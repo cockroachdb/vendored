@@ -1,0 +1,10 @@
+=== RUN TestSuite
+=== RUN TestA
+--- PASS: TestA (0.01 seconds)
+=== RUN TestB
+--- PASS: TestB (0.02 seconds)
+--- PASS: TestSuite (0.03 seconds)
+=== RUN TestC
+--- PASS: TestC (0.04 seconds)
+PASS
+ok	testify-suite	0.071s

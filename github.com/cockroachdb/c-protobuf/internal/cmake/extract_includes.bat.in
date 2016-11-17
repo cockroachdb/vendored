@@ -1,0 +1,105 @@
+mkdir include
+mkdir include\google
+mkdir include\google\protobuf
+mkdir include\google\protobuf\compiler
+mkdir include\google\protobuf\compiler\cpp
+mkdir include\google\protobuf\compiler\csharp
+mkdir include\google\protobuf\compiler\java
+mkdir include\google\protobuf\compiler\javanano
+mkdir include\google\protobuf\compiler\js
+mkdir include\google\protobuf\compiler\objectivec
+mkdir include\google\protobuf\compiler\php
+mkdir include\google\protobuf\compiler\python
+mkdir include\google\protobuf\compiler\ruby
+mkdir include\google\protobuf\io
+mkdir include\google\protobuf\stubs
+mkdir include\google\protobuf\util
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobufny.h include\google\protobufny.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobufny.pb.h include\google\protobufny.pb.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobufpi.pb.h include\google\protobufpi.pb.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobufrena.h include\google\protobufrena.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobufrenastring.h include\google\protobufrenastring.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobufcopy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobufcopy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobufcopy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobufcopy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobufcopy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobufcopy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobufcopy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobufcopy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobufcopy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobufcopy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobufcopy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobufcopy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobufcopy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobufcopy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobufcopy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobufcopy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobufcopy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobufcopy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\descriptor.h include\google\protobuf\descriptor.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\descriptor.pb.h include\google\protobuf\descriptor.pb.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\descriptor_database.h include\google\protobuf\descriptor_database.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\duration.pb.h include\google\protobuf\duration.pb.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\dynamic_message.h include\google\protobuf\dynamic_message.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\empty.pb.h include\google\protobuf\empty.pb.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\extension_set.h include\google\protobuf\extension_set.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobufield_mask.pb.h include\google\protobufield_mask.pb.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\generated_enum_reflection.h include\google\protobuf\generated_enum_reflection.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\generated_enum_util.h include\google\protobuf\generated_enum_util.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\generated_message_reflection.h include\google\protobuf\generated_message_reflection.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\generated_message_util.h include\google\protobuf\generated_message_util.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\has_bits.h include\google\protobuf\has_bits.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\iocopy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\io\gzip_stream.h include\google\protobuf\io\gzip_stream.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\io\printer.h include\google\protobuf\io\printer.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\io\strtod.h include\google\protobuf\io\strtod.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\io	okenizer.h include\google\protobuf\io	okenizer.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\io\zero_copy_stream.h include\google\protobuf\io\zero_copy_stream.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\io\zero_copy_stream_impl.h include\google\protobuf\io\zero_copy_stream_impl.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\io\zero_copy_stream_impl_lite.h include\google\protobuf\io\zero_copy_stream_impl_lite.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\map.h include\google\protobuf\map.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\map_entry.h include\google\protobuf\map_entry.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\map_entry_lite.h include\google\protobuf\map_entry_lite.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\map_field.h include\google\protobuf\map_field.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\map_field_inl.h include\google\protobuf\map_field_inl.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\map_field_lite.h include\google\protobuf\map_field_lite.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\map_type_handler.h include\google\protobuf\map_type_handler.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\message.h include\google\protobuf\message.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\message_lite.h include\google\protobuf\message_lite.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\metadata.h include\google\protobuf\metadata.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobufeflection.h include\google\protobufeflection.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobufeflection_ops.h include\google\protobufeflection_ops.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobufepeated_field.h include\google\protobufepeated_field.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\service.h include\google\protobuf\service.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\source_context.pb.h include\google\protobuf\source_context.pb.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\struct.pb.h include\google\protobuf\struct.pb.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\stubstomic_sequence_num.h include\google\protobuf\stubstomic_sequence_num.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\stubstomicops.h include\google\protobuf\stubstomicops.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\stubstomicops_internals_arm64_gcc.h include\google\protobuf\stubstomicops_internals_arm64_gcc.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\stubstomicops_internals_arm_gcc.h include\google\protobuf\stubstomicops_internals_arm_gcc.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\stubstomicops_internals_arm_qnx.h include\google\protobuf\stubstomicops_internals_arm_qnx.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\stubstomicops_internals_atomicword_compat.h include\google\protobuf\stubstomicops_internals_atomicword_compat.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\stubstomicops_internals_generic_gcc.h include\google\protobuf\stubstomicops_internals_generic_gcc.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\stubstomicops_internals_macosx.h include\google\protobuf\stubstomicops_internals_macosx.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\stubstomicops_internals_mips_gcc.h include\google\protobuf\stubstomicops_internals_mips_gcc.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\stubstomicops_internals_pnacl.h include\google\protobuf\stubstomicops_internals_pnacl.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\stubstomicops_internals_power.h include\google\protobuf\stubstomicops_internals_power.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\stubstomicops_internals_ppc_gcc.h include\google\protobuf\stubstomicops_internals_ppc_gcc.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\stubstomicops_internals_solaris.h include\google\protobuf\stubstomicops_internals_solaris.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\stubstomicops_internals_tsan.h include\google\protobuf\stubstomicops_internals_tsan.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\stubstomicops_internals_x86_gcc.h include\google\protobuf\stubstomicops_internals_x86_gcc.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\stubstomicops_internals_x86_msvc.h include\google\protobuf\stubstomicops_internals_x86_msvc.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\stubsytestream.h include\google\protobuf\stubsytestream.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\stubscopy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\stubscopy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\stubscopy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\stubsastmem.h include\google\protobuf\stubsastmem.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\stubs\hash.h include\google\protobuf\stubs\hash.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\stubs\logging.h include\google\protobuf\stubs\logging.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\stubs\macros.h include\google\protobuf\stubs\macros.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\stubs\mutex.h include\google\protobuf\stubs\mutex.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\stubs\once.h include\google\protobuf\stubs\once.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\stubs\platform_macros.h include\google\protobuf\stubs\platform_macros.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\stubs\port.h include\google\protobuf\stubs\port.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\stubs\scoped_ptr.h include\google\protobuf\stubs\scoped_ptr.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\stubs\shared_ptr.h include\google\protobuf\stubs\shared_ptr.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\stubs\singleton.h include\google\protobuf\stubs\singleton.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\stubs\status.h include\google\protobuf\stubs\status.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\stubs\stl_util.h include\google\protobuf\stubs\stl_util.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\stubs\stringpiece.h include\google\protobuf\stubs\stringpiece.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\stubs	emplate_util.h include\google\protobuf\stubs	emplate_util.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\stubs	ype_traits.h include\google\protobuf\stubs	ype_traits.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf	ext_format.h include\google\protobuf	ext_format.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf	imestamp.pb.h include\google\protobuf	imestamp.pb.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf	ype.pb.h include\google\protobuf	ype.pb.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\unknown_field_set.h include\google\protobuf\unknown_field_set.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\utilield_comparator.h include\google\protobuf\utilield_comparator.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\utilield_mask_util.h include\google\protobuf\utilield_mask_util.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\util\json_util.h include\google\protobuf\util\json_util.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\util\message_differencer.h include\google\protobuf\util\message_differencer.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\util	ime_util.h include\google\protobuf\util	ime_util.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\util	ype_resolver.h include\google\protobuf\util	ype_resolver.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\util	ype_resolver_util.h include\google\protobuf\util	ype_resolver_util.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\wire_format.h include\google\protobuf\wire_format.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\wire_format_lite.h include\google\protobuf\wire_format_lite.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\wire_format_lite_inl.h include\google\protobuf\wire_format_lite_inl.h
+copy ${PROTOBUF_SOURCE_WIN32_PATH}\..\src\google\protobuf\wrappers.pb.h include\google\protobuf\wrappers.pb.h
