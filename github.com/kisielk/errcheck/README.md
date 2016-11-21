@@ -8,7 +8,7 @@ errcheck is a program for checking for unchecked errors in go programs.
 
     go get -u github.com/kisielk/errcheck
 
-errcheck requires Go 1.5 or newer and depends on the package go/loader from the golang.org/x/tools repository.
+errcheck requires Go 1.6 or newer and depends on the package go/loader from the golang.org/x/tools repository.
 
 ## Use
 
@@ -24,7 +24,40 @@ Or check all packages in your $GOPATH and $GOROOT:
 
     errcheck all
 
-Additionally, the following flags are available.
+errcheck also recognizes the following command-line options:
+
+The `-tags` flag takes a space-separated list of build tags, just like `go
+build`. If you are using any custom build tags in your code base, you may need
+to specify the relevant tags here.
+
+The `-asserts` flag enables checking for ignored type assertion results. It
+takes no arguments.
+
+The `-blank` flag enables checking for assignments of errors to the
+blank identifier. It takes no arguments.
+
+
+## Excluding functions
+
+Use the `-exclude` flag to specify a path to a file containing a list of functions to
+be excluded.
+
+    errcheck -exclude errcheck_excludes.txt path/to/package
+
+The file should contain one function signature per line. The format for function signatures is
+`package.FunctionName` while for methods it's `(package.Receiver).MethodName` for value receivers
+and `(*package.Receiver).MethodName` for pointer receivers.
+
+An example of an exclude file is:
+
+    io/ioutil.ReadFile
+    (*net/http.Client).Do
+
+The exclude list is combined with an internal list for functions in the Go standard library that
+have an error return type but are documented to never return an error.
+
+
+### The deprecated method
 
 The `-ignore` flag takes a comma-separated list of pairs of the form package:regex.
 For each package, the regex describes which functions to ignore within that package.
@@ -58,16 +91,6 @@ specified for it. To disable this, specify a regex that matches nothing:
 
 The `-ignoretests` flag disables checking of `_test.go` files. It takes
 no arguments.
-
-The `-tags` flag takes a space-separated list of build tags, just like `go
-build`. If you are using any custom build tags in your code base, you may need
-to specify the relevant tags here.
-
-The `-asserts` flag enables checking for ignored type assertion results. It
-takes no arguments.
-
-The `-blank` flag enables checking for assignments of errors to the
-blank identifier. It takes no arguments.
 
 ## Cgo
 

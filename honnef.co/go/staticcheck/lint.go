@@ -33,7 +33,12 @@ var Funcs = map[string]lint.Func{
 	"SA1006": CheckUnsafePrintf,
 	"SA1007": CheckURLs,
 	"SA1008": CheckCanonicalHeaderKey,
-	"SA1009": CheckStdlibUsage,
+	"SA1009": nil,
+	"SA1010": CheckRegexpFindAll,
+	"SA1011": CheckUTF8Cutset,
+	"SA1012": CheckNilContext,
+	"SA1013": CheckSeeker,
+	"SA1014": CheckUnmarshalPointer,
 
 	"SA2000": CheckWaitgroupAdd,
 	"SA2001": CheckEmptyCriticalSection,
@@ -65,6 +70,7 @@ var Funcs = map[string]lint.Func{
 	"SA5004": CheckLoopEmptyDefault,
 	"SA5005": CheckCyclicFinalizer,
 	"SA5006": CheckSliceOutOfBounds,
+	"SA5007": CheckInfiniteRecursion,
 
 	"SA9000": CheckDubiousSyncPoolPointers,
 	"SA9001": CheckDubiousDeferInChannelRangeLoop,
@@ -120,19 +126,21 @@ func CheckTemplate(f *lint.File) {
 		if len(call.Args) != 1 {
 			return true
 		}
-		sel, ok := call.Fun.(*ast.SelectorExpr)
-		if !ok {
-			return true
-		}
-		if sel.Sel.Name != "Parse" {
-			return true
-		}
 		var kind string
-		if hasType(f, sel.X, "*text/template.Template") {
+		if isFunctionCallName(f, call, "(*text/template.Template).Parse") {
 			kind = "text"
-		} else if hasType(f, sel.X, "*html/template.Template") {
+		} else if isFunctionCallName(f, call, "(*html/template.Template).Parse") {
 			kind = "html"
 		} else {
+			return true
+		}
+		sel := call.Fun.(*ast.SelectorExpr)
+		if !isFunctionCallName(f, sel.X, "text/template.New") &&
+			!isFunctionCallName(f, sel.X, "html/template.New") {
+			// TODO(dh): this is a cheap workaround for templates with
+			// different delims. A better solution with less false
+			// negatives would use data flow analysis to see where the
+			// template comes from and where it has been
 			return true
 		}
 		s, ok := constantString(f, call.Args[0])
@@ -1540,14 +1548,7 @@ func CheckIneffectiveLoop(f *lint.File) {
 	f.Walk(fn)
 }
 
-func CheckStdlibUsage(f *lint.File) {
-	checkStdlibUsageRegexpFindAll(f)
-	checkStdlibUsageUTF8Cutset(f)
-	checkStdlibUsageNilContext(f)
-	checkStdlibUsageSeeker(f)
-}
-
-func checkStdlibUsageRegexpFindAll(f *lint.File) {
+func CheckRegexpFindAll(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
 		if !ok {
@@ -1576,7 +1577,7 @@ func checkStdlibUsageRegexpFindAll(f *lint.File) {
 	f.Walk(fn)
 }
 
-func checkStdlibUsageUTF8Cutset(f *lint.File) {
+func CheckUTF8Cutset(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
 		if !ok {
@@ -1606,7 +1607,7 @@ func checkStdlibUsageUTF8Cutset(f *lint.File) {
 	f.Walk(fn)
 }
 
-func checkStdlibUsageNilContext(f *lint.File) {
+func CheckNilContext(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
 		if !ok {
@@ -1635,7 +1636,7 @@ func checkStdlibUsageNilContext(f *lint.File) {
 	f.Walk(fn)
 }
 
-func checkStdlibUsageSeeker(f *lint.File) {
+func CheckSeeker(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
 		if !ok {
@@ -2014,6 +2015,112 @@ func CheckNaNComparison(f *lint.File) {
 		if isNaN(op.X) || isNaN(op.Y) {
 			f.Errorf(op, "no value is equal to NaN, not even NaN itself")
 		}
+		return true
+	}
+	f.Walk(fn)
+}
+
+func CheckInfiniteRecursion(f *lint.File) {
+	fn := func(node ast.Node) bool {
+		fn, ok := node.(*ast.FuncDecl)
+		if !ok {
+			return true
+		}
+		ssafn := f.EnclosingSSAFunction(fn)
+		if ssafn == nil {
+			return true
+		}
+		if len(ssafn.Blocks) == 0 {
+			return true
+		}
+		for _, block := range ssafn.Blocks {
+			for _, ins := range block.Instrs {
+				call, ok := ins.(*ssa.Call)
+				if !ok {
+					continue
+				}
+				if call.Common().IsInvoke() {
+					continue
+				}
+				subfn, ok := call.Common().Value.(*ssa.Function)
+				if !ok || subfn != ssafn {
+					continue
+				}
+
+				canReturn := false
+				for _, b := range subfn.Blocks {
+					if block.Dominates(b) {
+						continue
+					}
+					if len(b.Instrs) == 0 {
+						continue
+					}
+					if _, ok := b.Instrs[len(b.Instrs)-1].(*ssa.Return); ok {
+						canReturn = true
+						break
+					}
+				}
+				if canReturn {
+					continue
+				}
+				f.Errorf(call, "infinite recursive call")
+			}
+		}
+		return true
+	}
+	f.Walk(fn)
+}
+
+func isFunctionCallName(f *lint.File, node ast.Node, name string) bool {
+	call, ok := node.(*ast.CallExpr)
+	if !ok {
+		return false
+	}
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok {
+		return false
+	}
+	fn, ok := f.Pkg.TypesInfo.ObjectOf(sel.Sel).(*types.Func)
+	return ok && fn.FullName() == name
+}
+
+func isFunctionCallNameAny(f *lint.File, node ast.Node, names []string) bool {
+	for _, name := range names {
+		if isFunctionCallName(f, node, name) {
+			return true
+		}
+	}
+	return false
+}
+
+func CheckUnmarshalPointer(f *lint.File) {
+	names := []string{
+		"encoding/xml.Unmarshal",
+		"(*encoding/xml.Decoder).Decode",
+		"encoding/json.Unmarshal",
+		"(*encoding/json.Decoder).Decode",
+	}
+	fn := func(node ast.Node) bool {
+		call, ok := node.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		sel, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok {
+			return false
+		}
+		if len(call.Args) == 0 {
+			return true
+		}
+		if !isFunctionCallNameAny(f, call, names) {
+			return true
+		}
+		arg := call.Args[len(call.Args)-1]
+		switch f.Pkg.TypesInfo.TypeOf(arg).Underlying().(type) {
+		case *types.Pointer, *types.Interface:
+			return true
+		}
+		f.Errorf(arg, "%s expects to unmarshal into a pointer, but the provided value is not a pointer", sel.Sel.Name)
 		return true
 	}
 	f.Walk(fn)

@@ -12,6 +12,7 @@ import (
 	"flag"
 	"fmt"
 	"go/build"
+	"go/parser"
 	"log"
 	"os"
 	"strings"
@@ -107,8 +108,13 @@ func ProcessArgs(name string, funcs map[string]lint.Func, args []string) {
 		fmt.Fprintln(os.Stderr, err)
 		runner.unclean = true
 	}
+	ctx := build.Default
+	ctx.BuildTags = runner.tags
+	conf := &loader.Config{
+		Build:      &ctx,
+		ParserMode: parser.ParseComments,
+	}
 	if goFiles {
-		conf := &loader.Config{}
 		conf.CreateFromFilenames("adhoc", paths...)
 		lprog, err := conf.Load()
 		if err != nil {
@@ -122,17 +128,13 @@ func ProcessArgs(name string, funcs map[string]lint.Func, args []string) {
 			}
 		}
 	} else {
-		ctx := build.Default
-		conf := &loader.Config{
-			Build: &ctx,
-			TypeCheckFuncBodies: func(s string) bool {
-				for _, path := range paths {
-					if s == path || s == path+"_test" {
-						return true
-					}
+		conf.TypeCheckFuncBodies = func(s string) bool {
+			for _, path := range paths {
+				if s == path || s == path+"_test" {
+					return true
 				}
-				return false
-			},
+			}
+			return false
 		}
 		for _, path := range paths {
 			conf.ImportWithTests(path)
