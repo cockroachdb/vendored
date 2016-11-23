@@ -1,4 +1,4 @@
-// Copyright 2016 The etcd Authors
+// Copyright 2016 CoreOS, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,30 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package mvcc
+// +build !cgo
 
-import (
-	"fmt"
-	"testing"
-)
+package util
 
-func BenchmarkIndexRestore(b *testing.B) {
-	var (
-		keys            = make([][]byte, b.N)
-		createds        = make([]revision, b.N)
-		modifieds       = make([]revision, b.N)
-		ver       int64 = 1
-	)
-	for i := 0; i < b.N; i++ {
-		keys[i] = []byte(fmt.Sprintf("foo%d", i))
-		createds[i] = revision{int64(i), 0}
-		modifieds[i] = revision{int64(i), 1}
-	}
+func getRunningSlice() (string, error) { return "", ErrNoCGO }
 
-	kvindex := newTreeIndex()
+func runningFromSystemService() (bool, error) { return false, ErrNoCGO }
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		kvindex.Restore(keys[i], createds[i], modifieds[i], ver)
-	}
-}
+func currentUnitName() (string, error) { return "", ErrNoCGO }

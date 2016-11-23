@@ -27,14 +27,14 @@ import (
 
 var (
 	flagP        = flag.Int("p", runtime.NumCPU(), "run `N` processes in parallel")
-	flagTimeout  = flag.Duration("timeout", 10*time.Minute, "timeout each process after `duration`")
+	flagTimeout  = flag.Duration("timeout", 0, "timeout each process after `duration`")
 	flagKill     = flag.Bool("kill", true, "kill timed out processes if true, otherwise just print pid (to attach with gdb)")
 	flagFailure  = flag.String("failure", "", "fail only if output matches `regexp`")
 	flagIgnore   = flag.String("ignore", "", "ignore failure if output matches `regexp`")
 	flagMaxTime  = flag.Duration("maxtime", 0, "maximum time to run")
 	flagMaxRuns  = flag.Int("maxruns", 0, "maximum number of runs")
-	flagMaxFails = flag.Int("maxfails", 0, "maximum number of failures")
-	flagStdErr   = flag.Bool("stderr", false, "output failures to STDERR instead of to a temp file")
+	flagMaxFails = flag.Int("maxfails", 1, "maximum number of failures")
+	flagStdErr   = flag.Bool("stderr", true, "output failures to STDERR instead of to a temp file")
 )
 
 func roundToSeconds(d time.Duration) time.Duration {
@@ -43,7 +43,7 @@ func roundToSeconds(d time.Duration) time.Duration {
 
 func main() {
 	flag.Parse()
-	if *flagP <= 0 || *flagTimeout <= 0 || len(flag.Args()) == 0 {
+	if *flagP <= 0 || *flagTimeout < 0 || len(flag.Args()) == 0 {
 		flag.Usage()
 		os.Exit(1)
 	}
