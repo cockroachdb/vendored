@@ -37,13 +37,6 @@ func (m *IdMessage) String() string            { return proto.CompactTextString(
 func (*IdMessage) ProtoMessage()               {}
 func (*IdMessage) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
-func (m *IdMessage) GetUuid() string {
-	if m != nil {
-		return m.Uuid
-	}
-	return ""
-}
-
 func init() {
 	proto.RegisterType((*IdMessage)(nil), "sub2.IdMessage")
 }
