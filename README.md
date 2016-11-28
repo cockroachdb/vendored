@@ -18,7 +18,7 @@ After adding or updating dependencies (and running all tests), switch into the `
 and commit changes (or use `git -C`). The commit must be available on `github.com/cockroachdb/vendored`
 *before* submitting a pull request to `cockroachdb/cockroach` that references it.
 * Organization members can push new refs directly.
-  * Likely want to `git remote origin set-url git@github.com:cockroachdb/vendored.git`.
+  * Likely want to `git remote set-url origin git@github.com:cockroachdb/vendored.git`.
   * If not pushing to `master`, be sure to tag the ref so that it will not be GC'ed.
 * Non-members should fork the `vendored` repo, add their fork as a second remote, and submit a pull
 request.
