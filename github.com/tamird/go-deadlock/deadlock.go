@@ -227,8 +227,10 @@ func newLockOrder() *lockOrder {
 }
 
 func (l *lockOrder) PostLock(skip int, p interface{}) {
+	stack := callers(skip)
+	gid := goid.Get()
 	l.mu.Lock()
-	l.cur[p] = stackGID{callers(skip), goid.Get()}
+	l.cur[p] = stackGID{stack, gid}
 	l.mu.Unlock()
 }
 
