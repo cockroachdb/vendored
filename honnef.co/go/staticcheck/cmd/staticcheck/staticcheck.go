@@ -1,4 +1,4 @@
-// staticcheck statically checks arguments to certain functions
+// staticcheck statically checks your code for bugs.
 package main // import "honnef.co/go/staticcheck/cmd/staticcheck"
 
 import (
@@ -16,5 +16,6 @@ func main() {
 		}
 		args = append(args, arg)
 	}
-	lintutil.ProcessArgs("staticcheck", staticcheck.Funcs, args)
+	c := staticcheck.NewChecker()
+	lintutil.ProcessArgs("staticcheck", c, args)
 }

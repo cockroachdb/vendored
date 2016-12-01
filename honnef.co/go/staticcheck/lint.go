@@ -18,62 +18,193 @@ import (
 	"unicode/utf8"
 
 	"honnef.co/go/lint"
+	"honnef.co/go/ssa"
+	"honnef.co/go/staticcheck/vrp"
 
 	"golang.org/x/tools/go/ast/astutil"
-	"golang.org/x/tools/go/ssa"
 )
 
-var Funcs = map[string]lint.Func{
-	"SA1000": CheckRegexps,
-	"SA1001": CheckTemplate,
-	"SA1002": CheckTimeParse,
-	"SA1003": CheckEncodingBinary,
-	"SA1004": CheckTimeSleepConstant,
-	"SA1005": CheckExec,
-	"SA1006": CheckUnsafePrintf,
-	"SA1007": CheckURLs,
-	"SA1008": CheckCanonicalHeaderKey,
-	"SA1009": nil,
-	"SA1010": CheckRegexpFindAll,
-	"SA1011": CheckUTF8Cutset,
-	"SA1012": CheckNilContext,
-	"SA1013": CheckSeeker,
-	"SA1014": CheckUnmarshalPointer,
+type Checker struct {
+	terminatesCache map[*ssa.Function]bool
+	ranges          map[*ssa.Function]vrp.Ranges
+}
 
-	"SA2000": CheckWaitgroupAdd,
-	"SA2001": CheckEmptyCriticalSection,
-	"SA2002": CheckConcurrentTesting,
-	"SA2003": CheckDeferLock,
+func NewChecker() *Checker {
+	return &Checker{}
+}
 
-	"SA3000": CheckTestMainExit,
-	"SA3001": CheckBenchmarkN,
+func (c *Checker) Funcs() map[string]lint.Func {
+	return map[string]lint.Func{
+		"SA1000": c.CheckRegexps,
+		"SA1001": c.CheckTemplate,
+		"SA1002": c.CheckTimeParse,
+		"SA1003": c.CheckEncodingBinary,
+		"SA1004": c.CheckTimeSleepConstant,
+		"SA1005": c.CheckExec,
+		"SA1006": c.CheckUnsafePrintf,
+		"SA1007": c.CheckURLs,
+		"SA1008": c.CheckCanonicalHeaderKey,
+		"SA1009": nil,
+		"SA1010": c.CheckRegexpFindAll,
+		"SA1011": c.CheckUTF8Cutset,
+		"SA1012": c.CheckNilContext,
+		"SA1013": c.CheckSeeker,
+		"SA1014": c.CheckUnmarshalPointer,
+		"SA1015": c.CheckLeakyTimeTick,
+		"SA1016": c.CheckUntrappableSignal,
+		"SA1017": c.CheckUnbufferedSignalChan,
 
-	"SA4000": CheckLhsRhsIdentical,
-	"SA4001": CheckIneffectiveCopy,
-	"SA4002": CheckDiffSizeComparison,
-	"SA4003": CheckUnsignedComparison,
-	"SA4004": CheckIneffectiveLoop,
-	"SA4005": CheckIneffecitiveFieldAssignments,
-	"SA4006": CheckUnreadVariableValues,
-	// "SA4007": CheckPredeterminedBooleanExprs,
-	"SA4007": nil,
-	"SA4008": CheckLoopCondition,
-	"SA4009": CheckArgOverwritten,
-	"SA4010": CheckIneffectiveAppend,
-	"SA4011": CheckScopedBreak,
-	"SA4012": CheckNaNComparison,
+		"SA2000": c.CheckWaitgroupAdd,
+		"SA2001": c.CheckEmptyCriticalSection,
+		"SA2002": c.CheckConcurrentTesting,
+		"SA2003": c.CheckDeferLock,
 
-	"SA5000": CheckNilMaps,
-	"SA5001": CheckEarlyDefer,
-	"SA5002": CheckInfiniteEmptyLoop,
-	"SA5003": CheckDeferInInfiniteLoop,
-	"SA5004": CheckLoopEmptyDefault,
-	"SA5005": CheckCyclicFinalizer,
-	"SA5006": CheckSliceOutOfBounds,
-	"SA5007": CheckInfiniteRecursion,
+		"SA3000": c.CheckTestMainExit,
+		"SA3001": c.CheckBenchmarkN,
 
-	"SA9000": CheckDubiousSyncPoolPointers,
-	"SA9001": CheckDubiousDeferInChannelRangeLoop,
+		"SA4000": c.CheckLhsRhsIdentical,
+		"SA4001": c.CheckIneffectiveCopy,
+		"SA4002": c.CheckDiffSizeComparison,
+		"SA4003": c.CheckUnsignedComparison,
+		"SA4004": c.CheckIneffectiveLoop,
+		"SA4005": c.CheckIneffecitiveFieldAssignments,
+		"SA4006": c.CheckUnreadVariableValues,
+		// "SA4007": c.CheckPredeterminedBooleanExprs,
+		"SA4007": nil,
+		"SA4008": c.CheckLoopCondition,
+		"SA4009": c.CheckArgOverwritten,
+		"SA4010": c.CheckIneffectiveAppend,
+		"SA4011": c.CheckScopedBreak,
+		"SA4012": c.CheckNaNComparison,
+		"SA4013": c.CheckDoubleNegation,
+		"SA4014": c.CheckRepeatedIfElse,
+		"SA4015": c.CheckMathInt,
+
+		"SA5000": c.CheckNilMaps,
+		"SA5001": c.CheckEarlyDefer,
+		"SA5002": c.CheckInfiniteEmptyLoop,
+		"SA5003": c.CheckDeferInInfiniteLoop,
+		"SA5004": c.CheckLoopEmptyDefault,
+		"SA5005": c.CheckCyclicFinalizer,
+		"SA5006": c.CheckSliceOutOfBounds,
+		"SA5007": c.CheckInfiniteRecursion,
+
+		"SA9000": c.CheckDubiousSyncPoolPointers,
+		"SA9001": c.CheckDubiousDeferInChannelRangeLoop,
+
+		//"SA0000": c.DumpGraph,
+	}
+}
+
+func (c *Checker) Init(prog *lint.Program) {
+	c.terminatesCache = map[*ssa.Function]bool{}
+	c.ranges = map[*ssa.Function]vrp.Ranges{}
+
+	var fns []*ssa.Function
+	for _, pkg := range prog.Packages {
+		for _, m := range pkg.SSAPkg.Members {
+			if fn, ok := m.(*ssa.Function); ok {
+				fns = append(fns, fn)
+			}
+			if typ, ok := m.(*ssa.Type); ok {
+				ttyp := typ.Type().(*types.Named)
+				if _, ok := ttyp.Underlying().(*types.Interface); ok {
+					continue
+				}
+				ptr := types.NewPointer(ttyp)
+				ms := pkg.SSAPkg.Prog.MethodSets.MethodSet(ptr)
+				for i := 0; i < ms.Len(); i++ {
+					fns = append(fns, pkg.SSAPkg.Prog.MethodValue(ms.At(i)))
+				}
+				ms = pkg.SSAPkg.Prog.MethodSets.MethodSet(ttyp)
+				for i := 0; i < ms.Len(); i++ {
+					fns = append(fns, pkg.SSAPkg.Prog.MethodValue(ms.At(i)))
+				}
+			}
+		}
+	}
+
+	for _, fn := range fns {
+		if fn.Blocks == nil {
+			continue
+		}
+		detectInfiniteLoops(fn)
+		ssa.OptimizeBlocks(fn)
+
+		g := vrp.BuildGraph(fn)
+		c.ranges[fn] = g.Solve()
+	}
+}
+
+func detectInfiniteLoops(fn *ssa.Function) {
+	if len(fn.Blocks) == 0 {
+		return
+	}
+
+	// Detect loops that can terminate from a compiler POV, but can't
+	// due to stdlib behaviour
+	for _, block := range fn.Blocks {
+		if len(block.Instrs) < 3 {
+			continue
+		}
+		if len(block.Succs) != 2 {
+			continue
+		}
+		var instrs []*ssa.Instruction
+		for i, ins := range block.Instrs {
+			if _, ok := ins.(*ssa.DebugRef); ok {
+				continue
+			}
+			instrs = append(instrs, &block.Instrs[i])
+		}
+
+		for i, ins := range instrs {
+			unop, ok := (*ins).(*ssa.UnOp)
+			if !ok || unop.Op != token.ARROW {
+				continue
+			}
+			call, ok := unop.X.(*ssa.Call)
+			if !ok || call.Common().IsInvoke() {
+				continue
+			}
+			fn, ok := call.Common().Value.(*ssa.Function)
+			if !ok {
+				continue
+			}
+			tfn, ok := fn.Object().(*types.Func)
+			if !ok {
+				continue
+			}
+			if tfn.FullName() != "time.Tick" {
+				continue
+			}
+			// XXX check if we're extracting ok from our unop
+			if _, ok := (*instrs[i+1]).(*ssa.Extract); !ok {
+				continue
+			}
+			// XXX check that we're branching on our extract result
+			if _, ok := (*instrs[i+2]).(*ssa.If); !ok {
+				continue
+			}
+
+			loop := false
+			for _, pred := range block.Preds {
+				// This will only detect natural loops, which is fine
+				// for detecting `for range`.
+				if block.Dominates(pred) {
+					loop = true
+					break
+				}
+			}
+			if !loop {
+				continue
+			}
+			*instrs[i+2] = ssa.NewJump(block)
+			succ := block.Succs[1]
+			block.Succs = block.Succs[0:1]
+			succ.RemovePred(block)
+		}
+	}
 }
 
 func constantString(f *lint.File, expr ast.Expr) (string, bool) {
@@ -91,7 +222,63 @@ func hasType(f *lint.File, expr ast.Expr, name string) bool {
 	return types.TypeString(f.Pkg.TypesInfo.TypeOf(expr), nil) == name
 }
 
-func CheckRegexps(f *lint.File) {
+// terminates reports whether fn is supposed to return, that is if it
+// has at least one theoretic path that returns from the function.
+// Explicit panics do not count as terminating.
+func (c *Checker) terminates(fn *ssa.Function) (ret bool) {
+	if b, ok := c.terminatesCache[fn]; ok {
+		return b
+	}
+	defer func() {
+		c.terminatesCache[fn] = ret
+	}()
+	if fn.Blocks == nil {
+		// assuming that a function terminates is the conservative
+		// choice
+		return true
+	}
+
+	// Detect ranging over a time.Tick channel
+	for _, block := range fn.Blocks {
+		if len(block.Instrs) == 0 {
+			continue
+		}
+		if _, ok := block.Instrs[len(block.Instrs)-1].(*ssa.Return); ok {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *Checker) CheckUntrappableSignal(f *lint.File) {
+	fn := func(node ast.Node) bool {
+		call, ok := node.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		if !lint.IsPkgDot(call.Fun, "signal", "Ignore") &&
+			!lint.IsPkgDot(call.Fun, "signal", "Notify") &&
+			!lint.IsPkgDot(call.Fun, "signal", "Reset") {
+			return true
+		}
+		for _, arg := range call.Args {
+			if conv, ok := arg.(*ast.CallExpr); ok && lint.IsPkgDot(conv.Fun, "os", "Signal") {
+				arg = conv.Args[0]
+			}
+
+			if lint.IsPkgDot(arg, "os", "Kill") || lint.IsPkgDot(arg, "syscall", "SIGKILL") {
+				f.Errorf(arg, "%s cannot be trapped (did you mean syscall.SIGTERM?)", f.Render(arg))
+			}
+			if lint.IsPkgDot(arg, "syscall", "SIGSTOP") {
+				f.Errorf(arg, "%s signal cannot be trapped", f.Render(arg))
+			}
+		}
+		return true
+	}
+	f.Walk(fn)
+}
+
+func (c *Checker) CheckRegexps(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
 		if !ok {
@@ -117,7 +304,7 @@ func CheckRegexps(f *lint.File) {
 	f.Walk(fn)
 }
 
-func CheckTemplate(f *lint.File) {
+func (c *Checker) CheckTemplate(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
 		if !ok {
@@ -165,7 +352,7 @@ func CheckTemplate(f *lint.File) {
 	f.Walk(fn)
 }
 
-func CheckTimeParse(f *lint.File) {
+func (c *Checker) CheckTimeParse(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
 		if !ok {
@@ -192,7 +379,7 @@ func CheckTimeParse(f *lint.File) {
 	f.Walk(fn)
 }
 
-func CheckEncodingBinary(f *lint.File) {
+func (c *Checker) CheckEncodingBinary(f *lint.File) {
 	// TODO(dominikh): also check binary.Read
 	fn := func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
@@ -259,7 +446,7 @@ func validEncodingBinaryType(typ types.Type) bool {
 	return false
 }
 
-func CheckTimeSleepConstant(f *lint.File) {
+func (c *Checker) CheckTimeSleepConstant(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
 		if !ok {
@@ -295,7 +482,7 @@ func CheckTimeSleepConstant(f *lint.File) {
 	f.Walk(fn)
 }
 
-func CheckWaitgroupAdd(f *lint.File) {
+func (c *Checker) CheckWaitgroupAdd(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		g, ok := node.(*ast.GoStmt)
 		if !ok {
@@ -333,7 +520,7 @@ func CheckWaitgroupAdd(f *lint.File) {
 	f.Walk(fn)
 }
 
-func CheckInfiniteEmptyLoop(f *lint.File) {
+func (c *Checker) CheckInfiniteEmptyLoop(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		loop, ok := node.(*ast.ForStmt)
 		if !ok || len(loop.Body.List) != 0 || loop.Cond != nil || loop.Init != nil {
@@ -345,7 +532,7 @@ func CheckInfiniteEmptyLoop(f *lint.File) {
 	f.Walk(fn)
 }
 
-func CheckDeferInInfiniteLoop(f *lint.File) {
+func (c *Checker) CheckDeferInInfiniteLoop(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		mightExit := false
 		var defers []ast.Stmt
@@ -385,7 +572,7 @@ func CheckDeferInInfiniteLoop(f *lint.File) {
 	f.Walk(fn)
 }
 
-func CheckDubiousDeferInChannelRangeLoop(f *lint.File) {
+func (c *Checker) CheckDubiousDeferInChannelRangeLoop(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		var defers []ast.Stmt
 		loop, ok := node.(*ast.RangeStmt)
@@ -419,7 +606,7 @@ func CheckDubiousDeferInChannelRangeLoop(f *lint.File) {
 	f.Walk(fn)
 }
 
-func CheckTestMainExit(f *lint.File) {
+func (c *Checker) CheckTestMainExit(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		if !IsTestMain(f, node) {
 			return true
@@ -491,7 +678,7 @@ func IsTestMain(f *lint.File, node ast.Node) bool {
 	return typ != nil && typ.String() == "*testing.M"
 }
 
-func CheckExec(f *lint.File) {
+func (c *Checker) CheckExec(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
 		if !ok {
@@ -516,7 +703,7 @@ func CheckExec(f *lint.File) {
 	f.Walk(fn)
 }
 
-func CheckLoopEmptyDefault(f *lint.File) {
+func (c *Checker) CheckLoopEmptyDefault(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		loop, ok := node.(*ast.ForStmt)
 		if !ok || len(loop.Body.List) != 1 || loop.Cond != nil || loop.Init != nil {
@@ -536,7 +723,7 @@ func CheckLoopEmptyDefault(f *lint.File) {
 	f.Walk(fn)
 }
 
-func CheckLhsRhsIdentical(f *lint.File) {
+func (c *Checker) CheckLhsRhsIdentical(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		op, ok := node.(*ast.BinaryExpr)
 		if !ok {
@@ -567,7 +754,7 @@ func CheckLhsRhsIdentical(f *lint.File) {
 	f.Walk(fn)
 }
 
-func CheckScopedBreak(f *lint.File) {
+func (c *Checker) CheckScopedBreak(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		loop, ok := node.(*ast.ForStmt)
 		if !ok {
@@ -621,7 +808,7 @@ func CheckScopedBreak(f *lint.File) {
 	f.Walk(fn)
 }
 
-func CheckUnsafePrintf(f *lint.File) {
+func (c *Checker) CheckUnsafePrintf(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
 		if !ok {
@@ -646,7 +833,7 @@ func CheckUnsafePrintf(f *lint.File) {
 	f.Walk(fn)
 }
 
-func CheckURLs(f *lint.File) {
+func (c *Checker) CheckURLs(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
 		if !ok {
@@ -671,7 +858,7 @@ func CheckURLs(f *lint.File) {
 	f.Walk(fn)
 }
 
-func CheckEarlyDefer(f *lint.File) {
+func (c *Checker) CheckEarlyDefer(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		block, ok := node.(*ast.BlockStmt)
 		if !ok {
@@ -752,7 +939,7 @@ func selectorX(sel *ast.SelectorExpr) ast.Node {
 	}
 }
 
-func CheckDubiousSyncPoolPointers(f *lint.File) {
+func (c *Checker) CheckDubiousSyncPoolPointers(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
 		if !ok {
@@ -784,7 +971,7 @@ func CheckDubiousSyncPoolPointers(f *lint.File) {
 	f.Walk(fn)
 }
 
-func CheckEmptyCriticalSection(f *lint.File) {
+func (c *Checker) CheckEmptyCriticalSection(f *lint.File) {
 	mutexParams := func(s ast.Stmt) (x ast.Expr, funcName string, ok bool) {
 		expr, ok := s.(*ast.ExprStmt)
 		if !ok {
@@ -836,7 +1023,7 @@ func CheckEmptyCriticalSection(f *lint.File) {
 	f.Walk(fn)
 }
 
-func CheckIneffectiveCopy(f *lint.File) {
+func (c *Checker) CheckIneffectiveCopy(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		if unary, ok := node.(*ast.UnaryExpr); ok {
 			if _, ok := unary.X.(*ast.StarExpr); ok && unary.Op == token.AND {
@@ -869,41 +1056,7 @@ func constantInt(f *lint.File, expr ast.Expr) (int, bool) {
 	return int(v), true
 }
 
-func sliceSize(f *lint.File, expr ast.Expr) (int, bool) {
-	if slice, ok := expr.(*ast.SliceExpr); ok {
-		low := 0
-		high := 0
-		if slice.Low != nil {
-			v, ok := constantInt(f, slice.Low)
-			if !ok {
-				return 0, false
-			}
-			low = v
-		}
-		if slice.High == nil {
-			v, ok := sliceSize(f, slice.X)
-			if !ok {
-				return 0, false
-			}
-			high = v
-		} else {
-			v, ok := constantInt(f, slice.High)
-			if !ok {
-				return 0, false
-			}
-			high = v
-		}
-		return high - low, true
-	}
-
-	s, ok := constantString(f, expr)
-	if !ok {
-		return 0, false
-	}
-	return len(s), true
-}
-
-func CheckDiffSizeComparison(f *lint.File) {
+func (c *Checker) CheckDiffSizeComparison(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		expr, ok := node.(*ast.BinaryExpr)
 		if !ok {
@@ -921,21 +1074,29 @@ func CheckDiffSizeComparison(f *lint.File) {
 			// positives because of debug toggles and the like.
 			return true
 		}
-		left, ok1 := sliceSize(f, expr.X)
-		right, ok2 := sliceSize(f, expr.Y)
+		ssafn := f.EnclosingSSAFunction(expr)
+		if ssafn == nil {
+			return true
+		}
+		ssaexpr, _ := ssafn.ValueForExpr(expr)
+		binop, ok := ssaexpr.(*ssa.BinOp)
+		if !ok {
+			return true
+		}
+		r1, ok1 := c.ranges[ssafn].Get(binop.X).(vrp.StringInterval)
+		r2, ok2 := c.ranges[ssafn].Get(binop.Y).(vrp.StringInterval)
 		if !ok1 || !ok2 {
 			return true
 		}
-		if left == right {
-			return true
+		if r1.Length.Intersection(r2.Length).Empty() {
+			f.Errorf(expr, "comparing strings of different sizes for equality will always return false")
 		}
-		f.Errorf(expr, "comparing strings of different sizes for equality will always return false")
 		return true
 	}
 	f.Walk(fn)
 }
 
-func CheckCanonicalHeaderKey(f *lint.File) {
+func (c *Checker) CheckCanonicalHeaderKey(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		assign, ok := node.(*ast.AssignStmt)
 		if ok {
@@ -973,7 +1134,7 @@ func CheckCanonicalHeaderKey(f *lint.File) {
 	f.Walk(fn)
 }
 
-func CheckBenchmarkN(f *lint.File) {
+func (c *Checker) CheckBenchmarkN(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		assign, ok := node.(*ast.AssignStmt)
 		if !ok {
@@ -998,7 +1159,7 @@ func CheckBenchmarkN(f *lint.File) {
 	f.Walk(fn)
 }
 
-func CheckIneffecitiveFieldAssignments(f *lint.File) {
+func (c *Checker) CheckIneffecitiveFieldAssignments(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		fn, ok := node.(*ast.FuncDecl)
 		if !ok {
@@ -1113,7 +1274,7 @@ func CheckIneffecitiveFieldAssignments(f *lint.File) {
 	f.Walk(fn)
 }
 
-func CheckUnreadVariableValues(f *lint.File) {
+func (c *Checker) CheckUnreadVariableValues(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		fn, ok := node.(*ast.FuncDecl)
 		if !ok {
@@ -1157,7 +1318,7 @@ func CheckUnreadVariableValues(f *lint.File) {
 	f.Walk(fn)
 }
 
-func CheckPredeterminedBooleanExprs(f *lint.File) {
+func (c *Checker) CheckPredeterminedBooleanExprs(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		binop, ok := node.(*ast.BinaryExpr)
 		if !ok {
@@ -1208,7 +1369,7 @@ func CheckPredeterminedBooleanExprs(f *lint.File) {
 	f.Walk(fn)
 }
 
-func CheckNilMaps(f *lint.File) {
+func (c *Checker) CheckNilMaps(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		fn, ok := node.(*ast.FuncDecl)
 		if !ok {
@@ -1240,7 +1401,7 @@ func CheckNilMaps(f *lint.File) {
 	f.Walk(fn)
 }
 
-func CheckUnsignedComparison(f *lint.File) {
+func (c *Checker) CheckUnsignedComparison(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		expr, ok := node.(*ast.BinaryExpr)
 		if !ok {
@@ -1325,7 +1486,7 @@ func consts(val ssa.Value, out []*ssa.Const, visitedPhis map[string]bool) ([]*ss
 	return uniq, true
 }
 
-func CheckLoopCondition(f *lint.File) {
+func (c *Checker) CheckLoopCondition(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		loop, ok := node.(*ast.ForStmt)
 		if !ok {
@@ -1365,8 +1526,24 @@ func CheckLoopCondition(f *lint.File) {
 		if v == nil || isAddr {
 			return true
 		}
-		switch v.(type) {
-		case *ssa.Phi, *ssa.UnOp:
+		switch v := v.(type) {
+		case *ssa.Phi:
+			ops := v.Operands(nil)
+			if len(ops) != 2 {
+				return true
+			}
+			_, ok := (*ops[0]).(*ssa.Const)
+			if !ok {
+				return true
+			}
+			sigma, ok := (*ops[1]).(*ssa.Sigma)
+			if !ok {
+				return true
+			}
+			if sigma.X != v {
+				return true
+			}
+		case *ssa.UnOp:
 			return true
 		}
 		f.Errorf(cond, "variable in loop condition never changes")
@@ -1376,7 +1553,7 @@ func CheckLoopCondition(f *lint.File) {
 	f.Walk(fn)
 }
 
-func CheckArgOverwritten(f *lint.File) {
+func (c *Checker) CheckArgOverwritten(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		fn, ok := node.(*ast.FuncDecl)
 		if !ok {
@@ -1441,7 +1618,7 @@ func CheckArgOverwritten(f *lint.File) {
 	f.Walk(fn)
 }
 
-func CheckIneffectiveLoop(f *lint.File) {
+func (c *Checker) CheckIneffectiveLoop(f *lint.File) {
 	// This check detects some, but not all unconditional loop exits.
 	// We give up in the following cases:
 	//
@@ -1548,7 +1725,7 @@ func CheckIneffectiveLoop(f *lint.File) {
 	f.Walk(fn)
 }
 
-func CheckRegexpFindAll(f *lint.File) {
+func (c *Checker) CheckRegexpFindAll(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
 		if !ok {
@@ -1577,7 +1754,7 @@ func CheckRegexpFindAll(f *lint.File) {
 	f.Walk(fn)
 }
 
-func CheckUTF8Cutset(f *lint.File) {
+func (c *Checker) CheckUTF8Cutset(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
 		if !ok {
@@ -1607,7 +1784,7 @@ func CheckUTF8Cutset(f *lint.File) {
 	f.Walk(fn)
 }
 
-func CheckNilContext(f *lint.File) {
+func (c *Checker) CheckNilContext(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
 		if !ok {
@@ -1636,7 +1813,7 @@ func CheckNilContext(f *lint.File) {
 	f.Walk(fn)
 }
 
-func CheckSeeker(f *lint.File) {
+func (c *Checker) CheckSeeker(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
 		if !ok {
@@ -1674,7 +1851,7 @@ func CheckSeeker(f *lint.File) {
 	f.Walk(fn)
 }
 
-func CheckIneffectiveAppend(f *lint.File) {
+func (c *Checker) CheckIneffectiveAppend(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		assign, ok := node.(*ast.AssignStmt)
 		if !ok || len(assign.Lhs) != 1 || len(assign.Rhs) != 1 {
@@ -1764,7 +1941,7 @@ func CheckIneffectiveAppend(f *lint.File) {
 	f.Walk(fn)
 }
 
-func CheckConcurrentTesting(f *lint.File) {
+func (c *Checker) CheckConcurrentTesting(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		fn, ok := node.(*ast.FuncDecl)
 		if !ok {
@@ -1832,7 +2009,7 @@ func CheckConcurrentTesting(f *lint.File) {
 	f.Walk(fn)
 }
 
-func CheckCyclicFinalizer(f *lint.File) {
+func (c *Checker) CheckCyclicFinalizer(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
 		if !ok {
@@ -1902,7 +2079,7 @@ func CheckCyclicFinalizer(f *lint.File) {
 	f.Walk(fn)
 }
 
-func CheckSliceOutOfBounds(f *lint.File) {
+func (c *Checker) CheckSliceOutOfBounds(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		fn, ok := node.(*ast.FuncDecl)
 		if !ok {
@@ -1958,7 +2135,7 @@ func CheckSliceOutOfBounds(f *lint.File) {
 	f.Walk(fn)
 }
 
-func CheckDeferLock(f *lint.File) {
+func (c *Checker) CheckDeferLock(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		block, ok := node.(*ast.BlockStmt)
 		if !ok {
@@ -1999,7 +2176,7 @@ func CheckDeferLock(f *lint.File) {
 	f.Walk(fn)
 }
 
-func CheckNaNComparison(f *lint.File) {
+func (c *Checker) CheckNaNComparison(f *lint.File) {
 	isNaN := func(x ast.Expr) bool {
 		call, ok := x.(*ast.CallExpr)
 		if !ok {
@@ -2020,7 +2197,7 @@ func CheckNaNComparison(f *lint.File) {
 	f.Walk(fn)
 }
 
-func CheckInfiniteRecursion(f *lint.File) {
+func (c *Checker) CheckInfiniteRecursion(f *lint.File) {
 	fn := func(node ast.Node) bool {
 		fn, ok := node.(*ast.FuncDecl)
 		if !ok {
@@ -2093,7 +2270,7 @@ func isFunctionCallNameAny(f *lint.File, node ast.Node, names []string) bool {
 	return false
 }
 
-func CheckUnmarshalPointer(f *lint.File) {
+func (c *Checker) CheckUnmarshalPointer(f *lint.File) {
 	names := []string{
 		"encoding/xml.Unmarshal",
 		"(*encoding/xml.Decoder).Decode",
@@ -2121,6 +2298,212 @@ func CheckUnmarshalPointer(f *lint.File) {
 			return true
 		}
 		f.Errorf(arg, "%s expects to unmarshal into a pointer, but the provided value is not a pointer", sel.Sel.Name)
+		return true
+	}
+	f.Walk(fn)
+}
+
+func (c *Checker) CheckLeakyTimeTick(f *lint.File) {
+	if f.IsMain() || f.IsTest() {
+		return
+	}
+	var flowTerminates func(start, b *ssa.BasicBlock, seen map[*ssa.BasicBlock]bool) bool
+	flowTerminates = func(start, b *ssa.BasicBlock, seen map[*ssa.BasicBlock]bool) bool {
+		if seen == nil {
+			seen = map[*ssa.BasicBlock]bool{}
+		}
+		if seen[b] {
+			return false
+		}
+		seen[b] = true
+		for _, ins := range b.Instrs {
+			if _, ok := ins.(*ssa.Return); ok {
+				return true
+			}
+		}
+		if b == start {
+			if flowTerminates(start, b.Succs[0], seen) {
+				return true
+			}
+		} else {
+			for _, succ := range b.Succs {
+				if flowTerminates(start, succ, seen) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	fn := func(node ast.Node) bool {
+		if !isFunctionCallName(f, node, "time.Tick") {
+			return true
+		}
+		ssafn := f.EnclosingSSAFunction(node)
+		if ssafn == nil {
+			return false
+		}
+		if !c.terminates(ssafn) {
+			return true
+		}
+		f.Errorf(node, "using time.Tick leaks the underlying ticker, consider using it only in endless functions, tests and the main package, and use time.NewTicker here")
+		return true
+	}
+	f.Walk(fn)
+}
+
+func (c *Checker) CheckDoubleNegation(f *lint.File) {
+	fn := func(node ast.Node) bool {
+		unary1, ok := node.(*ast.UnaryExpr)
+		if !ok {
+			return true
+		}
+		unary2, ok := unary1.X.(*ast.UnaryExpr)
+		if !ok {
+			return true
+		}
+		if unary1.Op != token.NOT || unary2.Op != token.NOT {
+			return true
+		}
+		f.Errorf(unary1, "negating a boolean twice has no effect; is this a typo?")
+		return true
+	}
+	f.Walk(fn)
+}
+
+func (c *Checker) CheckRepeatedIfElse(f *lint.File) {
+	seen := map[ast.Node]bool{}
+
+	var collectConds func(ifstmt *ast.IfStmt, inits []ast.Stmt, conds []ast.Expr) ([]ast.Stmt, []ast.Expr)
+	collectConds = func(ifstmt *ast.IfStmt, inits []ast.Stmt, conds []ast.Expr) ([]ast.Stmt, []ast.Expr) {
+		seen[ifstmt] = true
+		if ifstmt.Init != nil {
+			inits = append(inits, ifstmt.Init)
+		}
+		conds = append(conds, ifstmt.Cond)
+		if elsestmt, ok := ifstmt.Else.(*ast.IfStmt); ok {
+			return collectConds(elsestmt, inits, conds)
+		}
+		return inits, conds
+	}
+	isDynamic := func(node ast.Node) bool {
+		dynamic := false
+		ast.Inspect(node, func(node ast.Node) bool {
+			switch node := node.(type) {
+			case *ast.CallExpr:
+				dynamic = true
+				return false
+			case *ast.UnaryExpr:
+				if node.Op == token.ARROW {
+					dynamic = true
+					return false
+				}
+			}
+			return true
+		})
+		return dynamic
+	}
+	fn := func(node ast.Node) bool {
+		ifstmt, ok := node.(*ast.IfStmt)
+		if !ok {
+			return true
+		}
+		if seen[ifstmt] {
+			return true
+		}
+		inits, conds := collectConds(ifstmt, nil, nil)
+		if len(inits) > 0 {
+			return true
+		}
+		for _, cond := range conds {
+			if isDynamic(cond) {
+				return true
+			}
+		}
+		counts := map[string]int{}
+		for _, cond := range conds {
+			s := f.Render(cond)
+			counts[s]++
+			if counts[s] == 2 {
+				f.Errorf(cond, "this condition occurs multiple times in this if/else if chain")
+			}
+		}
+		return true
+	}
+	f.Walk(fn)
+}
+
+func (c *Checker) CheckUnbufferedSignalChan(f *lint.File) {
+	fn := func(node ast.Node) bool {
+		call, ok := node.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		if !lint.IsPkgDot(call.Fun, "signal", "Notify") {
+			return true
+		}
+		ssafn := f.EnclosingSSAFunction(call)
+		arg, _ := ssafn.ValueForExpr(call.Args[0])
+		if arg == nil {
+			return true
+		}
+		r, ok := c.ranges[ssafn][arg].(vrp.ChannelInterval)
+		if !ok || !r.IsKnown() {
+			return true
+		}
+		if r.Size.Lower.Cmp(vrp.NewZ(0)) == 0 &&
+			r.Size.Upper.Cmp(vrp.NewZ(0)) == 0 {
+			f.Errorf(call, "the channel used with signal.Notify should be buffered")
+		}
+		return true
+	}
+	f.Walk(fn)
+}
+
+func (c *Checker) CheckMathInt(f *lint.File) {
+	fn := func(node ast.Node) bool {
+		fn, ok := node.(*ast.FuncDecl)
+		if !ok {
+			return true
+		}
+		ssafn := f.EnclosingSSAFunction(fn)
+		if ssafn == nil {
+			return true
+		}
+		for _, block := range ssafn.Blocks {
+			for _, ins := range block.Instrs {
+				call, ok := ins.(*ssa.Call)
+				if !ok {
+					continue
+				}
+				callee := call.Common().StaticCallee()
+				if callee == nil {
+					continue
+				}
+				obj, ok := callee.Object().(*types.Func)
+				if !ok {
+					continue
+				}
+				name := obj.FullName()
+				switch name {
+				case "math.Ceil", "math.Floor", "math.IsNaN", "math.Trunc", "math.IsInf":
+				default:
+					continue
+				}
+				arg := call.Common().Args[0]
+				conv, ok := arg.(*ssa.Convert)
+				if !ok {
+					continue
+				}
+				b, ok := conv.X.Type().Underlying().(*types.Basic)
+				if !ok {
+					continue
+				}
+				if (b.Info() & types.IsInteger) == 0 {
+					continue
+				}
+				f.Errorf(call, "calling %s on a converted integer is pointless", name)
+			}
+		}
 		return true
 	}
 	f.Walk(fn)
