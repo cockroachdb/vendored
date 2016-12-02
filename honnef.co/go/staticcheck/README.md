@@ -59,6 +59,7 @@ The following things are currently checked by staticcheck:
 | SA1015     | Using `time.Tick` in a way that will leak. Consider using `time.NewTicker`, and only use `time.Tick` in tests, commands and endless functions         |
 | SA1016     | Trapping a signal that cannot be trapped                                                                                                              |
 | SA1017     | Channels used with signal.Notify should be buffered                                                                                                   |
+| SA1018     | `strings.Replace` called with n == 0, which does nothing                                                                                              |
 |            |                                                                                                                                                       |
 | **SA2???** | **Concurrency issues**                                                                                                                                |
 | SA2000     | `sync.WaitGroup.Add` called inside the goroutine, leading to a race condition                                                                         |
@@ -86,6 +87,8 @@ The following things are currently checked by staticcheck:
 | SA4013     | Negating a boolean twice (`!!b`) is the same as writing `b`. This is either redundant, or a typo.                                                     |
 | SA4014     | An if/else if chain has repeated conditions and no side-effects; if the condition didn't match the first time, it won't match the second time, either |
 | SA4015     | Calling functions like math.Ceil on floats converted from integers doesn't do anything useful                                                         |
+| SA4016     | Certain bitwise operations, such as `x ^ 0`, do not do anything useful                                                                                |
+| SA4017     | A pure function's return value is discarded, making the call pointless                                                                                |
 |            |                                                                                                                                                       |
 | **SA5???** | **Correctness issues**                                                                                                                                |
 | SA5000     | Assignment to nil map                                                                                                                                 |
@@ -100,6 +103,7 @@ The following things are currently checked by staticcheck:
 | **SA9???** | **Dubious code constructs that have a high probability of being wrong**                                                                               |
 | SA9000     | Storing non-pointer values in sync.Pool allocates memory                                                                                              |
 | SA9001     | `defer`s in `for range` loops may not run when you expect them to                                                                                     |
+| SA9002     | Using a non-octal `os.FileMode`  that looks like it was meant to be in octal.                                                                         |
 
 ## Ignoring checks
 
