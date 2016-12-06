@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	texttemplate "text/template"
 	"time"
 	"unicode/utf8"
@@ -88,6 +89,9 @@ func (d FunctionDescriptions) Merge(fn *ssa.Function, desc Function) {
 
 type Checker struct {
 	funcDescs FunctionDescriptions
+
+	depmu          sync.Mutex
+	deprecatedObjs map[types.Object]string
 }
 
 func NewChecker() *Checker {
@@ -115,6 +119,7 @@ func (c *Checker) Funcs() map[string]lint.Func {
 		"SA1016": c.CheckUntrappableSignal,
 		"SA1017": c.CheckUnbufferedSignalChan,
 		"SA1018": c.CheckStringsReplaceZero,
+		"SA1019": c.CheckDeprecated,
 
 		"SA2000": c.CheckWaitgroupAdd,
 		"SA2001": c.CheckEmptyCriticalSection,
@@ -182,6 +187,7 @@ func terminates(fn *ssa.Function) (ret bool) {
 
 func (c *Checker) Init(prog *lint.Program) {
 	c.funcDescs = FunctionDescriptions{}
+	c.deprecatedObjs = map[types.Object]string{}
 
 	for fn, desc := range stdlibDescs {
 		c.funcDescs[fn] = desc
@@ -2091,38 +2097,16 @@ func (c *Checker) CheckSliceOutOfBounds(f *lint.File) {
 				if !ok {
 					continue
 				}
-				ic, ok := ia.Index.(*ssa.Const)
-				if !ok || ic.Value == nil {
+				if _, ok := ia.X.Type().Underlying().(*types.Slice); !ok {
 					continue
 				}
-				idx, _ := constant.Int64Val(ic.Value)
-				switch x := ia.X.(type) {
-				case *ssa.Const:
-					if x.Value == nil {
-						f.Errorf(ia, "index out of bounds")
-					}
-				case *ssa.Slice:
-					high := int64(-1)
-					if x.High == nil {
-						if alloc, ok := x.X.(*ssa.Alloc); ok {
-							if array, ok := alloc.Type().(*types.Pointer).Elem().(*types.Array); ok {
-								high = array.Len()
-							}
-						}
-					}
-					if high == -1 {
-						c, ok := x.High.(*ssa.Const)
-						if !ok {
-							break
-						}
-						if c.Value == nil {
-							break
-						}
-						high, _ = constant.Int64Val(c.Value)
-					}
-					if idx >= high {
-						f.Errorf(ia, "index out of bounds")
-					}
+				sr, ok1 := c.funcDescs.Get(ssafn).Ranges[ia.X].(vrp.SliceInterval)
+				idxr, ok2 := c.funcDescs.Get(ssafn).Ranges[ia.Index].(vrp.IntInterval)
+				if !ok1 || !ok2 || !sr.IsKnown() || !idxr.IsKnown() || sr.Length.Empty() || idxr.Empty() {
+					continue
+				}
+				if idxr.Lower.Cmp(sr.Length.Upper) >= 0 {
+					f.Errorf(ia, "index out of bounds")
 				}
 			}
 		}
@@ -2642,6 +2626,81 @@ func (c *Checker) CheckPureFunctions(f *lint.File) {
 				}
 			}
 		}
+		return true
+	}
+	f.Walk(fn)
+}
+
+func (c *Checker) CheckDeprecated(f *lint.File) {
+	c.depmu.Lock()
+	defer c.depmu.Unlock()
+
+	fn := func(node ast.Node) bool {
+		sel, ok := node.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+		obj := f.Pkg.TypesInfo.ObjectOf(sel.Sel)
+		if obj.Pkg() == nil {
+			return true
+		}
+		if f.Pkg.PkgInfo.Pkg == obj.Pkg() || obj.Pkg().Path()+"_test" == f.Pkg.PkgInfo.Pkg.Path() {
+			// Don't flag stuff in our own package
+			return true
+		}
+		if alt, ok := c.deprecatedObjs[obj]; ok {
+			if alt == "" {
+				return true
+			}
+			f.Errorf(sel, "%s is deprecated: %s", f.Render(sel), alt)
+			return true
+		}
+		_, path, _ := f.Program.PathEnclosingInterval(obj.Pos(), obj.Pos())
+		if len(path) <= 2 {
+			c.deprecatedObjs[obj] = ""
+			return true
+		}
+		var docs []*ast.CommentGroup
+		switch n := path[1].(type) {
+		case *ast.FuncDecl:
+			docs = append(docs, n.Doc)
+		case *ast.Field:
+			docs = append(docs, n.Doc)
+		case *ast.ValueSpec:
+			docs = append(docs, n.Doc)
+			if len(path) >= 3 {
+				if n, ok := path[2].(*ast.GenDecl); ok {
+					docs = append(docs, n.Doc)
+				}
+			}
+		case *ast.TypeSpec:
+			docs = append(docs, n.Doc)
+			if len(path) >= 3 {
+				if n, ok := path[2].(*ast.GenDecl); ok {
+					docs = append(docs, n.Doc)
+				}
+			}
+		default:
+			c.deprecatedObjs[obj] = ""
+			return true
+		}
+
+		for _, doc := range docs {
+			if doc == nil {
+				continue
+			}
+			parts := strings.Split(doc.Text(), "\n\n")
+			last := parts[len(parts)-1]
+			if !strings.HasPrefix(last, "Deprecated: ") {
+				continue
+			}
+			alt := last[len("Deprecated: "):]
+			alt = strings.Replace(alt, "\n", " ", -1)
+			f.Errorf(sel, "%s is deprecated: %s", f.Render(sel), alt)
+			c.deprecatedObjs[obj] = alt
+			return true
+		}
+		c.deprecatedObjs[obj] = ""
 		return true
 	}
 	f.Walk(fn)
