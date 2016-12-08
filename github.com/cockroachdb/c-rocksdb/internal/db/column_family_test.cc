@@ -13,10 +13,12 @@
 #include <thread>
 
 #include "db/db_impl.h"
+#include "db/db_test_util.h"
 #include "rocksdb/db.h"
 #include "rocksdb/env.h"
 #include "rocksdb/iterator.h"
 #include "util/coding.h"
+#include "util/fault_injection_test_env.h"
 #include "util/options_parser.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
@@ -25,6 +27,8 @@
 #include "utilities/merge_operators.h"
 
 namespace rocksdb {
+
+static const int kValueSize = 1000;
 
 namespace {
 std::string RandomString(Random* rnd, int len) {
@@ -70,10 +74,81 @@ class ColumnFamilyTest : public testing::Test {
     delete env_;
   }
 
+  // Return the value to associate with the specified key
+  Slice Value(int k, std::string* storage) {
+    if (k == 0) {
+      // Ugh.  Random seed of 0 used to produce no entropy.  This code
+      // preserves the implementation that was in place when all of the
+      // magic values in this file were picked.
+      *storage = std::string(kValueSize, ' ');
+      return Slice(*storage);
+    } else {
+      Random r(k);
+      return test::RandomString(&r, kValueSize, storage);
+    }
+  }
+
+  void Build(int base, int n, int flush_every = 0) {
+    std::string key_space, value_space;
+    WriteBatch batch;
+
+    for (int i = 0; i < n; i++) {
+      if (flush_every != 0 && i != 0 && i % flush_every == 0) {
+        DBImpl* dbi = reinterpret_cast<DBImpl*>(db_);
+        dbi->TEST_FlushMemTable();
+      }
+
+      int keyi = base + i;
+      Slice key(DBTestBase::Key(keyi));
+
+      batch.Clear();
+      batch.Put(handles_[0], key, Value(keyi, &value_space));
+      batch.Put(handles_[1], key, Value(keyi, &value_space));
+      batch.Put(handles_[2], key, Value(keyi, &value_space));
+      ASSERT_OK(db_->Write(WriteOptions(), &batch));
+    }
+  }
+
+  void CheckMissed() {
+    uint64_t next_expected = 0;
+    uint64_t missed = 0;
+    int bad_keys = 0;
+    int bad_values = 0;
+    int correct = 0;
+    std::string value_space;
+    for (int cf = 0; cf < 3; cf++) {
+      next_expected = 0;
+      Iterator* iter = db_->NewIterator(ReadOptions(false, true), handles_[cf]);
+      for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
+        uint64_t key;
+        Slice in(iter->key());
+        in.remove_prefix(3);
+        if (!ConsumeDecimalNumber(&in, &key) || !in.empty() ||
+            key < next_expected) {
+          bad_keys++;
+          continue;
+        }
+        missed += (key - next_expected);
+        next_expected = key + 1;
+        if (iter->value() != Value(static_cast<int>(key), &value_space)) {
+          bad_values++;
+        } else {
+          correct++;
+        }
+      }
+      delete iter;
+    }
+
+    ASSERT_EQ(0, bad_keys);
+    ASSERT_EQ(0, bad_values);
+    ASSERT_EQ(0, missed);
+    (void)correct;
+  }
+
   void Close() {
     for (auto h : handles_) {
       if (h) {
-        delete h;
+        db_->DestroyColumnFamilyHandle(h);
       }
     }
     handles_.clear();
@@ -184,7 +259,7 @@ class ColumnFamilyTest : public testing::Test {
   void DropColumnFamilies(const std::vector<int>& cfs) {
     for (auto cf : cfs) {
       ASSERT_OK(db_->DropColumnFamily(handles_[cf]));
-      delete handles_[cf];
+      db_->DestroyColumnFamilyHandle(handles_[cf]);
       handles_[cf] = nullptr;
       names_[cf] = "";
     }
@@ -426,6 +501,135 @@ TEST_F(ColumnFamilyTest, DontReuseColumnFamilyID) {
   }
 }
 
+class FlushEmptyCFTestWithParam : public ColumnFamilyTest,
+                                  public testing::WithParamInterface<bool> {
+ public:
+  FlushEmptyCFTestWithParam() { allow_2pc_ = GetParam(); }
+
+  // Required if inheriting from testing::WithParamInterface<>
+  static void SetUpTestCase() {}
+  static void TearDownTestCase() {}
+
+  bool allow_2pc_;
+};
+
+TEST_P(FlushEmptyCFTestWithParam, FlushEmptyCFTest) {
+  std::unique_ptr<FaultInjectionTestEnv> fault_env(
+      new FaultInjectionTestEnv(env_));
+  db_options_.env = fault_env.get();
+  db_options_.allow_2pc = allow_2pc_;
+  Open();
+  CreateColumnFamilies({"one", "two"});
+  // Generate log file A.
+  ASSERT_OK(Put(1, "foo", "v1"));  // seqID 1
+
+  Reopen();
+  // Log file A is not dropped after reopening because default column family's
+  // min log number is 0.
+  // It flushes to SST file X
+  ASSERT_OK(Put(1, "foo", "v1"));  // seqID 2
+  ASSERT_OK(Put(1, "bar", "v2"));  // seqID 3
+  // Current log file is file B now. While flushing, a new log file C is created
+  // and is set to current. Boths' min log number is set to file C in memory, so
+  // after flushing file B is deleted. At the same time, the min log number of
+  // default CF is not written to manifest. Log file A still remains.
+  // Flushed to SST file Y.
+  Flush(1);
+  Flush(0);
+  ASSERT_OK(Put(1, "bar", "v3"));  // seqID 4
+  ASSERT_OK(Put(1, "foo", "v4"));  // seqID 5
+
+  // Preserve file system state up to here to simulate a crash condition.
+  fault_env->SetFilesystemActive(false);
+  std::vector<std::string> names;
+  for (auto name : names_) {
+    if (name != "") {
+      names.push_back(name);
+    }
+  }
+
+  Close();
+  fault_env->ResetState();
+
+  // Before opening, there are four files:
+  //   Log file A contains seqID 1
+  //   Log file C contains seqID 4, 5
+  //   SST file X contains seqID 1
+  //   SST file Y contains seqID 2, 3
+  // Min log number:
+  //   default CF: 0
+  //   CF one, two: C
+  // When opening the DB, all the seqID should be preserved.
+  Open(names, {});
+  ASSERT_EQ("v4", Get(1, "foo"));
+  ASSERT_EQ("v3", Get(1, "bar"));
+  Close();
+
+  db_options_.env = env_;
+}
+
+TEST_P(FlushEmptyCFTestWithParam, FlushEmptyCFTest2) {
+  std::unique_ptr<FaultInjectionTestEnv> fault_env(
+      new FaultInjectionTestEnv(env_));
+  db_options_.env = fault_env.get();
+  db_options_.allow_2pc = allow_2pc_;
+  Open();
+  CreateColumnFamilies({"one", "two"});
+  // Generate log file A.
+  ASSERT_OK(Put(1, "foo", "v1"));  // seqID 1
+
+  Reopen();
+  // Log file A is not dropped after reopening because default column family's
+  // min log number is 0.
+  // It flushes to SST file X
+  ASSERT_OK(Put(1, "foo", "v1"));  // seqID 2
+  ASSERT_OK(Put(1, "bar", "v2"));  // seqID 3
+  // Current log file is file B now. While flushing, a new log file C is created
+  // and is set to current. Both CFs' min log number is set to file C so after
+  // flushing file B is deleted. Log file A still remains.
+  // Flushed to SST file Y.
+  Flush(1);
+  ASSERT_OK(Put(0, "bar", "v2"));  // seqID 4
+  ASSERT_OK(Put(2, "bar", "v2"));  // seqID 5
+  ASSERT_OK(Put(1, "bar", "v3"));  // seqID 6
+  // Flushing all column families. This forces all CFs' min log to current. This
+  // is written to the manifest file. Log file C is cleared.
+  Flush(0);
+  Flush(1);
+  Flush(2);
+  // Write to log file D
+  ASSERT_OK(Put(1, "bar", "v4"));  // seqID 7
+  ASSERT_OK(Put(1, "bar", "v5"));  // seqID 8
+  // Preserve file system state up to here to simulate a crash condition.
+  fault_env->SetFilesystemActive(false);
+  std::vector<std::string> names;
+  for (auto name : names_) {
+    if (name != "") {
+      names.push_back(name);
+    }
+  }
+
+  Close();
+  fault_env->ResetState();
+  // Before opening, there are two logfiles:
+  //   Log file A contains seqID 1
+  //   Log file D contains seqID 7, 8
+  // Min log number:
+  //   default CF: D
+  //   CF one, two: D
+  // When opening the DB, log file D should be replayed using the seqID
+  // specified in the file.
+  Open(names, {});
+  ASSERT_EQ("v1", Get(1, "foo"));
+  ASSERT_EQ("v5", Get(1, "bar"));
+  Close();
+
+  db_options_.env = env_;
+}
+
+INSTANTIATE_TEST_CASE_P(FlushEmptyCFTestWithParam, FlushEmptyCFTestWithParam,
+                        ::testing::Bool());
+
 TEST_F(ColumnFamilyTest, AddDrop) {
   Open();
   CreateColumnFamilies({"one", "two", "three"});
@@ -447,7 +651,7 @@ TEST_F(ColumnFamilyTest, AddDrop) {
 
   std::vector<std::string> families;
   ASSERT_OK(DB::ListColumnFamilies(db_options_, dbname_, &families));
-  sort(families.begin(), families.end());
+  std::sort(families.begin(), families.end());
   ASSERT_TRUE(families ==
               std::vector<std::string>({"default", "four", "three"}));
 }
@@ -706,6 +910,38 @@ TEST_F(ColumnFamilyTest, LogDeletionTest) {
   // [0, (1)] [1, (2)], [2, (3)] [3]
   AssertCountLiveLogFiles(4);
   Close();
+}
+
+TEST_F(ColumnFamilyTest, CrashAfterFlush) {
+  std::unique_ptr<FaultInjectionTestEnv> fault_env(
+      new FaultInjectionTestEnv(env_));
+  db_options_.env = fault_env.get();
+  Open();
+  CreateColumnFamilies({"one"});
+
+  WriteBatch batch;
+  batch.Put(handles_[0], Slice("foo"), Slice("bar"));
+  batch.Put(handles_[1], Slice("foo"), Slice("bar"));
+  ASSERT_OK(db_->Write(WriteOptions(), &batch));
+  Flush(0);
+  fault_env->SetFilesystemActive(false);
+
+  std::vector<std::string> names;
+  for (auto name : names_) {
+    if (name != "") {
+      names.push_back(name);
+    }
+  }
+  Close();
+  fault_env->DropUnsyncedFileData();
+  fault_env->ResetState();
+  Open(names, {});
+
+  // Write batch should be atomic.
+  ASSERT_EQ(Get(0, "foo"), Get(1, "foo"));
+
+  Close();
+  db_options_.env = env_;
 }
 
 // Makes sure that obsolete log files get deleted
@@ -1876,6 +2112,9 @@ TEST_F(ColumnFamilyTest, FlushStaleColumnFamilies) {
   // 3 files for default column families, 1 file for column family [two], zero
   // files for column family [one], because it's empty
   AssertCountLiveFiles(4);
+
+  Flush(0);
+  ASSERT_EQ(0, dbfull()->TEST_total_log_size());
   Close();
 }
 
@@ -1969,7 +2208,7 @@ TEST_F(ColumnFamilyTest, ReadDroppedColumnFamily) {
         ASSERT_OK(db_->DropColumnFamily(handles_[2]));
       } else {
         // delete CF two
-        delete handles_[2];
+        db_->DestroyColumnFamilyHandle(handles_[2]);
         handles_[2] = nullptr;
       }
       // Make sure iterator created can still be used.
@@ -2174,6 +2413,7 @@ TEST_F(ColumnFamilyTest, WriteStallSingleColumnFamily) {
   mutable_cf_options.level0_stop_writes_trigger = 10000;
   mutable_cf_options.soft_pending_compaction_bytes_limit = 200;
   mutable_cf_options.hard_pending_compaction_bytes_limit = 2000;
+  mutable_cf_options.disable_auto_compactions = false;
 
   vstorage->TEST_set_estimated_compaction_needed_bytes(50);
   cfd->RecalculateWriteStallConditions(mutable_cf_options);
@@ -2320,16 +2560,17 @@ TEST_F(ColumnFamilyTest, WriteStallSingleColumnFamily) {
   vstorage->set_l0_delay_trigger_count(50);
   cfd->RecalculateWriteStallConditions(mutable_cf_options);
   ASSERT_TRUE(!dbfull()->TEST_write_controler().IsStopped());
-  ASSERT_TRUE(dbfull()->TEST_write_controler().NeedsDelay());
+  ASSERT_TRUE(!dbfull()->TEST_write_controler().NeedsDelay());
   ASSERT_EQ(kBaseRate, dbfull()->TEST_write_controler().delayed_write_rate());
 
   vstorage->set_l0_delay_trigger_count(60);
   vstorage->TEST_set_estimated_compaction_needed_bytes(300);
   cfd->RecalculateWriteStallConditions(mutable_cf_options);
   ASSERT_TRUE(!dbfull()->TEST_write_controler().IsStopped());
-  ASSERT_TRUE(dbfull()->TEST_write_controler().NeedsDelay());
+  ASSERT_TRUE(!dbfull()->TEST_write_controler().NeedsDelay());
   ASSERT_EQ(kBaseRate, dbfull()->TEST_write_controler().delayed_write_rate());
 
+  mutable_cf_options.disable_auto_compactions = false;
   vstorage->set_l0_delay_trigger_count(70);
   vstorage->TEST_set_estimated_compaction_needed_bytes(500);
   cfd->RecalculateWriteStallConditions(mutable_cf_options);
@@ -2337,7 +2578,6 @@ TEST_F(ColumnFamilyTest, WriteStallSingleColumnFamily) {
   ASSERT_TRUE(dbfull()->TEST_write_controler().NeedsDelay());
   ASSERT_EQ(kBaseRate, dbfull()->TEST_write_controler().delayed_write_rate());
 
-  mutable_cf_options.disable_auto_compactions = false;
   vstorage->set_l0_delay_trigger_count(71);
   vstorage->TEST_set_estimated_compaction_needed_bytes(501);
   cfd->RecalculateWriteStallConditions(mutable_cf_options);
@@ -2564,6 +2804,217 @@ TEST_F(ColumnFamilyTest, CompactionSpeedupTwoColumnFamilies) {
   ASSERT_EQ(2, dbfull()->BGCompactionsAllowed());
 }
 
+#ifndef ROCKSDB_LITE
+TEST_F(ColumnFamilyTest, FlushCloseWALFiles) {
+  SpecialEnv env(Env::Default());
+  db_options_.env = &env;
+  db_options_.max_background_flushes = 1;
+  column_family_options_.memtable_factory.reset(new SpecialSkipListFactory(2));
+  Open();
+  CreateColumnFamilies({"one"});
+  ASSERT_OK(Put(1, "fodor", "mirko"));
+  ASSERT_OK(Put(0, "fodor", "mirko"));
+  ASSERT_OK(Put(1, "fodor", "mirko"));
+
+  // Block flush jobs from running
+  test::SleepingBackgroundTask sleeping_task;
+  env_->Schedule(&test::SleepingBackgroundTask::DoSleepTask, &sleeping_task,
+                 Env::Priority::HIGH);
+
+  WriteOptions wo;
+  wo.sync = true;
+  ASSERT_OK(db_->Put(wo, handles_[1], "fodor", "mirko"));
+
+  ASSERT_EQ(2, env.num_open_wal_file_.load());
+
+  sleeping_task.WakeUp();
+  sleeping_task.WaitUntilDone();
+  WaitForFlush(1);
+  ASSERT_EQ(1, env.num_open_wal_file_.load());
+
+  Reopen();
+  ASSERT_EQ("mirko", Get(0, "fodor"));
+  ASSERT_EQ("mirko", Get(1, "fodor"));
+  db_options_.env = env_;
+  Close();
+}
+#endif  // !ROCKSDB_LITE
+
+TEST_F(ColumnFamilyTest, IteratorCloseWALFile1) {
+  SpecialEnv env(Env::Default());
+  db_options_.env = &env;
+  db_options_.max_background_flushes = 1;
+  column_family_options_.memtable_factory.reset(new SpecialSkipListFactory(2));
+  Open();
+  CreateColumnFamilies({"one"});
+  ASSERT_OK(Put(1, "fodor", "mirko"));
+  // Create an iterator holding the current super version.
+  Iterator* it = db_->NewIterator(ReadOptions(), handles_[1]);
+  // A flush will make `it` hold the last reference of its super version.
+  Flush(1);
+
+  ASSERT_OK(Put(1, "fodor", "mirko"));
+  ASSERT_OK(Put(0, "fodor", "mirko"));
+  ASSERT_OK(Put(1, "fodor", "mirko"));
+
+  // Flush jobs will close previous WAL files after finishing. By
+  // block flush jobs from running, we trigger a condition where
+  // the iterator destructor should close the WAL files.
+  test::SleepingBackgroundTask sleeping_task;
+  env_->Schedule(&test::SleepingBackgroundTask::DoSleepTask, &sleeping_task,
+                 Env::Priority::HIGH);
+
+  WriteOptions wo;
+  wo.sync = true;
+  ASSERT_OK(db_->Put(wo, handles_[1], "fodor", "mirko"));
+
+  ASSERT_EQ(2, env.num_open_wal_file_.load());
+  // Deleting the iterator will clear its super version, triggering
+  // closing all files
+  delete it;
+  ASSERT_EQ(1, env.num_open_wal_file_.load());
+
+  sleeping_task.WakeUp();
+  sleeping_task.WaitUntilDone();
+  WaitForFlush(1);
+
+  Reopen();
+  ASSERT_EQ("mirko", Get(0, "fodor"));
+  ASSERT_EQ("mirko", Get(1, "fodor"));
+  db_options_.env = env_;
+  Close();
+}
+
+TEST_F(ColumnFamilyTest, IteratorCloseWALFile2) {
+  SpecialEnv env(Env::Default());
+  // Allow both of flush and purge job to schedule.
+  env.SetBackgroundThreads(2, Env::HIGH);
+  db_options_.env = &env;
+  db_options_.max_background_flushes = 1;
+  column_family_options_.memtable_factory.reset(new SpecialSkipListFactory(2));
+  Open();
+  CreateColumnFamilies({"one"});
+  ASSERT_OK(Put(1, "fodor", "mirko"));
+  // Create an iterator holding the current super version.
+  ReadOptions ro;
+  ro.background_purge_on_iterator_cleanup = true;
+  Iterator* it = db_->NewIterator(ro, handles_[1]);
+  // A flush will make `it` hold the last reference of its super version.
+  Flush(1);
+
+  ASSERT_OK(Put(1, "fodor", "mirko"));
+  ASSERT_OK(Put(0, "fodor", "mirko"));
+  ASSERT_OK(Put(1, "fodor", "mirko"));
+
+  rocksdb::SyncPoint::GetInstance()->LoadDependency({
+      {"ColumnFamilyTest::IteratorCloseWALFile2:0",
+       "DBImpl::BGWorkPurge:start"},
+      {"ColumnFamilyTest::IteratorCloseWALFile2:2",
+       "DBImpl::BackgroundCallFlush:start"},
+      {"DBImpl::BGWorkPurge:end", "ColumnFamilyTest::IteratorCloseWALFile2:1"},
+  });
+  rocksdb::SyncPoint::GetInstance()->EnableProcessing();
+
+  WriteOptions wo;
+  wo.sync = true;
+  ASSERT_OK(db_->Put(wo, handles_[1], "fodor", "mirko"));
+
+  ASSERT_EQ(2, env.num_open_wal_file_.load());
+  // Deleting the iterator will clear its super version, triggering
+  // closing all files
+  delete it;
+  ASSERT_EQ(2, env.num_open_wal_file_.load());
+
+  TEST_SYNC_POINT("ColumnFamilyTest::IteratorCloseWALFile2:0");
+  TEST_SYNC_POINT("ColumnFamilyTest::IteratorCloseWALFile2:1");
+  ASSERT_EQ(1, env.num_open_wal_file_.load());
+  TEST_SYNC_POINT("ColumnFamilyTest::IteratorCloseWALFile2:2");
+  WaitForFlush(1);
+  ASSERT_EQ(1, env.num_open_wal_file_.load());
+  rocksdb::SyncPoint::GetInstance()->DisableProcessing();
+
+  Reopen();
+  ASSERT_EQ("mirko", Get(0, "fodor"));
+  ASSERT_EQ("mirko", Get(1, "fodor"));
+  db_options_.env = env_;
+  Close();
+}
+
+#ifndef ROCKSDB_LITE  // TEST functions are not supported in lite
+TEST_F(ColumnFamilyTest, ForwardIteratorCloseWALFile) {
+  SpecialEnv env(Env::Default());
+  // Allow both of flush and purge job to schedule.
+  env.SetBackgroundThreads(2, Env::HIGH);
+  db_options_.env = &env;
+  db_options_.max_background_flushes = 1;
+  column_family_options_.memtable_factory.reset(new SpecialSkipListFactory(3));
+  column_family_options_.level0_file_num_compaction_trigger = 2;
+  Open();
+  CreateColumnFamilies({"one"});
+  ASSERT_OK(Put(1, "fodor", "mirko"));
+  ASSERT_OK(Put(1, "fodar2", "mirko"));
+  Flush(1);
+
+  // Create an iterator holding the current super version, as well as
+  // the SST file just flushed.
+  ReadOptions ro;
+  ro.tailing = true;
+  ro.background_purge_on_iterator_cleanup = true;
+  Iterator* it = db_->NewIterator(ro, handles_[1]);
+  // A flush will make `it` hold the last reference of its super version.
+
+  ASSERT_OK(Put(1, "fodor", "mirko"));
+  ASSERT_OK(Put(1, "fodar2", "mirko"));
+  Flush(1);
+
+  WaitForCompaction();
+
+  ASSERT_OK(Put(1, "fodor", "mirko"));
+  ASSERT_OK(Put(1, "fodor", "mirko"));
+  ASSERT_OK(Put(0, "fodor", "mirko"));
+  ASSERT_OK(Put(1, "fodor", "mirko"));
+
+  rocksdb::SyncPoint::GetInstance()->LoadDependency({
+      {"ColumnFamilyTest::IteratorCloseWALFile2:0",
+       "DBImpl::BGWorkPurge:start"},
+      {"ColumnFamilyTest::IteratorCloseWALFile2:2",
+       "DBImpl::BackgroundCallFlush:start"},
+      {"DBImpl::BGWorkPurge:end", "ColumnFamilyTest::IteratorCloseWALFile2:1"},
+  });
+  rocksdb::SyncPoint::GetInstance()->EnableProcessing();
+
+  WriteOptions wo;
+  wo.sync = true;
+  ASSERT_OK(db_->Put(wo, handles_[1], "fodor", "mirko"));
+
+  env.delete_count_.store(0);
+  ASSERT_EQ(2, env.num_open_wal_file_.load());
+  // Deleting the iterator will clear its super version, triggering
+  // closing all files
+  it->Seek("");
+  ASSERT_EQ(2, env.num_open_wal_file_.load());
+  ASSERT_EQ(0, env.delete_count_.load());
+
+  TEST_SYNC_POINT("ColumnFamilyTest::IteratorCloseWALFile2:0");
+  TEST_SYNC_POINT("ColumnFamilyTest::IteratorCloseWALFile2:1");
+  ASSERT_EQ(1, env.num_open_wal_file_.load());
+  ASSERT_EQ(1, env.delete_count_.load());
+  TEST_SYNC_POINT("ColumnFamilyTest::IteratorCloseWALFile2:2");
+  WaitForFlush(1);
+  ASSERT_EQ(1, env.num_open_wal_file_.load());
+  ASSERT_EQ(1, env.delete_count_.load());
+
+  delete it;
+  rocksdb::SyncPoint::GetInstance()->DisableProcessing();
+
+  Reopen();
+  ASSERT_EQ("mirko", Get(0, "fodor"));
+  ASSERT_EQ("mirko", Get(1, "fodor"));
+  db_options_.env = env_;
+  Close();
+}
+#endif  // !ROCKSDB_LITE
+
 // Disable on windows because SyncWAL requires env->IsSyncThreadSafe()
 // to return true which is not so in unbuffered mode.
 #ifndef OS_WIN
@@ -2597,6 +3048,80 @@ TEST_F(ColumnFamilyTest, LogSyncConflictFlush) {
   Close();
 }
 #endif
+
+// this test is placed here, because the infrastructure for Column Family
+// test is being used to ensure a roll of wal files.
+// Basic idea is to test that WAL truncation is being detected and not
+// ignored
+TEST_F(ColumnFamilyTest, DISABLED_LogTruncationTest) {
+  Open();
+  CreateColumnFamiliesAndReopen({"one", "two"});
+
+  Build(0, 100);
+
+  // Flush the 0th column family to force a roll of the wal log
+  Flush(0);
+
+  // Add some more entries
+  Build(100, 100);
+
+  std::vector<std::string> filenames;
+  ASSERT_OK(env_->GetChildren(dbname_, &filenames));
+
+  // collect wal files
+  std::vector<std::string> logfs;
+  for (size_t i = 0; i < filenames.size(); i++) {
+    uint64_t number;
+    FileType type;
+    if (!(ParseFileName(filenames[i], &number, &type))) continue;
+
+    if (type != kLogFile) continue;
+
+    logfs.push_back(filenames[i]);
+  }
+
+  std::sort(logfs.begin(), logfs.end());
+  ASSERT_GE(logfs.size(), 2);
+
+  // Take the last but one file, and truncate it
+  std::string fpath = dbname_ + "/" + logfs[logfs.size() - 2];
+  std::vector<std::string> names_save = names_;
+
+  uint64_t fsize;
+  ASSERT_OK(env_->GetFileSize(fpath, &fsize));
+  ASSERT_GT(fsize, 0);
+
+  Close();
+
+  std::string backup_logs = dbname_ + "/backup_logs";
+  std::string t_fpath = backup_logs + "/" + logfs[logfs.size() - 2];
+
+  ASSERT_OK(env_->CreateDirIfMissing(backup_logs));
+  // Not sure how easy it is to make this data driven.
+  // need to read back the WAL file and truncate last 10
+  // entries
+  CopyFile(fpath, t_fpath, fsize - 9180);
+
+  ASSERT_OK(env_->DeleteFile(fpath));
+  ASSERT_OK(env_->RenameFile(t_fpath, fpath));
+
+  db_options_.wal_recovery_mode = WALRecoveryMode::kPointInTimeRecovery;
+
+  OpenReadOnly(names_save);
+
+  CheckMissed();
+
+  Close();
+
+  Open(names_save);
+
+  CheckMissed();
+
+  Close();
+
+  // cleanup
+  env_->DeleteDir(backup_logs);
+}
 }  // namespace rocksdb
 
 int main(int argc, char** argv) {

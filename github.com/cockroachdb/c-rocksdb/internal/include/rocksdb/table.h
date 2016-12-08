@@ -21,15 +21,16 @@
 #include <unordered_map>
 
 #include "rocksdb/env.h"
+#include "rocksdb/immutable_options.h"
 #include "rocksdb/iterator.h"
 #include "rocksdb/options.h"
-#include "rocksdb/immutable_options.h"
 #include "rocksdb/status.h"
 
 namespace rocksdb {
 
 // -- Block-based Table
 class FlushBlockPolicyFactory;
+class PersistentCache;
 class RandomAccessFile;
 struct TableReaderOptions;
 struct TableBuilderOptions;
@@ -83,10 +84,8 @@ struct BlockBasedTableOptions {
 
   IndexType index_type = kBinarySearch;
 
-  // Influence the behavior when kHashSearch is used.
-  // if false, stores a precise prefix to block range mapping
-  // if true, does not store prefix and allows prefix hash collision
-  // (less memory consumption)
+  // This option is now deprecated. No matter what value it is set to,
+  // it will behave as if hash_index_allow_collision=true.
   bool hash_index_allow_collision = true;
 
   // Use the specified checksum type. Newly created table files will be
@@ -102,6 +101,10 @@ struct BlockBasedTableOptions {
   // If non-NULL use the specified cache for blocks.
   // If NULL, rocksdb will automatically create and use an 8MB internal cache.
   std::shared_ptr<Cache> block_cache = nullptr;
+
+  // If non-NULL use the specified cache for pages read from device
+  // IF NULL, no page cache is used
+  std::shared_ptr<PersistentCache> persistent_cache = nullptr;
 
   // If non-NULL use the specified cache for compressed blocks.
   // If NULL, rocksdb will not use a compressed block cache.
@@ -157,6 +160,11 @@ struct BlockBasedTableOptions {
   //
   // Default: false
   bool skip_table_builder_flush = false;
+
+  // Verify that decompressing the compressed block gives back the input. This
+  // is a verification mode that we use to detect bugs in compression
+  // algorithms.
+  bool verify_compression = false;
 
   // We currently have three versions:
   // 0 -- This version is currently written out by all RocksDB's versions by
@@ -382,7 +390,8 @@ class TableFactory {
   virtual Status NewTableReader(
       const TableReaderOptions& table_reader_options,
       unique_ptr<RandomAccessFileReader>&& file, uint64_t file_size,
-      unique_ptr<TableReader>* table_reader) const = 0;
+      unique_ptr<TableReader>* table_reader,
+      bool prefetch_index_and_filter_in_cache = true) const = 0;
 
   // Return a table builder to write to a file for this table type.
   //

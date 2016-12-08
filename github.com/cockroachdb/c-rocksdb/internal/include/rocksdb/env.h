@@ -68,6 +68,12 @@ struct EnvOptions {
    // If true, then use mmap to write data
   bool use_mmap_writes = true;
 
+  // If true, then use O_DIRECT for reading data
+  bool use_direct_reads = false;
+
+  // If true, then use O_DIRECT for writing data
+  bool use_direct_writes = false;
+
   // If false, fallocate() calls are bypassed
   bool allow_fallocate = true;
 
@@ -727,7 +733,7 @@ extern void Error(const shared_ptr<Logger>& info_log, const char* format, ...);
 extern void Fatal(const shared_ptr<Logger>& info_log, const char* format, ...);
 
 // Log the specified data to *info_log if info_log is non-nullptr.
-// The default info log level is InfoLogLevel::ERROR.
+// The default info log level is InfoLogLevel::INFO_LEVEL.
 extern void Log(const shared_ptr<Logger>& info_log, const char* format, ...)
 #   if defined(__GNUC__) || defined(__clang__)
     __attribute__((__format__ (__printf__, 2, 3)))
@@ -739,7 +745,7 @@ extern void LogFlush(Logger *info_log);
 extern void Log(const InfoLogLevel log_level, Logger* info_log,
                 const char* format, ...);
 
-// The default info log level is InfoLogLevel::ERROR.
+// The default info log level is InfoLogLevel::INFO_LEVEL.
 extern void Log(Logger* info_log, const char* format, ...)
 #   if defined(__GNUC__) || defined(__clang__)
     __attribute__((__format__ (__printf__, 2, 3)))

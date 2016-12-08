@@ -39,6 +39,7 @@ class DBBlockCacheTest : public DBTestBase {
   Options GetOptions(const BlockBasedTableOptions& table_options) {
     Options options = CurrentOptions();
     options.create_if_missing = true;
+    options.avoid_flush_during_recovery = false;
     // options.compression = kNoCompression;
     options.statistics = rocksdb::CreateDBStatistics();
     options.table_factory.reset(new BlockBasedTableFactory(table_options));
@@ -269,16 +270,57 @@ TEST_F(DBBlockCacheTest, IndexAndFilterBlocksOfNewTableAddedToCache) {
   ASSERT_EQ(2, TestGetTickerCount(options, BLOCK_CACHE_FILTER_HIT));
 
   // Make sure index block is in cache.
-  auto index_block_hit = TestGetTickerCount(options, BLOCK_CACHE_FILTER_HIT);
+  auto index_block_hit = TestGetTickerCount(options, BLOCK_CACHE_INDEX_HIT);
   value = Get(1, "key");
-  ASSERT_EQ(1, TestGetTickerCount(options, BLOCK_CACHE_FILTER_MISS));
+  ASSERT_EQ(1, TestGetTickerCount(options, BLOCK_CACHE_INDEX_MISS));
   ASSERT_EQ(index_block_hit + 1,
-            TestGetTickerCount(options, BLOCK_CACHE_FILTER_HIT));
+            TestGetTickerCount(options, BLOCK_CACHE_INDEX_HIT));
 
   value = Get(1, "key");
-  ASSERT_EQ(1, TestGetTickerCount(options, BLOCK_CACHE_FILTER_MISS));
+  ASSERT_EQ(1, TestGetTickerCount(options, BLOCK_CACHE_INDEX_MISS));
   ASSERT_EQ(index_block_hit + 2,
-            TestGetTickerCount(options, BLOCK_CACHE_FILTER_HIT));
+            TestGetTickerCount(options, BLOCK_CACHE_INDEX_HIT));
+}
+
+TEST_F(DBBlockCacheTest, IndexAndFilterBlocksStats) {
+  Options options = CurrentOptions();
+  options.create_if_missing = true;
+  options.statistics = rocksdb::CreateDBStatistics();
+  BlockBasedTableOptions table_options;
+  table_options.cache_index_and_filter_blocks = true;
+  // 200 bytes are enough to hold the first two blocks
+  std::shared_ptr<Cache> cache = NewLRUCache(200, 0, false);
+  table_options.block_cache = cache;
+  table_options.filter_policy.reset(NewBloomFilterPolicy(20));
+  options.table_factory.reset(new BlockBasedTableFactory(table_options));
+  CreateAndReopenWithCF({"pikachu"}, options);
+
+  ASSERT_OK(Put(1, "key", "val"));
+  // Create a new table
+  ASSERT_OK(Flush(1));
+  size_t index_bytes_insert =
+      TestGetTickerCount(options, BLOCK_CACHE_INDEX_BYTES_INSERT);
+  size_t filter_bytes_insert =
+      TestGetTickerCount(options, BLOCK_CACHE_FILTER_BYTES_INSERT);
+  ASSERT_GT(index_bytes_insert, 0);
+  ASSERT_GT(filter_bytes_insert, 0);
+  ASSERT_EQ(cache->GetUsage(), index_bytes_insert + filter_bytes_insert);
+  // set the cache capacity to the current usage
+  cache->SetCapacity(index_bytes_insert + filter_bytes_insert);
+  ASSERT_EQ(TestGetTickerCount(options, BLOCK_CACHE_INDEX_BYTES_EVICT), 0);
+  ASSERT_EQ(TestGetTickerCount(options, BLOCK_CACHE_FILTER_BYTES_EVICT), 0);
+  ASSERT_OK(Put(1, "key2", "val"));
+  // Create a new table
+  ASSERT_OK(Flush(1));
+  // cache evicted old index and block entries
+  ASSERT_GT(TestGetTickerCount(options, BLOCK_CACHE_INDEX_BYTES_INSERT),
+            index_bytes_insert);
+  ASSERT_GT(TestGetTickerCount(options, BLOCK_CACHE_FILTER_BYTES_INSERT),
+            filter_bytes_insert);
+  ASSERT_EQ(TestGetTickerCount(options, BLOCK_CACHE_INDEX_BYTES_EVICT),
+            index_bytes_insert);
+  ASSERT_EQ(TestGetTickerCount(options, BLOCK_CACHE_FILTER_BYTES_EVICT),
+            filter_bytes_insert);
 }
 
 TEST_F(DBBlockCacheTest, ParanoidFileChecks) {

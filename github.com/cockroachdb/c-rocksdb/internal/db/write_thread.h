@@ -11,11 +11,12 @@
 #include <chrono>
 #include <condition_variable>
 #include <mutex>
-#include <vector>
 #include <type_traits>
+#include <vector>
+
 #include "db/write_callback.h"
-#include "rocksdb/types.h"
 #include "rocksdb/status.h"
+#include "rocksdb/types.h"
 #include "rocksdb/write_batch.h"
 #include "util/autovector.h"
 #include "util/instrumented_mutex.h"
@@ -79,6 +80,9 @@ class WriteThread {
     WriteBatch* batch;
     bool sync;
     bool disableWAL;
+    bool disable_memtable;
+    uint64_t log_used;  // log number that this batch was inserted into
+    uint64_t log_ref;   // log number that memtable insert should reference
     bool in_batch_group;
     WriteCallback* callback;
     bool made_waitable;          // records lazy construction of mutex and cv
@@ -96,6 +100,9 @@ class WriteThread {
         : batch(nullptr),
           sync(false),
           disableWAL(false),
+          disable_memtable(false),
+          log_used(0),
+          log_ref(0),
           in_batch_group(false),
           callback(nullptr),
           made_waitable(false),
@@ -153,6 +160,12 @@ class WriteThread {
       return (callback != nullptr) && !callback_status.ok();
     }
 
+    bool ShouldWriteToMemtable() {
+      return !CallbackFailed() && !disable_memtable;
+    }
+
+    bool ShouldWriteToWAL() { return !CallbackFailed() && !disableWAL; }
+
     // No other mutexes may be acquired while holding StateMutex(), it is
     // always last in the order
     std::mutex& StateMutex() {
@@ -180,7 +193,7 @@ class WriteThread {
   // writer.  If w has become the leader of a write batch group, returns
   // STATE_GROUP_LEADER.  If w has been made part of a sequential batch
   // group and the leader has performed the write, returns STATE_DONE.
-  // If w has been made part of a parallel batch group and is reponsible
+  // If w has been made part of a parallel batch group and is responsible
   // for updating the memtable, returns STATE_PARALLEL_FOLLOWER.
   //
   // The db mutex SHOULD NOT be held when calling this function, because

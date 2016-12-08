@@ -10,13 +10,13 @@
 #include "rocksdb/db.h"
 
 #include <memory>
-#include "db/memtable.h"
 #include "db/column_family.h"
+#include "db/memtable.h"
 #include "db/write_batch_internal.h"
-#include "db/writebuffer.h"
 #include "rocksdb/env.h"
 #include "rocksdb/memtablerep.h"
 #include "rocksdb/utilities/write_batch_with_index.h"
+#include "rocksdb/write_buffer_manager.h"
 #include "table/scoped_arena_iterator.h"
 #include "util/logging.h"
 #include "util/string_util.h"
@@ -30,7 +30,7 @@ static std::string PrintContents(WriteBatch* b) {
   Options options;
   options.memtable_factory = factory;
   ImmutableCFOptions ioptions(options);
-  WriteBuffer wb(options.db_write_buffer_size);
+  WriteBufferManager wb(options.db_write_buffer_size);
   MemTable* mem =
       new MemTable(cmp, ioptions, MutableCFOptions(options, ioptions), &wb,
                    kMaxSequenceNumber);
@@ -231,6 +231,22 @@ namespace {
     virtual void LogData(const Slice& blob) override {
       seen += "LogData(" + blob.ToString() + ")";
     }
+    virtual Status MarkBeginPrepare() override {
+      seen += "MarkBeginPrepare()";
+      return Status::OK();
+    }
+    virtual Status MarkEndPrepare(const Slice& xid) override {
+      seen += "MarkEndPrepare(" + xid.ToString() + ")";
+      return Status::OK();
+    }
+    virtual Status MarkCommit(const Slice& xid) override {
+      seen += "MarkCommit(" + xid.ToString() + ")";
+      return Status::OK();
+    }
+    virtual Status MarkRollback(const Slice& xid) override {
+      seen += "MarkRollback(" + xid.ToString() + ")";
+      return Status::OK();
+    }
   };
 }
 
@@ -305,6 +321,31 @@ TEST_F(WriteBatchTest, Blob) {
       "SingleDelete(k3)"
       "LogData(blob2)"
       "Merge(foo, bar)",
+      handler.seen);
+}
+
+TEST_F(WriteBatchTest, PrepareCommit) {
+  WriteBatch batch;
+  WriteBatchInternal::InsertNoop(&batch);
+  batch.Put(Slice("k1"), Slice("v1"));
+  batch.Put(Slice("k2"), Slice("v2"));
+  batch.SetSavePoint();
+  WriteBatchInternal::MarkEndPrepare(&batch, Slice("xid1"));
+  Status s = batch.RollbackToSavePoint();
+  ASSERT_EQ(s, Status::NotFound());
+  WriteBatchInternal::MarkCommit(&batch, Slice("xid1"));
+  WriteBatchInternal::MarkRollback(&batch, Slice("xid1"));
+  ASSERT_EQ(2, batch.Count());
+
+  TestHandler handler;
+  batch.Iterate(&handler);
+  ASSERT_EQ(
+      "MarkBeginPrepare()"
+      "Put(k1, v1)"
+      "Put(k2, v2)"
+      "MarkEndPrepare(xid1)"
+      "MarkCommit(xid1)"
+      "MarkRollback(xid1)",
       handler.seen);
 }
 

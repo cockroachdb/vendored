@@ -537,16 +537,19 @@ bool ParseMemtableOptions(const std::string& name, const std::string& value,
   } else if (name == "arena_block_size") {
     new_options->arena_block_size = ParseSizeT(value);
   } else if (name == "memtable_prefix_bloom_bits") {
-    new_options->memtable_prefix_bloom_bits = ParseUint32(value);
+    // deprecated
+  } else if (name == "memtable_prefix_bloom_size_ratio") {
+    new_options->memtable_prefix_bloom_size_ratio = ParseDouble(value);
   } else if (name == "memtable_prefix_bloom_probes") {
-    new_options->memtable_prefix_bloom_probes = ParseUint32(value);
+    // Deprecated
   } else if (name == "memtable_prefix_bloom_huge_page_tlb_size") {
-    new_options->memtable_prefix_bloom_huge_page_tlb_size =
-      ParseSizeT(value);
+    // Deprecated
+  } else if (name == "memtable_huge_page_size") {
+    new_options->memtable_huge_page_size = ParseSizeT(value);
   } else if (name == "max_successive_merges") {
     new_options->max_successive_merges = ParseSizeT(value);
   } else if (name == "filter_deletes") {
-    new_options->filter_deletes = ParseBoolean(name, value);
+    // Deprecated
   } else if (name == "max_write_buffer_number") {
     new_options->max_write_buffer_number = ParseInt(value);
   } else if (name == "inplace_update_num_locks") {
@@ -622,6 +625,16 @@ bool ParseMiscOptions(const std::string& name, const std::string& value,
     new_options->max_sequential_skip_in_iterations = ParseUint64(value);
   } else if (name == "paranoid_file_checks") {
     new_options->paranoid_file_checks = ParseBoolean(name, value);
+  } else if (name == "report_bg_io_stats") {
+    new_options->report_bg_io_stats = ParseBoolean(name, value);
+  } else if (name == "compression") {
+    bool is_ok = ParseEnum<CompressionType>(compression_type_string_map, value,
+                                            &new_options->compression);
+    if (!is_ok) {
+      return false;
+    }
+  } else if (name == "min_partial_merge_operands") {
+    new_options->min_partial_merge_operands = ParseUint32(value);
   } else {
     return false;
   }
@@ -833,7 +846,8 @@ Status ParseColumnFamilyOption(const std::string& name,
             "Unable to parse the specified CF option " + name);
       }
       const auto& opt_info = iter->second;
-      if (ParseOptionHelper(
+      if (opt_info.verification != OptionVerificationType::kDeprecated &&
+          ParseOptionHelper(
               reinterpret_cast<char*>(new_options) + opt_info.offset,
               opt_info.type, value)) {
         return Status::OK();
@@ -945,6 +959,17 @@ Status GetStringFromColumnFamilyOptions(std::string* opt_string,
   return Status::OK();
 }
 
+Status GetStringFromCompressionType(std::string* compression_str,
+                                    CompressionType compression_type) {
+  bool ok = SerializeEnum<CompressionType>(compression_type_string_map,
+                                           compression_type, compression_str);
+  if (ok) {
+    return Status::OK();
+  } else {
+    return Status::InvalidArgument("Invalid compression types");
+  }
+}
+
 bool SerializeSingleBlockBasedTableOption(
     std::string* opt_string, const BlockBasedTableOptions& bbt_options,
     const std::string& name, const std::string& delimiter) {
@@ -1014,7 +1039,8 @@ Status ParseDBOption(const std::string& name,
         return Status::InvalidArgument("Unrecognized option DBOptions:", name);
       }
       const auto& opt_info = iter->second;
-      if (ParseOptionHelper(
+      if (opt_info.verification != OptionVerificationType::kDeprecated &&
+          ParseOptionHelper(
               reinterpret_cast<char*>(new_options) + opt_info.offset,
               opt_info.type, value)) {
         return Status::OK();
@@ -1416,14 +1442,10 @@ ColumnFamilyOptions BuildColumnFamilyOptions(
   cf_opts.write_buffer_size = mutable_cf_options.write_buffer_size;
   cf_opts.max_write_buffer_number = mutable_cf_options.max_write_buffer_number;
   cf_opts.arena_block_size = mutable_cf_options.arena_block_size;
-  cf_opts.memtable_prefix_bloom_bits =
-      mutable_cf_options.memtable_prefix_bloom_bits;
-  cf_opts.memtable_prefix_bloom_probes =
-      mutable_cf_options.memtable_prefix_bloom_probes;
-  cf_opts.memtable_prefix_bloom_huge_page_tlb_size =
-      mutable_cf_options.memtable_prefix_bloom_huge_page_tlb_size;
+  cf_opts.memtable_prefix_bloom_size_ratio =
+      mutable_cf_options.memtable_prefix_bloom_size_ratio;
+  cf_opts.memtable_huge_page_size = mutable_cf_options.memtable_huge_page_size;
   cf_opts.max_successive_merges = mutable_cf_options.max_successive_merges;
-  cf_opts.filter_deletes = mutable_cf_options.filter_deletes;
   cf_opts.inplace_update_num_locks =
       mutable_cf_options.inplace_update_num_locks;
 

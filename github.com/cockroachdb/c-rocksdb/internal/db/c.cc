@@ -269,33 +269,31 @@ struct rocksdb_mergeoperator_t : public MergeOperator {
 
   virtual const char* Name() const override { return (*name_)(state_); }
 
-  virtual bool FullMerge(const Slice& key, const Slice* existing_value,
-                         const std::deque<std::string>& operand_list,
-                         std::string* new_value,
-                         Logger* logger) const override {
-    size_t n = operand_list.size();
+  virtual bool FullMergeV2(const MergeOperationInput& merge_in,
+                           MergeOperationOutput* merge_out) const override {
+    size_t n = merge_in.operand_list.size();
     std::vector<const char*> operand_pointers(n);
     std::vector<size_t> operand_sizes(n);
     for (size_t i = 0; i < n; i++) {
-      Slice operand(operand_list[i]);
+      Slice operand(merge_in.operand_list[i]);
       operand_pointers[i] = operand.data();
       operand_sizes[i] = operand.size();
     }
 
     const char* existing_value_data = nullptr;
     size_t existing_value_len = 0;
-    if (existing_value != nullptr) {
-      existing_value_data = existing_value->data();
-      existing_value_len = existing_value->size();
+    if (merge_in.existing_value != nullptr) {
+      existing_value_data = merge_in.existing_value->data();
+      existing_value_len = merge_in.existing_value->size();
     }
 
     unsigned char success;
     size_t new_value_len;
     char* tmp_new_value = (*full_merge_)(
-        state_, key.data(), key.size(), existing_value_data, existing_value_len,
-        &operand_pointers[0], &operand_sizes[0], static_cast<int>(n), &success,
-        &new_value_len);
-    new_value->assign(tmp_new_value, new_value_len);
+        state_, merge_in.key.data(), merge_in.key.size(), existing_value_data,
+        existing_value_len, &operand_pointers[0], &operand_sizes[0],
+        static_cast<int>(n), &success, &new_value_len);
+    merge_out->new_value.assign(tmp_new_value, new_value_len);
 
     if (delete_value_ != nullptr) {
       (*delete_value_)(state_, tmp_new_value, new_value_len);
@@ -1692,11 +1690,6 @@ void rocksdb_options_set_verify_checksums_in_compaction(
   opt->rep.verify_checksums_in_compaction = v;
 }
 
-void rocksdb_options_set_filter_deletes(
-    rocksdb_options_t* opt, unsigned char v) {
-  opt->rep.filter_deletes = v;
-}
-
 void rocksdb_options_set_max_sequential_skip_in_iterations(
     rocksdb_options_t* opt, uint64_t v) {
   opt->rep.max_sequential_skip_in_iterations = v;
@@ -1799,19 +1792,14 @@ void rocksdb_options_set_memtable_vector_rep(rocksdb_options_t *opt) {
   opt->rep.memtable_factory.reset(factory);
 }
 
-void rocksdb_options_set_memtable_prefix_bloom_bits(
-    rocksdb_options_t* opt, uint32_t v) {
-  opt->rep.memtable_prefix_bloom_bits = v;
+void rocksdb_options_set_memtable_prefix_bloom_size_ratio(
+    rocksdb_options_t* opt, double v) {
+  opt->rep.memtable_prefix_bloom_size_ratio = v;
 }
 
-void rocksdb_options_set_memtable_prefix_bloom_probes(
-    rocksdb_options_t* opt, uint32_t v) {
-  opt->rep.memtable_prefix_bloom_probes = v;
-}
-
-void rocksdb_options_set_memtable_prefix_bloom_huge_page_tlb_size(
-    rocksdb_options_t* opt, size_t v) {
-  opt->rep.memtable_prefix_bloom_huge_page_tlb_size = v;
+void rocksdb_options_set_memtable_huge_page_size(rocksdb_options_t* opt,
+                                                 size_t v) {
+  opt->rep.memtable_huge_page_size = v;
 }
 
 void rocksdb_options_set_hash_skip_list_rep(
@@ -1873,6 +1861,11 @@ void rocksdb_options_set_inplace_update_support(
 void rocksdb_options_set_inplace_update_num_locks(
     rocksdb_options_t* opt, size_t v) {
   opt->rep.inplace_update_num_locks = v;
+}
+
+void rocksdb_options_set_report_bg_io_stats(
+    rocksdb_options_t* opt, int v) {
+  opt->rep.report_bg_io_stats = v;
 }
 
 void rocksdb_options_set_compaction_style(rocksdb_options_t *opt, int style) {
@@ -2122,6 +2115,11 @@ void rocksdb_readoptions_set_tailing(
   opt->rep.tailing = v;
 }
 
+void rocksdb_readoptions_set_readahead_size(
+    rocksdb_readoptions_t* opt, size_t v) {
+  opt->rep.readahead_size = v;
+}
+
 rocksdb_writeoptions_t* rocksdb_writeoptions_create() {
   return new rocksdb_writeoptions_t;
 }
@@ -2161,6 +2159,10 @@ rocksdb_cache_t* rocksdb_cache_create_lru(size_t capacity) {
 
 void rocksdb_cache_destroy(rocksdb_cache_t* cache) {
   delete cache;
+}
+
+void rocksdb_cache_set_capacity(rocksdb_cache_t* cache, size_t capacity) {
+  cache->rep->SetCapacity(capacity);
 }
 
 rocksdb_env_t* rocksdb_create_default_env() {
@@ -2386,6 +2388,31 @@ void rocksdb_get_options_from_string(const rocksdb_options_t* base_options,
   SaveError(errptr,
             GetOptionsFromString(base_options->rep, std::string(opts_str),
                                  &new_options->rep));
+}
+
+void rocksdb_delete_file_in_range(rocksdb_t* db, const char* start_key,
+                                  size_t start_key_len, const char* limit_key,
+                                  size_t limit_key_len, char** errptr) {
+  Slice a, b;
+  SaveError(
+      errptr,
+      DeleteFilesInRange(
+          db->rep, db->rep->DefaultColumnFamily(),
+          (start_key ? (a = Slice(start_key, start_key_len), &a) : nullptr),
+          (limit_key ? (b = Slice(limit_key, limit_key_len), &b) : nullptr)));
+}
+
+void rocksdb_delete_file_in_range_cf(
+    rocksdb_t* db, rocksdb_column_family_handle_t* column_family,
+    const char* start_key, size_t start_key_len, const char* limit_key,
+    size_t limit_key_len, char** errptr) {
+  Slice a, b;
+  SaveError(
+      errptr,
+      DeleteFilesInRange(
+          db->rep, column_family->rep,
+          (start_key ? (a = Slice(start_key, start_key_len), &a) : nullptr),
+          (limit_key ? (b = Slice(limit_key, limit_key_len), &b) : nullptr)));
 }
 
 void rocksdb_free(void* ptr) { free(ptr); }

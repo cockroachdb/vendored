@@ -15,11 +15,12 @@
 #include <string>
 
 #include "rocksdb/options.h"
+#include "rocksdb/persistent_cache.h"
 #include "rocksdb/statistics.h"
 #include "rocksdb/status.h"
 #include "rocksdb/table.h"
-#include "table/table_reader.h"
 #include "table/table_properties_internal.h"
+#include "table/table_reader.h"
 #include "util/coding.h"
 #include "util/file_reader_writer.h"
 
@@ -54,6 +55,9 @@ class BlockBasedTable : public TableReader {
  public:
   static const std::string kFilterBlockPrefix;
   static const std::string kFullFilterBlockPrefix;
+  // The longest prefix of the cache key used to identify blocks.
+  // For Posix files the unique ID is three varints.
+  static const size_t kMaxCacheKeyPrefixSize = kMaxVarint64Length * 3 + 1;
 
   // Attempt to open the table that is stored in bytes [0..file_size)
   // of "file", and read the metadata entries necessary to allow
@@ -65,17 +69,19 @@ class BlockBasedTable : public TableReader {
   // to nullptr and returns a non-ok status.
   //
   // @param file must remain live while this Table is in use.
-  // @param prefetch_index_and_filter can be used to disable prefetching of
-  //    index and filter blocks at startup
+  // @param prefetch_index_and_filter_in_cache can be used to disable
+  // prefetching of
+  //    index and filter blocks into block cache at startup
   // @param skip_filters Disables loading/accessing the filter block. Overrides
-  //    prefetch_index_and_filter, so filter will be skipped if both are set.
+  //    prefetch_index_and_filter_in_cache, so filter will be skipped if both
+  //    are set.
   static Status Open(const ImmutableCFOptions& ioptions,
                      const EnvOptions& env_options,
                      const BlockBasedTableOptions& table_options,
                      const InternalKeyComparator& internal_key_comparator,
                      unique_ptr<RandomAccessFileReader>&& file,
                      uint64_t file_size, unique_ptr<TableReader>* table_reader,
-                     bool prefetch_index_and_filter = true,
+                     bool prefetch_index_and_filter_in_cache = true,
                      bool skip_filters = false, int level = -1);
 
   bool PrefixMayMatch(const Slice& internal_key);
@@ -128,6 +134,10 @@ class BlockBasedTable : public TableReader {
   // Implementation of IndexReader will be exposed to internal cc file only.
   class IndexReader;
 
+  static Slice GetCacheKey(const char* cache_key_prefix,
+                           size_t cache_key_prefix_size,
+                           const BlockHandle& handle, char* cache_key);
+
  private:
   template <class TValue>
   struct CachableEntry;
@@ -169,8 +179,8 @@ class BlockBasedTable : public TableReader {
   //    dictionary.
   static Status GetDataBlockFromCache(
       const Slice& block_cache_key, const Slice& compressed_block_cache_key,
-      Cache* block_cache, Cache* block_cache_compressed, Statistics* statistics,
-      const ReadOptions& read_options,
+      Cache* block_cache, Cache* block_cache_compressed,
+      const ImmutableCFOptions &ioptions, const ReadOptions& read_options,
       BlockBasedTable::CachableEntry<Block>* block, uint32_t format_version,
       const Slice& compression_dict);
 
@@ -187,7 +197,7 @@ class BlockBasedTable : public TableReader {
   static Status PutDataBlockToCache(
       const Slice& block_cache_key, const Slice& compressed_block_cache_key,
       Cache* block_cache, Cache* block_cache_compressed,
-      const ReadOptions& read_options, Statistics* statistics,
+      const ReadOptions& read_options, const ImmutableCFOptions &ioptions,
       CachableEntry<Block>* block, Block* raw_block, uint32_t format_version,
       const Slice& compression_dict);
 
@@ -216,7 +226,7 @@ class BlockBasedTable : public TableReader {
                               std::unique_ptr<InternalIterator>* iter);
 
   // Create the filter from the filter block.
-  static FilterBlockReader* ReadFilter(Rep* rep, size_t* filter_size = nullptr);
+  static FilterBlockReader* ReadFilter(Rep* rep);
 
   static void SetupCacheKeyPrefix(Rep* rep, uint64_t file_size);
 
@@ -228,10 +238,6 @@ class BlockBasedTable : public TableReader {
     RandomAccessFile* file, char* buffer, size_t* size);
   static void GenerateCachePrefix(Cache* cc,
     WritableFile* file, char* buffer, size_t* size);
-
-  // The longest prefix of the cache key used to identify blocks.
-  // For Posix files the unique ID is three varints.
-  static const size_t kMaxCacheKeyPrefixSize = kMaxVarint64Length*3+1;
 
   // Helper functions for DumpTable()
   Status DumpIndexBlock(WritableFile* out_file);

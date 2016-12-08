@@ -226,6 +226,8 @@ class BaseDeltaIterator : public Iterator {
   bool BaseValid() const { return base_iterator_->Valid(); }
   bool DeltaValid() const { return delta_iterator_->Valid(); }
   void UpdateCurrent() {
+// Suppress false positive clang analyzer warnings.
+#ifndef __clang_analyzer__
     while (true) {
       WriteEntry delta_entry;
       if (DeltaValid()) {
@@ -275,6 +277,7 @@ class BaseDeltaIterator : public Iterator {
     }
 
     AssertInvariants();
+#endif  // __clang_analyzer__
   }
 
   bool forward_;
@@ -337,13 +340,13 @@ class WBWIIteratorImpl : public WBWIIterator {
 
   virtual WriteEntry Entry() const override {
     WriteEntry ret;
-    Slice blob;
+    Slice blob, xid;
     const WriteBatchIndexEntry* iter_entry = skip_list_iter_.key();
     // this is guaranteed with Valid()
     assert(iter_entry != nullptr &&
            iter_entry->column_family == column_family_id_);
-    auto s = write_batch_->GetEntryFromDataOffset(iter_entry->offset, &ret.type,
-                                                  &ret.key, &ret.value, &blob);
+    auto s = write_batch_->GetEntryFromDataOffset(
+        iter_entry->offset, &ret.type, &ret.key, &ret.value, &blob, &xid);
     assert(s.ok());
     assert(ret.type == kPutRecord || ret.type == kDeleteRecord ||
            ret.type == kSingleDeleteRecord || ret.type == kMergeRecord);
@@ -501,7 +504,7 @@ void WriteBatchWithIndex::Rep::AddNewEntry(uint32_t column_family_id) {
     // Loop through all entries in Rep and add each one to the index
     int found = 0;
     while (s.ok() && !input.empty()) {
-      Slice key, value, blob;
+      Slice key, value, blob, xid;
       uint32_t column_family_id = 0;  // default
       char tag = 0;
 
@@ -509,7 +512,7 @@ void WriteBatchWithIndex::Rep::AddNewEntry(uint32_t column_family_id) {
       last_entry_offset = input.data() - write_batch.Data().data();
 
       s = ReadRecordFromWriteBatch(&input, &tag, &column_family_id, &key,
-                                   &value, &blob);
+                                   &value, &blob, &xid);
       if (!s.ok()) {
         break;
       }
@@ -529,6 +532,11 @@ void WriteBatchWithIndex::Rep::AddNewEntry(uint32_t column_family_id) {
           }
           break;
         case kTypeLogData:
+        case kTypeBeginPrepareXID:
+        case kTypeEndPrepareXID:
+        case kTypeCommitXID:
+        case kTypeRollbackXID:
+        case kTypeNoop:
           break;
         default:
           return Status::Corruption("unknown WriteBatch tag");
@@ -734,9 +742,13 @@ Status WriteBatchWithIndex::GetFromBatchAndDB(DB* db,
         merge_data = nullptr;
       }
 
-      s = MergeHelper::TimedFullMerge(
-          key, merge_data, merge_context.GetOperands(), merge_operator,
-          statistics, env, logger, value);
+      if (merge_operator) {
+        s = MergeHelper::TimedFullMerge(merge_operator, key, merge_data,
+                                        merge_context.GetOperands(), value,
+                                        logger, statistics, env);
+      } else {
+        s = Status::InvalidArgument("Options::merge_operator must be set");
+      }
     }
   }
 

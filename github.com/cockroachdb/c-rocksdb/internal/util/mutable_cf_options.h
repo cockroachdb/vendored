@@ -6,8 +6,9 @@
 #pragma once
 
 #include <vector>
-#include "rocksdb/options.h"
 #include "rocksdb/immutable_options.h"
+#include "rocksdb/options.h"
+#include "util/compression.h"
 
 namespace rocksdb {
 
@@ -16,12 +17,10 @@ struct MutableCFOptions {
       : write_buffer_size(options.write_buffer_size),
         max_write_buffer_number(options.max_write_buffer_number),
         arena_block_size(options.arena_block_size),
-        memtable_prefix_bloom_bits(options.memtable_prefix_bloom_bits),
-        memtable_prefix_bloom_probes(options.memtable_prefix_bloom_probes),
-        memtable_prefix_bloom_huge_page_tlb_size(
-            options.memtable_prefix_bloom_huge_page_tlb_size),
+        memtable_prefix_bloom_size_ratio(
+            options.memtable_prefix_bloom_size_ratio),
+        memtable_huge_page_size(options.memtable_huge_page_size),
         max_successive_merges(options.max_successive_merges),
-        filter_deletes(options.filter_deletes),
         inplace_update_num_locks(options.inplace_update_num_locks),
         disable_auto_compactions(options.disable_auto_compactions),
         soft_pending_compaction_bytes_limit(
@@ -47,20 +46,19 @@ struct MutableCFOptions {
         max_sequential_skip_in_iterations(
             options.max_sequential_skip_in_iterations),
         paranoid_file_checks(options.paranoid_file_checks),
-        report_bg_io_stats(options.report_bg_io_stats)
-
-  {
+        report_bg_io_stats(options.report_bg_io_stats),
+        compression(options.compression),
+        min_partial_merge_operands(options.min_partial_merge_operands),
+        compaction_options_fifo(ioptions.compaction_options_fifo) {
     RefreshDerivedOptions(ioptions);
   }
   MutableCFOptions()
       : write_buffer_size(0),
         max_write_buffer_number(0),
         arena_block_size(0),
-        memtable_prefix_bloom_bits(0),
-        memtable_prefix_bloom_probes(0),
-        memtable_prefix_bloom_huge_page_tlb_size(0),
+        memtable_prefix_bloom_size_ratio(0),
+        memtable_huge_page_size(0),
         max_successive_merges(0),
-        filter_deletes(false),
         inplace_update_num_locks(0),
         disable_auto_compactions(false),
         soft_pending_compaction_bytes_limit(0),
@@ -80,7 +78,9 @@ struct MutableCFOptions {
         max_subcompactions(1),
         max_sequential_skip_in_iterations(0),
         paranoid_file_checks(false),
-        report_bg_io_stats(false) {}
+        report_bg_io_stats(false),
+        compression(Snappy_Supported() ? kSnappyCompression : kNoCompression),
+        min_partial_merge_operands(2) {}
 
   // Must be called after any change to MutableCFOptions
   void RefreshDerivedOptions(const ImmutableCFOptions& ioptions);
@@ -106,11 +106,9 @@ struct MutableCFOptions {
   size_t write_buffer_size;
   int max_write_buffer_number;
   size_t arena_block_size;
-  uint32_t memtable_prefix_bloom_bits;
-  uint32_t memtable_prefix_bloom_probes;
-  size_t memtable_prefix_bloom_huge_page_tlb_size;
+  double memtable_prefix_bloom_size_ratio;
+  size_t memtable_huge_page_size;
   size_t max_successive_merges;
-  bool filter_deletes;
   size_t inplace_update_num_locks;
 
   // Compaction related options
@@ -136,6 +134,9 @@ struct MutableCFOptions {
   uint64_t max_sequential_skip_in_iterations;
   bool paranoid_file_checks;
   bool report_bg_io_stats;
+  CompressionType compression;
+  uint32_t min_partial_merge_operands;
+  CompactionOptionsFIFO compaction_options_fifo;
 
   // Derived options
   // Per-level target file size.

@@ -129,6 +129,20 @@ int fromHex(char c) {
   return c - 'A' + 10;
 }
 
+Slice::Slice(const SliceParts& parts, std::string* buf) {
+  size_t length = 0;
+  for (int i = 0; i < parts.num_parts; ++i) {
+    length += parts.parts[i].size();
+  }
+  buf->reserve(length);
+
+  for (int i = 0; i < parts.num_parts; ++i) {
+    buf->append(parts.parts[i].data(), parts.parts[i].size());
+  }
+  data_ = buf->data();
+  size_ = buf->size();
+}
+
 // Return a string that contains the copy of the referenced data.
 std::string Slice::ToString(bool hex) const {
   std::string result;  // RVO/NRVO/move
@@ -146,7 +160,7 @@ std::string Slice::ToString(bool hex) const {
   }
 }
 
-// Originally from tools/ldb_cmd.h
+// Originally from rocksdb/utilities/ldb_cmd.h
 bool Slice::DecodeHex(std::string* result) const {
   std::string::size_type len = size_;
   if (len % 2) {

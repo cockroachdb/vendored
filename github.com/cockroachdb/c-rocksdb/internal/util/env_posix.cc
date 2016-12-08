@@ -42,7 +42,7 @@
 #include "rocksdb/slice.h"
 #include "util/coding.h"
 #include "util/io_posix.h"
-#include "util/thread_posix.h"
+#include "util/threadpool.h"
 #include "util/iostats_context_imp.h"
 #include "util/logging.h"
 #include "util/posix_logger.h"
@@ -129,9 +129,13 @@ class PosixEnv : public Env {
     for (int pool_id = 0; pool_id < Env::Priority::TOTAL; ++pool_id) {
       thread_pools_[pool_id].JoinAllThreads();
     }
-    // All threads must be joined before the deletion of
-    // thread_status_updater_.
-    delete thread_status_updater_;
+    // Delete the thread_status_updater_ only when the current Env is not
+    // Env::Default().  This is to avoid the free-after-use error when
+    // Env::Default() is destructed while some other child threads are
+    // still trying to update thread status.
+    if (this != Env::Default()) {
+      delete thread_status_updater_;
+    }
   }
 
   void SetFD_CLOEXEC(int fd, const EnvOptions* options) {
@@ -152,6 +156,27 @@ class PosixEnv : public Env {
     if (f == nullptr) {
       *result = nullptr;
       return IOError(fname, errno);
+    } else if (options.use_direct_reads && !options.use_mmap_writes) {
+#ifdef OS_MACOSX
+      int flags = O_RDONLY;
+#else
+      int flags = O_RDONLY | O_DIRECT;
+      TEST_SYNC_POINT_CALLBACK("NewSequentialFile:O_DIRECT", &flags);
+#endif
+      int fd = open(fname.c_str(), flags, 0644);
+      if (fd < 0) {
+        return IOError(fname, errno);
+      }
+#ifdef OS_MACOSX
+      if (fcntl(fd, F_NOCACHE, 1) == -1) {
+        close(fd);
+        return IOError(fname, errno);
+      }
+#endif
+      std::unique_ptr<PosixDirectIOSequentialFile> file(
+          new PosixDirectIOSequentialFile(fname, fd));
+      *result = std::move(file);
+      return Status::OK();
     } else {
       int fd = fileno(f);
       SetFD_CLOEXEC(fd, &options);
@@ -189,6 +214,28 @@ class PosixEnv : public Env {
         }
       }
       close(fd);
+    } else if (options.use_direct_reads) {
+#ifdef OS_MACOSX
+      int flags = O_RDONLY;
+#else
+      int flags = O_RDONLY | O_DIRECT;
+      TEST_SYNC_POINT_CALLBACK("NewRandomAccessFile:O_DIRECT", &flags);
+#endif
+      fd = open(fname.c_str(), flags, 0644);
+      if (fd < 0) {
+        s = IOError(fname, errno);
+      } else {
+        std::unique_ptr<PosixDirectIORandomAccessFile> file(
+            new PosixDirectIORandomAccessFile(fname, fd));
+        *result = std::move(file);
+        s = Status::OK();
+#ifdef OS_MACOSX
+        if (fcntl(fd, F_NOCACHE, 1) == -1) {
+          close(fd);
+          s = IOError(fname, errno);
+        }
+#endif
+      }
     } else {
       result->reset(new PosixRandomAccessFile(fname, fd, options));
     }
@@ -221,6 +268,28 @@ class PosixEnv : public Env {
       }
       if (options.use_mmap_writes && !forceMmapOff) {
         result->reset(new PosixMmapFile(fname, fd, page_size_, options));
+      } else if (options.use_direct_writes) {
+#ifdef OS_MACOSX
+        int flags = O_WRONLY | O_APPEND | O_TRUNC | O_CREAT;
+#else
+        int flags = O_WRONLY | O_APPEND | O_TRUNC | O_CREAT | O_DIRECT;
+#endif
+        TEST_SYNC_POINT_CALLBACK("NewWritableFile:O_DIRECT", &flags);
+        fd = open(fname.c_str(), flags, 0644);
+        if (fd < 0) {
+          s = IOError(fname, errno);
+        } else {
+          std::unique_ptr<PosixDirectIOWritableFile> file(
+              new PosixDirectIOWritableFile(fname, fd));
+          *result = std::move(file);
+          s = Status::OK();
+#ifdef OS_MACOSX
+          if (fcntl(fd, F_NOCACHE, 1) == -1) {
+            close(fd);
+            s = IOError(fname, errno);
+          }
+#endif
+        }
       } else {
         // disable mmap writes
         EnvOptions no_mmap_writes_options = options;
@@ -763,6 +832,9 @@ std::string Env::GenerateUniqueId() {
   return uuid2;
 }
 
+//
+// Default Posix Env
+//
 Env* Env::Default() {
   // The following function call initializes the singletons of ThreadLocalPtr
   // right before the static default_env.  This guarantees default_env will

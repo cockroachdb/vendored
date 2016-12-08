@@ -32,7 +32,6 @@ namespace rocksdb {
 class Mutex;
 class MemTableIterator;
 class MergeContext;
-class WriteBuffer;
 class InternalIterator;
 
 struct MemTableOptions {
@@ -42,8 +41,7 @@ struct MemTableOptions {
   size_t write_buffer_size;
   size_t arena_block_size;
   uint32_t memtable_prefix_bloom_bits;
-  uint32_t memtable_prefix_bloom_probes;
-  size_t memtable_prefix_bloom_huge_page_tlb_size;
+  size_t memtable_huge_page_size;
   bool inplace_update_support;
   size_t inplace_update_num_locks;
   UpdateStatus (*inplace_callback)(char* existing_value,
@@ -51,10 +49,18 @@ struct MemTableOptions {
                                    Slice delta_value,
                                    std::string* merged_value);
   size_t max_successive_merges;
-  bool filter_deletes;
   Statistics* statistics;
   MergeOperator* merge_operator;
   Logger* info_log;
+};
+
+// Batched counters to updated when inserting keys in one write batch.
+// In post process of the write batch, these can be updated together.
+// Only used in concurrent memtable insert case.
+struct MemTablePostProcessInfo {
+  uint64_t data_size = 0;
+  uint64_t num_entries = 0;
+  uint64_t num_deletes = 0;
 };
 
 // Note:  Many of the methods in this class have comments indicating that
@@ -93,7 +99,8 @@ class MemTable {
   explicit MemTable(const InternalKeyComparator& comparator,
                     const ImmutableCFOptions& ioptions,
                     const MutableCFOptions& mutable_cf_options,
-                    WriteBuffer* write_buffer, SequenceNumber earliest_seq);
+                    WriteBufferManager* write_buffer_manager,
+                    SequenceNumber earliest_seq);
 
   // Do not delete this MemTable unless Unref() indicates it not in use.
   ~MemTable();
@@ -159,7 +166,8 @@ class MemTable {
   // REQUIRES: if allow_concurrent = false, external synchronization to prevent
   // simultaneous operations on the same MemTable.
   void Add(SequenceNumber seq, ValueType type, const Slice& key,
-           const Slice& value, bool allow_concurrent = false);
+           const Slice& value, bool allow_concurrent = false,
+           MemTablePostProcessInfo* post_process_info = nullptr);
 
   // If memtable contains a value for key, store it in *value and return true.
   // If memtable contains a deletion for key, store a NotFound() error
@@ -218,6 +226,19 @@ class MemTable {
   // key in the memtable.
   size_t CountSuccessiveMergeEntries(const LookupKey& key);
 
+  // Update counters and flush status after inserting a whole write batch
+  // Used in concurrent memtable inserts.
+  void BatchPostProcess(const MemTablePostProcessInfo& update_counters) {
+    num_entries_.fetch_add(update_counters.num_entries,
+                           std::memory_order_relaxed);
+    data_size_.fetch_add(update_counters.data_size, std::memory_order_relaxed);
+    if (update_counters.num_deletes != 0) {
+      num_deletes_.fetch_add(update_counters.num_deletes,
+                             std::memory_order_relaxed);
+    }
+    UpdateFlushState();
+  }
+
   // Get total number of entries in the mem table.
   // REQUIRES: external synchronization to prevent simultaneous
   // operations on the same MemTable (unless this Memtable is immutable).
@@ -270,6 +291,13 @@ class MemTable {
   // REQUIRES: external synchronization to prevent simultaneous
   // operations on the same MemTable.
   void SetNextLogNumber(uint64_t num) { mem_next_logfile_number_ = num; }
+
+  // if this memtable contains data from a committed
+  // two phase transaction we must take note of the
+  // log which contains that data so we can know
+  // when to relese that log
+  void RefLogContainingPrepSection(uint64_t log);
+  uint64_t GetMinLogContainingPrepSection();
 
   // Notify the underlying storage that no more items will be added.
   // REQUIRES: external synchronization to prevent simultaneous
@@ -341,6 +369,10 @@ class MemTable {
 
   // The log files earlier than this number can be deleted.
   uint64_t mem_next_logfile_number_;
+
+  // the earliest log containing a prepared section
+  // which has been inserted into this memtable.
+  std::atomic<uint64_t> min_prep_log_referenced_;
 
   // rw locks for inplace updates
   std::vector<port::RWMutex> locks_;

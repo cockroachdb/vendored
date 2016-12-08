@@ -55,9 +55,8 @@ class LookupKey;
 class MemTable;
 class Version;
 class VersionSet;
-class WriteBuffer;
+class WriteBufferManager;
 class MergeContext;
-class ColumnFamilyData;
 class ColumnFamilySet;
 class TableCache;
 class MergeIteratorBuilder;
@@ -121,9 +120,7 @@ class VersionStorageInfo {
   // We use compaction scores to figure out which compaction to do next
   // REQUIRES: db_mutex held!!
   // TODO find a better way to pass compaction_options_fifo.
-  void ComputeCompactionScore(
-      const MutableCFOptions& mutable_cf_options,
-      const CompactionOptionsFIFO& compaction_options_fifo);
+  void ComputeCompactionScore(const MutableCFOptions& mutable_cf_options);
 
   // Estimate est_comp_needed_bytes_
   void EstimateCompactionBytesNeeded(
@@ -578,7 +575,8 @@ class VersionSet {
  public:
   VersionSet(const std::string& dbname, const DBOptions* db_options,
              const EnvOptions& env_options, Cache* table_cache,
-             WriteBuffer* write_buffer, WriteController* write_controller);
+             WriteBufferManager* write_buffer_manager,
+             WriteController* write_controller);
   ~VersionSet();
 
   // Apply *edit to the current version to form a new descriptor that
@@ -592,6 +590,19 @@ class VersionSet {
       const MutableCFOptions& mutable_cf_options, VersionEdit* edit,
       InstrumentedMutex* mu, Directory* db_directory = nullptr,
       bool new_descriptor_log = false,
+      const ColumnFamilyOptions* column_family_options = nullptr) {
+    autovector<VersionEdit*> edit_list;
+    edit_list.push_back(edit);
+    return LogAndApply(column_family_data, mutable_cf_options, edit_list, mu,
+                       db_directory, new_descriptor_log, column_family_options);
+  }
+  // The batch version. If edit_list.size() > 1, caller must ensure that
+  // no edit in the list column family add or drop
+  Status LogAndApply(
+      ColumnFamilyData* column_family_data,
+      const MutableCFOptions& mutable_cf_options,
+      const autovector<VersionEdit*>& edit_list, InstrumentedMutex* mu,
+      Directory* db_directory = nullptr, bool new_descriptor_log = false,
       const ColumnFamilyOptions* column_family_options = nullptr);
 
   // Recover the last saved descriptor from persistent storage.
@@ -628,6 +639,8 @@ class VersionSet {
 
   // Return the current manifest file number
   uint64_t manifest_file_number() const { return manifest_file_number_; }
+
+  uint64_t options_file_number() const { return options_file_number_; }
 
   uint64_t pending_manifest_file_number() const {
     return pending_manifest_file_number_;
@@ -745,6 +758,7 @@ class VersionSet {
   const DBOptions* const db_options_;
   std::atomic<uint64_t> next_file_number_;
   uint64_t manifest_file_number_;
+  uint64_t options_file_number_;
   uint64_t pending_manifest_file_number_;
   std::atomic<uint64_t> last_sequence_;
   uint64_t prev_log_number_;  // 0 or backing store for memtable being compacted

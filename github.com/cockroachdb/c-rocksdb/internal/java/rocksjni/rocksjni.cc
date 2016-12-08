@@ -115,14 +115,15 @@ jlongArray rocksdb_open_helper(JNIEnv* env, jlong jopt_handle,
   // check if open operation was successful
   if (s.ok()) {
     jsize resultsLen = 1 + len_cols; //db handle + column family handles
-    jlong results[resultsLen];
+    std::unique_ptr<jlong[]> results =
+        std::unique_ptr<jlong[]>(new jlong[resultsLen]);
     results[0] = reinterpret_cast<jlong>(db);
     for(int i = 1; i <= len_cols; i++) {
       results[i] = reinterpret_cast<jlong>(handles[i - 1]);
     }
 
     jlongArray jresults = env->NewLongArray(resultsLen);
-    env->SetLongArrayRegion(jresults, 0, resultsLen, results);
+    env->SetLongArrayRegion(jresults, 0, resultsLen, results.get());
     return jresults;
   } else {
     rocksdb::RocksDBExceptionJni::ThrowNew(env, s);
@@ -1482,6 +1483,42 @@ void Java_org_rocksdb_RocksDB_compactRange__J_3BI_3BIZIIJ(
   auto cf_handle = reinterpret_cast<rocksdb::ColumnFamilyHandle*>(jcf_handle);
   rocksdb_compactrange_helper(env, db, cf_handle, jbegin, jbegin_len,
       jend, jend_len, jreduce_level, jtarget_level, jtarget_path_id);
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// rocksdb::DB::PauseBackgroundWork
+
+/*
+ * Class:     org_rocksdb_RocksDB
+ * Method:    pauseBackgroundWork
+ * Signature: (J)V
+ */
+void Java_org_rocksdb_RocksDB_pauseBackgroundWork(
+    JNIEnv* env, jobject jobj, jlong jdb_handle) {
+  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
+  auto s = db->PauseBackgroundWork();
+  if (s.ok()) {
+    return;
+  }
+  rocksdb::RocksDBExceptionJni::ThrowNew(env, s);
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// rocksdb::DB::ContinueBackgroundWork
+
+/*
+ * Class:     org_rocksdb_RocksDB
+ * Method:    continueBackgroundWork
+ * Signature: (J)V
+ */
+void Java_org_rocksdb_RocksDB_continueBackgroundWork(
+    JNIEnv* env, jobject jobj, jlong jdb_handle) {
+  auto* db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
+  auto s = db->ContinueBackgroundWork();
+  if (s.ok()) {
+    return;
+  }
+  rocksdb::RocksDBExceptionJni::ThrowNew(env, s);
 }
 
 //////////////////////////////////////////////////////////////////////////////

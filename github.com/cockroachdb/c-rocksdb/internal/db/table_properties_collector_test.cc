@@ -276,7 +276,7 @@ void TestCustomizedTablePropertiesCollector(
           new test::StringSource(fwf->contents())));
   TableProperties* props;
   Status s = ReadTableProperties(fake_file_reader.get(), fwf->contents().size(),
-                                 magic_number, Env::Default(), nullptr, &props);
+                                 magic_number, ioptions, &props);
   std::unique_ptr<TableProperties> props_guard(props);
   ASSERT_OK(s);
 
@@ -368,6 +368,8 @@ void TestInternalKeyPropertiesCollector(
       InternalKey("Y       ", 5, ValueType::kTypeDeletion),
       InternalKey("Z       ", 6, ValueType::kTypeDeletion),
       InternalKey("a       ", 7, ValueType::kTypeSingleDeletion),
+      InternalKey("b       ", 8, ValueType::kTypeMerge),
+      InternalKey("c       ", 9, ValueType::kTypeMerge),
   };
 
   std::unique_ptr<TableBuilder> builder;
@@ -415,13 +417,18 @@ void TestInternalKeyPropertiesCollector(
     TableProperties* props;
     Status s =
         ReadTableProperties(reader.get(), fwf->contents().size(), magic_number,
-                            Env::Default(), nullptr, &props);
+                            ioptions, &props);
     ASSERT_OK(s);
 
     std::unique_ptr<TableProperties> props_guard(props);
     auto user_collected = props->user_collected_properties;
     uint64_t deleted = GetDeletedKeys(user_collected);
     ASSERT_EQ(5u, deleted);  // deletes + single-deletes
+
+    bool property_present;
+    uint64_t merges = GetMergeOperands(user_collected, &property_present);
+    ASSERT_TRUE(property_present);
+    ASSERT_EQ(2u, merges);
 
     if (sanitized) {
       uint32_t starts_with_A = 0;

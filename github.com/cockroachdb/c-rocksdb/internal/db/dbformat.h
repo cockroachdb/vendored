@@ -39,6 +39,11 @@ enum ValueType : unsigned char {
   kTypeColumnFamilyMerge = 0x6,     // WAL only.
   kTypeSingleDeletion = 0x7,
   kTypeColumnFamilySingleDeletion = 0x8,  // WAL only.
+  kTypeBeginPrepareXID = 0x9,             // WAL only.
+  kTypeEndPrepareXID = 0xA,               // WAL only.
+  kTypeCommitXID = 0xB,                   // WAL only.
+  kTypeRollbackXID = 0xC,                 // WAL only.
+  kTypeNoop = 0xD,                        // WAL only.
   kMaxValue = 0x7F                        // Not used for storing records.
 };
 
@@ -173,6 +178,10 @@ class InternalKey {
 
   Slice user_key() const { return ExtractUserKey(rep_); }
   size_t size() { return rep_.size(); }
+
+  void Set(const Slice& _user_key, SequenceNumber s, ValueType t) {
+    SetFrom(ParsedInternalKey(_user_key, s, t));
+  }
 
   void SetFrom(const ParsedInternalKey& p) {
     rep_.clear();
@@ -478,5 +487,5 @@ extern bool ReadKeyFromWriteBatchEntry(Slice* input, Slice* key,
 // input will be advanced to after the record.
 extern Status ReadRecordFromWriteBatch(Slice* input, char* tag,
                                        uint32_t* column_family, Slice* key,
-                                       Slice* value, Slice* blob);
+                                       Slice* value, Slice* blob, Slice* xid);
 }  // namespace rocksdb

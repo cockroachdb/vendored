@@ -10,6 +10,8 @@
 #pragma once
 #include <stddef.h>
 #include <stdint.h>
+#include <string>
+#include <vector>
 #ifdef ROCKSDB_MALLOC_USABLE_SIZE
 #include <malloc.h>
 #endif
@@ -18,7 +20,6 @@
 #include "db/pinned_iterators_manager.h"
 #include "rocksdb/iterator.h"
 #include "rocksdb/options.h"
-#include "table/block_hash_index.h"
 #include "table/block_prefix_index.h"
 #include "table/internal_iterator.h"
 
@@ -29,7 +30,6 @@ namespace rocksdb {
 struct BlockContents;
 class Comparator;
 class BlockIter;
-class BlockHashIndex;
 class BlockPrefixIndex;
 
 class Block {
@@ -71,7 +71,6 @@ class Block {
   InternalIterator* NewIterator(const Comparator* comparator,
                                 BlockIter* iter = nullptr,
                                 bool total_order_seek = true);
-  void SetBlockHashIndex(BlockHashIndex* hash_index);
   void SetBlockPrefixIndex(BlockPrefixIndex* prefix_index);
 
   // Report an approximation of how much memory has been used.
@@ -82,7 +81,6 @@ class Block {
   const char* data_;            // contents_.data.data()
   size_t size_;                 // contents_.data.size()
   uint32_t restart_offset_;     // Offset in data_ of restart array
-  std::unique_ptr<BlockHashIndex> hash_index_;
   std::unique_ptr<BlockPrefixIndex> prefix_index_;
 
   // No copying allowed
@@ -100,20 +98,18 @@ class BlockIter : public InternalIterator {
         current_(0),
         restart_index_(0),
         status_(Status::OK()),
-        hash_index_(nullptr),
-        prefix_index_(nullptr) {}
+        prefix_index_(nullptr),
+        key_pinned_(false) {}
 
   BlockIter(const Comparator* comparator, const char* data, uint32_t restarts,
-       uint32_t num_restarts, BlockHashIndex* hash_index,
-       BlockPrefixIndex* prefix_index)
+            uint32_t num_restarts, BlockPrefixIndex* prefix_index)
       : BlockIter() {
-    Initialize(comparator, data, restarts, num_restarts,
-        hash_index, prefix_index);
+    Initialize(comparator, data, restarts, num_restarts, prefix_index);
   }
 
   void Initialize(const Comparator* comparator, const char* data,
-      uint32_t restarts, uint32_t num_restarts, BlockHashIndex* hash_index,
-      BlockPrefixIndex* prefix_index) {
+                  uint32_t restarts, uint32_t num_restarts,
+                  BlockPrefixIndex* prefix_index) {
     assert(data_ == nullptr);           // Ensure it is called only once
     assert(num_restarts > 0);           // Ensure the param is valid
 
@@ -123,7 +119,6 @@ class BlockIter : public InternalIterator {
     num_restarts_ = num_restarts;
     current_ = restarts_;
     restart_index_ = num_restarts_;
-    hash_index_ = hash_index;
     prefix_index_ = prefix_index;
   }
 
@@ -165,7 +160,9 @@ class BlockIter : public InternalIterator {
   PinnedIteratorsManager* pinned_iters_mgr_ = nullptr;
 #endif
 
-  virtual bool IsKeyPinned() const override { return key_.IsKeyPinned(); }
+  virtual bool IsKeyPinned() const override { return key_pinned_; }
+
+  virtual bool IsValuePinned() const override { return true; }
 
  private:
   const Comparator* comparator_;
@@ -179,8 +176,32 @@ class BlockIter : public InternalIterator {
   IterKey key_;
   Slice value_;
   Status status_;
-  BlockHashIndex* hash_index_;
   BlockPrefixIndex* prefix_index_;
+  bool key_pinned_;
+
+  struct CachedPrevEntry {
+    explicit CachedPrevEntry(uint32_t _offset, const char* _key_ptr,
+                             size_t _key_offset, size_t _key_size, Slice _value)
+        : offset(_offset),
+          key_ptr(_key_ptr),
+          key_offset(_key_offset),
+          key_size(_key_size),
+          value(_value) {}
+
+    // offset of entry in block
+    uint32_t offset;
+    // Pointer to key data in block (nullptr if key is delta-encoded)
+    const char* key_ptr;
+    // offset of key in prev_entries_keys_buff_ (0 if key_ptr is not nullptr)
+    size_t key_offset;
+    // size of key
+    size_t key_size;
+    // value slice pointing to data in block
+    Slice value;
+  };
+  std::string prev_entries_keys_buff_;
+  std::vector<CachedPrevEntry> prev_entries_;
+  int32_t prev_entries_idx_ = -1;
 
   inline int Compare(const Slice& a, const Slice& b) const {
     return comparator_->Compare(a, b);
@@ -219,8 +240,6 @@ class BlockIter : public InternalIterator {
   bool BinaryBlockIndexSeek(const Slice& target, uint32_t* block_ids,
                             uint32_t left, uint32_t right,
                             uint32_t* index);
-
-  bool HashSeek(const Slice& target, uint32_t* index);
 
   bool PrefixSeek(const Slice& target, uint32_t* index);
 

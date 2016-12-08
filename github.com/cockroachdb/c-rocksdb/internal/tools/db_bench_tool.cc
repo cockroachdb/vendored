@@ -49,8 +49,11 @@
 #include "rocksdb/rate_limiter.h"
 #include "rocksdb/slice.h"
 #include "rocksdb/slice_transform.h"
+#include "rocksdb/utilities/env_registry.h"
 #include "rocksdb/utilities/flashcache.h"
 #include "rocksdb/utilities/optimistic_transaction_db.h"
+#include "rocksdb/utilities/options_util.h"
+#include "rocksdb/utilities/sim_cache.h"
 #include "rocksdb/utilities/transaction.h"
 #include "rocksdb/utilities/transaction_db.h"
 #include "rocksdb/write_batch.h"
@@ -190,6 +193,9 @@ DEFINE_int32(
 
 DEFINE_int64(reads, -1, "Number of read operations to do.  "
              "If negative, do FLAGS_num reads.");
+
+DEFINE_int64(deletes, -1, "Number of delete operations to do.  "
+             "If negative, do FLAGS_num deletions.");
 
 DEFINE_int32(bloom_locality, 0, "Control bloom filter probes locality");
 
@@ -334,8 +340,13 @@ DEFINE_int32(universal_compression_size_percent, -1,
 DEFINE_bool(universal_allow_trivial_move, false,
             "Allow trivial move in universal compaction.");
 
-DEFINE_int64(cache_size, -1, "Number of bytes to use as a cache of uncompressed"
-             "data. Negative means use default settings.");
+DEFINE_int64(cache_size, -1,
+             "Number of bytes to use as a cache of uncompressed"
+             " data. Negative means use default settings.");
+
+DEFINE_int64(simcache_size, -1,
+             "Number of bytes to use as a simcache of "
+             "uncompressed data. Negative means use default settings.");
 
 DEFINE_bool(cache_index_and_filter_blocks, false,
             "Cache index/filter blocks in block cache.");
@@ -350,7 +361,12 @@ DEFINE_int32(block_size,
 DEFINE_int32(block_restart_interval,
              rocksdb::BlockBasedTableOptions().block_restart_interval,
              "Number of keys between restart points "
-             "for delta encoding of keys.");
+             "for delta encoding of keys in data block.");
+
+DEFINE_int32(index_block_restart_interval,
+             rocksdb::BlockBasedTableOptions().index_block_restart_interval,
+             "Number of keys between restart points "
+             "for delta encoding of keys in index block.");
 
 DEFINE_int64(compressed_cache_size, -1,
              "Number of bytes to use as a cache of compressed data.");
@@ -383,8 +399,11 @@ DEFINE_int32(skip_table_builder_flush, false, "Skip flushing block in "
 
 DEFINE_int32(bloom_bits, -1, "Bloom filter bits per key. Negative means"
              " use default settings.");
-DEFINE_int32(memtable_bloom_bits, 0, "Bloom filter bits per key for memtable. "
-             "Negative means no bloom filter.");
+DEFINE_double(memtable_bloom_size_ratio, 0,
+              "Ratio of memtable size used for bloom filter. 0 means no bloom "
+              "filter.");
+DEFINE_bool(memtable_use_huge_page, false,
+            "Try to use huge page in memtables.");
 
 DEFINE_bool(use_existing_db, false, "If true, do not destroy the existing"
             " database.  If you set this flag and also specify a benchmark that"
@@ -487,6 +506,11 @@ DEFINE_int32(deletepercent, 2, "Percentage of deletes out of reads/writes/"
              "deletepercent), so deletepercent must be smaller than (100 - "
              "FLAGS_readwritepercent)");
 
+DEFINE_bool(optimize_filters_for_hits, false,
+            "Optimizes bloom filters for workloads for most lookups return "
+            "a value. For now this doesn't create bloom filters for the max "
+            "level of the LSM to reduce metadata that should fit in RAM. ");
+
 DEFINE_uint64(delete_obsolete_files_period_micros, 0,
               "Ignored. Left here for backward compatibility");
 
@@ -514,6 +538,23 @@ DEFINE_int32(transaction_sleep, 0,
 DEFINE_uint64(transaction_lock_timeout, 100,
               "If using a transaction_db, specifies the lock wait timeout in"
               " milliseconds before failing a transaction waiting on a lock");
+DEFINE_string(
+    options_file, "",
+    "The path to a RocksDB options file.  If specified, then db_bench will "
+    "run with the RocksDB options in the default column family of the "
+    "specified options file. "
+    "Note that with this setting, db_bench will ONLY accept the following "
+    "RocksDB options related command-line arguments, all other arguments "
+    "that are related to RocksDB options will be ignored:\n"
+    "\t--use_existing_db\n"
+    "\t--statistics\n"
+    "\t--row_cache_size\n"
+    "\t--row_cache_numshardbits\n"
+    "\t--enable_io_prio\n"
+    "\t--disable_flashcache_for_background_threads\n"
+    "\t--flashcache_dev\n"
+    "\t--dump_malloc_stats\n"
+    "\t--num_multi_db\n");
 #endif  // ROCKSDB_LITE
 
 DEFINE_bool(report_bg_io_stats, false,
@@ -594,8 +635,12 @@ static bool ValidateTableCacheNumshardbits(const char* flagname,
 }
 DEFINE_int32(table_cache_numshardbits, 4, "");
 
-DEFINE_string(hdfs, "", "Name of hdfs environment");
-// posix or hdfs environment
+#ifndef ROCKSDB_LITE
+DEFINE_string(env_uri, "", "URI for registry Env lookup. Mutually exclusive"
+              " with --hdfs.");
+#endif  // ROCKSDB_LITE
+DEFINE_string(hdfs, "", "Name of hdfs environment. Mutually exclusive with"
+              " --env_uri.");
 static rocksdb::Env* FLAGS_env = rocksdb::Env::Default();
 
 DEFINE_int64(stats_interval, 0, "Stats are reported every N operations when "
@@ -619,7 +664,7 @@ DEFINE_int32(thread_status_per_interval, 0,
              "Takes and report a snapshot of the current status of each thread"
              " when this is greater than 0.");
 
-DEFINE_int32(perf_level, 0, "Level of perf collection");
+DEFINE_int32(perf_level, rocksdb::PerfLevel::kDisable, "Level of perf collection");
 
 static bool ValidateRateLimit(const char* flagname, double value) {
   const double EPSILON = 1e-10;
@@ -725,9 +770,6 @@ DEFINE_uint64(wal_bytes_per_sync,  rocksdb::Options().wal_bytes_per_sync,
               "Allows OS to incrementally sync WAL files to disk while they are"
               " being written, in the background. Issue one request for every"
               " wal_bytes_per_sync written. 0 turns it off.");
-
-DEFINE_bool(filter_deletes, false, " On true, deletes use bloom-filter and drop"
-            " the delete if key not present");
 
 DEFINE_bool(use_single_deletes, true,
             "Use single deletes (used in RandomReplaceKeys only).");
@@ -1573,6 +1615,7 @@ class Benchmark {
   WriteOptions write_options_;
   Options open_options_;  // keep options around to properly destroy db later
   int64_t reads_;
+  int64_t deletes_;
   double read_random_exp_range_;
   int64_t writes_;
   int64_t readwrites_;
@@ -1798,6 +1841,16 @@ class Benchmark {
         merge_keys_(FLAGS_merge_keys < 0 ? FLAGS_num : FLAGS_merge_keys),
         report_file_operations_(FLAGS_report_file_operations),
         cachedev_fd_(-1) {
+    // use simcache instead of cache
+    if (FLAGS_simcache_size >= 0) {
+      if (FLAGS_cache_numshardbits >= 1) {
+        cache_ =
+            NewSimCache(cache_, FLAGS_simcache_size, FLAGS_cache_numshardbits);
+      } else {
+        cache_ = NewSimCache(cache_, FLAGS_simcache_size, 0);
+      }
+    }
+
     if (report_file_operations_) {
       if (!FLAGS_hdfs.empty()) {
         fprintf(stderr,
@@ -1905,8 +1958,8 @@ class Benchmark {
     if (!SanityCheck()) {
       exit(1);
     }
-    PrintHeader();
     Open(&open_options_);
+    PrintHeader();
     std::stringstream benchmark_stream(FLAGS_benchmarks);
     std::string name;
     while (std::getline(benchmark_stream, name, ',')) {
@@ -1914,6 +1967,7 @@ class Benchmark {
       num_ = FLAGS_num;
       reads_ = (FLAGS_reads < 0 ? FLAGS_num : FLAGS_reads);
       writes_ = (FLAGS_writes < 0 ? FLAGS_num : FLAGS_writes);
+      deletes_ = (FLAGS_deletes < 0 ? FLAGS_num : FLAGS_deletes);
       value_size_ = FLAGS_value_size;
       key_size_ = FLAGS_key_size;
       entries_per_batch_ = FLAGS_batch_size;
@@ -2089,7 +2143,11 @@ class Benchmark {
       }
     }
     if (FLAGS_statistics) {
-     fprintf(stdout, "STATISTICS:\n%s\n", dbstats->ToString().c_str());
+      fprintf(stdout, "STATISTICS:\n%s\n", dbstats->ToString().c_str());
+    }
+    if (FLAGS_simcache_size >= 0) {
+      fprintf(stdout, "SIMULATOR CACHE STATISTICS:\n%s\n",
+              std::dynamic_pointer_cast<SimCache>(cache_)->ToString().c_str());
     }
   }
 
@@ -2355,13 +2413,36 @@ class Benchmark {
     }
   }
 
-  void Open(Options* opts) {
+  // Returns true if the options is initialized from the specified
+  // options file.
+  bool InitializeOptionsFromFile(Options* opts) {
+#ifndef ROCKSDB_LITE
+    printf("Initializing RocksDB Options from the specified file\n");
+    DBOptions db_opts;
+    std::vector<ColumnFamilyDescriptor> cf_descs;
+    if (FLAGS_options_file != "") {
+      auto s = LoadOptionsFromFile(FLAGS_options_file, Env::Default(), &db_opts,
+                                   &cf_descs);
+      if (s.ok()) {
+        *opts = Options(db_opts, cf_descs[0].options);
+        return true;
+      }
+      fprintf(stderr, "Unable to load options file %s --- %s\n",
+              FLAGS_options_file.c_str(), s.ToString().c_str());
+      exit(1);
+    }
+#endif
+    return false;
+  }
+
+  void InitializeOptionsFromFlags(Options* opts) {
+    printf("Initializing RocksDB Options from command-line flags\n");
     Options& options = *opts;
 
     assert(db_.db == nullptr);
 
-    options.create_if_missing = !FLAGS_use_existing_db;
     options.create_missing_column_families = FLAGS_num_column_families > 1;
+    options.max_open_files = FLAGS_open_files;
     options.db_write_buffer_size = FLAGS_db_write_buffer_size;
     options.write_buffer_size = FLAGS_write_buffer_size;
     options.max_write_buffer_number = FLAGS_max_write_buffer_number;
@@ -2385,41 +2466,17 @@ class Benchmark {
         exit(1);
       }
     }
-    options.memtable_prefix_bloom_bits = FLAGS_memtable_bloom_bits;
+    options.memtable_huge_page_size = FLAGS_memtable_use_huge_page ? 2048 : 0;
+    options.memtable_prefix_bloom_size_ratio = FLAGS_memtable_bloom_size_ratio;
     options.bloom_locality = FLAGS_bloom_locality;
-    options.max_open_files = FLAGS_open_files;
     options.max_file_opening_threads = FLAGS_file_opening_threads;
     options.new_table_reader_for_compaction_inputs =
         FLAGS_new_table_reader_for_compaction_inputs;
     options.compaction_readahead_size = FLAGS_compaction_readahead_size;
     options.random_access_max_buffer_size = FLAGS_random_access_max_buffer_size;
     options.writable_file_max_buffer_size = FLAGS_writable_file_max_buffer_size;
-    options.statistics = dbstats;
-    if (FLAGS_enable_io_prio) {
-      FLAGS_env->LowerThreadPoolIOPriority(Env::LOW);
-      FLAGS_env->LowerThreadPoolIOPriority(Env::HIGH);
-    }
-    if (FLAGS_disable_flashcache_for_background_threads &&
-        cachedev_fd_ == -1) {
-      // Avoid creating the env twice when an use_existing_db is true
-      cachedev_fd_ = open(FLAGS_flashcache_dev.c_str(), O_RDONLY);
-      if (cachedev_fd_ < 0) {
-        fprintf(stderr, "Open flash device failed\n");
-        exit(1);
-      }
-      flashcache_aware_env_ = NewFlashcacheAwareEnv(FLAGS_env, cachedev_fd_);
-      if (flashcache_aware_env_.get() == nullptr) {
-        fprintf(stderr, "Failed to open flashcache device at %s\n",
-                FLAGS_flashcache_dev.c_str());
-        std::abort();
-      }
-      options.env = flashcache_aware_env_.get();
-    } else {
-      options.env = FLAGS_env;
-    }
     options.disableDataSync = FLAGS_disable_data_sync;
     options.use_fsync = FLAGS_use_fsync;
-    options.wal_dir = FLAGS_wal_dir;
     options.num_levels = FLAGS_num_levels;
     options.target_file_size_base = FLAGS_target_file_size_base;
     options.target_file_size_multiplier = FLAGS_target_file_size_multiplier;
@@ -2428,15 +2485,6 @@ class Benchmark {
         FLAGS_level_compaction_dynamic_level_bytes;
     options.max_bytes_for_level_multiplier =
         FLAGS_max_bytes_for_level_multiplier;
-    options.filter_deletes = FLAGS_filter_deletes;
-    if (FLAGS_row_cache_size) {
-      if (FLAGS_cache_numshardbits >= 1) {
-        options.row_cache =
-            NewLRUCache(FLAGS_row_cache_size, FLAGS_cache_numshardbits);
-      } else {
-        options.row_cache = NewLRUCache(FLAGS_row_cache_size);
-      }
-    }
     if ((FLAGS_prefix_size == 0) && (FLAGS_rep_factory == kPrefixHash ||
                                      FLAGS_rep_factory == kHashLinkedList)) {
       fprintf(stderr, "prefix_size should be non-zero if PrefixHash or "
@@ -2536,6 +2584,8 @@ class Benchmark {
       block_based_options.block_cache_compressed = compressed_cache_;
       block_based_options.block_size = FLAGS_block_size;
       block_based_options.block_restart_interval = FLAGS_block_restart_interval;
+      block_based_options.index_block_restart_interval =
+          FLAGS_index_block_restart_interval;
       block_based_options.filter_policy = filter_policy_;
       block_based_options.skip_table_builder_flush =
           FLAGS_skip_table_builder_flush;
@@ -2596,6 +2646,7 @@ class Benchmark {
       FLAGS_max_grandparent_overlap_factor;
     options.disable_auto_compactions = FLAGS_disable_auto_compactions;
     options.source_compaction_factor = FLAGS_source_compaction_factor;
+    options.optimize_filters_for_hits = FLAGS_optimize_filters_for_hits;
 
     // fill storage options
     options.allow_os_buffer = FLAGS_bufferedio;
@@ -2656,6 +2707,45 @@ class Benchmark {
     }
 #endif  // ROCKSDB_LITE
 
+  }
+
+  void InitializeOptionsGeneral(Options* opts) {
+    Options& options = *opts;
+
+    options.statistics = dbstats;
+    options.wal_dir = FLAGS_wal_dir;
+    options.create_if_missing = !FLAGS_use_existing_db;
+
+    if (FLAGS_row_cache_size) {
+      if (FLAGS_cache_numshardbits >= 1) {
+        options.row_cache =
+            NewLRUCache(FLAGS_row_cache_size, FLAGS_cache_numshardbits);
+      } else {
+        options.row_cache = NewLRUCache(FLAGS_row_cache_size);
+      }
+    }
+    if (FLAGS_enable_io_prio) {
+      FLAGS_env->LowerThreadPoolIOPriority(Env::LOW);
+      FLAGS_env->LowerThreadPoolIOPriority(Env::HIGH);
+    }
+    if (FLAGS_disable_flashcache_for_background_threads && cachedev_fd_ == -1) {
+      // Avoid creating the env twice when an use_existing_db is true
+      cachedev_fd_ = open(FLAGS_flashcache_dev.c_str(), O_RDONLY);
+      if (cachedev_fd_ < 0) {
+        fprintf(stderr, "Open flash device failed\n");
+        exit(1);
+      }
+      flashcache_aware_env_ = NewFlashcacheAwareEnv(FLAGS_env, cachedev_fd_);
+      if (flashcache_aware_env_.get() == nullptr) {
+        fprintf(stderr, "Failed to open flashcache device at %s\n",
+                FLAGS_flashcache_dev.c_str());
+        std::abort();
+      }
+      options.env = flashcache_aware_env_.get();
+    } else {
+      options.env = FLAGS_env;
+    }
+
     if (FLAGS_num_multi_db <= 1) {
       OpenDb(options, FLAGS_db, &db_);
     } else {
@@ -2665,11 +2755,15 @@ class Benchmark {
         OpenDb(options, GetDbNameForMultiple(FLAGS_db, i), &multi_dbs_[i]);
       }
     }
-    if (FLAGS_min_level_to_compress >= 0) {
-      options.compression_per_level.clear();
+    options.dump_malloc_stats = FLAGS_dump_malloc_stats;
+  }
+
+  void Open(Options* opts) {
+    if (!InitializeOptionsFromFile(opts)) {
+      InitializeOptionsFromFlags(opts);
     }
 
-    options.dump_malloc_stats = FLAGS_dump_malloc_stats;
+    InitializeOptionsGeneral(opts);
   }
 
   void OpenDb(const Options& options, const std::string& db_name,
@@ -2997,7 +3091,7 @@ class Benchmark {
 
     thread->stats.AddMessage(msg);
 
-    if (FLAGS_perf_level > 0) {
+    if (FLAGS_perf_level > rocksdb::PerfLevel::kDisable) {
       thread->stats.AddMessage(perf_context.ToString());
     }
   }
@@ -3065,7 +3159,7 @@ class Benchmark {
     thread->stats.AddBytes(bytes);
     thread->stats.AddMessage(msg);
 
-    if (FLAGS_perf_level > 0) {
+    if (FLAGS_perf_level > rocksdb::PerfLevel::kDisable) {
       thread->stats.AddMessage(perf_context.ToString());
     }
   }
@@ -3208,7 +3302,7 @@ class Benchmark {
              found, read);
     thread->stats.AddBytes(bytes);
     thread->stats.AddMessage(msg);
-    if (FLAGS_perf_level > 0) {
+    if (FLAGS_perf_level > rocksdb::PerfLevel::kDisable) {
       thread->stats.AddMessage(perf_context.ToString());
     }
   }
@@ -3231,7 +3325,7 @@ class Benchmark {
 
   void DoDelete(ThreadState* thread, bool seq) {
     WriteBatch batch;
-    Duration duration(seq ? 0 : FLAGS_duration, num_);
+    Duration duration(seq ? 0 : FLAGS_duration, deletes_);
     int64_t i = 0;
     std::unique_ptr<const char[]> key_guard;
     Slice key = AllocateKey(&key_guard);
@@ -3845,7 +3939,7 @@ class Benchmark {
     }
     thread->stats.AddMessage(msg);
 
-    if (FLAGS_perf_level > 0) {
+    if (FLAGS_perf_level > rocksdb::PerfLevel::kDisable) {
       thread->stats.AddMessage(perf_context.ToString());
     }
   }
@@ -3959,8 +4053,12 @@ class Benchmark {
 
 int db_bench_tool(int argc, char** argv) {
   rocksdb::port::InstallStackTraceHandler();
-  SetUsageMessage(std::string("\nUSAGE:\n") + std::string(argv[0]) +
-                  " [OPTIONS]...");
+  static bool initialized = false;
+  if (!initialized) {
+    SetUsageMessage(std::string("\nUSAGE:\n") + std::string(argv[0]) +
+                    " [OPTIONS]...");
+    initialized = true;
+  }
   ParseCommandLineFlags(&argc, &argv, true);
 
   FLAGS_compaction_style_e = (rocksdb::CompactionStyle) FLAGS_compaction_style;
@@ -3983,6 +4081,19 @@ int db_bench_tool(int argc, char** argv) {
   FLAGS_compression_type_e =
     StringToCompressionType(FLAGS_compression_type.c_str());
 
+#ifndef ROCKSDB_LITE
+  std::unique_ptr<Env> custom_env_guard;
+  if (!FLAGS_hdfs.empty() && !FLAGS_env_uri.empty()) {
+    fprintf(stderr, "Cannot provide both --hdfs and --env_uri.\n");
+    exit(1);
+  } else if (!FLAGS_env_uri.empty()) {
+    FLAGS_env = NewEnvFromUri(FLAGS_env_uri, &custom_env_guard);
+    if (FLAGS_env == nullptr) {
+      fprintf(stderr, "No Env registered for URI: %s\n", FLAGS_env_uri.c_str());
+      exit(1);
+    }
+  }
+#endif  // ROCKSDB_LITE
   if (!FLAGS_hdfs.empty()) {
     FLAGS_env  = new rocksdb::HdfsEnv(FLAGS_hdfs);
   }

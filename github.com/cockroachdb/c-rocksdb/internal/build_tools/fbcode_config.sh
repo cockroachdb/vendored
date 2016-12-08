@@ -14,7 +14,7 @@ CFLAGS=""
 
 # libgcc
 LIBGCC_INCLUDE="$LIBGCC_BASE/include"
-LIBGCC_LIBS=" -L $LIBGCC_BASE/libs"
+LIBGCC_LIBS=" -L $LIBGCC_BASE/lib"
 
 # glibc
 GLIBC_INCLUDE="$GLIBC_BASE/include"
@@ -87,7 +87,7 @@ CLANG_LIB="$CLANG_BASE/lib"
 CLANG_SRC="$CLANG_BASE/../../src"
 
 CLANG_ANALYZER="$CLANG_BIN/clang++"
-CLANG_SCAN_BUILD="$CLANG_SRC/clang/tools/scan-build/scan-build"
+CLANG_SCAN_BUILD="$CLANG_SRC/llvm/tools/clang/tools/scan-build/bin/scan-build"
 
 if [ -z "$USE_CLANG" ]; then
   # gcc
@@ -100,7 +100,7 @@ if [ -z "$USE_CLANG" ]; then
   JEMALLOC=1
 else
   # clang
-  CLANG_INCLUDE="$CLANG_LIB/clang/*/include"
+  CLANG_INCLUDE="$CLANG_LIB/clang/stable/include"
   CC="$CLANG_BIN/clang"
   CXX="$CLANG_BIN/clang++"
 
@@ -114,6 +114,7 @@ else
   CFLAGS+=" -isystem $CLANG_INCLUDE"
   CFLAGS+=" -isystem $KERNEL_HEADERS_INCLUDE/linux "
   CFLAGS+=" -isystem $KERNEL_HEADERS_INCLUDE "
+  CFLAGS+=" -Wno-expansion-to-defined "
   CXXFLAGS="-nostdinc++"
 fi
 
