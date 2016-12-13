@@ -52,6 +52,8 @@ func NewClient(ctx context.Context, project, instance string, opts ...option.Cli
 	if err != nil {
 		return nil, err
 	}
+	// Default to a small connection pool that can be overridden.
+	o = append(o, option.WithGRPCConnectionPool(4))
 	o = append(o, opts...)
 	conn, err := transport.DialGRPC(ctx, o...)
 	if err != nil {
@@ -296,12 +298,9 @@ func (r RowRange) retainRowsAfter(lastRowKey string) RowSet {
 	return NewRange(start, r.limit)
 }
 
-// SingleRow returns a RowRange for reading a single row.
-func SingleRow(row string) RowRange {
-	return RowRange{
-		start: row,
-		limit: row + "\x00",
-	}
+// SingleRow returns a RowSet for reading a single row.
+func SingleRow(row string) RowSet {
+	return RowList{row}
 }
 
 // PrefixRange returns a RowRange consisting of all keys starting with the prefix.
@@ -675,6 +674,9 @@ func (t *Table) ApplyReadModifyWrite(ctx context.Context, row string, m *ReadMod
 	res, err := t.c.client.ReadModifyWriteRow(ctx, req)
 	if err != nil {
 		return nil, err
+	}
+	if res.Row == nil {
+		return nil, errors.New("unable to apply ReadModifyWrite: res.Row=nil")
 	}
 	r := make(Row)
 	for _, fam := range res.Row.Families { // res is *btpb.Row, fam is *btpb.Family

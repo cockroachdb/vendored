@@ -151,6 +151,12 @@ type fieldCodec struct {
 	// path is the index path to the field
 	path    []int
 	noIndex bool
+	// flatten indicates that the field, a nested struct, should be saved
+	// as a flattened set of its fields, and not as an Entity value.
+	flatten bool
+	// omitEmpty indicates that the field should be omitted on save
+	// if empty.
+	omitEmpty bool
 	// structCodec is the codec fot the struct field at index 'path',
 	// or nil if the field is not a struct.
 	structCodec *structCodec
@@ -195,17 +201,18 @@ func getStructCodecLocked(t reflect.Type) (ret *structCodec, retErr error) {
 
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
-		// Skip unexported fields.
-		// Note that if f is an anonymous, unexported struct field,
-		// we will not promote its fields. We will skip f entirely.
-		if f.PkgPath != "" {
+		// Skip all unexported fields except unexported anonymous struct fields.
+		if f.PkgPath != "" /*unexported*/ && !(f.Type.Kind() == reflect.Struct && f.Anonymous) {
 			continue
 		}
 
-		name, opts := f.Tag.Get("datastore"), ""
-		if i := strings.Index(name, ","); i != -1 {
-			name, opts = name[:i], name[i+1:]
+		tags := strings.Split(f.Tag.Get("datastore"), ",")
+		name := tags[0]
+		opts := map[string]bool{}
+		for _, t := range tags[1:] {
+			opts[strings.TrimSpace(t)] = true
 		}
+
 		switch {
 		case name == "":
 			if !f.Anonymous {
@@ -261,7 +268,9 @@ func getStructCodecLocked(t reflect.Type) (ret *structCodec, retErr error) {
 					}
 					c.fields[subname] = fieldCodec{
 						path:        append([]int{i}, subfield.path...),
-						noIndex:     subfield.noIndex || opts == "noindex",
+						noIndex:     subfield.noIndex || opts["noindex"],
+						flatten:     subfield.flatten || opts["flatten"],
+						omitEmpty:   subfield.omitEmpty,
 						structCodec: subfield.structCodec,
 					}
 				}
@@ -274,7 +283,9 @@ func getStructCodecLocked(t reflect.Type) (ret *structCodec, retErr error) {
 		}
 		c.fields[name] = fieldCodec{
 			path:        []int{i},
-			noIndex:     opts == "noindex",
+			noIndex:     opts["noindex"],
+			flatten:     opts["flatten"],
+			omitEmpty:   opts["omitempty"],
 			structCodec: sub,
 		}
 	}

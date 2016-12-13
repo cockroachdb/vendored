@@ -115,6 +115,16 @@ func newStringValueField(name, value string, valueType pb.FieldValue_ContentType
 	}
 }
 
+func newFacet(name, value string, valueType pb.FacetValue_ContentType) *pb.Facet {
+	return &pb.Facet{
+		Name: proto.String(name),
+		Value: &pb.FacetValue{
+			StringValue: proto.String(value),
+			Type:        valueType.Enum(),
+		},
+	}
+}
+
 func TestValidIndexNameOrDocID(t *testing.T) {
 	testCases := []struct {
 		s    string
@@ -156,6 +166,17 @@ func TestSaveDoc(t *testing.T) {
 	want := protoFields
 	if !reflect.DeepEqual(got.Field, want) {
 		t.Errorf("\ngot  %v\nwant %v", got, want)
+	}
+}
+
+func TestSaveDocUsesDefaultedRankIfNotSpecified(t *testing.T) {
+	got, err := saveDoc(&searchDoc)
+	if err != nil {
+		t.Fatalf("saveDoc: %v", err)
+	}
+	orderIdSource := got.GetOrderIdSource()
+	if orderIdSource != pb.Document_DEFAULTED {
+		t.Errorf("OrderIdSource: got %v, wanted DEFAULTED", orderIdSource)
 	}
 }
 
@@ -221,8 +242,9 @@ func TestLoadMeta(t *testing.T) {
 		Fields: searchFieldsWithLang,
 	}
 	doc := &pb.Document{
-		Field:   protoFields,
-		OrderId: proto.Int32(42),
+		Field:         protoFields,
+		OrderId:       proto.Int32(42),
+		OrderIdSource: pb.Document_SUPPLIED.Enum(),
 	}
 	if err := loadDoc(&got, doc, nil); err != nil {
 		t.Fatalf("loadDoc: %v", err)
@@ -241,11 +263,89 @@ func TestSaveMeta(t *testing.T) {
 		t.Fatalf("saveDoc: %v", err)
 	}
 	want := &pb.Document{
-		Field:   protoFields,
-		OrderId: proto.Int32(42),
+		Field:         protoFields,
+		OrderId:       proto.Int32(42),
+		OrderIdSource: pb.Document_SUPPLIED.Enum(),
 	}
 	if !proto.Equal(got, want) {
 		t.Errorf("\ngot  %v\nwant %v", got, want)
+	}
+}
+
+func TestSaveMetaWithDefaultedRank(t *testing.T) {
+	metaWithoutRank := &DocumentMetadata{
+		Rank: 0,
+	}
+	got, err := saveDoc(&FieldListWithMeta{
+		Meta:   metaWithoutRank,
+		Fields: searchFields,
+	})
+	if err != nil {
+		t.Fatalf("saveDoc: %v", err)
+	}
+	want := &pb.Document{
+		Field:         protoFields,
+		OrderId:       got.OrderId,
+		OrderIdSource: pb.Document_DEFAULTED.Enum(),
+	}
+	if !proto.Equal(got, want) {
+		t.Errorf("\ngot  %v\nwant %v", got, want)
+	}
+}
+
+func TestSaveWithoutMetaUsesDefaultedRank(t *testing.T) {
+	got, err := saveDoc(&FieldListWithMeta{
+		Fields: searchFields,
+	})
+	if err != nil {
+		t.Fatalf("saveDoc: %v", err)
+	}
+	want := &pb.Document{
+		Field:         protoFields,
+		OrderId:       got.OrderId,
+		OrderIdSource: pb.Document_DEFAULTED.Enum(),
+	}
+	if !proto.Equal(got, want) {
+		t.Errorf("\ngot  %v\nwant %v", got, want)
+	}
+}
+
+func TestLoadSaveWithStruct(t *testing.T) {
+	type gopher struct {
+		Name string
+		Info string  `search:"about"`
+		Legs float64 `search:",facet"`
+		Fuzz Atom    `search:"Fur,facet"`
+	}
+
+	doc := gopher{"Gopher", "Likes slide rules.", 4, Atom("furry")}
+	pb := &pb.Document{
+		Field: []*pb.Field{
+			newStringValueField("Name", "Gopher", pb.FieldValue_TEXT),
+			newStringValueField("about", "Likes slide rules.", pb.FieldValue_TEXT),
+		},
+		Facet: []*pb.Facet{
+			newFacet("Legs", "4e+00", pb.FacetValue_NUMBER),
+			newFacet("Fur", "furry", pb.FacetValue_ATOM),
+		},
+	}
+
+	var gotDoc gopher
+	if err := loadDoc(&gotDoc, pb, nil); err != nil {
+		t.Fatalf("loadDoc: %v", err)
+	}
+	if !reflect.DeepEqual(gotDoc, doc) {
+		t.Errorf("loading doc\ngot  %v\nwant %v", gotDoc, doc)
+	}
+
+	gotPB, err := saveDoc(&doc)
+	if err != nil {
+		t.Fatalf("saveDoc: %v", err)
+	}
+	gotPB.OrderId = nil       // Don't test: it's time dependent.
+	gotPB.OrderIdSource = nil // Don't test because it's contingent on OrderId.
+	if !proto.Equal(gotPB, pb) {
+		t.Errorf("saving doc\ngot  %v\nwant %v", gotPB, pb)
 	}
 }
 
@@ -438,7 +538,7 @@ func TestPut(t *testing.T) {
 		expectedIn := &pb.IndexDocumentRequest{
 			Params: &pb.IndexDocumentParams{
 				Document: []*pb.Document{
-					{Field: protoFields, OrderId: proto.Int32(42)},
+					{Field: protoFields, OrderId: proto.Int32(42), OrderIdSource: pb.Document_SUPPLIED.Enum()},
 				},
 				IndexSpec: &pb.IndexSpec{
 					Name: proto.String("Doc"),
@@ -673,12 +773,13 @@ func TestBasicSearchOpts(t *testing.T) {
 	noErr := errors.New("") // Sentinel err to return to prevent sending request.
 
 	testCases := []struct {
-		desc      string
-		facetOpts []FacetSearchOption
-		cursor    Cursor
-		offset    int
-		want      *pb.SearchParams
-		wantErr   string
+		desc          string
+		facetOpts     []FacetSearchOption
+		cursor        Cursor
+		offset        int
+		countAccuracy int
+		want          *pb.SearchParams
+		wantErr       string
 	}{
 		{
 			desc: "No options",
@@ -790,6 +891,13 @@ func TestBasicSearchOpts(t *testing.T) {
 			offset:  121,
 			wantErr: "at most one of Cursor and Offset may be specified",
 		},
+		{
+			desc:          "Count accuracy",
+			countAccuracy: 100,
+			want: &pb.SearchParams{
+				MatchedCountAccuracy: proto.Int32(100),
+			},
+		},
 	}
 
 	for _, tt := range testCases {
@@ -810,9 +918,10 @@ func TestBasicSearchOpts(t *testing.T) {
 		})
 
 		it := index.Search(c, "gopher", &SearchOptions{
-			Facets: tt.facetOpts,
-			Cursor: tt.cursor,
-			Offset: tt.offset,
+			Facets:        tt.facetOpts,
+			Cursor:        tt.cursor,
+			Offset:        tt.offset,
+			CountAccuracy: tt.countAccuracy,
 		})
 		_, err := it.Next(nil)
 		if err == nil {
@@ -902,5 +1011,42 @@ func TestFacetRefinements(t *testing.T) {
 		if err.Error() != tt.wantErr {
 			t.Errorf("%s: got error %q, want %q", tt.desc, err, tt.wantErr)
 		}
+	}
+}
+
+func TestNamespaceResetting(t *testing.T) {
+	namec := make(chan *string, 1)
+	c0 := aetesting.FakeSingleContext(t, "search", "IndexDocument", func(req *pb.IndexDocumentRequest, res *pb.IndexDocumentResponse) error {
+		namec <- req.Params.IndexSpec.Namespace
+		return fmt.Errorf("RPC error")
+	})
+
+	// Check that wrapping c0 in a namespace twice works correctly.
+	c1, err := appengine.Namespace(c0, "A")
+	if err != nil {
+		t.Fatalf("appengine.Namespace: %v", err)
+	}
+	c2, err := appengine.Namespace(c1, "") // should act as the original context
+	if err != nil {
+		t.Fatalf("appengine.Namespace: %v", err)
+	}
+
+	i := (&Index{})
+
+	i.Put(c0, "something", &searchDoc)
+	if ns := <-namec; ns != nil {
+		t.Errorf(`Put with c0: ns = %q, want nil`, *ns)
+	}
+
+	i.Put(c1, "something", &searchDoc)
+	if ns := <-namec; ns == nil {
+		t.Error(`Put with c1: ns = nil, want "A"`)
+	} else if *ns != "A" {
+		t.Errorf(`Put with c1: ns = %q, want "A"`, *ns)
+	}
+
+	i.Put(c2, "something", &searchDoc)
+	if ns := <-namec; ns != nil {
+		t.Errorf(`Put with c2: ns = %q, want nil`, *ns)
 	}
 }

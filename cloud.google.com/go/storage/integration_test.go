@@ -18,6 +18,8 @@ import (
 	"bytes"
 	"compress/gzip"
 	"crypto/md5"
+	"crypto/sha256"
+	"encoding/base64"
 	"flag"
 	"fmt"
 	"io"
@@ -32,11 +34,15 @@ import (
 	"testing"
 	"time"
 
+	gax "github.com/googleapis/gax-go"
+
 	"golang.org/x/net/context"
 
+	"cloud.google.com/go/internal"
 	"cloud.google.com/go/internal/testutil"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
+	itesting "google.golang.org/api/iterator/testing"
 	"google.golang.org/api/option"
 )
 
@@ -519,18 +525,13 @@ func TestObjects(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rc, err := publicClient.Bucket(bucket).Object(publicObj).NewReader(ctx)
+
+	slurp, err := readObject(ctx, publicClient.Bucket(bucket).Object(publicObj))
 	if err != nil {
-		t.Error(err)
-	}
-	slurp, err := ioutil.ReadAll(rc)
-	if err != nil {
-		t.Errorf("ReadAll failed with %v", err)
-	}
-	if !bytes.Equal(slurp, contents[publicObj]) {
+		t.Errorf("readObject failed with %v", err)
+	} else if !bytes.Equal(slurp, contents[publicObj]) {
 		t.Errorf("Public object's content: got %q, want %q", slurp, contents[publicObj])
 	}
-	rc.Close()
 
 	// Test writer error handling.
 	wc := publicClient.Bucket(bucket).Object(publicObj).NewWriter(ctx)
@@ -555,33 +556,46 @@ func TestObjects(t *testing.T) {
 	}
 
 	// Test object composition.
-	compDst := bkt.Object("composed")
 	var compSrcs []*ObjectHandle
 	var wantContents []byte
 	for _, obj := range objects {
 		compSrcs = append(compSrcs, bkt.Object(obj))
 		wantContents = append(wantContents, contents[obj]...)
 	}
+	checkCompose := func(obj *ObjectHandle, wantContentType string) {
+		rc, err := obj.NewReader(ctx)
+		if err != nil {
+			t.Fatalf("NewReader: %v", err)
+		}
+		slurp, err = ioutil.ReadAll(rc)
+		if err != nil {
+			t.Fatalf("ioutil.ReadAll: %v", err)
+		}
+		defer rc.Close()
+		if !bytes.Equal(slurp, wantContents) {
+			t.Errorf("Composed object contents\ngot:  %q\nwant: %q", slurp, wantContents)
+		}
+		if got := rc.ContentType(); got != wantContentType {
+			t.Errorf("Composed object content-type = %q, want %q", got, wantContentType)
+		}
+	}
+
+	// Compose should work even if the user sets no destination attributes.
+	compDst := bkt.Object("composed1")
 	c := compDst.ComposerFrom(compSrcs...)
+	if _, err := c.Run(ctx); err != nil {
+		t.Fatalf("ComposeFrom error: %v", err)
+	}
+	checkCompose(compDst, "application/octet-stream")
+
+	// It should also work if we do.
+	compDst = bkt.Object("composed2")
+	c = compDst.ComposerFrom(compSrcs...)
 	c.ContentType = "text/json"
 	if _, err := c.Run(ctx); err != nil {
 		t.Fatalf("ComposeFrom error: %v", err)
 	}
-	rc, err = compDst.NewReader(ctx)
-	if err != nil {
-		t.Fatalf("compDst.NewReader: %v", err)
-	}
-	slurp, err = ioutil.ReadAll(rc)
-	if err != nil {
-		t.Fatalf("compDst ioutil.ReadAll: %v", err)
-	}
-	defer rc.Close()
-	if !bytes.Equal(slurp, wantContents) {
-		t.Errorf("Composed object contents\ngot:  %q\nwant: %q", slurp, wantContents)
-	}
-	if got, want := rc.ContentType(), "text/json"; got != want {
-		t.Errorf("Composed object content-type = %q, want %q", got, want)
-	}
+	checkCompose(compDst, "text/json")
 }
 
 func namesEqual(obj *ObjectAttrs, bucketName, objectName string) bool {
@@ -603,14 +617,27 @@ func testObjectIterator(t *testing.T, bkt *BucketHandle, objects []string) {
 		}
 		attrs = append(attrs, attr)
 	}
-
-	it := bkt.Objects(ctx, &Query{Prefix: "obj"})
-	msg, ok := testutil.TestIteratorNext(attrs, iterator.Done, func() (interface{}, error) { return it.Next() })
+	// The following iterator test fails occasionally, probably because the
+	// underlying Objects.List operation is eventually consistent. So we retry
+	// it.
+	tctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	var msg string
+	var ok bool
+	err := internal.Retry(tctx, gax.Backoff{}, func() (stop bool, err error) {
+		msg, ok = itesting.TestIterator(attrs,
+			func() interface{} { return bkt.Objects(ctx, &Query{Prefix: "obj"}) },
+			func(it interface{}) (interface{}, error) { return it.(*ObjectIterator).Next() })
+		if ok {
+			return true, nil
+		} else {
+			t.Logf("TestIterator failed, trying again: %s", msg)
+			return false, nil
+		}
+	})
 	if !ok {
-		t.Errorf("ObjectIterator.Next: %s", msg)
+		t.Errorf("ObjectIterator.Next: %s (err=%v)", msg, err)
 	}
-
-	// TODO(jba): test pagination.
 	// TODO(jba): test query.Delimiter != ""
 }
 
@@ -797,18 +824,193 @@ func TestZeroSizedObject(t *testing.T) {
 	defer obj.Delete(ctx)
 
 	// Check we can read it too.
-	r, err := obj.NewReader(ctx)
+	body, err := readObject(ctx, obj)
 	if err != nil {
-		t.Fatalf("NewReader: %v", err)
-	}
-	defer r.Close()
-	body, err := ioutil.ReadAll(r)
-	if err != nil {
-		t.Fatalf("ioutil.ReadAll: %v", err)
+		t.Fatalf("readObject: %v", err)
 	}
 	if len(body) != 0 {
 		t.Errorf("Body is %v, want empty []byte{}", body)
 	}
+}
+
+func TestIntegration_Encryption(t *testing.T) {
+	// This function tests customer-supplied encryption keys for all operations
+	// involving objects. Bucket and ACL operations aren't tested because they
+	// aren't affected customer encryption.
+	ctx := context.Background()
+	client, bucket := testConfig(ctx, t)
+	defer client.Close()
+
+	obj := client.Bucket(bucket).Object("customer-encryption")
+	key := []byte("my-secret-AES-256-encryption-key")
+	keyHash := sha256.Sum256(key)
+	keyHashB64 := base64.StdEncoding.EncodeToString(keyHash[:])
+	key2 := []byte("My-Secret-AES-256-Encryption-Key")
+	contents := "top secret."
+
+	checkMetadataCall := func(msg string, f func(o *ObjectHandle) (*ObjectAttrs, error)) {
+		// Performing a metadata operation without the key should succeed.
+		attrs, err := f(obj)
+		if err != nil {
+			t.Fatalf("%s: %v", msg, err)
+		}
+		// The key hash should match...
+		if got, want := attrs.CustomerKeySHA256, keyHashB64; got != want {
+			t.Errorf("%s: key hash: got %q, want %q", msg, got, want)
+		}
+		// ...but CRC and MD5 should not be present.
+		if attrs.CRC32C != 0 {
+			t.Errorf("%s: CRC: got %v, want 0", msg, attrs.CRC32C)
+		}
+		if len(attrs.MD5) > 0 {
+			t.Errorf("%s: MD5: got %v, want len == 0", msg, attrs.MD5)
+		}
+
+		// Performing a metadata operation with the key should succeed.
+		attrs, err = f(obj.Key(key))
+		if err != nil {
+			t.Fatalf("%s: %v", msg, err)
+		}
+		// Check the key and content hashes.
+		if got, want := attrs.CustomerKeySHA256, keyHashB64; got != want {
+			t.Errorf("%s: key hash: got %q, want %q", msg, got, want)
+		}
+		if attrs.CRC32C == 0 {
+			t.Errorf("%s: CRC: got 0, want non-zero", msg)
+		}
+		if len(attrs.MD5) == 0 {
+			t.Errorf("%s: MD5: got len == 0, want len > 0", msg)
+		}
+	}
+
+	checkRead := func(msg string, o *ObjectHandle, k []byte, wantContents string) {
+		// Reading the object without the key should fail.
+		if _, err := readObject(ctx, o); err == nil {
+			t.Errorf("%s: reading without key: want error, got nil", msg)
+		}
+		// Reading the object with the key should succeed.
+		got, err := readObject(ctx, o.Key(k))
+		if err != nil {
+			t.Fatalf("%s: %v", msg, err)
+		}
+		gotContents := string(got)
+		// And the contents should match what we wrote.
+		if gotContents != wantContents {
+			t.Errorf("%s: contents: got %q, want %q", msg, gotContents, wantContents)
+		}
+	}
+
+	checkReadUnencrypted := func(msg string, obj *ObjectHandle, wantContents string) {
+		got, err := readObject(ctx, obj)
+		if err != nil {
+			t.Fatalf("%s: %v", msg, err)
+		}
+		gotContents := string(got)
+		if gotContents != wantContents {
+			t.Errorf("%s: got %q, want %q", gotContents, wantContents)
+		}
+	}
+
+	// Write to obj using our own encryption key, which is a valid 32-byte
+	// AES-256 key.
+	w := obj.Key(key).NewWriter(ctx)
+	w.Write([]byte(contents))
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	checkMetadataCall("Attrs", func(o *ObjectHandle) (*ObjectAttrs, error) {
+		return o.Attrs(ctx)
+	})
+
+	checkMetadataCall("Update", func(o *ObjectHandle) (*ObjectAttrs, error) {
+		return o.Update(ctx, ObjectAttrsToUpdate{ContentLanguage: "en"})
+	})
+
+	checkRead("first object", obj, key, contents)
+
+	obj2 := client.Bucket(bucket).Object("customer-encryption-2")
+	// Copying an object without the key should fail.
+	if _, err := obj2.CopierFrom(obj).Run(ctx); err == nil {
+		t.Fatal("want error, got nil")
+	}
+	// Copying an object with the key should succeed.
+	if _, err := obj2.CopierFrom(obj.Key(key)).Run(ctx); err != nil {
+		t.Fatal(err)
+	}
+	// The destination object is not encrypted; we can read it without a key.
+	checkReadUnencrypted("copy dest", obj2, contents)
+
+	// Providing a key on the destination but not the source should fail,
+	// since the source is encrypted.
+	if _, err := obj2.Key(key2).CopierFrom(obj).Run(ctx); err == nil {
+		t.Fatal("want error, got nil")
+	}
+
+	// But copying with keys for both source and destination should succeed.
+	if _, err := obj2.Key(key2).CopierFrom(obj.Key(key)).Run(ctx); err != nil {
+		t.Fatal(err)
+	}
+	// And the destination should be encrypted, meaning we can only read it
+	// with a key.
+	checkRead("copy destination", obj2, key2, contents)
+
+	// Change obj2's key to prepare for compose, where all objects must have
+	// the same key. Also illustrates key rotation: copy an object to itself
+	// with a different key.
+	if _, err := obj2.Key(key).CopierFrom(obj2.Key(key2)).Run(ctx); err != nil {
+		t.Fatal(err)
+	}
+	obj3 := client.Bucket(bucket).Object("customer-encryption-3")
+	// Composing without keys should fail.
+	if _, err := obj3.ComposerFrom(obj, obj2).Run(ctx); err == nil {
+		t.Fatal("want error, got nil")
+	}
+	// Keys on the source objects result in an error.
+	if _, err := obj3.ComposerFrom(obj.Key(key), obj2).Run(ctx); err == nil {
+		t.Fatal("want error, got nil")
+	}
+	// A key on the destination object both decrypts the source objects
+	// and encrypts the destination.
+	if _, err := obj3.Key(key).ComposerFrom(obj, obj2).Run(ctx); err != nil {
+		t.Fatalf("got %v, want nil", err)
+	}
+	// Check that the destination in encrypted.
+	checkRead("compose destination", obj3, key, contents+contents)
+
+	// You can't compose one or more unencrypted source objects into an
+	// encrypted destination object.
+	_, err := obj2.CopierFrom(obj2.Key(key)).Run(ctx) // unencrypt obj2
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := obj3.Key(key).ComposerFrom(obj2).Run(ctx); err == nil {
+		t.Fatal("got nil, want error")
+	}
+}
+
+func TestIntegration_NonexistentBucket(t *testing.T) {
+	ctx := context.Background()
+	client, bucket := testConfig(ctx, t)
+	defer client.Close()
+
+	bkt := client.Bucket(bucket + "-nonexistent")
+	if _, err := bkt.Attrs(ctx); err != ErrBucketNotExist {
+		t.Errorf("Attrs: got %v, want ErrBucketNotExist", err)
+	}
+	it := bkt.Objects(ctx, nil)
+	if _, err := it.Next(); err != ErrBucketNotExist {
+		t.Errorf("Objects: got %v, want ErrBucketNotExist", err)
+	}
+}
+
+func readObject(ctx context.Context, obj *ObjectHandle) ([]byte, error) {
+	r, err := obj.NewReader(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
+	return ioutil.ReadAll(r)
 }
 
 // cleanup deletes the bucket used for testing, as well as old

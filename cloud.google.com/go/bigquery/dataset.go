@@ -15,15 +15,29 @@
 package bigquery
 
 import (
+	"time"
+
 	"golang.org/x/net/context"
 	"google.golang.org/api/iterator"
 )
 
 // Dataset is a reference to a BigQuery dataset.
 type Dataset struct {
-	projectID string
-	id        string
+	ProjectID string
+	DatasetID string
 	c         *Client
+}
+
+type DatasetMetadata struct {
+	CreationTime           time.Time
+	LastModifiedTime       time.Time // When the dataset or any of its tables were modified.
+	DefaultTableExpiration time.Duration
+	Description            string // The user-friendly description of this table.
+	Name                   string // The user-friendly name for this table.
+	ID                     string
+	Location               string            // The geo location of the dataset.
+	Labels                 map[string]string // User-provided labels.
+	// TODO(jba): access rules
 }
 
 // Dataset creates a handle to a BigQuery dataset in the client's project.
@@ -34,8 +48,8 @@ func (c *Client) Dataset(id string) *Dataset {
 // DatasetInProject creates a handle to a BigQuery dataset in the specified project.
 func (c *Client) DatasetInProject(projectID, datasetID string) *Dataset {
 	return &Dataset{
-		projectID: projectID,
-		id:        datasetID,
+		ProjectID: projectID,
+		DatasetID: datasetID,
 		c:         c,
 	}
 }
@@ -43,14 +57,24 @@ func (c *Client) DatasetInProject(projectID, datasetID string) *Dataset {
 // Create creates a dataset in the BigQuery service. An error will be returned
 // if the dataset already exists.
 func (d *Dataset) Create(ctx context.Context) error {
-	return d.c.service.insertDataset(ctx, d.id, d.projectID)
+	return d.c.service.insertDataset(ctx, d.DatasetID, d.ProjectID)
+}
+
+// Delete deletes the dataset.
+func (d *Dataset) Delete(ctx context.Context) error {
+	return d.c.service.deleteDataset(ctx, d.DatasetID, d.ProjectID)
+}
+
+// Metadata fetches the metadata for the dataset.
+func (d *Dataset) Metadata(ctx context.Context) (*DatasetMetadata, error) {
+	return d.c.service.getDatasetMetadata(ctx, d.ProjectID, d.DatasetID)
 }
 
 // Table creates a handle to a BigQuery table in the dataset.
 // To determine if a table exists, call Table.Metadata.
 // If the table does not already exist, use Table.Create to create it.
 func (d *Dataset) Table(tableID string) *Table {
-	return &Table{ProjectID: d.projectID, DatasetID: d.id, TableID: tableID, c: d.c}
+	return &Table{ProjectID: d.ProjectID, DatasetID: d.DatasetID, TableID: tableID, c: d.c}
 }
 
 // Tables returns an iterator over the tables in the Dataset.
@@ -91,7 +115,7 @@ func (it *TableIterator) Next() (*Table, error) {
 func (it *TableIterator) PageInfo() *iterator.PageInfo { return it.pageInfo }
 
 func (it *TableIterator) fetch(pageSize int, pageToken string) (string, error) {
-	tables, tok, err := it.dataset.c.service.listTables(it.ctx, it.dataset.projectID, it.dataset.id, pageSize, pageToken)
+	tables, tok, err := it.dataset.c.service.listTables(it.ctx, it.dataset.ProjectID, it.dataset.DatasetID, pageSize, pageToken)
 	if err != nil {
 		return "", err
 	}

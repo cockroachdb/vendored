@@ -2,7 +2,7 @@
 // Use of this source code is governed by the Apache 2.0
 // license that can be found in the LICENSE file.
 
-// Program aedeploy assists with deploying Go Managed VM apps to production.
+// Program aedeploy assists with deploying App Engine "flexible environment" Go apps to production.
 // A temporary directory is created; the app, its subdirectories, and all its
 // dependencies from $GOPATH are copied into the directory; then the app
 // is deployed to production with the provided command.
@@ -19,6 +19,7 @@ import (
 	"go/build"
 	"io"
 	"io/ioutil"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -32,16 +33,25 @@ var (
 		".hg":         true,
 		".travis.yml": true,
 	}
-
-	gopathCache = map[string]string{}
 )
 
 func usage() {
 	fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
-	fmt.Fprintf(os.Stderr, "\t%s gcloud --verbosity debug preview app deploy --version myversion ./app.yaml\tDeploy app to production\n", os.Args[0])
+	fmt.Fprintf(os.Stderr, "\t%s gcloud --verbosity debug app deploy --version myversion ./app.yaml\tDeploy app to production\n", os.Args[0])
+}
+
+var verbose bool
+
+// vlogf logs to stderr if the "-v" flag is provided.
+func vlogf(f string, v ...interface{}) {
+	if !verbose {
+		return
+	}
+	log.Printf("[aedeploy] "+f, v...)
 }
 
 func main() {
+	flag.BoolVar(&verbose, "v", false, "Verbose logging.")
 	flag.Usage = usage
 	flag.Parse()
 	if flag.NArg() < 1 {
@@ -78,6 +88,7 @@ func aedeploy() error {
 
 // deploy calls the provided command to deploy the app from the temporary directory.
 func deploy() error {
+	vlogf("Running command %v", flag.Args())
 	cmd := exec.Command(flag.Arg(0), flag.Args()[1:]...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -95,12 +106,12 @@ type app struct {
 // app files, and a map of full directory import names to original import names.
 func analyze(tags []string) (*app, error) {
 	ctxt := buildContext(tags)
+	vlogf("Using build context %#v", ctxt)
 	appFiles, err := appFiles(ctxt)
 	if err != nil {
 		return nil, err
 	}
-	gopath := filepath.SplitList(ctxt.GOPATH)
-	im, err := imports(ctxt, ".", gopath)
+	im, err := imports(ctxt, ".")
 	return &app{
 		appFiles: appFiles,
 		imports:  im,
@@ -115,9 +126,13 @@ func buildContext(tags []string) *build.Context {
 		GOROOT:    build.Default.GOROOT,
 		GOPATH:    build.Default.GOPATH,
 		Compiler:  build.Default.Compiler,
-		BuildTags: append(build.Default.BuildTags, tags...),
+		BuildTags: append(defaultBuildTags, tags...),
 	}
 }
+
+// All build tags except go1.7, since Go 1.6 is the runtime version.
+var defaultBuildTags = []string{
+	"go1.1", "go1.2", "go1.3", "go1.4", "go1.5", "go1.6"}
 
 // bundle bundles the app into a temporary directory.
 func (s *app) bundle() (tmpdir string, err error) {
@@ -138,56 +153,75 @@ func (s *app) bundle() (tmpdir string, err error) {
 	return workDir, nil
 }
 
-// imports returns a map of all import directories (recursively) used by the app.
+// imports returns a map of all import directories used by the app.
 // The return value maps full directory names to original import names.
-func imports(ctxt *build.Context, srcDir string, gopath []string) (map[string]string, error) {
+func imports(ctxt *build.Context, srcDir string) (map[string]string, error) {
+	result := make(map[string]string)
+
+	type importFrom struct {
+		path, fromDir string
+	}
+	var imports []importFrom
+	visited := make(map[importFrom]bool)
+
 	pkg, err := ctxt.ImportDir(srcDir, 0)
 	if err != nil {
 		return nil, err
 	}
+	for _, v := range pkg.Imports {
+		imports = append(imports, importFrom{
+			path:    v,
+			fromDir: srcDir,
+		})
+	}
 
 	// Resolve all non-standard-library imports
-	result := make(map[string]string)
-	for _, v := range pkg.Imports {
-		if !strings.Contains(v, ".") {
+	for len(imports) != 0 {
+		i := imports[0]
+		imports = imports[1:] // shift
+		if i.path == "C" {
+			// ignore cgo
 			continue
 		}
-		src, err := findInGopath(v, gopath)
-		if err != nil {
-			return nil, fmt.Errorf("unable to find import %v in gopath %v: %v", v, gopath, err)
-		}
-		if _, ok := result[src]; ok { // Already processed
+		if _, ok := visited[i]; ok {
+			// already scanned
 			continue
 		}
-		result[src] = v
-		im, err := imports(ctxt, src, gopath)
-		if err != nil {
-			return nil, fmt.Errorf("unable to parse package %v: %v", src, err)
-		}
-		for k, v := range im {
-			result[k] = v
-		}
-	}
-	return result, nil
-}
+		visited[i] = true
 
-// findInGopath searches the gopath for the named import directory.
-func findInGopath(dir string, gopath []string) (string, error) {
-	if v, ok := gopathCache[dir]; ok {
-		return v, nil
-	}
-	for _, v := range gopath {
-		dst := filepath.Join(v, "src", dir)
-		if _, err := os.Stat(dst); err == nil {
-			gopathCache[dir] = dst
-			return dst, nil
+		abs, err := filepath.Abs(i.fromDir)
+		if err != nil {
+			return nil, fmt.Errorf("unable to get absolute directory of %q: %v", i.fromDir, err)
+		}
+		pkg, err := ctxt.Import(i.path, abs, 0)
+		if err != nil {
+			return nil, fmt.Errorf("unable to find import %s, imported from %q: %v", i.path, i.fromDir, err)
+		}
+
+		// TODO(cbro): handle packages that are vendored by multiple imports correctly.
+
+		if pkg.Goroot {
+			// ignore standard library imports
+			continue
+		}
+
+		vlogf("Located %q (imported from %q) -> %q", i.path, i.fromDir, pkg.Dir)
+		result[pkg.Dir] = i.path
+
+		for _, v := range pkg.Imports {
+			imports = append(imports, importFrom{
+				path:    v,
+				fromDir: pkg.Dir,
+			})
 		}
 	}
-	return "", fmt.Errorf("unable to find package %v in gopath %v", dir, gopath)
+
+	return result, nil
 }
 
 // copyTree copies srcDir to dstDir relative to dstRoot, ignoring skipFiles.
 func copyTree(dstRoot, dstDir, srcDir string) error {
+	vlogf("Copying %q to %q", srcDir, dstDir)
 	d := filepath.Join(dstRoot, dstDir)
 	if err := os.MkdirAll(d, 0755); err != nil {
 		return fmt.Errorf("unable to create directory %q: %v", d, err)
@@ -253,12 +287,13 @@ func appFiles(ctxt *build.Context) ([]string, error) {
 		return nil, err
 	}
 	if !pkg.IsCommand() {
-		return nil, fmt.Errorf(`the root of your app needs to be package "main" (currently %q). Please see https://cloud.google.com/appengine/docs/go/managed-vms for more details on structuring your app.`, pkg.Name)
+		return nil, fmt.Errorf(`the root of your app needs to be package "main" (currently %q). Please see https://cloud.google.com/appengine/docs/flexible/go/ for more details on structuring your app.`, pkg.Name)
 	}
 	var appFiles []string
 	for _, f := range pkg.GoFiles {
 		n := filepath.Join(".", f)
 		appFiles = append(appFiles, n)
 	}
+	vlogf("Found application files %v", appFiles)
 	return appFiles, nil
 }

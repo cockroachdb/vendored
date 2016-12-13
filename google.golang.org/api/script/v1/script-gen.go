@@ -280,7 +280,7 @@ type Operation struct {
 	Error *Status `json:"error,omitempty"`
 
 	// Metadata: This field is not used.
-	Metadata OperationMetadata `json:"metadata,omitempty"`
+	Metadata googleapi.RawMessage `json:"metadata,omitempty"`
 
 	// Name: This field is not used.
 	Name string `json:"name,omitempty"`
@@ -288,7 +288,7 @@ type Operation struct {
 	// Response: If the script function returns successfully, this field
 	// will contain an `ExecutionResponse` object with the function's return
 	// value as the object's `result` field.
-	Response OperationResponse `json:"response,omitempty"`
+	Response googleapi.RawMessage `json:"response,omitempty"`
 
 	// ServerResponse contains the HTTP response code and headers from the
 	// server.
@@ -316,10 +316,6 @@ func (s *Operation) MarshalJSON() ([]byte, error) {
 	raw := noMethod(*s)
 	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
 }
-
-type OperationMetadata interface{}
-
-type OperationResponse interface{}
 
 // ScriptStackTraceElement: A stack trace through the script that shows
 // where the execution failed.
@@ -363,7 +359,7 @@ type Status struct {
 
 	// Details: An array that contains a single `ExecutionError` object that
 	// provides information about the nature of the error.
-	Details []StatusDetails `json:"details,omitempty"`
+	Details []googleapi.RawMessage `json:"details,omitempty"`
 
 	// Message: A developer-facing error message, which should be in
 	// English. Any user-facing error message should be localized and sent
@@ -393,8 +389,6 @@ func (s *Status) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
 }
 
-type StatusDetails interface{}
-
 // method id "script.scripts.run":
 
 type ScriptsRunCall struct {
@@ -403,6 +397,7 @@ type ScriptsRunCall struct {
 	executionrequest *ExecutionRequest
 	urlParams_       gensupport.URLParams
 	ctx_             context.Context
+	header_          http.Header
 }
 
 // Run: Runs a function in an Apps Script project that has been deployed
@@ -436,8 +431,20 @@ func (c *ScriptsRunCall) Context(ctx context.Context) *ScriptsRunCall {
 	return c
 }
 
+// Header returns an http.Header that can be modified by the caller to
+// add HTTP headers to the request.
+func (c *ScriptsRunCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
 func (c *ScriptsRunCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
+	for k, v := range c.header_ {
+		reqHeaders[k] = v
+	}
 	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.executionrequest)

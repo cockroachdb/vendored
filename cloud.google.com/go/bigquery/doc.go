@@ -36,12 +36,12 @@ Querying
 To query existing tables, create a Query and call its Read method:
 
     q := client.Query(`
-    SELECT year, SUM(number)
-    FROM [bigquery-public-data:usa_names.usa_1910_2013]
-    WHERE name = "William"
-    GROUP BY year
-    ORDER BY year
-`)
+        SELECT year, SUM(number)
+        FROM [bigquery-public-data:usa_names.usa_1910_2013]
+        WHERE name = "William"
+        GROUP BY year
+        ORDER BY year
+    `)
     it, err := q.Read(ctx)
     if err != nil {
         // TODO: Handle error.
@@ -172,7 +172,15 @@ You can chain the call to Run if you don't want to set options:
         // TODO: Handle error.
     }
 
-You can poll for completion of the job if you wish:
+You can wait for your job to complete:
+
+    status, err := job.Wait(ctx)
+    if err != nil {
+        // TODO: Handle error.
+    }
+
+Job.Wait polls with exponential backoff You can also poll yourself, if you
+wish:
 
     for {
         status, err := job.Status(ctx)

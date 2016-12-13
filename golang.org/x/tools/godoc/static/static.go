@@ -878,7 +878,7 @@ function updateVersionTags() {
 function addPermalinks() {
   function addPermalink(source, parent) {
     var id = source.attr("id");
-    if (id.indexOf("tmp_") === 0) {
+    if (id == "" || id.indexOf("tmp_") === 0) {
       // Auto-generated permalink.
       return;
     }
@@ -886,7 +886,7 @@ function addPermalinks() {
       // Already attached.
       return;
     }
-    parent.append(" ").append($("&nbsp;<a class='permalink'>&#xb6;</a>").attr("href", "#" + id));
+    parent.append(" ").append($("<a class='permalink'>&#xb6;</a>").attr("href", "#" + id));
   }
 
   $("#page .container").find("h2[id], h3[id]").each(function() {
@@ -2859,6 +2859,12 @@ pre .selection-comment {
 }
 pre .ln {
 	color: #999;
+}
+.ln {
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+	user-select: none;
 }
 body {
 	color: #222;

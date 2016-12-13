@@ -16,7 +16,7 @@ package bigquery_test
 
 import (
 	"fmt"
-	"time"
+	"os"
 
 	"cloud.google.com/go/bigquery"
 	"golang.org/x/net/context"
@@ -88,13 +88,8 @@ func ExampleClient_JobFromID() {
 	fmt.Println(job)
 }
 
-func ExampleClient_NewGCSReference() {
-	ctx := context.Background()
-	client, err := bigquery.NewClient(ctx, "project-id")
-	if err != nil {
-		// TODO: Handle error.
-	}
-	gcsRef := client.NewGCSReference("gs://my-bucket/my-object")
+func ExampleNewGCSReference() {
+	gcsRef := bigquery.NewGCSReference("gs://my-bucket/my-object")
 	fmt.Println(gcsRef)
 }
 
@@ -136,7 +131,7 @@ func ExampleRowIterator_Next() {
 		// TODO: Handle error.
 	}
 	for {
-		var row bigquery.ValueList
+		var row []bigquery.Value
 		err := it.Next(&row)
 		if err == iterator.Done {
 			break
@@ -168,15 +163,59 @@ func ExampleJob_Read() {
 	_ = it // TODO: iterate using Next or iterator.Pager.
 }
 
+func ExampleJob_Wait() {
+	ctx := context.Background()
+	client, err := bigquery.NewClient(ctx, "project-id")
+	if err != nil {
+		// TODO: Handle error.
+	}
+	ds := client.Dataset("my_dataset")
+	job, err := ds.Table("t1").CopierFrom(ds.Table("t2")).Run(ctx)
+	if err != nil {
+		// TODO: Handle error.
+	}
+	status, err := job.Wait(ctx)
+	if err != nil {
+		// TODO: Handle error.
+	}
+	if status.Err() != nil {
+		// TODO: Handle error.
+	}
+}
+
 func ExampleDataset_Create() {
 	ctx := context.Background()
 	client, err := bigquery.NewClient(ctx, "project-id")
 	if err != nil {
 		// TODO: Handle error.
 	}
-	if err := client.Dataset("new-dataset").Create(ctx); err != nil {
+	if err := client.Dataset("my_dataset").Create(ctx); err != nil {
 		// TODO: Handle error.
 	}
+}
+
+func ExampleDataset_Delete() {
+	ctx := context.Background()
+	client, err := bigquery.NewClient(ctx, "project-id")
+	if err != nil {
+		// TODO: Handle error.
+	}
+	if err := client.Dataset("my_dataset").Delete(ctx); err != nil {
+		// TODO: Handle error.
+	}
+}
+
+func ExampleDataset_Metadata() {
+	ctx := context.Background()
+	client, err := bigquery.NewClient(ctx, "project-id")
+	if err != nil {
+		// TODO: Handle error.
+	}
+	md, err := client.Dataset("my_dataset").Metadata(ctx)
+	if err != nil {
+		// TODO: Handle error.
+	}
+	fmt.Println(md)
 }
 
 func ExampleDataset_Table() {
@@ -252,6 +291,23 @@ func ExampleTable_Create() {
 	}
 }
 
+func ExampleTable_Create_schema() {
+	ctx := context.Background()
+	// Infer table schema from a Go type.
+	schema, err := bigquery.InferSchema(Item{})
+	if err != nil {
+		// TODO: Handle error.
+	}
+	client, err := bigquery.NewClient(ctx, "project-id")
+	if err != nil {
+		// TODO: Handle error.
+	}
+	t := client.Dataset("my_dataset").Table("new-table")
+	if err := t.Create(ctx, schema); err != nil {
+		// TODO: Handle error.
+	}
+}
+
 func ExampleTable_Delete() {
 	ctx := context.Background()
 	client, err := bigquery.NewClient(ctx, "project-id")
@@ -312,23 +368,14 @@ func ExampleTable_CopierFrom() {
 	if err != nil {
 		// TODO: Handle error.
 	}
-	// Poll for job completion.
-	for {
-		status, err := job.Status(ctx)
-		if err != nil {
-			// TODO: Handle error.
-		}
-		if status.Done() {
-			if status.Err() != nil {
-				// TODO: Handle error.
-			}
-			break
-		}
-		time.Sleep(pollInterval)
+	status, err := job.Wait(ctx)
+	if err != nil {
+		// TODO: Handle error.
+	}
+	if status.Err() != nil {
+		// TODO: Handle error.
 	}
 }
-
-const pollInterval = 30 * time.Second
 
 func ExampleTable_ExtractorTo() {
 	ctx := context.Background()
@@ -336,7 +383,7 @@ func ExampleTable_ExtractorTo() {
 	if err != nil {
 		// TODO: Handle error.
 	}
-	gcsRef := client.NewGCSReference("gs://my-bucket/my-object")
+	gcsRef := bigquery.NewGCSReference("gs://my-bucket/my-object")
 	gcsRef.FieldDelimiter = ":"
 	// TODO: set other options on the GCSReference.
 	ds := client.Dataset("my_dataset")
@@ -347,19 +394,12 @@ func ExampleTable_ExtractorTo() {
 	if err != nil {
 		// TODO: Handle error.
 	}
-	// Poll for job completion.
-	for {
-		status, err := job.Status(ctx)
-		if err != nil {
-			// TODO: Handle error.
-		}
-		if status.Done() {
-			if status.Err() != nil {
-				// TODO: Handle error.
-			}
-			break
-		}
-		time.Sleep(pollInterval)
+	status, err := job.Wait(ctx)
+	if err != nil {
+		// TODO: Handle error.
+	}
+	if status.Err() != nil {
+		// TODO: Handle error.
 	}
 }
 
@@ -369,7 +409,7 @@ func ExampleTable_LoaderFrom() {
 	if err != nil {
 		// TODO: Handle error.
 	}
-	gcsRef := client.NewGCSReference("gs://my-bucket/my-object")
+	gcsRef := bigquery.NewGCSReference("gs://my-bucket/my-object")
 	gcsRef.AllowJaggedRows = true
 	// TODO: set other options on the GCSReference.
 	ds := client.Dataset("my_dataset")
@@ -380,19 +420,42 @@ func ExampleTable_LoaderFrom() {
 	if err != nil {
 		// TODO: Handle error.
 	}
-	// Poll for job completion.
-	for {
-		status, err := job.Status(ctx)
-		if err != nil {
-			// TODO: Handle error.
-		}
-		if status.Done() {
-			if status.Err() != nil {
-				// TODO: Handle error.
-			}
-			break
-		}
-		time.Sleep(pollInterval)
+	status, err := job.Wait(ctx)
+	if err != nil {
+		// TODO: Handle error.
+	}
+	if status.Err() != nil {
+		// TODO: Handle error.
+	}
+}
+
+func ExampleTable_LoaderFrom_reader() {
+	ctx := context.Background()
+	client, err := bigquery.NewClient(ctx, "project-id")
+	if err != nil {
+		// TODO: Handle error.
+	}
+	f, err := os.Open("data.csv")
+	if err != nil {
+		// TODO: Handle error.
+	}
+	rs := bigquery.NewReaderSource(f)
+	rs.AllowJaggedRows = true
+	// TODO: set other options on the GCSReference.
+	ds := client.Dataset("my_dataset")
+	loader := ds.Table("my_table").LoaderFrom(rs)
+	loader.CreateDisposition = bigquery.CreateNever
+	// TODO: set other options on the Loader.
+	job, err := loader.Run(ctx)
+	if err != nil {
+		// TODO: Handle error.
+	}
+	status, err := job.Wait(ctx)
+	if err != nil {
+		// TODO: Handle error.
+	}
+	if status.Err() != nil {
+		// TODO: Handle error.
 	}
 }
 

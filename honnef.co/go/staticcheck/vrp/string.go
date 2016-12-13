@@ -2,6 +2,8 @@ package vrp
 
 import (
 	"fmt"
+	"go/token"
+	"go/types"
 
 	"honnef.co/go/ssa"
 )
@@ -41,14 +43,68 @@ type StringSliceConstraint struct {
 	Upper ssa.Value
 }
 
+type StringIntersectionConstraint struct {
+	aConstraint
+	ranges   Ranges
+	A        ssa.Value
+	B        ssa.Value
+	Op       token.Token
+	I        IntInterval
+	resolved bool
+}
+
+type StringConcatConstraint struct {
+	aConstraint
+	A ssa.Value
+	B ssa.Value
+}
+
+type StringLengthConstraint struct {
+	aConstraint
+	X ssa.Value
+}
+
+type StringIntervalConstraint struct {
+	aConstraint
+	I IntInterval
+}
+
 func NewStringSliceConstraint(x, lower, upper, y ssa.Value) Constraint {
-	return &StringSliceConstraint{
+	return &StringSliceConstraint{NewConstraint(y), x, lower, upper}
+}
+func NewStringIntersectionConstraint(a, b ssa.Value, op token.Token, ranges Ranges, y ssa.Value) Constraint {
+	return &StringIntersectionConstraint{
 		aConstraint: NewConstraint(y),
-		X:           x,
-		Lower:       lower,
-		Upper:       upper,
+		ranges:      ranges,
+		A:           a,
+		B:           b,
+		Op:          op,
 	}
 }
+func NewStringConcatConstraint(a, b, y ssa.Value) Constraint {
+	return &StringConcatConstraint{NewConstraint(y), a, b}
+}
+func NewStringLengthConstraint(x ssa.Value, y ssa.Value) Constraint {
+	return &StringLengthConstraint{NewConstraint(y), x}
+}
+func NewStringIntervalConstraint(i IntInterval, y ssa.Value) Constraint {
+	return &StringIntervalConstraint{NewConstraint(y), i}
+}
+
+func (c *StringSliceConstraint) Operands() []ssa.Value {
+	vs := []ssa.Value{c.X}
+	if c.Lower != nil {
+		vs = append(vs, c.Lower)
+	}
+	if c.Upper != nil {
+		vs = append(vs, c.Upper)
+	}
+	return vs
+}
+func (c *StringIntersectionConstraint) Operands() []ssa.Value { return []ssa.Value{c.A} }
+func (c StringConcatConstraint) Operands() []ssa.Value        { return []ssa.Value{c.A, c.B} }
+func (c *StringLengthConstraint) Operands() []ssa.Value       { return []ssa.Value{c.X} }
+func (s *StringIntervalConstraint) Operands() []ssa.Value     { return nil }
 
 func (c *StringSliceConstraint) String() string {
 	var lname, uname string
@@ -60,6 +116,16 @@ func (c *StringSliceConstraint) String() string {
 	}
 	return fmt.Sprintf("%s[%s:%s]", c.X.Name(), lname, uname)
 }
+func (c *StringIntersectionConstraint) String() string {
+	return fmt.Sprintf("%s = %s %s %s (%t branch)", c.Y().Name(), c.A.Name(), c.Op, c.B.Name(), c.Y().(*ssa.Sigma).Branch)
+}
+func (c StringConcatConstraint) String() string {
+	return fmt.Sprintf("%s = %s + %s", c.Y().Name(), c.A.Name(), c.B.Name())
+}
+func (c *StringLengthConstraint) String() string {
+	return fmt.Sprintf("%s = len(%s)", c.Y().Name(), c.X.Name())
+}
+func (c *StringIntervalConstraint) String() string { return fmt.Sprintf("%s = %s", c.Y().Name(), c.I) }
 
 func (c *StringSliceConstraint) Eval(g *Graph) Range {
 	lr := NewIntInterval(NewZ(0), NewZ(0))
@@ -93,70 +159,22 @@ func (c *StringSliceConstraint) Eval(g *Graph) Range {
 		Length: NewIntInterval(MinZ(ls...), MaxZ(ls...)),
 	}
 }
-
-func (c *StringSliceConstraint) Operands() []ssa.Value {
-	vs := []ssa.Value{c.X}
-	if c.Lower != nil {
-		vs = append(vs, c.Lower)
-	}
-	if c.Upper != nil {
-		vs = append(vs, c.Upper)
-	}
-	return vs
-}
-
-type StringIntersectionConstraint struct {
-	aConstraint
-	X ssa.Value
-	I IntInterval
-}
-
-func NewStringIntersectionConstraint(x ssa.Value, i IntInterval, y ssa.Value) Constraint {
-	return &StringIntersectionConstraint{
-		aConstraint: NewConstraint(y),
-		X:           x,
-		I:           i,
-	}
-}
-
-func (c *StringIntersectionConstraint) Operands() []ssa.Value {
-	return []ssa.Value{c.X}
-}
-
 func (c *StringIntersectionConstraint) Eval(g *Graph) Range {
-	xi := g.Range(c.X).(StringInterval)
-	if !xi.IsKnown() {
-		return c.I
+	var l IntInterval
+	switch r := g.Range(c.A).(type) {
+	case StringInterval:
+		l = r.Length
+	case IntInterval:
+		l = r
+	}
+
+	if !l.IsKnown() {
+		return StringInterval{c.I}
 	}
 	return StringInterval{
-		Length: xi.Length.Intersection(c.I),
+		Length: l.Intersection(c.I),
 	}
 }
-
-func (c *StringIntersectionConstraint) String() string {
-	return fmt.Sprintf("%s = %s.%t ⊓ %s", c.Y().Name(), c.X.Name(), c.Y().(*ssa.Sigma).Branch, c.I)
-}
-
-type StringConcatConstraint struct {
-	aConstraint
-	A ssa.Value
-	B ssa.Value
-}
-
-func NewStringConcatConstraint(a, b, y ssa.Value) Constraint {
-	return &StringConcatConstraint{
-		aConstraint: aConstraint{
-			y: y,
-		},
-		A: a,
-		B: b,
-	}
-}
-
-func (c StringConcatConstraint) String() string {
-	return fmt.Sprintf("%s = %s + %s", c.Y().Name(), c.A.Name(), c.B.Name())
-}
-
 func (c StringConcatConstraint) Eval(g *Graph) Range {
 	i1, i2 := g.Range(c.A).(StringInterval), g.Range(c.B).(StringInterval)
 	if !i1.Length.IsKnown() || !i2.Length.IsKnown() {
@@ -166,29 +184,6 @@ func (c StringConcatConstraint) Eval(g *Graph) Range {
 		Length: i1.Length.Add(i2.Length),
 	}
 }
-
-func (c StringConcatConstraint) Operands() []ssa.Value {
-	return []ssa.Value{c.A, c.B}
-}
-
-type StringLengthConstraint struct {
-	aConstraint
-	X ssa.Value
-}
-
-func NewStringLengthConstraint(x ssa.Value, y ssa.Value) Constraint {
-	return &StringLengthConstraint{
-		aConstraint: aConstraint{
-			y: y,
-		},
-		X: x,
-	}
-}
-
-func (c *StringLengthConstraint) String() string {
-	return fmt.Sprintf("%s = len(%s)", c.Y().Name(), c.X.Name())
-}
-
 func (c *StringLengthConstraint) Eval(g *Graph) Range {
 	i := g.Range(c.X).(StringInterval).Length
 	if !i.IsKnown() {
@@ -196,31 +191,68 @@ func (c *StringLengthConstraint) Eval(g *Graph) Range {
 	}
 	return i
 }
+func (c *StringIntervalConstraint) Eval(*Graph) Range { return StringInterval{c.I} }
 
-func (c *StringLengthConstraint) Operands() []ssa.Value {
-	return []ssa.Value{c.X}
+func (c *StringIntersectionConstraint) Futures() []ssa.Value {
+	return []ssa.Value{c.B}
 }
 
-type StringIntervalConstraint struct {
-	aConstraint
-	I IntInterval
-}
-
-func NewStringIntervalConstraint(i IntInterval, y ssa.Value) Constraint {
-	return &StringIntervalConstraint{
-		aConstraint: NewConstraint(y),
-		I:           i,
+func (c *StringIntersectionConstraint) Resolve() {
+	if (c.A.Type().Underlying().(*types.Basic).Info() & types.IsString) != 0 {
+		// comparing two strings
+		r, ok := c.ranges[c.B].(StringInterval)
+		if !ok {
+			c.I = NewIntInterval(NewZ(0), PInfinity)
+			return
+		}
+		switch c.Op {
+		case token.EQL:
+			c.I = r.Length
+		case token.GTR, token.GEQ:
+			c.I = NewIntInterval(r.Length.Lower, PInfinity)
+		case token.LSS, token.LEQ:
+			c.I = NewIntInterval(NewZ(0), r.Length.Upper)
+		case token.NEQ:
+		default:
+			panic("unsupported op " + c.Op.String())
+		}
+	} else {
+		r, ok := c.ranges[c.B].(IntInterval)
+		if !ok {
+			c.I = NewIntInterval(NewZ(0), PInfinity)
+			return
+		}
+		// comparing two lengths
+		switch c.Op {
+		case token.EQL:
+			c.I = r
+		case token.GTR:
+			c.I = NewIntInterval(r.Lower.Add(NewZ(1)), PInfinity)
+		case token.GEQ:
+			c.I = NewIntInterval(r.Lower, PInfinity)
+		case token.LSS:
+			c.I = NewIntInterval(NInfinity, r.Upper.Sub(NewZ(1)))
+		case token.LEQ:
+			c.I = NewIntInterval(NInfinity, r.Upper)
+		case token.NEQ:
+		default:
+			panic("unsupported op " + c.Op.String())
+		}
 	}
 }
 
-func (s *StringIntervalConstraint) Operands() []ssa.Value {
-	return nil
+func (c *StringIntersectionConstraint) IsKnown() bool {
+	return c.I.IsKnown()
 }
 
-func (c *StringIntervalConstraint) Eval(*Graph) Range {
-	return StringInterval{c.I}
+func (c *StringIntersectionConstraint) MarkUnresolved() {
+	c.resolved = false
 }
 
-func (c *StringIntervalConstraint) String() string {
-	return fmt.Sprintf("%s = %s", c.Y().Name(), c.I)
+func (c *StringIntersectionConstraint) MarkResolved() {
+	c.resolved = true
+}
+
+func (c *StringIntersectionConstraint) IsResolved() bool {
+	return c.resolved
 }

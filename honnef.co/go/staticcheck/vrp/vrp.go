@@ -16,7 +16,13 @@ import (
 )
 
 type Future interface {
+	Constraint
 	Futures() []ssa.Value
+	Resolve()
+	IsKnown() bool
+	MarkUnresolved()
+	MarkResolved()
+	IsResolved() bool
 }
 
 type Range interface {
@@ -104,58 +110,6 @@ func isSupportedType(typ types.Type) bool {
 	return true
 }
 
-func sigmaIntegerFuture(g *Graph, ins *ssa.Sigma, cond *ssa.BinOp, ops []*ssa.Value) Constraint {
-	op := cond.Op
-	if !ins.Branch {
-		op = (invertToken(op))
-	}
-
-	c := &FutureIntIntersectionConstraint{
-		aConstraint: aConstraint{
-			y: ins,
-		},
-		ranges:      g.ranges,
-		lowerOffset: NewZ(0),
-		upperOffset: NewZ(0),
-	}
-	var other ssa.Value
-	if (*ops[0]) == ins.X {
-		c.X = *ops[0]
-		other = *ops[1]
-	} else {
-		c.X = *ops[1]
-		other = *ops[0]
-		op = invertToken(op)
-	}
-
-	switch op {
-	case token.EQL:
-		c.lower = other
-		c.upper = other
-	case token.GTR, token.GEQ:
-		off := int64(0)
-		if cond.Op == token.GTR {
-			off = 1
-		}
-		c.lower = other
-		c.lowerOffset = NewZ(off)
-		c.upper = nil
-		c.upperOffset = PInfinity
-	case token.LSS, token.LEQ:
-		off := int64(0)
-		if cond.Op == token.LSS {
-			off = -1
-		}
-		c.lower = nil
-		c.lowerOffset = NInfinity
-		c.upper = other
-		c.upperOffset = NewZ(off)
-	default:
-		return nil
-	}
-	return c
-}
-
 func ConstantToZ(c constant.Value) Z {
 	s := constant.ToInt(c).ExactString()
 	n := &big.Int{}
@@ -163,116 +117,64 @@ func ConstantToZ(c constant.Value) Z {
 	return NewBigZ(n)
 }
 
-func sigmaIntegerConst(g *Graph, ins *ssa.Sigma, cond *ssa.BinOp, ops []*ssa.Value) Constraint {
+func sigmaInteger(g *Graph, ins *ssa.Sigma, cond *ssa.BinOp, ops []*ssa.Value) Constraint {
 	op := cond.Op
 	if !ins.Branch {
 		op = (invertToken(op))
 	}
 
-	k, ok := (*ops[1]).(*ssa.Const)
-	// XXX investigate in what cases this wouldn't be a Const
-	if !ok {
-		return nil
-	}
-
-	v := ConstantToZ(k.Value)
-	c := NewIntIntersectionConstraint(*ops[0], IntInterval{}, ins).(*IntIntersectionConstraint)
 	switch op {
-	case token.EQL:
-		c.I = NewIntInterval(v, v)
-	case token.GTR, token.GEQ:
-		off := int64(0)
-		if cond.Op == token.GTR {
-			off = 1
-		}
-		c.I = NewIntInterval(
-			v.Add(NewZ(off)),
-			PInfinity,
-		)
-	case token.LSS, token.LEQ:
-		off := int64(0)
-		if cond.Op == token.LSS {
-			off = -1
-		}
-		c.I = NewIntInterval(
-			NInfinity,
-			v.Add(NewZ(off)),
-		)
+	case token.EQL, token.GTR, token.GEQ, token.LSS, token.LEQ:
 	default:
 		return nil
 	}
-	return c
-}
-
-func sigmaInteger(g *Graph, ins *ssa.Sigma, cond *ssa.BinOp, ops []*ssa.Value) Constraint {
-	_, ok1 := (*ops[0]).(*ssa.Const)
-	_, ok2 := (*ops[1]).(*ssa.Const)
-	if !ok1 && !ok2 {
-		return sigmaIntegerFuture(g, ins, cond, ops)
+	var a, b ssa.Value
+	if (*ops[0]) == ins.X {
+		a = *ops[0]
+		b = *ops[1]
+	} else {
+		a = *ops[1]
+		b = *ops[0]
+		op = flipToken(op)
 	}
-	return sigmaIntegerConst(g, ins, cond, ops)
+	return NewIntIntersectionConstraint(a, b, op, g.ranges, ins)
 }
 
 func sigmaString(g *Graph, ins *ssa.Sigma, cond *ssa.BinOp, ops []*ssa.Value) Constraint {
-	// XXX support futures
-	//
-	// TODO integer and string sigma are very similar. try condensing
-	// them into one type/code path.
-
 	op := cond.Op
 	if !ins.Branch {
 		op = (invertToken(op))
 	}
 
-	k, ok := (*ops[1]).(*ssa.Const)
-	// XXX investigate in what cases this wouldn't be a Const
-	//
-	// XXX what if left and right are swapped?
-	if !ok {
-		return nil
-	}
-
-	call, ok := (*ops[0]).(*ssa.Call)
-	if !ok {
-		return nil
-	}
-	builtin, ok := call.Common().Value.(*ssa.Builtin)
-	if !ok {
-		return nil
-	}
-	if builtin.Name() != "len" {
-		return nil
-	}
-	// TODO(dh) support == string comparison
-	callops := call.Operands(nil)
-
-	v := ConstantToZ(k.Value)
-	c := NewStringIntersectionConstraint(*callops[1], IntInterval{}, ins).(*StringIntersectionConstraint)
 	switch op {
-	case token.EQL:
-		c.I = NewIntInterval(v, v)
-	case token.GTR, token.GEQ:
-		off := int64(0)
-		if cond.Op == token.GTR {
-			off = 1
-		}
-		c.I = NewIntInterval(
-			v.Add(NewZ(off)),
-			PInfinity,
-		)
-	case token.LSS, token.LEQ:
-		off := int64(0)
-		if cond.Op == token.LSS {
-			off = -1
-		}
-		c.I = NewIntInterval(
-			NInfinity,
-			v.Add(NewZ(off)),
-		)
+	case token.EQL, token.GTR, token.GEQ, token.LSS, token.LEQ:
 	default:
 		return nil
 	}
-	return c
+
+	if ((*ops[0]).Type().Underlying().(*types.Basic).Info() & types.IsString) == 0 {
+		var a, b ssa.Value
+		call, ok := (*ops[0]).(*ssa.Call)
+		if ok && call.Common().Args[0] == ins.X {
+			a = *ops[0]
+			b = *ops[1]
+		} else {
+			a = *ops[1]
+			b = *ops[0]
+			op = flipToken(op)
+		}
+		return NewStringIntersectionConstraint(a, b, op, g.ranges, ins)
+	}
+	var a, b ssa.Value
+	if (*ops[0]) == ins.X {
+		a = *ops[0]
+		b = *ops[1]
+	} else {
+		a = *ops[1]
+		b = *ops[0]
+		op = flipToken(op)
+	}
+	return NewStringIntersectionConstraint(a, b, op, g.ranges, ins)
 }
 
 func sigmaSlice(g *Graph, ins *ssa.Sigma, cond *ssa.BinOp, ops []*ssa.Value) Constraint {
@@ -556,13 +458,13 @@ func BuildGraph(f *ssa.Function) *Graph {
 
 	g.FindSCCs()
 	g.sccEdges = make([][]Edge, len(g.SCCs))
-	g.futures = make([][]*FutureIntIntersectionConstraint, len(g.SCCs))
+	g.futures = make([][]Future, len(g.SCCs))
 	for _, e := range g.Edges {
 		g.sccEdges[e.From.SCC] = append(g.sccEdges[e.From.SCC], e)
 		if !e.control {
 			continue
 		}
-		if c, ok := e.To.Value.(*FutureIntIntersectionConstraint); ok {
+		if c, ok := e.To.Value.(Future); ok {
 			g.futures[e.From.SCC] = append(g.futures[e.From.SCC], c)
 		}
 	}
@@ -673,9 +575,9 @@ func (g *Graph) Solve() Ranges {
 			if c, ok := edge.To.Value.(Constraint); ok {
 				g.SetRange(c.Y(), c.Eval(g))
 			}
-			if c, ok := edge.To.Value.(*FutureIntIntersectionConstraint); ok {
-				if !c.I.IsKnown() {
-					c.resolved = false
+			if c, ok := edge.To.Value.(Future); ok {
+				if !c.IsKnown() {
+					c.MarkUnresolved()
 				}
 			}
 		}
@@ -770,7 +672,7 @@ type Graph struct {
 	ranges   Ranges
 
 	// map SCCs to futures
-	futures [][]*FutureIntIntersectionConstraint
+	futures [][]Future
 	// map SCCs to edges
 	sccEdges [][]Edge
 }
@@ -786,7 +688,7 @@ func (g Graph) Graphviz() string {
 		if _, ok := v.Value.(ssa.Value); ok {
 			shape = "oval"
 		}
-		lines = append(lines, fmt.Sprintf(`n%d [shape="%s", label="%s", colorscheme=spectral11, style="filled", fillcolor="%d"]`,
+		lines = append(lines, fmt.Sprintf(`n%d [shape="%s", label=%q, colorscheme=spectral11, style="filled", fillcolor="%d"]`,
 			i, shape, VertexString(v), (v.SCC%11)+1))
 		i++
 	}
@@ -949,11 +851,11 @@ func (g *Graph) entries(scc int) []ssa.Value {
 			// can't really verify that this code is working
 			// correctly, or indeed doing anything useful.
 			for _, on := range g.Vertices {
-				if c, ok := on.Value.(*FutureIntIntersectionConstraint); ok {
+				if c, ok := on.Value.(Future); ok {
 					if c.Y() == v {
-						if !c.resolved {
+						if !c.IsResolved() {
 							g.SetRange(c.Y(), c.Eval(g))
-							c.resolved = true
+							c.MarkResolved()
 						}
 						break
 					}
@@ -1096,6 +998,25 @@ func invertToken(tok token.Token) token.Token {
 		return token.LSS
 	case token.LEQ:
 		return token.GTR
+	default:
+		panic(fmt.Sprintf("unsupported token %s", tok))
+	}
+}
+
+func flipToken(tok token.Token) token.Token {
+	switch tok {
+	case token.LSS:
+		return token.GTR
+	case token.GTR:
+		return token.LSS
+	case token.EQL:
+		return token.EQL
+	case token.NEQ:
+		return token.NEQ
+	case token.GEQ:
+		return token.LEQ
+	case token.LEQ:
+		return token.GEQ
 	default:
 		panic(fmt.Sprintf("unsupported token %s", tok))
 	}

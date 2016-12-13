@@ -26,6 +26,7 @@ import (
 
 	"cloud.google.com/go/internal/testutil"
 	"golang.org/x/net/context"
+	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 )
 
@@ -64,7 +65,7 @@ func TestBasics(t *testing.T) {
 	}
 
 	x0 := X{66, "99", time.Now().Truncate(time.Millisecond)}
-	k, err := client.Put(ctx, NewIncompleteKey(ctx, "BasicsX", nil), &x0)
+	k, err := client.Put(ctx, IncompleteKey("BasicsX", nil), &x0)
 	if err != nil {
 		t.Fatalf("client.Put: %v", err)
 	}
@@ -93,7 +94,7 @@ func TestListValues(t *testing.T) {
 	p0 := PropertyList{
 		{Name: "L", Value: []interface{}{int64(12), "string", true}},
 	}
-	k, err := client.Put(ctx, NewIncompleteKey(ctx, "ListValue", nil), &p0)
+	k, err := client.Put(ctx, IncompleteKey("ListValue", nil), &p0)
 	if err != nil {
 		t.Fatalf("client.Put: %v", err)
 	}
@@ -120,16 +121,16 @@ func TestGetMulti(t *testing.T) {
 	type X struct {
 		I int
 	}
-	p := NewKey(ctx, "X", "x"+suffix, 0, nil)
+	p := NameKey("X", "x"+suffix, nil)
 
 	cases := []struct {
 		key *Key
 		put bool
 	}{
-		{key: NewKey(ctx, "X", "item1", 0, p), put: true},
-		{key: NewKey(ctx, "X", "item2", 0, p), put: false},
-		{key: NewKey(ctx, "X", "item3", 0, p), put: false},
-		{key: NewKey(ctx, "X", "item4", 0, p), put: true},
+		{key: NameKey("X", "item1", p), put: true},
+		{key: NameKey("X", "item2", p), put: false},
+		{key: NameKey("X", "item3", p), put: false},
+		{key: NameKey("X", "item4", p), put: true},
 	}
 
 	var src, dst []*X
@@ -206,7 +207,7 @@ func TestUnindexableValues(t *testing.T) {
 		{in: Z{K: []byte(x1501)}, wantErr: false},
 	}
 	for _, tt := range testCases {
-		_, err := client.Put(ctx, NewIncompleteKey(ctx, "BasicsZ", nil), &tt.in)
+		_, err := client.Put(ctx, IncompleteKey("BasicsZ", nil), &tt.in)
 		if (err != nil) != tt.wantErr {
 			t.Errorf("client.Put %s got err %v, want err %t", tt.in, err, tt.wantErr)
 		}
@@ -229,7 +230,7 @@ func TestNilKey(t *testing.T) {
 		{in: K0{}, wantErr: false},
 	}
 	for _, tt := range testCases {
-		_, err := client.Put(ctx, NewIncompleteKey(ctx, "NilKey", nil), &tt.in)
+		_, err := client.Put(ctx, IncompleteKey("NilKey", nil), &tt.in)
 		if (err != nil) != tt.wantErr {
 			t.Errorf("client.Put %s got err %v, want err %t", tt.in, err, tt.wantErr)
 		}
@@ -252,7 +253,7 @@ func testSmallQueries(t *testing.T, ctx context.Context, client *Client, parent 
 	testCases []SQTestCase, extraTests ...func()) {
 	keys := make([]*Key, len(children))
 	for i := range keys {
-		keys[i] = NewIncompleteKey(ctx, "SQChild", parent)
+		keys[i] = IncompleteKey("SQChild", parent)
 	}
 	keys, err := client.PutMulti(ctx, keys, children)
 	if err != nil {
@@ -306,7 +307,7 @@ func TestFilters(t *testing.T) {
 	client := newClient(ctx, t)
 	defer client.Close()
 
-	parent := NewKey(ctx, "SQParent", "TestFilters"+suffix, 0, nil)
+	parent := NameKey("SQParent", "TestFilters"+suffix, nil)
 	now := time.Now().Truncate(time.Millisecond).Unix()
 	children := []*SQChild{
 		{I: 0, T: now, U: now},
@@ -393,7 +394,7 @@ func TestLargeQuery(t *testing.T) {
 	client := newClient(ctx, t)
 	defer client.Close()
 
-	parent := NewKey(ctx, "LQParent", "TestFilters"+suffix, 0, nil)
+	parent := NameKey("LQParent", "TestFilters"+suffix, nil)
 	now := time.Now().Truncate(time.Millisecond).Unix()
 
 	// Make a large number of children entities.
@@ -402,7 +403,7 @@ func TestLargeQuery(t *testing.T) {
 	keys := make([]*Key, 0, n)
 	for i := 0; i < n; i++ {
 		children = append(children, &SQChild{I: i, T: now, U: now})
-		keys = append(keys, NewIncompleteKey(ctx, "SQChild", parent))
+		keys = append(keys, IncompleteKey("SQChild", parent))
 	}
 
 	// Store using PutMulti in batches.
@@ -514,7 +515,7 @@ func TestLargeQuery(t *testing.T) {
 			it := client.Run(ctx, q.Limit(limit).Offset(offset).KeysOnly())
 			for i := 0; i < count; i++ {
 				_, err := it.Next(nil)
-				if err == Done {
+				if err == iterator.Done {
 					break
 				}
 				if err != nil {
@@ -536,7 +537,7 @@ func TestLargeQuery(t *testing.T) {
 			_, err = it.Next(&entity)
 			switch {
 			case want == -1:
-				if err != Done {
+				if err != iterator.Done {
 					t.Errorf("count=%d, limit=%d, offset=%d: it.Next from cursor %v, want Done", count, limit, offset, err)
 				}
 			case err != nil:
@@ -561,7 +562,7 @@ func TestEventualConsistency(t *testing.T) {
 	client := newClient(ctx, t)
 	defer client.Close()
 
-	parent := NewKey(ctx, "SQParent", "TestEventualConsistency"+suffix, 0, nil)
+	parent := NameKey("SQParent", "TestEventualConsistency"+suffix, nil)
 	now := time.Now().Truncate(time.Millisecond).Unix()
 	children := []*SQChild{
 		{I: 0, T: now, U: now},
@@ -588,7 +589,7 @@ func TestProjection(t *testing.T) {
 	client := newClient(ctx, t)
 	defer client.Close()
 
-	parent := NewKey(ctx, "SQParent", "TestProjection"+suffix, 0, nil)
+	parent := NameKey("SQParent", "TestProjection"+suffix, nil)
 	now := time.Now().Truncate(time.Millisecond).Unix()
 	children := []*SQChild{
 		{I: 1 << 0, J: 100, T: now, U: now},
@@ -630,7 +631,7 @@ func TestAllocateIDs(t *testing.T) {
 
 	keys := make([]*Key, 5)
 	for i := range keys {
-		keys[i] = NewIncompleteKey(ctx, "AllocID", nil)
+		keys[i] = IncompleteKey("AllocID", nil)
 	}
 	keys, err := client.AllocateIDs(ctx, keys)
 	if err != nil {
@@ -665,10 +666,10 @@ func TestGetAllWithFieldMismatch(t *testing.T) {
 	// by default, which prevents a test from being flaky.
 	// See https://cloud.google.com/appengine/docs/go/datastore/queries#Go_Data_consistency
 	// for more information.
-	parent := NewKey(ctx, "SQParent", "TestGetAllWithFieldMismatch"+suffix, 0, nil)
+	parent := NameKey("SQParent", "TestGetAllWithFieldMismatch"+suffix, nil)
 	putKeys := make([]*Key, 3)
 	for i := range putKeys {
-		putKeys[i] = NewKey(ctx, "GetAllThing", "", int64(10+i), parent)
+		putKeys[i] = IDKey("GetAllThing", int64(10+i), parent)
 		_, err := client.Put(ctx, putKeys[i], &Fat{X: 20 + i, Y: 30 + i})
 		if err != nil {
 			t.Fatalf("client.Put: %v", err)
@@ -710,13 +711,13 @@ func TestKindlessQueries(t *testing.T) {
 		Pling string
 	}
 
-	parent := NewKey(ctx, "Tweedle", "tweedle"+suffix, 0, nil)
+	parent := NameKey("Tweedle", "tweedle"+suffix, nil)
 
 	keys := []*Key{
-		NewKey(ctx, "Dee", "dee0", 0, parent),
-		NewKey(ctx, "Dum", "dum1", 0, parent),
-		NewKey(ctx, "Dum", "dum2", 0, parent),
-		NewKey(ctx, "Dum", "dum3", 0, parent),
+		NameKey("Dee", "dee0", parent),
+		NameKey("Dum", "dum1", parent),
+		NameKey("Dum", "dum2", parent),
+		NameKey("Dum", "dum3", parent),
 	}
 	src := []interface{}{
 		&Dee{1, "binary0001"},
@@ -800,7 +801,7 @@ loop:
 				Why, Pling string
 			}
 			_, err := iter.Next(&dst)
-			if err == Done {
+			if err == iterator.Done {
 				break
 			}
 			if err != nil {
@@ -867,7 +868,7 @@ func TestTransaction(t *testing.T) {
 	for i, tt := range tests {
 		// Put a new counter.
 		c := &Counter{N: 10, T: time.Now()}
-		key, err := client.Put(ctx, NewIncompleteKey(ctx, "TransCounter", nil), c)
+		key, err := client.Put(ctx, IncompleteKey("TransCounter", nil), c)
 		if err != nil {
 			t.Errorf("%s: client.Put: %v", tt.desc, err)
 			continue
@@ -936,7 +937,7 @@ func TestNilPointers(t *testing.T) {
 	}
 
 	src := []*X{{"zero"}, {"one"}}
-	keys := []*Key{NewIncompleteKey(ctx, "NilX", nil), NewIncompleteKey(ctx, "NilX", nil)}
+	keys := []*Key{IncompleteKey("NilX", nil), IncompleteKey("NilX", nil)}
 	keys, err := client.PutMulti(ctx, keys, src)
 	if err != nil {
 		t.Fatalf("PutMulti: %v", err)
@@ -983,7 +984,7 @@ func TestNestedRepeatedElementNoIndex(t *testing.T) {
 		},
 	}
 
-	key := NewKey(ctx, "Nested", "Nested"+suffix, 0, nil)
+	key := NameKey("Nested", "Nested"+suffix, nil)
 	if _, err := client.Put(ctx, key, m); err != nil {
 		t.Fatalf("client.Put: %v", err)
 	}

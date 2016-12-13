@@ -161,116 +161,6 @@ func (s *Advice) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
 }
 
-// Analytics: Analytics configuration of the service.
-//
-// The example below shows how to configure monitored resources and
-// metrics
-// for analytics. In the example, a monitored resource and two metrics
-// are
-// defined. The `library.googleapis.com/book/returned_count`
-// and
-// `library.googleapis.com/book/overdue_count` metric are sent
-// to the analytics.
-//
-//     monitored_resources:
-//     - type: library.googleapis.com/branch
-//       labels:
-//       - key: /city
-//         description: The city where the library branch is located
-// in.
-//       - key: /name
-//         description: The name of the branch.
-//     metrics:
-//     - name: library.googleapis.com/book/returned_count
-//       metric_kind: DELTA
-//       value_type: INT64
-//       labels:
-//       - key: /customer_id
-//     - name: library.googleapis.com/book/overdue_count
-//       metric_kind: GAUGE
-//       value_type: INT64
-//       labels:
-//       - key: /customer_id
-//     analytics:
-//       producer_destinations:
-//       - monitored_resource: library.googleapis.com/branch
-//         metrics:
-//         - library.googleapis.com/book/returned_count
-//         - library.googleapis.com/book/overdue_count
-type Analytics struct {
-	// ProducerDestinations: Analytics configurations for sending metrics to
-	// the analytics backend.
-	// There can be multiple producer destinations, each one must have
-	// a
-	// different monitored resource type. A metric can be used in at
-	// most
-	// one producer destination.
-	ProducerDestinations []*AnalyticsDestination `json:"producerDestinations,omitempty"`
-
-	// ForceSendFields is a list of field names (e.g.
-	// "ProducerDestinations") to unconditionally include in API requests.
-	// By default, fields with empty values are omitted from API requests.
-	// However, any non-pointer, non-interface field appearing in
-	// ForceSendFields will be sent to the server regardless of whether the
-	// field is empty or not. This may be used to include empty fields in
-	// Patch requests.
-	ForceSendFields []string `json:"-"`
-
-	// NullFields is a list of field names (e.g. "ProducerDestinations") to
-	// include in API requests with the JSON null value. By default, fields
-	// with empty values are omitted from API requests. However, any field
-	// with an empty value appearing in NullFields will be sent to the
-	// server as null. It is an error if a field in this list has a
-	// non-empty value. This may be used to include null fields in Patch
-	// requests.
-	NullFields []string `json:"-"`
-}
-
-func (s *Analytics) MarshalJSON() ([]byte, error) {
-	type noMethod Analytics
-	raw := noMethod(*s)
-	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
-}
-
-// AnalyticsDestination: Configuration of a specific analytics
-// destination.
-type AnalyticsDestination struct {
-	// Metrics: Names of the metrics to report to this analytics
-	// destination.
-	// Each name must be defined in Service.metrics section. Metrics
-	// with value type BOOL and STRING must be of GUAGE kind, metrics
-	// with
-	// value type INT64, DOUBLE and MONEY must be of DELTA kind.
-	Metrics []string `json:"metrics,omitempty"`
-
-	// MonitoredResource: The monitored resource type. The type must be
-	// defined in
-	// Service.monitored_resources section.
-	MonitoredResource string `json:"monitoredResource,omitempty"`
-
-	// ForceSendFields is a list of field names (e.g. "Metrics") to
-	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
-	ForceSendFields []string `json:"-"`
-
-	// NullFields is a list of field names (e.g. "Metrics") to include in
-	// API requests with the JSON null value. By default, fields with empty
-	// values are omitted from API requests. However, any field with an
-	// empty value appearing in NullFields will be sent to the server as
-	// null. It is an error if a field in this list has a non-empty value.
-	// This may be used to include null fields in Patch requests.
-	NullFields []string `json:"-"`
-}
-
-func (s *AnalyticsDestination) MarshalJSON() ([]byte, error) {
-	type noMethod AnalyticsDestination
-	raw := noMethod(*s)
-	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
-}
-
 // Api: Api is a light-weight descriptor for a protocol buffer service.
 type Api struct {
 	// Methods: The methods of this api, in unspecified order.
@@ -398,6 +288,28 @@ func (s *AuditConfig) MarshalJSON() ([]byte, error) {
 // (JWT)](https://tools.ietf.org/html/draft-ietf-oauth-json-web-token-32)
 // .
 type AuthProvider struct {
+	// Audiences: The list of
+	// JWT
+	// [audiences](https://tools.ietf.org/html/draft-ietf-oauth-json-web-
+	// token-32#section-4.1.3).
+	// that are allowed to access. A JWT containing any of these audiences
+	// will
+	// be accepted. When this setting is absent, only JWTs with
+	// audience
+	// "https://Service_name/API_name"
+	// will be accepted. For example, if no audiences are in the
+	// setting,
+	// LibraryService API will only accept JWTs with the following
+	// audience
+	// "https://library-example.googleapis.com/google.example.librar
+	// y.v1.LibraryService".
+	//
+	// Example:
+	//
+	//     audiences: bookstore_android.apps.googleusercontent.com,
+	//                bookstore_web.apps.googleusercontent.com
+	Audiences string `json:"audiences,omitempty"`
+
 	// Id: The unique identifier of the auth provider. It will be referred
 	// to by
 	// `AuthRequirement.provider_id`.
@@ -432,7 +344,7 @@ type AuthProvider struct {
 	// Example: https://www.googleapis.com/oauth2/v1/certs
 	JwksUri string `json:"jwksUri,omitempty"`
 
-	// ForceSendFields is a list of field names (e.g. "Id") to
+	// ForceSendFields is a list of field names (e.g. "Audiences") to
 	// unconditionally include in API requests. By default, fields with
 	// empty values are omitted from API requests. However, any non-pointer,
 	// non-interface field appearing in ForceSendFields will be sent to the
@@ -440,8 +352,8 @@ type AuthProvider struct {
 	// used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
-	// NullFields is a list of field names (e.g. "Id") to include in API
-	// requests with the JSON null value. By default, fields with empty
+	// NullFields is a list of field names (e.g. "Audiences") to include in
+	// API requests with the JSON null value. By default, fields with empty
 	// values are omitted from API requests. However, any field with an
 	// empty value appearing in NullFields will be sent to the server as
 	// null. It is an error if a field in this list has a non-empty value.
@@ -461,7 +373,11 @@ func (s *AuthProvider) MarshalJSON() ([]byte, error) {
 // (JWT)](https://tools.ietf.org/html/draft-ietf-oauth-json-web-token-32)
 // .
 type AuthRequirement struct {
-	// Audiences: The list of
+	// Audiences: NOTE: This will be deprecated soon, once
+	// AuthProvider.audiences is
+	// implemented and accepted in all the runtime components.
+	//
+	// The list of
 	// JWT
 	// [audiences](https://tools.ietf.org/html/draft-ietf-oauth-json-web-
 	// token-32#section-4.1.3).
@@ -1406,8 +1322,8 @@ type DisableServiceRequest struct {
 	//
 	// The Google Service Management implementation accepts the
 	// following
-	// forms: "project:<project_id>",
-	// "project_number:<project_number>".
+	// forms:
+	// - "project:<project_id>"
 	//
 	// Note: this is made compatible
 	// with
@@ -1624,8 +1540,8 @@ type EnableServiceRequest struct {
 	//
 	// The Google Service Management implementation accepts the
 	// following
-	// forms: "project:<project_id>",
-	// "project_number:<project_number>".
+	// forms:
+	// - "project:<project_id>"
 	//
 	// Note: this is made compatible
 	// with
@@ -1931,7 +1847,7 @@ type GenerateConfigReportRequest struct {
 	// google.api.servicemanag
 	// ement.v1.ConfigSource,
 	// and google.api.Service
-	NewConfig GenerateConfigReportRequestNewConfig `json:"newConfig,omitempty"`
+	NewConfig googleapi.RawMessage `json:"newConfig,omitempty"`
 
 	// OldConfig: Service configuration against which the comparison will be
 	// done.
@@ -1941,7 +1857,7 @@ type GenerateConfigReportRequest struct {
 	// google.api.servicemanag
 	// ement.v1.ConfigSource,
 	// and google.api.Service
-	OldConfig GenerateConfigReportRequestOldConfig `json:"oldConfig,omitempty"`
+	OldConfig googleapi.RawMessage `json:"oldConfig,omitempty"`
 
 	// ForceSendFields is a list of field names (e.g. "NewConfig") to
 	// unconditionally include in API requests. By default, fields with
@@ -1965,10 +1881,6 @@ func (s *GenerateConfigReportRequest) MarshalJSON() ([]byte, error) {
 	raw := noMethod(*s)
 	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
 }
-
-type GenerateConfigReportRequestNewConfig interface{}
-
-type GenerateConfigReportRequestOldConfig interface{}
 
 // GenerateConfigReportResponse: Response message for
 // GenerateConfigReport method.
@@ -2280,7 +2192,8 @@ func (s *Http) MarshalJSON() ([]byte, error) {
 // semantics
 // of [RFC 6570](https://tools.ietf.org/html/rfc6570) Section 3.2.3
 // Reserved
-// Expansion.
+// Expansion. NOTE: it must be the last segment in the path except the
+// Verb.
 //
 // The syntax `LITERAL` matches literal text in the URL path.
 //
@@ -2506,7 +2419,7 @@ type ListServicesResponse struct {
 	// paginated query.
 	NextPageToken string `json:"nextPageToken,omitempty"`
 
-	// Services: The results of the query.
+	// Services: The returned services will only have the name field set.
 	Services []*ManagedService `json:"services,omitempty"`
 
 	// ServerResponse contains the HTTP response code and headers from the
@@ -2924,7 +2837,11 @@ func (s *Method) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
 }
 
-// MetricDescriptor: Defines a metric type and its schema.
+// MetricDescriptor: Defines a metric type and its schema. Once a metric
+// descriptor is created,
+// deleting or altering it stops data collection and makes the metric
+// type's
+// existing data unusable.
 type MetricDescriptor struct {
 	// Description: A detailed description of the metric, which can be used
 	// in documentation.
@@ -2936,15 +2853,14 @@ type MetricDescriptor struct {
 	// count".
 	DisplayName string `json:"displayName,omitempty"`
 
-	// Labels: The set of labels that can be used to describe a specific
-	// instance of this
-	// metric type. For example,
+	// Labels: The set of labels that can be used to describe a
+	// specific
+	// instance of this metric type. For example,
 	// the
-	// `compute.googleapis.com/instance/network/received_bytes_count` metric
-	// type
-	// has a label, `loadbalanced`, that specifies whether the traffic
-	// was
-	// received through a load balanced IP address.
+	// `appengine.googleapis.com/http/server/response_latencies` metric
+	// type has a label for the HTTP response code, `response_code`, so
+	// you can look at latencies for successful responses or just
+	// for responses that failed.
 	Labels []*LabelDescriptor `json:"labels,omitempty"`
 
 	// MetricKind: Whether the metric records instantaneous values, changes
@@ -2964,32 +2880,33 @@ type MetricDescriptor struct {
 	// points.
 	MetricKind string `json:"metricKind,omitempty"`
 
-	// Name: Resource name. The format of the name may vary between
-	// different
-	// implementations. For examples:
+	// Name: The resource name of the metric descriptor. Depending on
+	// the
+	// implementation, the name typically includes: (1) the parent resource
+	// name
+	// that defines the scope of the metric type or of its data; and (2)
+	// the
+	// metric's URL-encoded type, which also appears in the `type` field of
+	// this
+	// descriptor. For example, following is the resource name of a
+	// custom
+	// metric within the GCP project 123456789:
 	//
-	//     projects/{project_id}/metricDescriptors/{type=**}
-	//     metricDescriptors/{type=**}
+	//
+	// "projects/123456789/metricDescriptors/custom.googleapis.com%2Finvoice%
+	// 2Fpaid%2Famount"
 	Name string `json:"name,omitempty"`
 
-	// Type: The metric type including a DNS name prefix, for
-	// example
-	// "compute.googleapis.com/instance/cpu/utilization". Metric
-	// types
-	// should use a natural hierarchical grouping such as the following:
+	// Type: The metric type, including its DNS name prefix. The type is
+	// not
+	// URL-encoded.  All user-defined metric types have the DNS
+	// name
+	// `custom.googleapis.com`.  Metric types should use a natural
+	// hierarchical
+	// grouping. For example:
 	//
-	//     compute.googleapis.com/instance/cpu/utilization
-	//     compute.googleapis.com/instance/disk/read_ops_count
-	//
-	// compute.googleapis.com/instance/network/received_bytes_count
-	//
-	// Note that if the metric type changes, the monitoring data will
-	// be
-	// discontinued, and anything depends on it will break, such as
-	// monitoring
-	// dashboards, alerting rules and quota limits. Therefore, once a metric
-	// has
-	// been published, its type should be immutable.
+	//     "custom.googleapis.com/invoice/paid/amount"
+	//     "appengine.googleapis.com/http/server/response_latencies"
 	Type string `json:"type,omitempty"`
 
 	// Unit: The unit in which the metric value is reported. It is only
@@ -3506,7 +3423,7 @@ type Operation struct {
 	// Some services might not provide such metadata.  Any method that
 	// returns a
 	// long-running operation should document the metadata type, if any.
-	Metadata OperationMetadata `json:"metadata,omitempty"`
+	Metadata googleapi.RawMessage `json:"metadata,omitempty"`
 
 	// Name: The server-assigned name, which is only unique within the same
 	// service that
@@ -3530,7 +3447,7 @@ type Operation struct {
 	// is `TakeSnapshot()`, the inferred response type
 	// is
 	// `TakeSnapshotResponse`.
-	Response OperationResponse `json:"response,omitempty"`
+	Response googleapi.RawMessage `json:"response,omitempty"`
 
 	// ServerResponse contains the HTTP response code and headers from the
 	// server.
@@ -3559,13 +3476,9 @@ func (s *Operation) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
 }
 
-type OperationMetadata interface{}
-
-type OperationResponse interface{}
-
-// OperationMetadata1: The metadata associated with a long running
+// OperationMetadata: The metadata associated with a long running
 // operation resource.
-type OperationMetadata1 struct {
+type OperationMetadata struct {
 	// ProgressPercentage: Percentage of completion of this operation,
 	// ranging from 0 to 100.
 	ProgressPercentage int64 `json:"progressPercentage,omitempty"`
@@ -3600,8 +3513,8 @@ type OperationMetadata1 struct {
 	NullFields []string `json:"-"`
 }
 
-func (s *OperationMetadata1) MarshalJSON() ([]byte, error) {
-	type noMethod OperationMetadata1
+func (s *OperationMetadata) MarshalJSON() ([]byte, error) {
+	type noMethod OperationMetadata
 	raw := noMethod(*s)
 	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
 }
@@ -3614,7 +3527,7 @@ type Option struct {
 	Name string `json:"name,omitempty"`
 
 	// Value: The option's value. For example, "com.google.protobuf".
-	Value OptionValue `json:"value,omitempty"`
+	Value googleapi.RawMessage `json:"value,omitempty"`
 
 	// ForceSendFields is a list of field names (e.g. "Name") to
 	// unconditionally include in API requests. By default, fields with
@@ -3638,8 +3551,6 @@ func (s *Option) MarshalJSON() ([]byte, error) {
 	raw := noMethod(*s)
 	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
 }
-
-type OptionValue interface{}
 
 // Page: Represents a documentation page. A page can contain subpages to
 // represent
@@ -4000,12 +3911,6 @@ func (s *Rule) MarshalJSON() ([]byte, error) {
 //       - selector: "google.calendar.v3.*"
 //         address: calendar.example.com
 type Service struct {
-	// Analytics: WARNING: DO NOT USE UNTIL THIS MESSAGE IS
-	// REMOVED.
-	//
-	// Analytics configuration.
-	Analytics *Analytics `json:"analytics,omitempty"`
-
 	// Apis: A list of API interfaces exported by this service. Only the
 	// `name` field
 	// of the google.protobuf.Api needs to be provided by the
@@ -4140,7 +4045,7 @@ type Service struct {
 	// server.
 	googleapi.ServerResponse `json:"-"`
 
-	// ForceSendFields is a list of field names (e.g. "Analytics") to
+	// ForceSendFields is a list of field names (e.g. "Apis") to
 	// unconditionally include in API requests. By default, fields with
 	// empty values are omitted from API requests. However, any non-pointer,
 	// non-interface field appearing in ForceSendFields will be sent to the
@@ -4148,8 +4053,8 @@ type Service struct {
 	// used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
-	// NullFields is a list of field names (e.g. "Analytics") to include in
-	// API requests with the JSON null value. By default, fields with empty
+	// NullFields is a list of field names (e.g. "Apis") to include in API
+	// requests with the JSON null value. By default, fields with empty
 	// values are omitted from API requests. However, any field with an
 	// empty value appearing in NullFields will be sent to the server as
 	// null. It is an error if a field in this list has a non-empty value.
@@ -4316,7 +4221,7 @@ type Status struct {
 	// Details: A list of messages that carry the error details.  There will
 	// be a
 	// common set of message types for APIs to use.
-	Details []StatusDetails `json:"details,omitempty"`
+	Details []googleapi.RawMessage `json:"details,omitempty"`
 
 	// Message: A developer-facing error message, which should be in
 	// English. Any
@@ -4347,8 +4252,6 @@ func (s *Status) MarshalJSON() ([]byte, error) {
 	raw := noMethod(*s)
 	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
 }
-
-type StatusDetails interface{}
 
 // Step: Represents the status of one operation step.
 type Step struct {
@@ -5049,6 +4952,7 @@ type OperationsGetCall struct {
 	urlParams_   gensupport.URLParams
 	ifNoneMatch_ string
 	ctx_         context.Context
+	header_      http.Header
 }
 
 // Get: Gets the latest state of a long-running operation.  Clients can
@@ -5088,8 +4992,20 @@ func (c *OperationsGetCall) Context(ctx context.Context) *OperationsGetCall {
 	return c
 }
 
+// Header returns an http.Header that can be modified by the caller to
+// add HTTP headers to the request.
+func (c *OperationsGetCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
 func (c *OperationsGetCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
+	for k, v := range c.header_ {
+		reqHeaders[k] = v
+	}
 	reqHeaders.Set("User-Agent", c.s.userAgent())
 	if c.ifNoneMatch_ != "" {
 		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
@@ -5155,7 +5071,7 @@ func (c *OperationsGetCall) Do(opts ...googleapi.CallOption) (*Operation, error)
 	//     "name": {
 	//       "description": "The name of the operation resource.",
 	//       "location": "path",
-	//       "pattern": "^operations/.*$",
+	//       "pattern": "^operations/.+$",
 	//       "required": true,
 	//       "type": "string"
 	//     }
@@ -5179,6 +5095,7 @@ type ServicesCreateCall struct {
 	managedservice *ManagedService
 	urlParams_     gensupport.URLParams
 	ctx_           context.Context
+	header_        http.Header
 }
 
 // Create: Creates a new managed service.
@@ -5208,8 +5125,20 @@ func (c *ServicesCreateCall) Context(ctx context.Context) *ServicesCreateCall {
 	return c
 }
 
+// Header returns an http.Header that can be modified by the caller to
+// add HTTP headers to the request.
+func (c *ServicesCreateCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
 func (c *ServicesCreateCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
+	for k, v := range c.header_ {
+		reqHeaders[k] = v
+	}
 	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.managedservice)
@@ -5291,10 +5220,11 @@ type ServicesDeleteCall struct {
 	serviceName string
 	urlParams_  gensupport.URLParams
 	ctx_        context.Context
+	header_     http.Header
 }
 
 // Delete: Deletes a managed service. This method will change the
-// serivce in the
+// service to the
 // `Soft-Delete` state for 30 days. Within this period, service
 // producers may
 // call UndeleteService to restore the service.
@@ -5324,8 +5254,20 @@ func (c *ServicesDeleteCall) Context(ctx context.Context) *ServicesDeleteCall {
 	return c
 }
 
+// Header returns an http.Header that can be modified by the caller to
+// add HTTP headers to the request.
+func (c *ServicesDeleteCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
 func (c *ServicesDeleteCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
+	for k, v := range c.header_ {
+		reqHeaders[k] = v
+	}
 	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
@@ -5377,7 +5319,7 @@ func (c *ServicesDeleteCall) Do(opts ...googleapi.CallOption) (*Operation, error
 	}
 	return ret, nil
 	// {
-	//   "description": "Deletes a managed service. This method will change the serivce in the\n`Soft-Delete` state for 30 days. Within this period, service producers may\ncall UndeleteService to restore the service.\nAfter 30 days, the service will be permanently deleted.\n\nOperation\u003cresponse: google.protobuf.Empty\u003e",
+	//   "description": "Deletes a managed service. This method will change the service to the\n`Soft-Delete` state for 30 days. Within this period, service producers may\ncall UndeleteService to restore the service.\nAfter 30 days, the service will be permanently deleted.\n\nOperation\u003cresponse: google.protobuf.Empty\u003e",
 	//   "flatPath": "v1/services/{serviceName}",
 	//   "httpMethod": "DELETE",
 	//   "id": "servicemanagement.services.delete",
@@ -5412,6 +5354,7 @@ type ServicesDisableCall struct {
 	disableservicerequest *DisableServiceRequest
 	urlParams_            gensupport.URLParams
 	ctx_                  context.Context
+	header_               http.Header
 }
 
 // Disable: Disable a managed service for a
@@ -5441,8 +5384,20 @@ func (c *ServicesDisableCall) Context(ctx context.Context) *ServicesDisableCall 
 	return c
 }
 
+// Header returns an http.Header that can be modified by the caller to
+// add HTTP headers to the request.
+func (c *ServicesDisableCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
 func (c *ServicesDisableCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
+	for k, v := range c.header_ {
+		reqHeaders[k] = v
+	}
 	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.disableservicerequest)
@@ -5537,6 +5492,7 @@ type ServicesEnableCall struct {
 	enableservicerequest *EnableServiceRequest
 	urlParams_           gensupport.URLParams
 	ctx_                 context.Context
+	header_              http.Header
 }
 
 // Enable: Enable a managed service for a project with default
@@ -5569,8 +5525,20 @@ func (c *ServicesEnableCall) Context(ctx context.Context) *ServicesEnableCall {
 	return c
 }
 
+// Header returns an http.Header that can be modified by the caller to
+// add HTTP headers to the request.
+func (c *ServicesEnableCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
 func (c *ServicesEnableCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
+	for k, v := range c.header_ {
+		reqHeaders[k] = v
+	}
 	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.enableservicerequest)
@@ -5664,6 +5632,7 @@ type ServicesGenerateConfigReportCall struct {
 	generateconfigreportrequest *GenerateConfigReportRequest
 	urlParams_                  gensupport.URLParams
 	ctx_                        context.Context
+	header_                     http.Header
 }
 
 // GenerateConfigReport: Generates and returns a report (errors,
@@ -5706,8 +5675,20 @@ func (c *ServicesGenerateConfigReportCall) Context(ctx context.Context) *Service
 	return c
 }
 
+// Header returns an http.Header that can be modified by the caller to
+// add HTTP headers to the request.
+func (c *ServicesGenerateConfigReportCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
 func (c *ServicesGenerateConfigReportCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
+	for k, v := range c.header_ {
+		reqHeaders[k] = v
+	}
 	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.generateconfigreportrequest)
@@ -5790,9 +5771,12 @@ type ServicesGetCall struct {
 	urlParams_   gensupport.URLParams
 	ifNoneMatch_ string
 	ctx_         context.Context
+	header_      http.Header
 }
 
-// Get: Gets a managed service.
+// Get: Gets a managed service. Authentication is required unless the
+// service is
+// public.
 func (r *ServicesService) Get(serviceName string) *ServicesGetCall {
 	c := &ServicesGetCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.serviceName = serviceName
@@ -5825,8 +5809,20 @@ func (c *ServicesGetCall) Context(ctx context.Context) *ServicesGetCall {
 	return c
 }
 
+// Header returns an http.Header that can be modified by the caller to
+// add HTTP headers to the request.
+func (c *ServicesGetCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
 func (c *ServicesGetCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
+	for k, v := range c.header_ {
+		reqHeaders[k] = v
+	}
 	reqHeaders.Set("User-Agent", c.s.userAgent())
 	if c.ifNoneMatch_ != "" {
 		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
@@ -5881,7 +5877,7 @@ func (c *ServicesGetCall) Do(opts ...googleapi.CallOption) (*ManagedService, err
 	}
 	return ret, nil
 	// {
-	//   "description": "Gets a managed service.",
+	//   "description": "Gets a managed service. Authentication is required unless the service is\npublic.",
 	//   "flatPath": "v1/services/{serviceName}",
 	//   "httpMethod": "GET",
 	//   "id": "servicemanagement.services.get",
@@ -5918,6 +5914,7 @@ type ServicesGetConfigCall struct {
 	urlParams_   gensupport.URLParams
 	ifNoneMatch_ string
 	ctx_         context.Context
+	header_      http.Header
 }
 
 // GetConfig: Gets a service configuration (version) for a managed
@@ -5928,7 +5925,8 @@ func (r *ServicesService) GetConfig(serviceName string) *ServicesGetConfigCall {
 	return c
 }
 
-// ConfigId sets the optional parameter "configId":
+// ConfigId sets the optional parameter "configId": The id of the
+// service configuration resource.
 func (c *ServicesGetConfigCall) ConfigId(configId string) *ServicesGetConfigCall {
 	c.urlParams_.Set("configId", configId)
 	return c
@@ -5960,8 +5958,20 @@ func (c *ServicesGetConfigCall) Context(ctx context.Context) *ServicesGetConfigC
 	return c
 }
 
+// Header returns an http.Header that can be modified by the caller to
+// add HTTP headers to the request.
+func (c *ServicesGetConfigCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
 func (c *ServicesGetConfigCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
+	for k, v := range c.header_ {
+		reqHeaders[k] = v
+	}
 	reqHeaders.Set("User-Agent", c.s.userAgent())
 	if c.ifNoneMatch_ != "" {
 		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
@@ -6025,6 +6035,7 @@ func (c *ServicesGetConfigCall) Do(opts ...googleapi.CallOption) (*Service, erro
 	//   ],
 	//   "parameters": {
 	//     "configId": {
+	//       "description": "The id of the service configuration resource.",
 	//       "location": "query",
 	//       "type": "string"
 	//     },
@@ -6057,6 +6068,7 @@ type ServicesGetIamPolicyCall struct {
 	getiampolicyrequest *GetIamPolicyRequest
 	urlParams_          gensupport.URLParams
 	ctx_                context.Context
+	header_             http.Header
 }
 
 // GetIamPolicy: Gets the access control policy for a resource.
@@ -6086,8 +6098,20 @@ func (c *ServicesGetIamPolicyCall) Context(ctx context.Context) *ServicesGetIamP
 	return c
 }
 
+// Header returns an http.Header that can be modified by the caller to
+// add HTTP headers to the request.
+func (c *ServicesGetIamPolicyCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
 func (c *ServicesGetIamPolicyCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
+	for k, v := range c.header_ {
+		reqHeaders[k] = v
+	}
 	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.getiampolicyrequest)
@@ -6155,7 +6179,7 @@ func (c *ServicesGetIamPolicyCall) Do(opts ...googleapi.CallOption) (*Policy, er
 	//     "resource": {
 	//       "description": "REQUIRED: The resource for which the policy is being requested.\n`resource` is usually specified as a path. For example, a Project\nresource is specified as `projects/{project}`.",
 	//       "location": "path",
-	//       "pattern": "^services/[^/]*$",
+	//       "pattern": "^services/[^/]+$",
 	//       "required": true,
 	//       "type": "string"
 	//     }
@@ -6182,11 +6206,30 @@ type ServicesListCall struct {
 	urlParams_   gensupport.URLParams
 	ifNoneMatch_ string
 	ctx_         context.Context
+	header_      http.Header
 }
 
-// List: Lists all managed services.
+// List: Lists all managed services. The result is limited to services
+// that the
+// caller has "servicemanagement.services.get" permission for. If the
+// request
+// is made without authentication, it returns only public services that
+// are
+// available to everyone.
 func (r *ServicesService) List() *ServicesListCall {
 	c := &ServicesListCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	return c
+}
+
+// ConsumerId sets the optional parameter "consumerId": Include services
+// consumed by the specified consumer.
+//
+// The Google Service Management implementation accepts the
+// following
+// forms:
+// - project:<project_id>
+func (c *ServicesListCall) ConsumerId(consumerId string) *ServicesListCall {
+	c.urlParams_.Set("consumerId", consumerId)
 	return c
 }
 
@@ -6238,8 +6281,20 @@ func (c *ServicesListCall) Context(ctx context.Context) *ServicesListCall {
 	return c
 }
 
+// Header returns an http.Header that can be modified by the caller to
+// add HTTP headers to the request.
+func (c *ServicesListCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
 func (c *ServicesListCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
+	for k, v := range c.header_ {
+		reqHeaders[k] = v
+	}
 	reqHeaders.Set("User-Agent", c.s.userAgent())
 	if c.ifNoneMatch_ != "" {
 		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
@@ -6291,12 +6346,17 @@ func (c *ServicesListCall) Do(opts ...googleapi.CallOption) (*ListServicesRespon
 	}
 	return ret, nil
 	// {
-	//   "description": "Lists all managed services.",
+	//   "description": "Lists all managed services. The result is limited to services that the\ncaller has \"servicemanagement.services.get\" permission for. If the request\nis made without authentication, it returns only public services that are\navailable to everyone.",
 	//   "flatPath": "v1/services",
 	//   "httpMethod": "GET",
 	//   "id": "servicemanagement.services.list",
 	//   "parameterOrder": [],
 	//   "parameters": {
+	//     "consumerId": {
+	//       "description": "Include services consumed by the specified consumer.\n\nThe Google Service Management implementation accepts the following\nforms:\n- project:\u003cproject_id\u003e",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
 	//     "pageSize": {
 	//       "description": "Requested size of the next page of data.",
 	//       "format": "int32",
@@ -6357,6 +6417,7 @@ type ServicesSetIamPolicyCall struct {
 	setiampolicyrequest *SetIamPolicyRequest
 	urlParams_          gensupport.URLParams
 	ctx_                context.Context
+	header_             http.Header
 }
 
 // SetIamPolicy: Sets the access control policy on the specified
@@ -6385,8 +6446,20 @@ func (c *ServicesSetIamPolicyCall) Context(ctx context.Context) *ServicesSetIamP
 	return c
 }
 
+// Header returns an http.Header that can be modified by the caller to
+// add HTTP headers to the request.
+func (c *ServicesSetIamPolicyCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
 func (c *ServicesSetIamPolicyCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
+	for k, v := range c.header_ {
+		reqHeaders[k] = v
+	}
 	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.setiampolicyrequest)
@@ -6454,7 +6527,7 @@ func (c *ServicesSetIamPolicyCall) Do(opts ...googleapi.CallOption) (*Policy, er
 	//     "resource": {
 	//       "description": "REQUIRED: The resource for which the policy is being specified.\n`resource` is usually specified as a path. For example, a Project\nresource is specified as `projects/{project}`.",
 	//       "location": "path",
-	//       "pattern": "^services/[^/]*$",
+	//       "pattern": "^services/[^/]+$",
 	//       "required": true,
 	//       "type": "string"
 	//     }
@@ -6482,6 +6555,7 @@ type ServicesTestIamPermissionsCall struct {
 	testiampermissionsrequest *TestIamPermissionsRequest
 	urlParams_                gensupport.URLParams
 	ctx_                      context.Context
+	header_                   http.Header
 }
 
 // TestIamPermissions: Returns permissions that a caller has on the
@@ -6509,8 +6583,20 @@ func (c *ServicesTestIamPermissionsCall) Context(ctx context.Context) *ServicesT
 	return c
 }
 
+// Header returns an http.Header that can be modified by the caller to
+// add HTTP headers to the request.
+func (c *ServicesTestIamPermissionsCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
 func (c *ServicesTestIamPermissionsCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
+	for k, v := range c.header_ {
+		reqHeaders[k] = v
+	}
 	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.testiampermissionsrequest)
@@ -6578,7 +6664,7 @@ func (c *ServicesTestIamPermissionsCall) Do(opts ...googleapi.CallOption) (*Test
 	//     "resource": {
 	//       "description": "REQUIRED: The resource for which the policy detail is being requested.\n`resource` is usually specified as a path. For example, a Project\nresource is specified as `projects/{project}`.",
 	//       "location": "path",
-	//       "pattern": "^services/[^/]*$",
+	//       "pattern": "^services/[^/]+$",
 	//       "required": true,
 	//       "type": "string"
 	//     }
@@ -6605,6 +6691,7 @@ type ServicesUndeleteCall struct {
 	serviceName string
 	urlParams_  gensupport.URLParams
 	ctx_        context.Context
+	header_     http.Header
 }
 
 // Undelete: Revives a previously deleted managed service. The method
@@ -6638,8 +6725,20 @@ func (c *ServicesUndeleteCall) Context(ctx context.Context) *ServicesUndeleteCal
 	return c
 }
 
+// Header returns an http.Header that can be modified by the caller to
+// add HTTP headers to the request.
+func (c *ServicesUndeleteCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
 func (c *ServicesUndeleteCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
+	for k, v := range c.header_ {
+		reqHeaders[k] = v
+	}
 	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
@@ -6726,6 +6825,7 @@ type ServicesConfigsCreateCall struct {
 	service     *Service
 	urlParams_  gensupport.URLParams
 	ctx_        context.Context
+	header_     http.Header
 }
 
 // Create: Creates a new service configuration (version) for a managed
@@ -6757,8 +6857,20 @@ func (c *ServicesConfigsCreateCall) Context(ctx context.Context) *ServicesConfig
 	return c
 }
 
+// Header returns an http.Header that can be modified by the caller to
+// add HTTP headers to the request.
+func (c *ServicesConfigsCreateCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
 func (c *ServicesConfigsCreateCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
+	for k, v := range c.header_ {
+		reqHeaders[k] = v
+	}
 	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.service)
@@ -6854,6 +6966,7 @@ type ServicesConfigsGetCall struct {
 	urlParams_   gensupport.URLParams
 	ifNoneMatch_ string
 	ctx_         context.Context
+	header_      http.Header
 }
 
 // Get: Gets a service configuration (version) for a managed service.
@@ -6890,8 +7003,20 @@ func (c *ServicesConfigsGetCall) Context(ctx context.Context) *ServicesConfigsGe
 	return c
 }
 
+// Header returns an http.Header that can be modified by the caller to
+// add HTTP headers to the request.
+func (c *ServicesConfigsGetCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
 func (c *ServicesConfigsGetCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
+	for k, v := range c.header_ {
+		reqHeaders[k] = v
+	}
 	reqHeaders.Set("User-Agent", c.s.userAgent())
 	if c.ifNoneMatch_ != "" {
 		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
@@ -6957,6 +7082,7 @@ func (c *ServicesConfigsGetCall) Do(opts ...googleapi.CallOption) (*Service, err
 	//   ],
 	//   "parameters": {
 	//     "configId": {
+	//       "description": "The id of the service configuration resource.",
 	//       "location": "path",
 	//       "required": true,
 	//       "type": "string"
@@ -6990,6 +7116,7 @@ type ServicesConfigsListCall struct {
 	urlParams_   gensupport.URLParams
 	ifNoneMatch_ string
 	ctx_         context.Context
+	header_      http.Header
 }
 
 // List: Lists the history of the service configuration for a managed
@@ -7041,8 +7168,20 @@ func (c *ServicesConfigsListCall) Context(ctx context.Context) *ServicesConfigsL
 	return c
 }
 
+// Header returns an http.Header that can be modified by the caller to
+// add HTTP headers to the request.
+func (c *ServicesConfigsListCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
 func (c *ServicesConfigsListCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
+	for k, v := range c.header_ {
+		reqHeaders[k] = v
+	}
 	reqHeaders.Set("User-Agent", c.s.userAgent())
 	if c.ifNoneMatch_ != "" {
 		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
@@ -7166,6 +7305,7 @@ type ServicesConfigsSubmitCall struct {
 	submitconfigsourcerequest *SubmitConfigSourceRequest
 	urlParams_                gensupport.URLParams
 	ctx_                      context.Context
+	header_                   http.Header
 }
 
 // Submit: Creates a new service configuration (version) for a managed
@@ -7204,8 +7344,20 @@ func (c *ServicesConfigsSubmitCall) Context(ctx context.Context) *ServicesConfig
 	return c
 }
 
+// Header returns an http.Header that can be modified by the caller to
+// add HTTP headers to the request.
+func (c *ServicesConfigsSubmitCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
 func (c *ServicesConfigsSubmitCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
+	for k, v := range c.header_ {
+		reqHeaders[k] = v
+	}
 	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.submitconfigsourcerequest)
@@ -7300,6 +7452,7 @@ type ServicesRolloutsCreateCall struct {
 	rollout     *Rollout
 	urlParams_  gensupport.URLParams
 	ctx_        context.Context
+	header_     http.Header
 }
 
 // Create: Creates a new service configuration rollout. Based on
@@ -7340,8 +7493,20 @@ func (c *ServicesRolloutsCreateCall) Context(ctx context.Context) *ServicesRollo
 	return c
 }
 
+// Header returns an http.Header that can be modified by the caller to
+// add HTTP headers to the request.
+func (c *ServicesRolloutsCreateCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
 func (c *ServicesRolloutsCreateCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
+	for k, v := range c.header_ {
+		reqHeaders[k] = v
+	}
 	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.rollout)
@@ -7437,6 +7602,7 @@ type ServicesRolloutsGetCall struct {
 	urlParams_   gensupport.URLParams
 	ifNoneMatch_ string
 	ctx_         context.Context
+	header_      http.Header
 }
 
 // Get: Gets a service configuration rollout.
@@ -7473,8 +7639,20 @@ func (c *ServicesRolloutsGetCall) Context(ctx context.Context) *ServicesRollouts
 	return c
 }
 
+// Header returns an http.Header that can be modified by the caller to
+// add HTTP headers to the request.
+func (c *ServicesRolloutsGetCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
 func (c *ServicesRolloutsGetCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
+	for k, v := range c.header_ {
+		reqHeaders[k] = v
+	}
 	reqHeaders.Set("User-Agent", c.s.userAgent())
 	if c.ifNoneMatch_ != "" {
 		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
@@ -7574,6 +7752,7 @@ type ServicesRolloutsListCall struct {
 	urlParams_   gensupport.URLParams
 	ifNoneMatch_ string
 	ctx_         context.Context
+	header_      http.Header
 }
 
 // List: Lists the history of the service configuration rollouts for a
@@ -7625,8 +7804,20 @@ func (c *ServicesRolloutsListCall) Context(ctx context.Context) *ServicesRollout
 	return c
 }
 
+// Header returns an http.Header that can be modified by the caller to
+// add HTTP headers to the request.
+func (c *ServicesRolloutsListCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
 func (c *ServicesRolloutsListCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
+	for k, v := range c.header_ {
+		reqHeaders[k] = v
+	}
 	reqHeaders.Set("User-Agent", c.s.userAgent())
 	if c.ifNoneMatch_ != "" {
 		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)

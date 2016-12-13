@@ -529,7 +529,7 @@ type Operation struct {
 
 	// Metadata: An OperationMetadata object. This will always be returned
 	// with the Operation.
-	Metadata OperationMetadata `json:"metadata,omitempty"`
+	Metadata googleapi.RawMessage `json:"metadata,omitempty"`
 
 	// Name: The server-assigned name, which is only unique within the same
 	// service that originally returns it. For example:
@@ -539,7 +539,7 @@ type Operation struct {
 	// Response: If importing ReadGroupSets, an ImportReadGroupSetsResponse
 	// is returned. If importing Variants, an ImportVariantsResponse is
 	// returned. For exports, an empty response is returned.
-	Response OperationResponse `json:"response,omitempty"`
+	Response googleapi.RawMessage `json:"response,omitempty"`
 
 	// ServerResponse contains the HTTP response code and headers from the
 	// server.
@@ -567,10 +567,6 @@ func (s *Operation) MarshalJSON() ([]byte, error) {
 	raw := noMethod(*s)
 	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
 }
-
-type OperationMetadata interface{}
-
-type OperationResponse interface{}
 
 // OperationEvent: An event that occurred during an Operation.
 type OperationEvent struct {
@@ -608,10 +604,11 @@ func (s *OperationEvent) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
 }
 
-// OperationMetadata1: Metadata describing an Operation.
-type OperationMetadata1 struct {
-	// ClientId: Optionally provided by the caller when submitting the
-	// request that creates the operation.
+// OperationMetadata: Metadata describing an Operation.
+type OperationMetadata struct {
+	// ClientId: This field is deprecated. Use `labels` instead. Optionally
+	// provided by the caller when submitting the request that creates the
+	// operation.
 	ClientId string `json:"clientId,omitempty"`
 
 	// CreateTime: The time at which the job was submitted to the Genomics
@@ -626,6 +623,10 @@ type OperationMetadata1 struct {
 	// import or export.
 	Events []*OperationEvent `json:"events,omitempty"`
 
+	// Labels: Optionally provided by the caller when submitting the request
+	// that creates the operation.
+	Labels map[string]string `json:"labels,omitempty"`
+
 	// ProjectId: The Google Cloud Project in which the job is scoped.
 	ProjectId string `json:"projectId,omitempty"`
 
@@ -633,10 +634,10 @@ type OperationMetadata1 struct {
 	// this will be in current version of the API. If the operation was
 	// started with v1beta2 API and a GetOperation is performed on v1 API, a
 	// v1 request will be returned.
-	Request OperationMetadataRequest `json:"request,omitempty"`
+	Request googleapi.RawMessage `json:"request,omitempty"`
 
 	// RuntimeMetadata: Runtime metadata on this Operation.
-	RuntimeMetadata OperationMetadataRuntimeMetadata `json:"runtimeMetadata,omitempty"`
+	RuntimeMetadata googleapi.RawMessage `json:"runtimeMetadata,omitempty"`
 
 	// StartTime: The time at which the job began to run.
 	StartTime string `json:"startTime,omitempty"`
@@ -658,15 +659,11 @@ type OperationMetadata1 struct {
 	NullFields []string `json:"-"`
 }
 
-func (s *OperationMetadata1) MarshalJSON() ([]byte, error) {
-	type noMethod OperationMetadata1
+func (s *OperationMetadata) MarshalJSON() ([]byte, error) {
+	type noMethod OperationMetadata
 	raw := noMethod(*s)
 	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
 }
-
-type OperationMetadataRequest interface{}
-
-type OperationMetadataRuntimeMetadata interface{}
 
 // Pipeline: The pipeline object. Represents a transformation from a set
 // of input parameters to a set of output parameters. The transformation
@@ -906,7 +903,8 @@ func (s *RepeatedString) MarshalJSON() ([]byte, error) {
 
 // RunPipelineArgs: The pipeline run arguments.
 type RunPipelineArgs struct {
-	// ClientId: Client-specified pipeline operation identifier.
+	// ClientId: This field is deprecated. Use `labels` instead.
+	// Client-specified pipeline operation identifier.
 	ClientId string `json:"clientId,omitempty"`
 
 	// Inputs: Pipeline input arguments; keys are defined in the pipeline
@@ -920,6 +918,19 @@ type RunPipelineArgs struct {
 	// files failed, etc). While the VM is up, one can ssh into the VM to
 	// debug. Default is 0; maximum allowed value is 1 day.
 	KeepVmAliveOnFailureDuration string `json:"keepVmAliveOnFailureDuration,omitempty"`
+
+	// Labels: Labels to apply to this pipeline run. Labels will also be
+	// applied to compute resources (VM, disks) created by this pipeline
+	// run. When listing operations, operations can filtered by labels.
+	// Label keys may not be empty; label values may be empty. Non-empty
+	// labels must be 1-63 characters long, and comply with [RFC1035]
+	// (https://www.ietf.org/rfc/rfc1035.txt). Specifically, the name must
+	// be 1-63 characters long and match the regular expression
+	// `[a-z]([-a-z0-9]*[a-z0-9])?` which means the first character must be
+	// a lowercase letter, and all following characters must be a dash,
+	// lowercase letter, or digit, except the last character, which cannot
+	// be a dash.
+	Labels map[string]string `json:"labels,omitempty"`
 
 	// Logging: Required. Logging options. Used by the service to
 	// communicate results to the user.
@@ -1175,7 +1186,7 @@ type Status struct {
 
 	// Details: A list of messages that carry the error details. There will
 	// be a common set of message types for APIs to use.
-	Details []StatusDetails `json:"details,omitempty"`
+	Details []googleapi.RawMessage `json:"details,omitempty"`
 
 	// Message: A developer-facing error message, which should be in
 	// English. Any user-facing error message should be localized and sent
@@ -1204,8 +1215,6 @@ func (s *Status) MarshalJSON() ([]byte, error) {
 	raw := noMethod(*s)
 	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
 }
-
-type StatusDetails interface{}
 
 // TimestampEvent: Stores the list of events and times they occured for
 // major events in job execution.
@@ -1247,6 +1256,7 @@ type OperationsCancelCall struct {
 	canceloperationrequest *CancelOperationRequest
 	urlParams_             gensupport.URLParams
 	ctx_                   context.Context
+	header_                http.Header
 }
 
 // Cancel: Starts asynchronous cancellation on a long-running operation.
@@ -1277,8 +1287,20 @@ func (c *OperationsCancelCall) Context(ctx context.Context) *OperationsCancelCal
 	return c
 }
 
+// Header returns an http.Header that can be modified by the caller to
+// add HTTP headers to the request.
+func (c *OperationsCancelCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
 func (c *OperationsCancelCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
+	for k, v := range c.header_ {
+		reqHeaders[k] = v
+	}
 	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.canceloperationrequest)
@@ -1373,6 +1395,7 @@ type OperationsGetCall struct {
 	urlParams_   gensupport.URLParams
 	ifNoneMatch_ string
 	ctx_         context.Context
+	header_      http.Header
 }
 
 // Get: Gets the latest state of a long-running operation. Clients can
@@ -1410,8 +1433,20 @@ func (c *OperationsGetCall) Context(ctx context.Context) *OperationsGetCall {
 	return c
 }
 
+// Header returns an http.Header that can be modified by the caller to
+// add HTTP headers to the request.
+func (c *OperationsGetCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
 func (c *OperationsGetCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
+	for k, v := range c.header_ {
+		reqHeaders[k] = v
+	}
 	reqHeaders.Set("User-Agent", c.s.userAgent())
 	if c.ifNoneMatch_ != "" {
 		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
@@ -1501,6 +1536,7 @@ type OperationsListCall struct {
 	urlParams_   gensupport.URLParams
 	ifNoneMatch_ string
 	ctx_         context.Context
+	header_      http.Header
 }
 
 // List: Lists operations that match the specified filter in the
@@ -1517,7 +1553,9 @@ func (r *OperationsService) List(name string) *OperationsListCall {
 // The time this job was created, in seconds from the
 // [epoch](http://en.wikipedia.org/wiki/Unix_time). Can use `>=` and/or
 // `= 1432140000` * `projectId = my-project AND createTime >= 1432140000
-// AND createTime <= 1432150000 AND status = RUNNING`
+// AND createTime <= 1432150000 AND status = RUNNING` * `projectId =
+// my-project AND labels.color = *` * `projectId = my-project AND
+// labels.color = red`
 func (c *OperationsListCall) Filter(filter string) *OperationsListCall {
 	c.urlParams_.Set("filter", filter)
 	return c
@@ -1564,8 +1602,20 @@ func (c *OperationsListCall) Context(ctx context.Context) *OperationsListCall {
 	return c
 }
 
+// Header returns an http.Header that can be modified by the caller to
+// add HTTP headers to the request.
+func (c *OperationsListCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
 func (c *OperationsListCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
+	for k, v := range c.header_ {
+		reqHeaders[k] = v
+	}
 	reqHeaders.Set("User-Agent", c.s.userAgent())
 	if c.ifNoneMatch_ != "" {
 		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
@@ -1628,7 +1678,7 @@ func (c *OperationsListCall) Do(opts ...googleapi.CallOption) (*ListOperationsRe
 	//   ],
 	//   "parameters": {
 	//     "filter": {
-	//       "description": "A string for filtering Operations. The following filter fields are supported: * projectId: Required. Corresponds to OperationMetadata.projectId. * createTime: The time this job was created, in seconds from the [epoch](http://en.wikipedia.org/wiki/Unix_time). Can use `\u003e=` and/or `= 1432140000` * `projectId = my-project AND createTime \u003e= 1432140000 AND createTime \u003c= 1432150000 AND status = RUNNING`",
+	//       "description": "A string for filtering Operations. The following filter fields are supported: * projectId: Required. Corresponds to OperationMetadata.projectId. * createTime: The time this job was created, in seconds from the [epoch](http://en.wikipedia.org/wiki/Unix_time). Can use `\u003e=` and/or `= 1432140000` * `projectId = my-project AND createTime \u003e= 1432140000 AND createTime \u003c= 1432150000 AND status = RUNNING` * `projectId = my-project AND labels.color = *` * `projectId = my-project AND labels.color = red`",
 	//       "location": "query",
 	//       "type": "string"
 	//     },
@@ -1691,6 +1741,7 @@ type PipelinesCreateCall struct {
 	pipeline   *Pipeline
 	urlParams_ gensupport.URLParams
 	ctx_       context.Context
+	header_    http.Header
 }
 
 // Create: Creates a pipeline that can be run later. Create takes a
@@ -1720,8 +1771,20 @@ func (c *PipelinesCreateCall) Context(ctx context.Context) *PipelinesCreateCall 
 	return c
 }
 
+// Header returns an http.Header that can be modified by the caller to
+// add HTTP headers to the request.
+func (c *PipelinesCreateCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
 func (c *PipelinesCreateCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
+	for k, v := range c.header_ {
+		reqHeaders[k] = v
+	}
 	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.pipeline)
@@ -1800,6 +1863,7 @@ type PipelinesDeleteCall struct {
 	pipelineId string
 	urlParams_ gensupport.URLParams
 	ctx_       context.Context
+	header_    http.Header
 }
 
 // Delete: Deletes a pipeline based on ID. Caller must have WRITE
@@ -1826,8 +1890,20 @@ func (c *PipelinesDeleteCall) Context(ctx context.Context) *PipelinesDeleteCall 
 	return c
 }
 
+// Header returns an http.Header that can be modified by the caller to
+// add HTTP headers to the request.
+func (c *PipelinesDeleteCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
 func (c *PipelinesDeleteCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
+	for k, v := range c.header_ {
+		reqHeaders[k] = v
+	}
 	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
@@ -1913,6 +1989,7 @@ type PipelinesGetCall struct {
 	urlParams_   gensupport.URLParams
 	ifNoneMatch_ string
 	ctx_         context.Context
+	header_      http.Header
 }
 
 // Get: Retrieves a pipeline based on ID. Caller must have READ
@@ -1949,8 +2026,20 @@ func (c *PipelinesGetCall) Context(ctx context.Context) *PipelinesGetCall {
 	return c
 }
 
+// Header returns an http.Header that can be modified by the caller to
+// add HTTP headers to the request.
+func (c *PipelinesGetCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
 func (c *PipelinesGetCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
+	for k, v := range c.header_ {
+		reqHeaders[k] = v
+	}
 	reqHeaders.Set("User-Agent", c.s.userAgent())
 	if c.ifNoneMatch_ != "" {
 		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
@@ -2038,6 +2127,7 @@ type PipelinesGetControllerConfigCall struct {
 	urlParams_   gensupport.URLParams
 	ifNoneMatch_ string
 	ctx_         context.Context
+	header_      http.Header
 }
 
 // GetControllerConfig: Gets controller configuration information.
@@ -2087,8 +2177,20 @@ func (c *PipelinesGetControllerConfigCall) Context(ctx context.Context) *Pipelin
 	return c
 }
 
+// Header returns an http.Header that can be modified by the caller to
+// add HTTP headers to the request.
+func (c *PipelinesGetControllerConfigCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
 func (c *PipelinesGetControllerConfigCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
+	for k, v := range c.header_ {
+		reqHeaders[k] = v
+	}
 	reqHeaders.Set("User-Agent", c.s.userAgent())
 	if c.ifNoneMatch_ != "" {
 		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
@@ -2174,6 +2276,7 @@ type PipelinesListCall struct {
 	urlParams_   gensupport.URLParams
 	ifNoneMatch_ string
 	ctx_         context.Context
+	header_      http.Header
 }
 
 // List: Lists pipelines. Caller must have READ permission to the
@@ -2240,8 +2343,20 @@ func (c *PipelinesListCall) Context(ctx context.Context) *PipelinesListCall {
 	return c
 }
 
+// Header returns an http.Header that can be modified by the caller to
+// add HTTP headers to the request.
+func (c *PipelinesListCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
 func (c *PipelinesListCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
+	for k, v := range c.header_ {
+		reqHeaders[k] = v
+	}
 	reqHeaders.Set("User-Agent", c.s.userAgent())
 	if c.ifNoneMatch_ != "" {
 		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
@@ -2359,6 +2474,7 @@ type PipelinesRunCall struct {
 	runpipelinerequest *RunPipelineRequest
 	urlParams_         gensupport.URLParams
 	ctx_               context.Context
+	header_            http.Header
 }
 
 // Run: Runs a pipeline. If `pipelineId` is specified in the request,
@@ -2389,8 +2505,20 @@ func (c *PipelinesRunCall) Context(ctx context.Context) *PipelinesRunCall {
 	return c
 }
 
+// Header returns an http.Header that can be modified by the caller to
+// add HTTP headers to the request.
+func (c *PipelinesRunCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
 func (c *PipelinesRunCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
+	for k, v := range c.header_ {
+		reqHeaders[k] = v
+	}
 	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.runpipelinerequest)
@@ -2470,6 +2598,7 @@ type PipelinesSetOperationStatusCall struct {
 	setoperationstatusrequest *SetOperationStatusRequest
 	urlParams_                gensupport.URLParams
 	ctx_                      context.Context
+	header_                   http.Header
 }
 
 // SetOperationStatus: Sets status of a given operation. Any new
@@ -2498,8 +2627,20 @@ func (c *PipelinesSetOperationStatusCall) Context(ctx context.Context) *Pipeline
 	return c
 }
 
+// Header returns an http.Header that can be modified by the caller to
+// add HTTP headers to the request.
+func (c *PipelinesSetOperationStatusCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
 func (c *PipelinesSetOperationStatusCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
+	for k, v := range c.header_ {
+		reqHeaders[k] = v
+	}
 	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.setoperationstatusrequest)

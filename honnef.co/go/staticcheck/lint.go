@@ -9,14 +9,10 @@ import (
 	"go/types"
 	htmltemplate "html/template"
 	"net/http"
-	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	texttemplate "text/template"
-	"time"
-	"unicode/utf8"
 
 	"honnef.co/go/lint"
 	"honnef.co/go/ssa"
@@ -92,6 +88,7 @@ type Checker struct {
 
 	depmu          sync.Mutex
 	deprecatedObjs map[types.Object]string
+	nodeFns        map[ast.Node]*ssa.Function
 }
 
 func NewChecker() *Checker {
@@ -120,6 +117,7 @@ func (c *Checker) Funcs() map[string]lint.Func {
 		"SA1017": c.CheckUnbufferedSignalChan,
 		"SA1018": c.CheckStringsReplaceZero,
 		"SA1019": c.CheckDeprecated,
+		"SA1020": c.CheckListenAddress,
 
 		"SA2000": c.CheckWaitgroupAdd,
 		"SA2001": c.CheckEmptyCriticalSection,
@@ -188,6 +186,7 @@ func terminates(fn *ssa.Function) (ret bool) {
 func (c *Checker) Init(prog *lint.Program) {
 	c.funcDescs = FunctionDescriptions{}
 	c.deprecatedObjs = map[types.Object]string{}
+	c.nodeFns = map[ast.Node]*ssa.Function{}
 
 	for fn, desc := range stdlibDescs {
 		c.funcDescs[fn] = desc
@@ -230,6 +229,65 @@ func (c *Checker) Init(prog *lint.Program) {
 			Ranges:   vrp.BuildGraph(fn).Solve(),
 			Infinite: !terminates(fn),
 		})
+	}
+
+	for _, pkg := range prog.Packages {
+		for _, f := range pkg.PkgInfo.Files {
+			ast.Walk(&globalVisitor{c.nodeFns, pkg, f}, f)
+		}
+	}
+}
+
+type globalVisitor struct {
+	m   map[ast.Node]*ssa.Function
+	pkg *lint.Pkg
+	f   *ast.File
+}
+
+func (v *globalVisitor) Visit(node ast.Node) ast.Visitor {
+	switch node := node.(type) {
+	case *ast.CallExpr:
+		v.m[node] = v.pkg.SSAPkg.Func("init")
+		return v
+	case *ast.FuncDecl:
+		nv := &fnVisitor{v.m, v.f, v.pkg, nil}
+		return nv.Visit(node)
+	default:
+		return v
+	}
+}
+
+type fnVisitor struct {
+	m     map[ast.Node]*ssa.Function
+	f     *ast.File
+	pkg   *lint.Pkg
+	ssafn *ssa.Function
+}
+
+func (v *fnVisitor) Visit(node ast.Node) ast.Visitor {
+	switch node := node.(type) {
+	case *ast.FuncDecl:
+		var ssafn *ssa.Function
+		if node.Name != nil {
+			ssafn = v.pkg.SSAPkg.Prog.FuncValue(v.pkg.TypesInfo.ObjectOf(node.Name).(*types.Func))
+		} else {
+			path, _ := astutil.PathEnclosingInterval(v.f, node.Pos(), node.Pos())
+			ssafn = ssa.EnclosingFunction(v.pkg.SSAPkg, path)
+		}
+		v.m[node] = ssafn
+		if ssafn == nil {
+			return nil
+		}
+		v.m[node] = ssafn
+		if ssafn == nil {
+			return nil
+		}
+		return &fnVisitor{v.m, v.f, v.pkg, ssafn}
+	case nil:
+		return nil
+	default:
+		v.m[node] = v.ssafn
+		return v
 	}
 }
 
@@ -346,26 +404,13 @@ func (c *Checker) CheckUntrappableSignal(f *lint.File) {
 	f.Walk(fn)
 }
 
+var checkRegexpRules = map[string]CallRule{
+	"regexp.MustCompile": CallRule{Arguments: []ArgumentRule{ValidRegexp{argumentRule{idx: 0}}}},
+	"regexp.Compile":     CallRule{Arguments: []ArgumentRule{ValidRegexp{argumentRule{idx: 0}}}},
+}
+
 func (c *Checker) CheckRegexps(f *lint.File) {
-	fn := func(node ast.Node) bool {
-		call, ok := node.(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-		if !isFunctionCallNameAny(f, call, "regexp.MustCompile", "regexp.Compile") {
-			return true
-		}
-		s, ok := constantString(f, call.Args[0])
-		if !ok {
-			return true
-		}
-		_, err := regexp.Compile(s)
-		if err != nil {
-			f.Errorf(call.Args[0], "%s", err)
-		}
-		return true
-	}
-	f.Walk(fn)
+	c.checkCalls(f, checkRegexpRules)
 }
 
 func (c *Checker) CheckTemplate(f *lint.File) {
@@ -413,89 +458,20 @@ func (c *Checker) CheckTemplate(f *lint.File) {
 	f.Walk(fn)
 }
 
+var checkTimeParseRules = map[string]CallRule{
+	"time.Parse": CallRule{Arguments: []ArgumentRule{ValidTimeLayout{argumentRule: argumentRule{idx: 0}}}},
+}
+
 func (c *Checker) CheckTimeParse(f *lint.File) {
-	fn := func(node ast.Node) bool {
-		call, ok := node.(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-		if !isFunctionCallName(f, call, "time.Parse") {
-			return true
-		}
-		s, ok := constantString(f, call.Args[0])
-		if !ok {
-			return true
-		}
-		s = strings.Replace(s, "_", " ", -1)
-		s = strings.Replace(s, "Z", "-", -1)
-		_, err := time.Parse(s, s)
-		if err != nil {
-			f.Errorf(call.Args[0], "%s", err)
-		}
-		return true
-	}
-	f.Walk(fn)
+	c.checkCalls(f, checkTimeParseRules)
+}
+
+var checkEncodingBinaryRules = map[string]CallRule{
+	"encoding/binary.Write": CallRule{Arguments: []ArgumentRule{CanBinaryMarshal{argumentRule: argumentRule{idx: 2}}}},
 }
 
 func (c *Checker) CheckEncodingBinary(f *lint.File) {
-	// TODO(dominikh): also check binary.Read
-	fn := func(node ast.Node) bool {
-		call, ok := node.(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-		if !isFunctionCallName(f, call, "encoding/binary.Write") {
-			return true
-		}
-		typ := f.Pkg.TypesInfo.TypeOf(call.Args[2])
-		dataType := typ.Underlying()
-		if typ, ok := dataType.(*types.Pointer); ok {
-			dataType = typ.Elem().Underlying()
-		}
-		if typ, ok := dataType.(interface {
-			Elem() types.Type
-		}); ok {
-			if _, ok := typ.(*types.Pointer); !ok {
-				dataType = typ.Elem()
-			}
-		}
-
-		if validEncodingBinaryType(dataType) {
-			return true
-		}
-		f.Errorf(call.Args[2], "type %s cannot be used with binary.Write",
-			f.Pkg.TypesInfo.TypeOf(call.Args[2]))
-		return true
-	}
-	f.Walk(fn)
-}
-
-func validEncodingBinaryType(typ types.Type) bool {
-	typ = typ.Underlying()
-	switch typ := typ.(type) {
-	case *types.Basic:
-		switch typ.Kind() {
-		case types.Uint8, types.Uint16, types.Uint32, types.Uint64,
-			types.Int8, types.Int16, types.Int32, types.Int64,
-			types.Float32, types.Float64, types.Complex64, types.Complex128, types.Invalid:
-			return true
-		}
-		return false
-	case *types.Struct:
-		n := typ.NumFields()
-		for i := 0; i < n; i++ {
-			if !validEncodingBinaryType(typ.Field(i).Type()) {
-				return false
-			}
-		}
-		return true
-	case *types.Array:
-		return validEncodingBinaryType(typ.Elem())
-	case *types.Interface:
-		// we can't determine if it's a valid type or not
-		return true
-	}
-	return false
+	c.checkCalls(f, checkEncodingBinaryRules)
 }
 
 func (c *Checker) CheckTimeSleepConstant(f *lint.File) {
@@ -623,7 +599,6 @@ func (c *Checker) CheckDeferInInfiniteLoop(f *lint.File) {
 
 func (c *Checker) CheckDubiousDeferInChannelRangeLoop(f *lint.File) {
 	fn := func(node ast.Node) bool {
-		var defers []ast.Stmt
 		loop, ok := node.(*ast.RangeStmt)
 		if !ok {
 			return true
@@ -636,7 +611,7 @@ func (c *Checker) CheckDubiousDeferInChannelRangeLoop(f *lint.File) {
 		fn2 := func(node ast.Node) bool {
 			switch stmt := node.(type) {
 			case *ast.DeferStmt:
-				defers = append(defers, stmt)
+				f.Errorf(stmt, "defers in this range loop won't run unless the channel gets closed")
 			case *ast.FuncLit:
 				// Don't look into function bodies
 				return false
@@ -644,9 +619,6 @@ func (c *Checker) CheckDubiousDeferInChannelRangeLoop(f *lint.File) {
 			return true
 		}
 		ast.Inspect(loop.Body, fn2)
-		for _, stmt := range defers {
-			f.Errorf(stmt, "defers in this range loop won't run unless the channel gets closed")
-		}
 		return true
 	}
 	f.Walk(fn)
@@ -870,26 +842,12 @@ func (c *Checker) CheckUnsafePrintf(f *lint.File) {
 	f.Walk(fn)
 }
 
+var checkURLsRules = map[string]CallRule{
+	"net/url.Parse": CallRule{Arguments: []ArgumentRule{ValidURL{argumentRule: argumentRule{idx: 0}}}},
+}
+
 func (c *Checker) CheckURLs(f *lint.File) {
-	fn := func(node ast.Node) bool {
-		call, ok := node.(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-		if !isFunctionCallName(f, call, "net/url.Parse") {
-			return true
-		}
-		s, ok := constantString(f, call.Args[0])
-		if !ok {
-			return true
-		}
-		_, err := url.Parse(s)
-		if err != nil {
-			f.Errorf(call.Args[0], "invalid argument to url.Parse: %s", err)
-		}
-		return true
-	}
-	f.Walk(fn)
+	c.checkCalls(f, checkURLsRules)
 }
 
 func (c *Checker) CheckEarlyDefer(f *lint.File) {
@@ -973,36 +931,21 @@ func selectorX(sel *ast.SelectorExpr) ast.Node {
 	}
 }
 
+var checkDubiousSyncPoolPointersRules = map[string]CallRule{
+	"(*sync.Pool).Put": CallRule{
+		Arguments: []ArgumentRule{
+			Pointer{
+				argumentRule: argumentRule{
+					idx:     0,
+					Message: "non-pointer type put into sync.Pool",
+				},
+			},
+		},
+	},
+}
+
 func (c *Checker) CheckDubiousSyncPoolPointers(f *lint.File) {
-	fn := func(node ast.Node) bool {
-		call, ok := node.(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-
-		sel, ok := call.Fun.(*ast.SelectorExpr)
-		if !ok {
-			return true
-		}
-		if sel.Sel.Name != "Put" {
-			return true
-		}
-		typ := f.Pkg.TypesInfo.TypeOf(sel.X)
-		if typ.String() != "sync.Pool" && typ.String() != "*sync.Pool" {
-			return true
-		}
-
-		arg := f.Pkg.TypesInfo.TypeOf(call.Args[0])
-		underlying := arg.Underlying()
-		switch underlying.(type) {
-		case *types.Pointer, *types.Map, *types.Chan, *types.Interface:
-			// all pointer types
-			return true
-		}
-		f.Errorf(call.Args[0], "non-pointer type %s put into sync.Pool", arg.String())
-		return false
-	}
-	f.Walk(fn)
+	c.checkCalls(f, checkDubiousSyncPoolPointersRules)
 }
 
 func (c *Checker) CheckEmptyCriticalSection(f *lint.File) {
@@ -1188,7 +1131,7 @@ func (c *Checker) CheckIneffecitiveFieldAssignments(f *lint.File) {
 		if fn.Recv == nil {
 			return true
 		}
-		ssafn := f.Pkg.SSAPkg.Prog.FuncValue(f.Pkg.TypesInfo.ObjectOf(fn.Name).(*types.Func))
+		ssafn := c.nodeFns[fn]
 		if ssafn == nil {
 			return true
 		}
@@ -1300,7 +1243,7 @@ func (c *Checker) CheckUnreadVariableValues(f *lint.File) {
 		if !ok {
 			return true
 		}
-		ssafn := f.EnclosingSSAFunction(fn)
+		ssafn := c.nodeFns[fn]
 		if ssafn == nil {
 			return true
 		}
@@ -1395,7 +1338,7 @@ func (c *Checker) CheckNilMaps(f *lint.File) {
 		if !ok {
 			return true
 		}
-		ssafn := f.Pkg.SSAPkg.Prog.FuncValue(f.Pkg.TypesInfo.ObjectOf(fn.Name).(*types.Func))
+		ssafn := c.nodeFns[fn]
 		if ssafn == nil {
 			return true
 		}
@@ -1578,7 +1521,7 @@ func (c *Checker) CheckArgOverwritten(f *lint.File) {
 		if fn.Body == nil {
 			return true
 		}
-		ssafn := f.EnclosingSSAFunction(fn)
+		ssafn := c.nodeFns[fn]
 		if ssafn == nil {
 			return true
 		}
@@ -1738,55 +1681,44 @@ func (c *Checker) CheckIneffectiveLoop(f *lint.File) {
 	f.Walk(fn)
 }
 
+var checkRegexpFindAllCallRule = CallRule{
+	Arguments: []ArgumentRule{
+		NotIntValue{
+			argumentRule: argumentRule{
+				idx:     1,
+				Message: "calling a FindAll method with n == 0 will return no results, did you mean -1?",
+			},
+			Not: vrp.NewZ(0),
+		},
+	},
+}
+var checkRegexpFindAllRules = map[string]CallRule{
+	"(*regexp.Regexp).FindAll":                    checkRegexpFindAllCallRule,
+	"(*regexp.Regexp).FindAllIndex":               checkRegexpFindAllCallRule,
+	"(*regexp.Regexp).FindAllString":              checkRegexpFindAllCallRule,
+	"(*regexp.Regexp).FindAllStringIndex":         checkRegexpFindAllCallRule,
+	"(*regexp.Regexp).FindAllStringSubmatch":      checkRegexpFindAllCallRule,
+	"(*regexp.Regexp).FindAllStringSubmatchIndex": checkRegexpFindAllCallRule,
+	"(*regexp.Regexp).FindAllSubmatch":            checkRegexpFindAllCallRule,
+	"(*regexp.Regexp).FindAllSubmatchIndex":       checkRegexpFindAllCallRule,
+}
+
 func (c *Checker) CheckRegexpFindAll(f *lint.File) {
-	fn := func(node ast.Node) bool {
-		call, ok := node.(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-		sel, ok := call.Fun.(*ast.SelectorExpr)
-		if !ok {
-			return true
-		}
-		if !hasType(f, sel.X, "*regexp.Regexp") {
-			return true
-		}
-		if !strings.HasPrefix(sel.Sel.Name, "FindAll") {
-			return true
-		}
-		lit, ok := call.Args[1].(*ast.BasicLit)
-		if !ok || lit.Value != "0" {
-			return true
-		}
-		f.Errorf(lit, "calling a FindAll method with n == 0 will return no results, did you mean -1?")
-		return true
-	}
-	f.Walk(fn)
+	c.checkCalls(f, checkRegexpFindAllRules)
+}
+
+var checkUTF8CutsetCallRule = CallRule{Arguments: []ArgumentRule{ValidUTF8{argumentRule: argumentRule{idx: 1}}}}
+var checkUTF8CutsetRules = map[string]CallRule{
+	"strings.IndexAny":     checkUTF8CutsetCallRule,
+	"strings.LastIndexAny": checkUTF8CutsetCallRule,
+	"strings.ContainsAny":  checkUTF8CutsetCallRule,
+	"strings.Trim":         checkUTF8CutsetCallRule,
+	"strings.TrimLeft":     checkUTF8CutsetCallRule,
+	"strings.TrimRight":    checkUTF8CutsetCallRule,
 }
 
 func (c *Checker) CheckUTF8Cutset(f *lint.File) {
-	fn := func(node ast.Node) bool {
-		call, ok := node.(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-		if !isFunctionCallNameAny(
-			f, call,
-			"strings.IndexAny", "strings.LastIndexAny", "strings.ContainsAny",
-			"strings.Trim", "strings.TrimLeft", "strings.TrimRight",
-		) {
-			return true
-		}
-		s, ok := constantString(f, call.Args[1])
-		if !ok {
-			return true
-		}
-		if !utf8.ValidString(s) {
-			f.Errorf(call.Args[1], "the second argument to %s should be a valid UTF-8 encoded string", f.Render(call.Fun))
-		}
-		return true
-	}
-	f.Walk(fn)
+	c.checkCalls(f, checkUTF8CutsetRules)
 }
 
 func (c *Checker) CheckNilContext(f *lint.File) {
@@ -1952,7 +1884,7 @@ func (c *Checker) CheckConcurrentTesting(f *lint.File) {
 		if !ok {
 			return true
 		}
-		ssafn := f.EnclosingSSAFunction(fn)
+		ssafn := c.nodeFns[fn]
 		if ssafn == nil {
 			return true
 		}
@@ -2023,7 +1955,7 @@ func (c *Checker) CheckCyclicFinalizer(f *lint.File) {
 		if !isFunctionCallName(f, call, "runtime.SetFinalizer") {
 			return true
 		}
-		ssafn := f.EnclosingSSAFunction(call)
+		ssafn := c.nodeFns[call]
 		if ssafn == nil {
 			return true
 		}
@@ -2087,7 +2019,7 @@ func (c *Checker) CheckSliceOutOfBounds(f *lint.File) {
 		if !ok {
 			return true
 		}
-		ssafn := f.Pkg.SSAPkg.Prog.FuncValue(f.Pkg.TypesInfo.ObjectOf(fn.Name).(*types.Func))
+		ssafn := c.nodeFns[fn]
 		if ssafn == nil {
 			return true
 		}
@@ -2179,7 +2111,7 @@ func (c *Checker) CheckInfiniteRecursion(f *lint.File) {
 		if !ok {
 			return true
 		}
-		ssafn := f.EnclosingSSAFunction(fn)
+		ssafn := c.nodeFns[fn]
 		if ssafn == nil {
 			return true
 		}
@@ -2273,34 +2205,51 @@ func isFunctionCallNameAny(f *lint.File, node ast.Node, names ...string) bool {
 	return false
 }
 
+var checkUnmarshalPointerRules = map[string]CallRule{
+	"encoding/xml.Unmarshal": CallRule{
+		Arguments: []ArgumentRule{
+			Pointer{
+				argumentRule: argumentRule{
+					idx:     1,
+					Message: "xml.Unmarshal expects to unmarshal into a pointer, but the provided value is not a pointer",
+				},
+			},
+		},
+	},
+	"(*encoding/xml.Decoder).Decode": CallRule{
+		Arguments: []ArgumentRule{
+			Pointer{
+				argumentRule: argumentRule{
+					idx:     0,
+					Message: "Decode expects to unmarshal into a pointer, but the provided value is not a pointer",
+				},
+			},
+		},
+	},
+	"encoding/json.Unmarshal": CallRule{
+		Arguments: []ArgumentRule{
+			Pointer{
+				argumentRule: argumentRule{
+					idx:     1,
+					Message: "json.Unmarshal expects to unmarshal into a pointer, but the provided value is not a pointer",
+				},
+			},
+		},
+	},
+	"(*encoding/json.Decoder).Decode": CallRule{
+		Arguments: []ArgumentRule{
+			Pointer{
+				argumentRule: argumentRule{
+					idx:     0,
+					Message: "Decode expects to unmarshal into a pointer, but the provided value is not a pointer",
+				},
+			},
+		},
+	},
+}
+
 func (c *Checker) CheckUnmarshalPointer(f *lint.File) {
-	names := []string{
-		"encoding/xml.Unmarshal",
-		"(*encoding/xml.Decoder).Decode",
-		"encoding/json.Unmarshal",
-		"(*encoding/json.Decoder).Decode",
-	}
-	fn := func(node ast.Node) bool {
-		call, ok := node.(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-		sel, ok := call.Fun.(*ast.SelectorExpr)
-		if !ok {
-			return false
-		}
-		if !isFunctionCallNameAny(f, call, names...) {
-			return true
-		}
-		arg := call.Args[len(call.Args)-1]
-		switch f.Pkg.TypesInfo.TypeOf(arg).Underlying().(type) {
-		case *types.Pointer, *types.Interface:
-			return true
-		}
-		f.Errorf(arg, "%s expects to unmarshal into a pointer, but the provided value is not a pointer", sel.Sel.Name)
-		return true
-	}
-	f.Walk(fn)
+	c.checkCalls(f, checkUnmarshalPointerRules)
 }
 
 func (c *Checker) CheckLeakyTimeTick(f *lint.File) {
@@ -2338,7 +2287,7 @@ func (c *Checker) CheckLeakyTimeTick(f *lint.File) {
 		if !isFunctionCallName(f, node, "time.Tick") {
 			return true
 		}
-		ssafn := f.EnclosingSSAFunction(node)
+		ssafn := c.nodeFns[node]
 		if ssafn == nil {
 			return false
 		}
@@ -2432,81 +2381,78 @@ func (c *Checker) CheckRepeatedIfElse(f *lint.File) {
 	f.Walk(fn)
 }
 
+var checkUnbufferedSignalChanRules = map[string]CallRule{
+	"os/signal.Notify": CallRule{
+		Arguments: []ArgumentRule{
+			BufferedChannel{
+				argumentRule: argumentRule{
+					idx:     0,
+					Message: "the channel used with signal.Notify should be buffered",
+				},
+			},
+		},
+	},
+}
+
 func (c *Checker) CheckUnbufferedSignalChan(f *lint.File) {
-	fn := func(node ast.Node) bool {
-		call, ok := node.(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-		if !isFunctionCallName(f, call, "os/signal.Notify") {
-			return true
-		}
-		ssafn := f.EnclosingSSAFunction(call)
-		arg, _ := ssafn.ValueForExpr(call.Args[0])
-		if arg == nil {
-			return true
-		}
-		r, ok := c.funcDescs.Get(ssafn).Ranges[arg].(vrp.ChannelInterval)
-		if !ok || !r.IsKnown() {
-			return true
-		}
-		if r.Size.Lower.Cmp(vrp.NewZ(0)) == 0 &&
-			r.Size.Upper.Cmp(vrp.NewZ(0)) == 0 {
-			f.Errorf(call, "the channel used with signal.Notify should be buffered")
-		}
-		return true
-	}
-	f.Walk(fn)
+	c.checkCalls(f, checkUnbufferedSignalChanRules)
+}
+
+var checkMathIntRules = map[string]CallRule{
+	"math.Ceil": CallRule{
+		Arguments: []ArgumentRule{
+			NotConvertedInt{
+				argumentRule: argumentRule{
+					idx:     0,
+					Message: "calling math.Ceil on a converted integer is pointless",
+				},
+			},
+		},
+	},
+	"math.Floor": CallRule{
+		Arguments: []ArgumentRule{
+			NotConvertedInt{
+				argumentRule: argumentRule{
+					idx:     0,
+					Message: "calling math.Floor on a converted integer is pointless",
+				},
+			},
+		},
+	},
+	"math.IsNaN": CallRule{
+		Arguments: []ArgumentRule{
+			NotConvertedInt{
+				argumentRule: argumentRule{
+					idx:     0,
+					Message: "calling math.IsNaN on a converted integer is pointless",
+				},
+			},
+		},
+	},
+	"math.Trunc": CallRule{
+		Arguments: []ArgumentRule{
+			NotConvertedInt{
+				argumentRule: argumentRule{
+					idx:     0,
+					Message: "calling math.Trunc on a converted integer is pointless",
+				},
+			},
+		},
+	},
+	"math.IsInf": CallRule{
+		Arguments: []ArgumentRule{
+			NotConvertedInt{
+				argumentRule: argumentRule{
+					idx:     0,
+					Message: "calling math.IsInf on a converted integer is pointless",
+				},
+			},
+		},
+	},
 }
 
 func (c *Checker) CheckMathInt(f *lint.File) {
-	fn := func(node ast.Node) bool {
-		fn, ok := node.(*ast.FuncDecl)
-		if !ok {
-			return true
-		}
-		ssafn := f.EnclosingSSAFunction(fn)
-		if ssafn == nil {
-			return true
-		}
-		for _, block := range ssafn.Blocks {
-			for _, ins := range block.Instrs {
-				call, ok := ins.(*ssa.Call)
-				if !ok {
-					continue
-				}
-				callee := call.Common().StaticCallee()
-				if callee == nil {
-					continue
-				}
-				obj, ok := callee.Object().(*types.Func)
-				if !ok {
-					continue
-				}
-				name := obj.FullName()
-				switch name {
-				case "math.Ceil", "math.Floor", "math.IsNaN", "math.Trunc", "math.IsInf":
-				default:
-					continue
-				}
-				arg := call.Common().Args[0]
-				conv, ok := arg.(*ssa.Convert)
-				if !ok {
-					continue
-				}
-				b, ok := conv.X.Type().Underlying().(*types.Basic)
-				if !ok {
-					continue
-				}
-				if (b.Info() & types.IsInteger) == 0 {
-					continue
-				}
-				f.Errorf(call, "calling %s on a converted integer is pointless", name)
-			}
-		}
-		return true
-	}
-	f.Walk(fn)
+	c.checkCalls(f, checkMathIntRules)
 }
 
 func (c *Checker) CheckSillyBitwiseOps(f *lint.File) {
@@ -2577,23 +2523,33 @@ func (c *Checker) CheckNonOctalFileMode(f *lint.File) {
 	f.Walk(fn)
 }
 
+var checkStringsReplaceZeroRules = map[string]CallRule{
+	"strings.Replace": CallRule{
+		Arguments: []ArgumentRule{
+			NotIntValue{
+				argumentRule: argumentRule{
+					idx:     3,
+					Message: "calling strings.Replace with n == 0 will do nothing, did you mean -1?",
+				},
+				Not: vrp.NewZ(0),
+			},
+		},
+	},
+	"bytes.Replace": CallRule{
+		Arguments: []ArgumentRule{
+			NotIntValue{
+				argumentRule: argumentRule{
+					idx:     3,
+					Message: "calling bytes.Replace with n == 0 will do nothing, did you mean -1?",
+				},
+				Not: vrp.NewZ(0),
+			},
+		},
+	},
+}
+
 func (c *Checker) CheckStringsReplaceZero(f *lint.File) {
-	fn := func(node ast.Node) bool {
-		call, ok := node.(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-		if !isFunctionCallName(f, call, "strings.Replace") {
-			return true
-		}
-		lit, ok := call.Args[3].(*ast.BasicLit)
-		if !ok || lit.Value != "0" {
-			return true
-		}
-		f.Errorf(lit, "calling strings.Replace with n == 0 will do nothing, did you mean -1?")
-		return true
-	}
-	f.Walk(fn)
+	c.checkCalls(f, checkStringsReplaceZeroRules)
 }
 
 func (c *Checker) CheckPureFunctions(f *lint.File) {
@@ -2602,7 +2558,7 @@ func (c *Checker) CheckPureFunctions(f *lint.File) {
 		if !ok {
 			return true
 		}
-		ssafn := f.EnclosingSSAFunction(fn)
+		ssafn := c.nodeFns[fn]
 		if ssafn == nil {
 			return true
 		}
@@ -2631,6 +2587,78 @@ func (c *Checker) CheckPureFunctions(f *lint.File) {
 	f.Walk(fn)
 }
 
+func enclosingFunction(f *lint.File, node ast.Node) *ast.FuncDecl {
+	path, _ := astutil.PathEnclosingInterval(f.File, node.Pos(), node.Pos())
+	for _, e := range path {
+		fn, ok := e.(*ast.FuncDecl)
+		if !ok {
+			continue
+		}
+		if fn.Name == nil {
+			continue
+		}
+		return fn
+	}
+	return nil
+}
+
+func (c *Checker) isDeprecated(f *lint.File, ident *ast.Ident) (bool, string) {
+	obj := f.Pkg.TypesInfo.ObjectOf(ident)
+	if obj.Pkg() == nil {
+		return false, ""
+	}
+	if alt, ok := c.deprecatedObjs[obj]; ok {
+		return alt != "", alt
+	}
+
+	_, path, _ := f.Program.PathEnclosingInterval(obj.Pos(), obj.Pos())
+	if len(path) <= 2 {
+		c.deprecatedObjs[obj] = ""
+		return false, ""
+	}
+	var docs []*ast.CommentGroup
+	switch n := path[1].(type) {
+	case *ast.FuncDecl:
+		docs = append(docs, n.Doc)
+	case *ast.Field:
+		docs = append(docs, n.Doc)
+	case *ast.ValueSpec:
+		docs = append(docs, n.Doc)
+		if len(path) >= 3 {
+			if n, ok := path[2].(*ast.GenDecl); ok {
+				docs = append(docs, n.Doc)
+			}
+		}
+	case *ast.TypeSpec:
+		docs = append(docs, n.Doc)
+		if len(path) >= 3 {
+			if n, ok := path[2].(*ast.GenDecl); ok {
+				docs = append(docs, n.Doc)
+			}
+		}
+	default:
+		c.deprecatedObjs[obj] = ""
+		return false, ""
+	}
+
+	for _, doc := range docs {
+		if doc == nil {
+			continue
+		}
+		parts := strings.Split(doc.Text(), "\n\n")
+		last := parts[len(parts)-1]
+		if !strings.HasPrefix(last, "Deprecated: ") {
+			continue
+		}
+		alt := last[len("Deprecated: "):]
+		alt = strings.Replace(alt, "\n", " ", -1)
+		c.deprecatedObjs[obj] = alt
+		return true, alt
+	}
+	c.deprecatedObjs[obj] = ""
+	return false, ""
+}
+
 func (c *Checker) CheckDeprecated(f *lint.File) {
 	c.depmu.Lock()
 	defer c.depmu.Unlock()
@@ -2640,6 +2668,14 @@ func (c *Checker) CheckDeprecated(f *lint.File) {
 		if !ok {
 			return true
 		}
+		if fn := enclosingFunction(f, sel); fn != nil {
+			if ok, _ := c.isDeprecated(f, fn.Name); ok {
+				// functions that are deprecated may use deprecated
+				// symbols
+				return true
+			}
+		}
+
 		obj := f.Pkg.TypesInfo.ObjectOf(sel.Sel)
 		if obj.Pkg() == nil {
 			return true
@@ -2648,60 +2684,69 @@ func (c *Checker) CheckDeprecated(f *lint.File) {
 			// Don't flag stuff in our own package
 			return true
 		}
-		if alt, ok := c.deprecatedObjs[obj]; ok {
-			if alt == "" {
-				return true
-			}
+		if ok, alt := c.isDeprecated(f, sel.Sel); ok {
 			f.Errorf(sel, "%s is deprecated: %s", f.Render(sel), alt)
 			return true
 		}
-		_, path, _ := f.Program.PathEnclosingInterval(obj.Pos(), obj.Pos())
-		if len(path) <= 2 {
-			c.deprecatedObjs[obj] = ""
-			return true
-		}
-		var docs []*ast.CommentGroup
-		switch n := path[1].(type) {
-		case *ast.FuncDecl:
-			docs = append(docs, n.Doc)
-		case *ast.Field:
-			docs = append(docs, n.Doc)
-		case *ast.ValueSpec:
-			docs = append(docs, n.Doc)
-			if len(path) >= 3 {
-				if n, ok := path[2].(*ast.GenDecl); ok {
-					docs = append(docs, n.Doc)
-				}
-			}
-		case *ast.TypeSpec:
-			docs = append(docs, n.Doc)
-			if len(path) >= 3 {
-				if n, ok := path[2].(*ast.GenDecl); ok {
-					docs = append(docs, n.Doc)
-				}
-			}
-		default:
-			c.deprecatedObjs[obj] = ""
-			return true
-		}
-
-		for _, doc := range docs {
-			if doc == nil {
-				continue
-			}
-			parts := strings.Split(doc.Text(), "\n\n")
-			last := parts[len(parts)-1]
-			if !strings.HasPrefix(last, "Deprecated: ") {
-				continue
-			}
-			alt := last[len("Deprecated: "):]
-			alt = strings.Replace(alt, "\n", " ", -1)
-			f.Errorf(sel, "%s is deprecated: %s", f.Render(sel), alt)
-			c.deprecatedObjs[obj] = alt
-			return true
-		}
-		c.deprecatedObjs[obj] = ""
 		return true
 	}
 	f.Walk(fn)
+}
+
+func (c *Checker) checkCalls(f *lint.File, rules map[string]CallRule) {
+	fn := func(node ast.Node) bool {
+		call, ok := node.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		ssafn := c.nodeFns[call]
+		if ssafn == nil {
+			return true
+		}
+		v, _ := ssafn.ValueForExpr(call)
+		if v == nil {
+			return true
+		}
+		ssacall, ok := v.(*ssa.Call)
+		if !ok {
+			return true
+		}
+
+		callee := ssacall.Common().StaticCallee()
+		if callee == nil {
+			return true
+		}
+		obj, ok := callee.Object().(*types.Func)
+		if !ok {
+			return true
+		}
+
+		r := rules[obj.FullName()]
+		for _, ar := range r.Arguments {
+			idx := ar.Index()
+			if ssacall.Common().Signature().Recv() != nil {
+				idx++
+			}
+			arg := ssacall.Common().Args[idx]
+			if iarg, ok := arg.(*ssa.MakeInterface); ok {
+				arg = iarg.X
+			}
+			err := ar.Validate(arg, ssafn, c)
+			if err != nil {
+				f.Errorf(call.Args[ar.Index()], "%s", err)
+			}
+		}
+
+		return true
+	}
+	f.Walk(fn)
+}
+
+var checkListenAddressRules = map[string]CallRule{
+	"net/http.ListenAndServe":    CallRule{[]ArgumentRule{ValidHostPort{argumentRule{idx: 0}}}},
+	"net/http.ListenAndServeTLS": CallRule{[]ArgumentRule{ValidHostPort{argumentRule{idx: 0}}}},
+}
+
+func (c *Checker) CheckListenAddress(f *lint.File) {
+	c.checkCalls(f, checkListenAddressRules)
 }

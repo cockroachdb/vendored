@@ -123,7 +123,7 @@ func (s *AnnotateImageRequest) MarshalJSON() ([]byte, error) {
 // AnnotateImageResponse: Response to an image annotation request.
 type AnnotateImageResponse struct {
 	// Error: If set, represents the error message for the operation.
-	// Note that filled-in mage annotations are guaranteed to be
+	// Note that filled-in image annotations are guaranteed to be
 	// correct, even when <code>error</code> is non-empty.
 	Error *Status `json:"error,omitempty"`
 
@@ -861,7 +861,7 @@ func (s *Image) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
 }
 
-// ImageContext: Image context.
+// ImageContext: Image context and/or feature-specific parameters.
 type ImageContext struct {
 	// LanguageHints: List of languages to use for TEXT_DETECTION. In most
 	// cases, an empty value
@@ -878,8 +878,7 @@ type ImageContext struct {
 	// error if one or more of the specified languages is not one of
 	// the
 	// [supported
-	// languages](/translate/v2/translate-reference#supported_
-	// languages).
+	// languages](/vision/docs/languages).
 	LanguageHints []string `json:"languageHints,omitempty"`
 
 	// LatLongRect: Lat/long rectangle that specifies the location of the
@@ -1419,7 +1418,7 @@ type Status struct {
 	// Details: A list of messages that carry the error details.  There will
 	// be a
 	// common set of message types for APIs to use.
-	Details []StatusDetails `json:"details,omitempty"`
+	Details []googleapi.RawMessage `json:"details,omitempty"`
 
 	// Message: A developer-facing error message, which should be in
 	// English. Any
@@ -1450,8 +1449,6 @@ func (s *Status) MarshalJSON() ([]byte, error) {
 	raw := noMethod(*s)
 	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
 }
-
-type StatusDetails interface{}
 
 // Vertex: A vertex represents a 2D point in the image.
 // NOTE: the vertex coordinates are in the same scale as the original
@@ -1493,6 +1490,7 @@ type ImagesAnnotateCall struct {
 	batchannotateimagesrequest *BatchAnnotateImagesRequest
 	urlParams_                 gensupport.URLParams
 	ctx_                       context.Context
+	header_                    http.Header
 }
 
 // Annotate: Run image detection and annotation for a batch of images.
@@ -1518,8 +1516,20 @@ func (c *ImagesAnnotateCall) Context(ctx context.Context) *ImagesAnnotateCall {
 	return c
 }
 
+// Header returns an http.Header that can be modified by the caller to
+// add HTTP headers to the request.
+func (c *ImagesAnnotateCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
 func (c *ImagesAnnotateCall) doRequest(alt string) (*http.Response, error) {
 	reqHeaders := make(http.Header)
+	for k, v := range c.header_ {
+		reqHeaders[k] = v
+	}
 	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.batchannotateimagesrequest)

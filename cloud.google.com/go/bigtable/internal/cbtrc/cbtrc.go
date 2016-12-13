@@ -32,7 +32,18 @@ import (
 type Config struct {
 	Project, Instance string // required
 	Creds             string // optional
+	AdminEndpoint     string // optional
+	DataEndpoint      string // optional
 }
+
+type RequiredFlags uint
+
+const NoneRequired RequiredFlags = 0
+const (
+	ProjectRequired RequiredFlags = 1 << iota
+	InstanceRequired
+)
+const ProjectAndInstanceRequired RequiredFlags = ProjectRequired & InstanceRequired
 
 // RegisterFlags registers a set of standard flags for this config.
 // It should be called before flag.Parse.
@@ -40,15 +51,17 @@ func (c *Config) RegisterFlags() {
 	flag.StringVar(&c.Project, "project", c.Project, "project ID")
 	flag.StringVar(&c.Instance, "instance", c.Instance, "Cloud Bigtable instance")
 	flag.StringVar(&c.Creds, "creds", c.Creds, "if set, use application credentials in this file")
+	flag.StringVar(&c.AdminEndpoint, "admin-endpoint", c.AdminEndpoint, "Override the admin api endpoint")
+	flag.StringVar(&c.DataEndpoint, "data-endpoint", c.DataEndpoint, "Override the data api endpoint")
 }
 
 // CheckFlags checks that the required config values are set.
-func (c *Config) CheckFlags() error {
+func (c *Config) CheckFlags(required RequiredFlags) error {
 	var missing []string
-	if c.Project == "" {
+	if required&ProjectRequired != 0 && c.Project == "" {
 		missing = append(missing, "-project")
 	}
-	if c.Instance == "" {
+	if required&InstanceRequired != 0 && c.Instance == "" {
 		missing = append(missing, "-instance")
 	}
 	if len(missing) > 0 {
@@ -93,7 +106,12 @@ func Load() (*Config, error) {
 			c.Instance = val
 		case "creds":
 			c.Creds = val
+		case "admin-endpoint":
+			c.AdminEndpoint = val
+		case "data-endpoint":
+			c.DataEndpoint = val
 		}
+
 	}
 	return c, s.Err()
 }

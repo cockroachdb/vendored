@@ -26,6 +26,9 @@ import (
 	"testing"
 	"time"
 
+	gax "github.com/googleapis/gax-go"
+
+	cinternal "cloud.google.com/go/internal"
 	"cloud.google.com/go/internal/testutil"
 	"cloud.google.com/go/logging"
 	"cloud.google.com/go/logging/internal"
@@ -151,11 +154,6 @@ func TestLogSync(t *testing.T) {
 	initLogs(ctx) // Generate new testLogID
 	ctx := context.Background()
 	lg := client.Logger(testLogID)
-	defer func() {
-		if ok := deleteLog(ctx, testLogID); !ok {
-			t.Fatal("timed out: deleteLog")
-		}
-	}()
 	err := lg.LogSync(ctx, logging.Entry{Payload: "hello"})
 	if err != nil {
 		t.Fatal(err)
@@ -182,7 +180,7 @@ func TestLogSync(t *testing.T) {
 			t.Log("fetching log entries: ", err)
 			return false
 		}
-		return len(got) >= len(want)
+		return len(got) == len(want)
 	})
 	if !ok {
 		t.Fatalf("timed out; got: %d, want: %d\n", len(got), len(want))
@@ -197,11 +195,6 @@ func TestLogAndEntries(t *testing.T) {
 	ctx := context.Background()
 	payloads := []string{"p1", "p2", "p3", "p4", "p5"}
 	lg := client.Logger(testLogID)
-	defer func() {
-		if ok := deleteLog(ctx, testLogID); !ok {
-			t.Fatal("timed out: deleteLog")
-		}
-	}()
 	for _, p := range payloads {
 		// Use the insert ID to guarantee iteration order.
 		lg.Log(logging.Entry{Payload: p, InsertID: p})
@@ -219,7 +212,7 @@ func TestLogAndEntries(t *testing.T) {
 			t.Log("fetching log entries: ", err)
 			return false
 		}
-		return len(got) >= len(want)
+		return len(got) == len(want)
 	})
 	if !ok {
 		t.Fatalf("timed out; got: %d, want: %d\n", len(got), len(want))
@@ -229,16 +222,48 @@ func TestLogAndEntries(t *testing.T) {
 	}
 }
 
+// compareEntries compares most fields list of Entries against expected. compareEntries does not compare:
+//   - HTTPRequest
+//   - Operation
+//   - Resource
 func compareEntries(got, want []*logging.Entry) (string, bool) {
 	if len(got) != len(want) {
 		return fmt.Sprintf("got %d entries, want %d", len(got), len(want)), false
 	}
 	for i := range got {
-		if !reflect.DeepEqual(got[i], want[i]) {
+		if !compareEntry(got[i], want[i]) {
 			return fmt.Sprintf("#%d:\ngot  %+v\nwant %+v", i, got[i], want[i]), false
 		}
 	}
 	return "", true
+}
+
+func compareEntry(got, want *logging.Entry) bool {
+	if got.Timestamp.Unix() != want.Timestamp.Unix() {
+		return false
+	}
+
+	if got.Severity != want.Severity {
+		return false
+	}
+
+	if !reflect.DeepEqual(got.Payload, want.Payload) {
+		return false
+	}
+
+	if !reflect.DeepEqual(got.Labels, want.Labels) {
+		return false
+	}
+
+	if got.InsertID != want.InsertID {
+		return false
+	}
+
+	if got.LogName != want.LogName {
+		return false
+	}
+
+	return true
 }
 
 func entryForTesting(payload interface{}) *logging.Entry {
@@ -246,7 +271,7 @@ func entryForTesting(payload interface{}) *logging.Entry {
 		Timestamp: testNow().UTC(),
 		Payload:   payload,
 		LogName:   "projects/" + testProjectID + "/logs/" + testLogID,
-		Resource:  &mrpb.MonitoredResource{Type: "global"},
+		Resource:  &mrpb.MonitoredResource{Type: "global", Labels: map[string]string{"project_id": testProjectID}},
 	}
 }
 
@@ -294,11 +319,6 @@ func TestStandardLogger(t *testing.T) {
 	initLogs(ctx) // Generate new testLogID
 	ctx := context.Background()
 	lg := client.Logger(testLogID)
-	defer func() {
-		if ok := deleteLog(ctx, testLogID); !ok {
-			t.Fatal("timed out: deleteLog")
-		}
-	}()
 	slg := lg.StandardLogger(logging.Info)
 
 	if slg != lg.StandardLogger(logging.Info) {
@@ -318,7 +338,7 @@ func TestStandardLogger(t *testing.T) {
 			t.Log("fetching log entries: ", err)
 			return false
 		}
-		return len(got) >= 1
+		return len(got) == 1
 	})
 	if !ok {
 		t.Fatalf("timed out; got: %d, want: %d\n", len(got), 1)
@@ -427,10 +447,41 @@ func TestPing(t *testing.T) {
 	}
 }
 
-// deleteLog is used to clean up a log after a test that writes to it.
-// deleteLog returns false if it times out.
-func deleteLog(ctx context.Context, logID string) bool {
-	err := aclient.DeleteLog(ctx, logID)
+func TestDeleteLog(t *testing.T) {
+	initLogs(ctx) // Generate new testLogID
+	// Write some log entries.
+	ctx := context.Background()
+	payloads := []string{"p1", "p2"}
+	lg := client.Logger(testLogID)
+	for _, p := range payloads {
+		// Use the insert ID to guarantee iteration order.
+		lg.Log(logging.Entry{Payload: p, InsertID: p})
+	}
+	lg.Flush()
+
+	var got []*logging.Entry
+	ok := waitFor(func() bool {
+		var err error
+		got, err = allTestLogEntries(ctx)
+		if err != nil {
+			t.Log("fetching log entries: ", err)
+			return false
+		}
+		return len(got) == 2
+	})
+	if !ok {
+		t.Fatalf("timed out; got: %d, want: %d\n", len(got), 2)
+	}
+
+	// Sleep.
+	// Write timestamp uses client-provided timestamp, delete uses server
+	// timestamp. We sleep to reduce the possibility that the logs are never
+	// "deleted" because of clock skew.
+	// This is the recommended approach by Stackdriver team.
+	time.Sleep(3 * time.Second)
+
+	// Delete the log
+	err := aclient.DeleteLog(ctx, testLogID)
 	if err != nil {
 		log.Fatalf("error deleting log: %v", err)
 	}
@@ -438,29 +489,21 @@ func deleteLog(ctx context.Context, logID string) bool {
 	// DeleteLog can take some time to happen, so we wait for the log to
 	// disappear. There is no direct way to determine if a log exists, so we
 	// just wait until there are no log entries associated with the ID.
-	filter := fmt.Sprintf(`logName = "%s"`, internal.LogPath("projects/"+testProjectID, logID))
-	return waitFor(func() bool { return countLogEntries(ctx, filter) == 0 })
+	filter := fmt.Sprintf(`logName = "%s"`, internal.LogPath("projects/"+testProjectID, testLogID))
+	ok = waitFor(func() bool { return countLogEntries(ctx, filter) == 0 })
+	if !ok {
+		t.Fatalf("timed out waiting for log entries to be deleted")
+	}
 }
 
 // waitFor calls f repeatedly with exponential backoff, blocking until it returns true.
-// It calls returns false after a while (if it times out).
+// It returns false after a while (if it times out).
 func waitFor(f func() bool) bool {
-	delay := time.Second
 	// TODO(shadams): Find a better way to deflake these tests.
-	timeout := time.NewTimer(2 * time.Minute)
-	for {
-		select {
-		case <-time.After(delay):
-			if f() {
-				timeout.Stop()
-				return true
-			}
-			delay = delay * 2
-		case <-timeout.C:
-			if f() {
-				return true
-			}
-			return false
-		}
-	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	err := cinternal.Retry(ctx,
+		gax.Backoff{Initial: time.Second, Multiplier: 2},
+		func() (bool, error) { return f(), nil })
+	return err == nil
 }

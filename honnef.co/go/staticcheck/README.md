@@ -1,6 +1,11 @@
 Staticcheck is `go vet` on steroids, applying a ton of static analysis
 checks you might be used to from tools like ReSharper for C#.
 
+**This project is supported by
+[patrons on Patreon](https://www.patreon.com/dominikh). If you, too,
+would like to support the project's development, consider
+[becoming a patron](https://www.patreon.com/dominikh).**
+
 
 ## Installation
 
@@ -61,6 +66,7 @@ The following things are currently checked by staticcheck:
 | SA1017     | Channels used with signal.Notify should be buffered                                                                                                   |
 | SA1018     | `strings.Replace` called with n == 0, which does nothing                                                                                              |
 | SA1019     | Using a deprecated function, variable, constant or field                                                                                              |
+| SA1020     | Using an invalid `host:port` pair with a `net.Listen`-related function                                                                                |
 |            |                                                                                                                                                       |
 | **SA2???** | **Concurrency issues**                                                                                                                                |
 | SA2000     | `sync.WaitGroup.Add` called inside the goroutine, leading to a race condition                                                                         |
