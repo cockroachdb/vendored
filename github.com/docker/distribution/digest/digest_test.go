@@ -27,6 +27,11 @@ func TestParseDigest(t *testing.T) {
 			err:   ErrDigestInvalidFormat,
 		},
 		{
+			// empty hex
+			input: ":",
+			err:   ErrDigestInvalidFormat,
+		},
+		{
 			// just hex
 			input: "d41d8cd98f00b204e9800998ecf8427e",
 			err:   ErrDigestInvalidFormat,
@@ -51,7 +56,7 @@ func TestParseDigest(t *testing.T) {
 			err:   ErrDigestUnsupported,
 		},
 	} {
-		digest, err := ParseDigest(testcase.input)
+		digest, err := Parse(testcase.input)
 		if err != testcase.err {
 			t.Fatalf("error differed from expected while parsing %q: %v != %v", testcase.input, err, testcase.err)
 		}
@@ -69,7 +74,7 @@ func TestParseDigest(t *testing.T) {
 		}
 
 		// Parse string return value and check equality
-		newParsed, err := ParseDigest(digest.String())
+		newParsed, err := Parse(digest.String())
 
 		if err != nil {
 			t.Fatalf("unexpected error parsing input %q: %v", testcase.input, err)
@@ -77,6 +82,11 @@ func TestParseDigest(t *testing.T) {
 
 		if newParsed != digest {
 			t.Fatalf("expected equal: %q != %q", newParsed, digest)
+		}
+
+		newFromHex := NewDigestFromHex(newParsed.Algorithm().String(), newParsed.Hex())
+		if newFromHex != digest {
+			t.Fatalf("%v != %v", newFromHex, digest)
 		}
 	}
 }

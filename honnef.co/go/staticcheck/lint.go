@@ -20,6 +20,7 @@ import (
 	"honnef.co/go/staticcheck/vrp"
 
 	"golang.org/x/tools/go/ast/astutil"
+	"golang.org/x/tools/go/loader"
 )
 
 type Function struct {
@@ -68,27 +69,19 @@ var stdlibDescs = map[string]Function{
 type FunctionDescriptions map[string]Function
 
 func (d FunctionDescriptions) Get(fn *ssa.Function) Function {
-	obj, ok := fn.Object().(*types.Func)
-	if !ok {
-		return Function{}
-	}
-	return d[obj.FullName()]
+	return d[fn.RelString(nil)]
 }
 
 func (d FunctionDescriptions) Merge(fn *ssa.Function, desc Function) {
-	obj, ok := fn.Object().(*types.Func)
-	if !ok {
-		return
-	}
-	d[obj.FullName()] = d[obj.FullName()].Merge(desc)
+	d[fn.RelString(nil)] = d[fn.RelString(nil)].Merge(desc)
 }
 
 type Checker struct {
-	funcDescs FunctionDescriptions
-
-	depmu          sync.Mutex
+	funcDescs      FunctionDescriptions
 	deprecatedObjs map[types.Object]string
 	nodeFns        map[ast.Node]*ssa.Function
+
+	tmpDeprecatedObjs map[*types.Package]map[types.Object]string
 }
 
 func NewChecker() *Checker {
@@ -118,6 +111,7 @@ func (c *Checker) Funcs() map[string]lint.Func {
 		"SA1018": c.CheckStringsReplaceZero,
 		"SA1019": c.CheckDeprecated,
 		"SA1020": c.CheckListenAddress,
+		"SA1021": c.CheckBytesEqualIP,
 
 		"SA2000": c.CheckWaitgroupAdd,
 		"SA2001": c.CheckEmptyCriticalSection,
@@ -187,6 +181,7 @@ func (c *Checker) Init(prog *lint.Program) {
 	c.funcDescs = FunctionDescriptions{}
 	c.deprecatedObjs = map[types.Object]string{}
 	c.nodeFns = map[ast.Node]*ssa.Function{}
+	c.tmpDeprecatedObjs = map[*types.Package]map[types.Object]string{}
 
 	for fn, desc := range stdlibDescs {
 		c.funcDescs[fn] = desc
@@ -216,19 +211,54 @@ func (c *Checker) Init(prog *lint.Program) {
 		}
 	}
 
-	s := pure.State{}
-	for _, fn := range fns {
-		if fn.Blocks == nil {
-			continue
+	s := &pure.State{}
+	var processPure func(*ssa.Function)
+	processPure = func(fn *ssa.Function) {
+		// TODO(dh): parallelize this
+		s.IsPure(fn)
+		for _, anon := range fn.AnonFuncs {
+			processPure(anon)
 		}
-		detectInfiniteLoops(fn)
-		ssa.OptimizeBlocks(fn)
+	}
+	for _, fn := range fns {
+		processPure(fn)
+	}
 
-		c.funcDescs.Merge(fn, Function{
-			Pure:     s.IsPure(fn),
-			Ranges:   vrp.BuildGraph(fn).Solve(),
-			Infinite: !terminates(fn),
-		})
+	type desc struct {
+		fn   *ssa.Function
+		desc Function
+	}
+	descs := make(chan desc)
+	var pwg sync.WaitGroup
+	var processFn func(*ssa.Function)
+	processFn = func(fn *ssa.Function) {
+		if fn.Blocks != nil {
+			detectInfiniteLoops(fn)
+			ssa.OptimizeBlocks(fn)
+
+			descs <- desc{fn, Function{
+				Pure:     s.IsPure(fn),
+				Ranges:   vrp.BuildGraph(fn).Solve(),
+				Infinite: !terminates(fn),
+			}}
+
+		}
+		for _, anon := range fn.AnonFuncs {
+			pwg.Add(1)
+			processFn(anon)
+		}
+		pwg.Done()
+	}
+	for _, fn := range fns {
+		pwg.Add(1)
+		go processFn(fn)
+	}
+	go func() {
+		pwg.Wait()
+		close(descs)
+	}()
+	for desc := range descs {
+		c.funcDescs.Merge(desc.fn, desc.desc)
 	}
 
 	for _, pkg := range prog.Packages {
@@ -236,6 +266,128 @@ func (c *Checker) Init(prog *lint.Program) {
 			ast.Walk(&globalVisitor{c.nodeFns, pkg, f}, f)
 		}
 	}
+
+	for _, pkginfo := range prog.Prog.AllPackages {
+		c.tmpDeprecatedObjs[pkginfo.Pkg] = map[types.Object]string{}
+	}
+	var wg sync.WaitGroup
+	for _, pkginfo := range prog.Prog.AllPackages {
+		pkginfo := pkginfo
+		wg.Add(1)
+		go func() {
+			scope := pkginfo.Pkg.Scope()
+			names := scope.Names()
+			for _, name := range names {
+				obj := scope.Lookup(name)
+				c.buildDeprecatedMap(pkginfo, prog.Prog, obj)
+				if typ, ok := obj.Type().Underlying().(*types.Struct); ok {
+					n := typ.NumFields()
+					for i := 0; i < n; i++ {
+						// FIXME(dh): This code will not find deprecated
+						// fields in anonymous structs.
+						field := typ.Field(i)
+						c.buildDeprecatedMap(pkginfo, prog.Prog, field)
+					}
+				}
+			}
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+	for _, m := range c.tmpDeprecatedObjs {
+		for k, v := range m {
+			c.deprecatedObjs[k] = v
+		}
+	}
+	c.tmpDeprecatedObjs = nil
+}
+
+// TODO(adonovan): make this a method: func (*token.File) Contains(token.Pos)
+func tokenFileContainsPos(f *token.File, pos token.Pos) bool {
+	p := int(pos)
+	base := f.Base()
+	return base <= p && p < base+f.Size()
+}
+
+func pathEnclosingInterval(info *loader.PackageInfo, prog *loader.Program, start, end token.Pos) (path []ast.Node, exact bool) {
+	for _, f := range info.Files {
+		if f.Pos() == token.NoPos {
+			// This can happen if the parser saw
+			// too many errors and bailed out.
+			// (Use parser.AllErrors to prevent that.)
+			continue
+		}
+		if !tokenFileContainsPos(prog.Fset.File(f.Pos()), start) {
+			continue
+		}
+		if path, exact := astutil.PathEnclosingInterval(f, start, end); path != nil {
+			return path, exact
+		}
+	}
+	return nil, false
+}
+
+func (c *Checker) buildDeprecatedMap(info *loader.PackageInfo, prog *loader.Program, obj types.Object) {
+	path, _ := pathEnclosingInterval(info, prog, obj.Pos(), obj.Pos())
+	if len(path) <= 2 {
+		c.tmpDeprecatedObjs[info.Pkg][obj] = ""
+		return
+	}
+	var docs []*ast.CommentGroup
+	switch n := path[1].(type) {
+	case *ast.FuncDecl:
+		docs = append(docs, n.Doc)
+	case *ast.Field:
+		docs = append(docs, n.Doc)
+	case *ast.ValueSpec:
+		docs = append(docs, n.Doc)
+		if len(path) >= 3 {
+			if n, ok := path[2].(*ast.GenDecl); ok {
+				docs = append(docs, n.Doc)
+			}
+		}
+	case *ast.TypeSpec:
+		docs = append(docs, n.Doc)
+		if len(path) >= 3 {
+			if n, ok := path[2].(*ast.GenDecl); ok {
+				docs = append(docs, n.Doc)
+			}
+		}
+	default:
+		c.tmpDeprecatedObjs[info.Pkg][obj] = ""
+		return
+	}
+
+	for _, doc := range docs {
+		if doc == nil {
+			continue
+		}
+		parts := strings.Split(doc.Text(), "\n\n")
+		last := parts[len(parts)-1]
+		if !strings.HasPrefix(last, "Deprecated: ") {
+			continue
+		}
+		alt := last[len("Deprecated: "):]
+		alt = strings.Replace(alt, "\n", " ", -1)
+		c.tmpDeprecatedObjs[info.Pkg][obj] = alt
+		return
+	}
+	c.tmpDeprecatedObjs[info.Pkg][obj] = ""
+}
+
+func enclosingFunctionInit(f *ast.File, node ast.Node) *ast.FuncDecl {
+	path, _ := astutil.PathEnclosingInterval(f, node.Pos(), node.Pos())
+	for _, e := range path {
+		fn, ok := e.(*ast.FuncDecl)
+		if !ok {
+			continue
+		}
+		if fn.Name == nil {
+			continue
+		}
+		return fn
+	}
+	return nil
 }
 
 type globalVisitor struct {
@@ -268,16 +420,16 @@ func (v *fnVisitor) Visit(node ast.Node) ast.Visitor {
 	switch node := node.(type) {
 	case *ast.FuncDecl:
 		var ssafn *ssa.Function
-		if node.Name != nil {
-			ssafn = v.pkg.SSAPkg.Prog.FuncValue(v.pkg.TypesInfo.ObjectOf(node.Name).(*types.Func))
-		} else {
-			path, _ := astutil.PathEnclosingInterval(v.f, node.Pos(), node.Pos())
-			ssafn = ssa.EnclosingFunction(v.pkg.SSAPkg, path)
-		}
+		ssafn = v.pkg.SSAPkg.Prog.FuncValue(v.pkg.TypesInfo.ObjectOf(node.Name).(*types.Func))
 		v.m[node] = ssafn
 		if ssafn == nil {
 			return nil
 		}
+		return &fnVisitor{v.m, v.f, v.pkg, ssafn}
+	case *ast.FuncLit:
+		var ssafn *ssa.Function
+		path, _ := astutil.PathEnclosingInterval(v.f, node.Pos(), node.Pos())
+		ssafn = ssa.EnclosingFunction(v.pkg.SSAPkg, path)
 		v.m[node] = ssafn
 		if ssafn == nil {
 			return nil
@@ -2607,62 +2759,11 @@ func (c *Checker) isDeprecated(f *lint.File, ident *ast.Ident) (bool, string) {
 	if obj.Pkg() == nil {
 		return false, ""
 	}
-	if alt, ok := c.deprecatedObjs[obj]; ok {
-		return alt != "", alt
-	}
-
-	_, path, _ := f.Program.PathEnclosingInterval(obj.Pos(), obj.Pos())
-	if len(path) <= 2 {
-		c.deprecatedObjs[obj] = ""
-		return false, ""
-	}
-	var docs []*ast.CommentGroup
-	switch n := path[1].(type) {
-	case *ast.FuncDecl:
-		docs = append(docs, n.Doc)
-	case *ast.Field:
-		docs = append(docs, n.Doc)
-	case *ast.ValueSpec:
-		docs = append(docs, n.Doc)
-		if len(path) >= 3 {
-			if n, ok := path[2].(*ast.GenDecl); ok {
-				docs = append(docs, n.Doc)
-			}
-		}
-	case *ast.TypeSpec:
-		docs = append(docs, n.Doc)
-		if len(path) >= 3 {
-			if n, ok := path[2].(*ast.GenDecl); ok {
-				docs = append(docs, n.Doc)
-			}
-		}
-	default:
-		c.deprecatedObjs[obj] = ""
-		return false, ""
-	}
-
-	for _, doc := range docs {
-		if doc == nil {
-			continue
-		}
-		parts := strings.Split(doc.Text(), "\n\n")
-		last := parts[len(parts)-1]
-		if !strings.HasPrefix(last, "Deprecated: ") {
-			continue
-		}
-		alt := last[len("Deprecated: "):]
-		alt = strings.Replace(alt, "\n", " ", -1)
-		c.deprecatedObjs[obj] = alt
-		return true, alt
-	}
-	c.deprecatedObjs[obj] = ""
-	return false, ""
+	alt := c.deprecatedObjs[obj]
+	return alt != "", alt
 }
 
 func (c *Checker) CheckDeprecated(f *lint.File) {
-	c.depmu.Lock()
-	defer c.depmu.Unlock()
-
 	fn := func(node ast.Node) bool {
 		sel, ok := node.(*ast.SelectorExpr)
 		if !ok {
@@ -2722,7 +2823,15 @@ func (c *Checker) checkCalls(f *lint.File, rules map[string]CallRule) {
 		}
 
 		r := rules[obj.FullName()]
-		for _, ar := range r.Arguments {
+		if len(r.Arguments) == 0 {
+			return true
+		}
+		type argError struct {
+			arg ast.Expr
+			err error
+		}
+		errs := make([]*argError, len(r.Arguments))
+		for i, ar := range r.Arguments {
 			idx := ar.Index()
 			if ssacall.Common().Signature().Recv() != nil {
 				idx++
@@ -2733,8 +2842,36 @@ func (c *Checker) checkCalls(f *lint.File, rules map[string]CallRule) {
 			}
 			err := ar.Validate(arg, ssafn, c)
 			if err != nil {
-				f.Errorf(call.Args[ar.Index()], "%s", err)
+				errs[i] = &argError{call.Args[ar.Index()], err}
 			}
+		}
+
+		switch r.Mode {
+		case InvalidIndependent:
+			for _, err := range errs {
+				if err != nil {
+					f.Errorf(err.arg, "%s", err.err)
+				}
+			}
+		case InvalidIfAny:
+			for _, err := range errs {
+				if err == nil {
+					continue
+				}
+				f.Errorf(call, "%s", err.err)
+				return true
+			}
+		case InvalidIfAll:
+			var first error
+			for _, err := range errs {
+				if err == nil {
+					return true
+				}
+				if first == nil {
+					first = err.err
+				}
+			}
+			f.Errorf(call, "%s", first)
 		}
 
 		return true
@@ -2743,10 +2880,36 @@ func (c *Checker) checkCalls(f *lint.File, rules map[string]CallRule) {
 }
 
 var checkListenAddressRules = map[string]CallRule{
-	"net/http.ListenAndServe":    CallRule{[]ArgumentRule{ValidHostPort{argumentRule{idx: 0}}}},
-	"net/http.ListenAndServeTLS": CallRule{[]ArgumentRule{ValidHostPort{argumentRule{idx: 0}}}},
+	"net/http.ListenAndServe":    CallRule{Arguments: []ArgumentRule{ValidHostPort{argumentRule{idx: 0}}}},
+	"net/http.ListenAndServeTLS": CallRule{Arguments: []ArgumentRule{ValidHostPort{argumentRule{idx: 0}}}},
 }
 
 func (c *Checker) CheckListenAddress(f *lint.File) {
 	c.checkCalls(f, checkListenAddressRules)
+}
+
+var checkBytesEqualIPRules = map[string]CallRule{
+	"bytes.Equal": CallRule{
+		Arguments: []ArgumentRule{
+			NotChangedTypeFrom{
+				argumentRule{
+					idx:     0,
+					Message: "use net.IP.Equal to compare net.IPs, not bytes.Equal",
+				},
+				"net.IP",
+			},
+			NotChangedTypeFrom{
+				argumentRule{
+					idx:     1,
+					Message: "use net.IP.Equal to compare net.IPs, not bytes.Equal",
+				},
+				"net.IP",
+			},
+		},
+		Mode: InvalidIfAll,
+	},
+}
+
+func (c *Checker) CheckBytesEqualIP(f *lint.File) {
+	c.checkCalls(f, checkBytesEqualIPRules)
 }

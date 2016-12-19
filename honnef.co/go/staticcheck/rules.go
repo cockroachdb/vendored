@@ -22,8 +22,17 @@ type ArgumentRule interface {
 	Validate(ssa.Value, *ssa.Function, *Checker) error
 }
 
+type InvalidMode int
+
+const (
+	InvalidIndependent InvalidMode = iota
+	InvalidIfAny
+	InvalidIfAll
+)
+
 type CallRule struct {
 	Arguments []ArgumentRule
+	Mode      InvalidMode
 }
 
 type argumentRule struct {
@@ -327,6 +336,25 @@ func (hp ValidHostPort) Validate(v ssa.Value, fn *ssa.Function, c *Checker) erro
 			}
 			return errors.New("invalid port or service name in host:port pair")
 		}
+	}
+	return nil
+}
+
+type NotChangedTypeFrom struct {
+	argumentRule
+	Type string
+}
+
+func (nt NotChangedTypeFrom) Validate(v ssa.Value, fn *ssa.Function, c *Checker) error {
+	change, ok := v.(*ssa.ChangeType)
+	if !ok {
+		return nil
+	}
+	if types.TypeString(change.X.Type(), nil) == nt.Type {
+		if nt.Message != "" {
+			return errors.New(nt.Message)
+		}
+		return fmt.Errorf("shouldn't use function with type %s", nt.Type)
 	}
 	return nil
 }

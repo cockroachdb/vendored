@@ -17,6 +17,7 @@ The easiest way to get started using etcd as a distributed key-value store is to
  - [gRPC naming and discovery][grpc_naming]
  - [Embedding etcd][embed_etcd]
  - [Experimental features and APIs][experimental]
+ - [System limits][system-limit]
 
 ## Operating etcd clusters
 
@@ -26,6 +27,7 @@ Administrators who need to create reliable and scalable key-value stores for the
  - [Setting up etcd gateways][gateway]
  - [Setting up etcd gRPC proxy (pre-alpha)][grpc_proxy]
  - [Run etcd clusters inside containers][container]
+ - [Hardware recommendations][hardware]
  - [Configuration][conf]
  - [Security][security]
  - [Monitoring][monitoring]
@@ -40,7 +42,7 @@ Administrators who need to create reliable and scalable key-value stores for the
 
 To learn more about the concepts and internals behind etcd, read the following pages:
 
- - Why etcd (TODO)
+ - [Why etcd][why] (TODO)
  - [Understand data model][data_model]
  - [Understand APIs][understand_apis]
  - [Glossary][glossary]
@@ -59,7 +61,9 @@ Answers to [common questions] about etcd.
 [api_grpc_gateway]: dev-guide/api_grpc_gateway.md
 [clustering]: op-guide/clustering.md
 [conf]: op-guide/configuration.md
+[system-limit]: dev-guide/limit.md
 [common questions]: faq.md
+[why]: learning/why.md
 [data_model]: learning/data_model.md
 [demo]: demo.md
 [download_build]: dl_build.md
@@ -69,6 +73,7 @@ Answers to [common questions] about etcd.
 [gateway]: op-guide/gateway.md
 [glossary]: learning/glossary.md
 [grpc_proxy]: op-guide/grpc_proxy.md
+[hardware]: op-guide/hardware.md
 [interacting]: dev-guide/interacting_v3.md
 [local_cluster]: dev-guide/local_cluster.md
 [performance]: op-guide/performance.md

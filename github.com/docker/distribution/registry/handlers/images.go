@@ -33,7 +33,7 @@ func imageManifestDispatcher(ctx *Context, r *http.Request) http.Handler {
 		Context: ctx,
 	}
 	reference := getReference(ctx)
-	dgst, err := digest.ParseDigest(reference)
+	dgst, err := digest.Parse(reference)
 	if err != nil {
 		// We just have a tag
 		imageManifestHandler.Tag = reference
@@ -360,7 +360,7 @@ func (imh *imageManifestHandler) applyResourcePolicy(manifest distribution.Manif
 		class = "image"
 	case *schema2.DeserializedManifest:
 		switch m.Config.MediaType {
-		case schema2.MediaTypeConfig:
+		case schema2.MediaTypeImageConfig:
 			class = "image"
 		case schema2.MediaTypePluginConfig:
 			class = "plugin"
