@@ -8,6 +8,7 @@ package disco
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"sort"
 )
 
@@ -22,8 +23,9 @@ type Document struct {
 	BasePath    string             `json:"basePath"`
 	Auth        Auth               `json:"auth"`
 	Features    []string           `json:"features"`
+	Methods     MethodList         `json:"methods"`
 	Schemas     map[string]*Schema `json:"schemas"`
-	// TODO(jba): resources
+	Resources   ResourceList       `json:"resources"`
 }
 
 // init performs additional initialization and checks that
@@ -41,6 +43,9 @@ func (d *Document) init() error {
 		if err := s.init(schemasByID); err != nil {
 			return err
 		}
+	}
+	for _, r := range d.Resources {
+		r.init("")
 	}
 	return nil
 }
@@ -84,13 +89,8 @@ func (a *Auth) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &m); err != nil {
 		return err
 	}
-	var keys []string
-	for k := range m.OAuth2.Scopes {
-		keys = append(keys, k)
-	}
-	// Sort to provide a deterministic ordering, mainly for testing.
-	sort.Strings(keys)
-	for _, k := range keys {
+	// Sort keys to provide a deterministic ordering, mainly for testing.
+	for _, k := range sortedKeys(m.OAuth2.Scopes) {
 		a.OAuth2Scopes = append(a.OAuth2Scopes, Scope{
 			URL:         k,
 			Description: m.OAuth2.Scopes[k].Description,
@@ -116,25 +116,33 @@ type Schema struct {
 	Enums                []string `json:"enum"`
 	// Google extensions to JSON Schema
 	EnumDescriptions []string
-	Variant          map[string]interface{}
+	Variant          *Variant
 
 	RefSchema *Schema `json:"-"` // Schema referred to by $ref
 	Name      string  `json:"-"` // Schema name, if top level
 	Kind      Kind    `json:"-"`
 }
 
+type Variant struct {
+	Discriminant string
+	Map          []*VariantMapItem
+}
+
+type VariantMapItem struct {
+	TypeValue string `json:"type_value"`
+	Ref       string `json:"$ref"`
+}
+
 func (s *Schema) init(topLevelSchemas map[string]*Schema) error {
 	if s == nil {
 		return nil
 	}
-	if s.Ref != "" {
-		rs, ok := topLevelSchemas[s.Ref]
-		if !ok {
-			return fmt.Errorf("could not resolve schema reference %q", s.Ref)
-		}
-		s.RefSchema = rs
-	}
 	var err error
+	if s.Ref != "" {
+		if s.RefSchema, err = resolveRef(s.Ref, topLevelSchemas); err != nil {
+			return err
+		}
+	}
 	s.Kind, err = s.initKind()
 	if err != nil {
 		return err
@@ -157,6 +165,14 @@ func (s *Schema) init(topLevelSchemas map[string]*Schema) error {
 		}
 	}
 	return nil
+}
+
+func resolveRef(ref string, topLevelSchemas map[string]*Schema) (*Schema, error) {
+	rs, ok := topLevelSchemas[ref]
+	if !ok {
+		return nil, fmt.Errorf("could not resolve schema reference %q", ref)
+	}
+	return rs, nil
 }
 
 func (s *Schema) initKind() (Kind, error) {
@@ -231,3 +247,128 @@ const (
 	// for more details on the format.
 	ReferenceKind
 )
+
+type ResourceList []*Resource
+
+func (rl *ResourceList) UnmarshalJSON(data []byte) error {
+	// In the discovery doc, resources are a map. Convert to a list.
+	var m map[string]*Resource
+	if err := json.Unmarshal(data, &m); err != nil {
+		return err
+	}
+	for _, k := range sortedKeys(m) {
+		r := m[k]
+		r.Name = k
+		*rl = append(*rl, r)
+	}
+	return nil
+}
+
+// A Resource holds information about a Google API Resource.
+type Resource struct {
+	Name      string
+	FullName  string // {parent.FullName}.{Name}
+	Methods   MethodList
+	Resources ResourceList
+}
+
+func (r *Resource) init(parentFullName string) {
+	r.FullName = fmt.Sprintf("%s.%s", parentFullName, r.Name)
+	for _, r2 := range r.Resources {
+		r2.init(r.FullName)
+	}
+}
+
+type MethodList []*Method
+
+func (ml *MethodList) UnmarshalJSON(data []byte) error {
+	// In the discovery doc, resources are a map. Convert to a list.
+	var m map[string]*Method
+	if err := json.Unmarshal(data, &m); err != nil {
+		return err
+	}
+	for _, k := range sortedKeys(m) {
+		meth := m[k]
+		meth.Name = k
+		*ml = append(*ml, meth)
+	}
+	return nil
+}
+
+// A Method holds information about a resource method.
+type Method struct {
+	Name           string
+	ID             string
+	Path           string
+	HTTPMethod     string
+	Description    string
+	Parameters     ParameterList
+	ParameterOrder []string
+	Request        map[string]interface{}
+	Response       struct {
+		Ref string `json:"$ref"`
+	}
+	Scopes                []string
+	MediaUpload           *MediaUpload
+	SupportsMediaDownload bool
+
+	JSONMap map[string]interface{} `json:"-"`
+}
+
+type MediaUpload struct {
+	Accept    []string
+	MaxSize   string
+	Protocols map[string]Protocol
+}
+
+type Protocol struct {
+	Multipart bool
+	Path      string
+}
+
+func (m *Method) UnmarshalJSON(data []byte) error {
+	type T Method // avoid a recursive call to UnmarshalJSON
+	if err := json.Unmarshal(data, (*T)(m)); err != nil {
+		return err
+	}
+	// Keep the unmarshalled map around, because the generator
+	// outputs it as a comment after the method body.
+	// TODO(jba): make this unnecessary.
+	return json.Unmarshal(data, &m.JSONMap)
+}
+
+type ParameterList []*Parameter
+
+func (pl *ParameterList) UnmarshalJSON(data []byte) error {
+	// In the discovery doc, resources are a map. Convert to a list.
+	var m map[string]*Parameter
+	if err := json.Unmarshal(data, &m); err != nil {
+		return err
+	}
+	for _, k := range sortedKeys(m) {
+		p := m[k]
+		p.Name = k
+		*pl = append(*pl, p)
+	}
+	return nil
+}
+
+// A Parameter holds information about a method parameter.
+type Parameter struct {
+	Name string
+	Schema
+	Required bool
+	Repeated bool
+	Location string
+}
+
+// sortedKeys returns the keys of m, which must be a map[string]T, in sorted order.
+func sortedKeys(m interface{}) []string {
+	vkeys := reflect.ValueOf(m).MapKeys()
+	var keys []string
+	for _, vk := range vkeys {
+		keys = append(keys, vk.Interface().(string))
+	}
+	sort.Strings(keys)
+	return keys
+}

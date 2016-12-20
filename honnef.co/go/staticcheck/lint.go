@@ -80,6 +80,7 @@ type Checker struct {
 	funcDescs      FunctionDescriptions
 	deprecatedObjs map[types.Object]string
 	nodeFns        map[ast.Node]*ssa.Function
+	funcs          map[*token.File][]*ssa.Function
 
 	tmpDeprecatedObjs map[*types.Package]map[types.Object]string
 }
@@ -156,6 +157,10 @@ func (c *Checker) Funcs() map[string]lint.Func {
 	}
 }
 
+func (c *Checker) funcsForFile(f *lint.File) []*ssa.Function {
+	return c.funcs[f.Program.Fset.File(f.File.Pos())]
+}
+
 // terminates reports whether fn is supposed to return, that is if it
 // has at least one theoretic path that returns from the function.
 // Explicit panics do not count as terminating.
@@ -178,6 +183,7 @@ func terminates(fn *ssa.Function) (ret bool) {
 }
 
 func (c *Checker) Init(prog *lint.Program) {
+	c.funcs = map[*token.File][]*ssa.Function{}
 	c.funcDescs = FunctionDescriptions{}
 	c.deprecatedObjs = map[types.Object]string{}
 	c.nodeFns = map[ast.Node]*ssa.Function{}
@@ -229,6 +235,7 @@ func (c *Checker) Init(prog *lint.Program) {
 		desc Function
 	}
 	descs := make(chan desc)
+	funcs := make(chan *ssa.Function)
 	var pwg sync.WaitGroup
 	var processFn func(*ssa.Function)
 	processFn = func(fn *ssa.Function) {
@@ -236,6 +243,7 @@ func (c *Checker) Init(prog *lint.Program) {
 			detectInfiniteLoops(fn)
 			ssa.OptimizeBlocks(fn)
 
+			funcs <- fn
 			descs <- desc{fn, Function{
 				Pure:     s.IsPure(fn),
 				Ranges:   vrp.BuildGraph(fn).Solve(),
@@ -256,10 +264,39 @@ func (c *Checker) Init(prog *lint.Program) {
 	go func() {
 		pwg.Wait()
 		close(descs)
+		close(funcs)
 	}()
-	for desc := range descs {
-		c.funcDescs.Merge(desc.fn, desc.desc)
-	}
+
+	var rwg sync.WaitGroup
+	rwg.Add(2)
+	go func() {
+		for fn := range funcs {
+			if fn.Synthetic != "" && (fn.Package() == nil || fn != fn.Package().Members["init"]) {
+				// Don't track synthetic functions, unless they're the
+				// init function
+				continue
+			}
+			pos := fn.Pos()
+			if pos == 0 {
+				for _, pkg := range prog.Packages {
+					if pkg.SSAPkg == fn.Pkg {
+						pos = pkg.PkgInfo.Files[0].Pos()
+						break
+					}
+				}
+			}
+			f := prog.Prog.Fset.File(pos)
+			c.funcs[f] = append(c.funcs[f], fn)
+		}
+		rwg.Done()
+	}()
+	go func() {
+		for desc := range descs {
+			c.funcDescs.Merge(desc.fn, desc.desc)
+		}
+		rwg.Done()
+	}()
+	rwg.Wait()
 
 	for _, pkg := range prog.Packages {
 		for _, f := range pkg.PkgInfo.Files {
@@ -1171,44 +1208,33 @@ func (c *Checker) CheckIneffectiveCopy(f *lint.File) {
 }
 
 func (c *Checker) CheckDiffSizeComparison(f *lint.File) {
-	fn := func(node ast.Node) bool {
-		expr, ok := node.(*ast.BinaryExpr)
-		if !ok {
-			return true
+	for _, ssafn := range c.funcsForFile(f) {
+		for _, b := range ssafn.Blocks {
+			for _, ins := range b.Instrs {
+				binop, ok := ins.(*ssa.BinOp)
+				if !ok {
+					continue
+				}
+				if binop.Op != token.EQL && binop.Op != token.NEQ {
+					continue
+				}
+				_, ok1 := binop.X.(*ssa.Slice)
+				_, ok2 := binop.Y.(*ssa.Slice)
+				if !ok1 && !ok2 {
+					continue
+				}
+				r := c.funcDescs.Get(ssafn).Ranges
+				r1, ok1 := r.Get(binop.X).(vrp.StringInterval)
+				r2, ok2 := r.Get(binop.Y).(vrp.StringInterval)
+				if !ok1 || !ok2 {
+					continue
+				}
+				if r1.Length.Intersection(r2.Length).Empty() {
+					f.Errorf(binop, "comparing strings of different sizes for equality will always return false")
+				}
+			}
 		}
-		if expr.Op != token.EQL && expr.Op != token.NEQ {
-			return true
-		}
-
-		_, isSlice1 := expr.X.(*ast.SliceExpr)
-		_, isSlice2 := expr.Y.(*ast.SliceExpr)
-		if !isSlice1 && !isSlice2 {
-			// Only do the check if at least one side has a slicing
-			// expression. Otherwise we'll just run into false
-			// positives because of debug toggles and the like.
-			return true
-		}
-		ssafn := f.EnclosingSSAFunction(expr)
-		if ssafn == nil {
-			return true
-		}
-		ssaexpr, _ := ssafn.ValueForExpr(expr)
-		binop, ok := ssaexpr.(*ssa.BinOp)
-		if !ok {
-			return true
-		}
-		r := c.funcDescs.Get(ssafn).Ranges
-		r1, ok1 := r.Get(binop.X).(vrp.StringInterval)
-		r2, ok2 := r.Get(binop.Y).(vrp.StringInterval)
-		if !ok1 || !ok2 {
-			return true
-		}
-		if r1.Length.Intersection(r2.Length).Empty() {
-			f.Errorf(expr, "comparing strings of different sizes for equality will always return false")
-		}
-		return true
 	}
-	f.Walk(fn)
 }
 
 func (c *Checker) CheckCanonicalHeaderKey(f *lint.File) {
@@ -1275,22 +1301,17 @@ func (c *Checker) CheckBenchmarkN(f *lint.File) {
 }
 
 func (c *Checker) CheckIneffecitiveFieldAssignments(f *lint.File) {
-	fn := func(node ast.Node) bool {
-		fn, ok := node.(*ast.FuncDecl)
-		if !ok {
-			return true
+	for _, ssafn := range c.funcsForFile(f) {
+		if f.Fset.File(f.File.Pos()) != f.Fset.File(ssafn.Pos()) {
+			continue
 		}
-		if fn.Recv == nil {
-			return true
-		}
-		ssafn := c.nodeFns[fn]
-		if ssafn == nil {
-			return true
+		if ssafn.Signature.Recv() == nil {
+			continue
 		}
 
 		if len(ssafn.Blocks) == 0 {
 			// External function
-			return true
+			continue
 		}
 
 		reads := map[*ssa.BasicBlock]map[ssa.Value]bool{}
@@ -1298,13 +1319,13 @@ func (c *Checker) CheckIneffecitiveFieldAssignments(f *lint.File) {
 
 		recv := ssafn.Params[0]
 		if _, ok := recv.Type().Underlying().(*types.Struct); !ok {
-			return true
+			continue
 		}
 		recvPtrs := map[ssa.Value]bool{
 			recv: true,
 		}
 		if len(ssafn.Locals) == 0 || ssafn.Locals[0].Heap {
-			return true
+			continue
 		}
 		blocks := ssafn.DomPreorder()
 		for _, block := range blocks {
@@ -1383,10 +1404,7 @@ func (c *Checker) CheckIneffecitiveFieldAssignments(f *lint.File) {
 				}
 			}
 		}
-
-		return true
 	}
-	f.Walk(fn)
 }
 
 func (c *Checker) CheckUnreadVariableValues(f *lint.File) {
@@ -1434,67 +1452,51 @@ func (c *Checker) CheckUnreadVariableValues(f *lint.File) {
 }
 
 func (c *Checker) CheckPredeterminedBooleanExprs(f *lint.File) {
-	fn := func(node ast.Node) bool {
-		binop, ok := node.(*ast.BinaryExpr)
-		if !ok {
-			return true
-		}
-		switch binop.Op {
-		case token.GTR, token.LSS, token.EQL, token.NEQ, token.LEQ, token.GEQ:
-		default:
-			return true
-		}
-		fn := f.EnclosingSSAFunction(binop)
-		if fn == nil {
-			return true
-		}
-		val, _ := fn.ValueForExpr(binop)
-		ssabinop, ok := val.(*ssa.BinOp)
-		if !ok {
-			return true
-		}
-		xs, ok1 := consts(ssabinop.X, nil, nil)
-		ys, ok2 := consts(ssabinop.Y, nil, nil)
-		if !ok1 || !ok2 || len(xs) == 0 || len(ys) == 0 {
-			return true
-		}
-
-		trues := 0
-		for _, x := range xs {
-			for _, y := range ys {
-				if x.Value == nil {
-					if y.Value == nil {
-						trues++
-					}
+	for _, ssafn := range c.funcsForFile(f) {
+		for _, block := range ssafn.Blocks {
+			for _, ins := range block.Instrs {
+				ssabinop, ok := ins.(*ssa.BinOp)
+				if !ok {
 					continue
 				}
-				if constant.Compare(x.Value, ssabinop.Op, y.Value) {
-					trues++
+				switch ssabinop.Op {
+				case token.GTR, token.LSS, token.EQL, token.NEQ, token.LEQ, token.GEQ:
+				default:
+					continue
+				}
+
+				xs, ok1 := consts(ssabinop.X, nil, nil)
+				ys, ok2 := consts(ssabinop.Y, nil, nil)
+				if !ok1 || !ok2 || len(xs) == 0 || len(ys) == 0 {
+					continue
+				}
+
+				trues := 0
+				for _, x := range xs {
+					for _, y := range ys {
+						if x.Value == nil {
+							if y.Value == nil {
+								trues++
+							}
+							continue
+						}
+						if constant.Compare(x.Value, ssabinop.Op, y.Value) {
+							trues++
+						}
+					}
+				}
+				b := trues != 0
+				if trues == 0 || trues == len(xs)*len(ys) {
+					f.Errorf(ssabinop, "binary expression is always %t for all possible values (%s %s %s)",
+						b, xs, ssabinop.Op, ys)
 				}
 			}
 		}
-		b := trues != 0
-		if trues == 0 || trues == len(xs)*len(ys) {
-			f.Errorf(binop, "%s is always %t for all possible values (%s %s %s)",
-				f.Render(binop), b, xs, binop.Op, ys)
-		}
-
-		return true
 	}
-	f.Walk(fn)
 }
 
 func (c *Checker) CheckNilMaps(f *lint.File) {
-	fn := func(node ast.Node) bool {
-		fn, ok := node.(*ast.FuncDecl)
-		if !ok {
-			return true
-		}
-		ssafn := c.nodeFns[fn]
-		if ssafn == nil {
-			return true
-		}
-
+	for _, ssafn := range c.funcsForFile(f) {
 		for _, block := range ssafn.Blocks {
 			for _, ins := range block.Instrs {
 				mu, ok := ins.(*ssa.MapUpdate)
@@ -1511,9 +1513,7 @@ func (c *Checker) CheckNilMaps(f *lint.File) {
 				f.Errorf(mu, "assignment to nil map")
 			}
 		}
-		return true
 	}
-	f.Walk(fn)
 }
 
 func (c *Checker) CheckUnsignedComparison(f *lint.File) {
@@ -2031,15 +2031,7 @@ func (c *Checker) CheckIneffectiveAppend(f *lint.File) {
 }
 
 func (c *Checker) CheckConcurrentTesting(f *lint.File) {
-	fn := func(node ast.Node) bool {
-		fn, ok := node.(*ast.FuncDecl)
-		if !ok {
-			return true
-		}
-		ssafn := c.nodeFns[fn]
-		if ssafn == nil {
-			return true
-		}
+	for _, ssafn := range c.funcsForFile(f) {
 		for _, block := range ssafn.Blocks {
 			for _, ins := range block.Instrs {
 				gostmt, ok := ins.(*ssa.Go)
@@ -2093,88 +2085,62 @@ func (c *Checker) CheckConcurrentTesting(f *lint.File) {
 				}
 			}
 		}
-		return true
 	}
-	f.Walk(fn)
 }
 
 func (c *Checker) CheckCyclicFinalizer(f *lint.File) {
-	fn := func(node ast.Node) bool {
-		call, ok := node.(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-		if !isFunctionCallName(f, call, "runtime.SetFinalizer") {
-			return true
-		}
-		ssafn := c.nodeFns[call]
-		if ssafn == nil {
-			return true
-		}
-		ident, ok := call.Args[0].(*ast.Ident)
-		if !ok {
-			return true
-		}
-		obj := f.Pkg.TypesInfo.ObjectOf(ident)
-		checkFn := func(fn *ssa.Function) {
-			if len(fn.FreeVars) == 0 {
-				return
-			}
-			for _, v := range fn.FreeVars {
-				path, _ := astutil.PathEnclosingInterval(f.File, v.Pos(), v.Pos())
-				if len(path) == 0 {
-					continue
-				}
-				ident, ok := path[0].(*ast.Ident)
+	for _, ssafn := range c.funcsForFile(f) {
+		for _, b := range ssafn.Blocks {
+			for _, ins := range b.Instrs {
+				call, ok := ins.(*ssa.Call)
 				if !ok {
 					continue
 				}
-				if f.Pkg.TypesInfo.ObjectOf(ident) == obj {
-					pos := f.Fset.Position(fn.Pos())
-					f.Errorf(call, "the finalizer closes over the object, preventing the finalizer from ever running (at %s)", pos)
-					break
+				callee := call.Common().StaticCallee()
+				if callee == nil {
+					continue
 				}
-			}
-		}
-		var checkValue func(val ssa.Value)
-		seen := map[ssa.Value]bool{}
-		checkValue = func(val ssa.Value) {
-			if seen[val] {
-				return
-			}
-			seen[val] = true
-			switch val := val.(type) {
-			case *ssa.Phi:
-				for _, val := range val.Operands(nil) {
-					checkValue(*val)
+				obj, ok := callee.Object().(*types.Func)
+				if !ok {
+					continue
 				}
-			case *ssa.MakeClosure:
-				checkFn(val.Fn.(*ssa.Function))
-			default:
-				return
-			}
-		}
+				if obj.FullName() != "runtime.SetFinalizer" {
+					continue
+				}
 
-		switch arg := call.Args[1].(type) {
-		case *ast.Ident, *ast.FuncLit:
-			r, _ := ssafn.ValueForExpr(arg)
-			checkValue(r)
+				arg0 := call.Common().Args[0]
+				if iface, ok := arg0.(*ssa.MakeInterface); ok {
+					arg0 = iface.X
+				}
+				unop, ok := arg0.(*ssa.UnOp)
+				if !ok {
+					continue
+				}
+				v, ok := unop.X.(*ssa.Alloc)
+				if !ok {
+					continue
+				}
+				arg1 := call.Common().Args[1]
+				if iface, ok := arg1.(*ssa.MakeInterface); ok {
+					arg1 = iface.X
+				}
+				mc, ok := arg1.(*ssa.MakeClosure)
+				if !ok {
+					continue
+				}
+				for _, b := range mc.Bindings {
+					if b == v {
+						pos := f.Fset.Position(mc.Fn.Pos())
+						f.Errorf(call, "the finalizer closes over the object, preventing the finalizer from ever running (at %s)", pos)
+					}
+				}
+			}
 		}
-		return true
 	}
-	f.Walk(fn)
 }
 
 func (c *Checker) CheckSliceOutOfBounds(f *lint.File) {
-	fn := func(node ast.Node) bool {
-		fn, ok := node.(*ast.FuncDecl)
-		if !ok {
-			return true
-		}
-		ssafn := c.nodeFns[fn]
-		if ssafn == nil {
-			return true
-		}
+	for _, ssafn := range c.funcsForFile(f) {
 		for _, block := range ssafn.Blocks {
 			for _, ins := range block.Instrs {
 				ia, ok := ins.(*ssa.IndexAddr)
@@ -2194,9 +2160,7 @@ func (c *Checker) CheckSliceOutOfBounds(f *lint.File) {
 				}
 			}
 		}
-		return true
 	}
-	f.Walk(fn)
 }
 
 func (c *Checker) CheckDeferLock(f *lint.File) {
@@ -2258,18 +2222,7 @@ func (c *Checker) CheckNaNComparison(f *lint.File) {
 }
 
 func (c *Checker) CheckInfiniteRecursion(f *lint.File) {
-	fn := func(node ast.Node) bool {
-		fn, ok := node.(*ast.FuncDecl)
-		if !ok {
-			return true
-		}
-		ssafn := c.nodeFns[fn]
-		if ssafn == nil {
-			return true
-		}
-		if len(ssafn.Blocks) == 0 {
-			return true
-		}
+	for _, ssafn := range c.funcsForFile(f) {
 		for _, block := range ssafn.Blocks {
 			for _, ins := range block.Instrs {
 				call, ok := ins.(*ssa.Call)
@@ -2303,9 +2256,7 @@ func (c *Checker) CheckInfiniteRecursion(f *lint.File) {
 				f.Errorf(call, "infinite recursive call")
 			}
 		}
-		return true
 	}
-	f.Walk(fn)
 }
 
 func objectName(obj types.Object) string {
@@ -2705,15 +2656,7 @@ func (c *Checker) CheckStringsReplaceZero(f *lint.File) {
 }
 
 func (c *Checker) CheckPureFunctions(f *lint.File) {
-	fn := func(node ast.Node) bool {
-		fn, ok := node.(*ast.FuncDecl)
-		if !ok {
-			return true
-		}
-		ssafn := c.nodeFns[fn]
-		if ssafn == nil {
-			return true
-		}
+	for _, ssafn := range c.funcsForFile(f) {
 		for _, b := range ssafn.Blocks {
 			for _, ins := range b.Instrs {
 				ins, ok := ins.(*ssa.Call)
@@ -2734,9 +2677,7 @@ func (c *Checker) CheckPureFunctions(f *lint.File) {
 				}
 			}
 		}
-		return true
 	}
-	f.Walk(fn)
 }
 
 func enclosingFunction(f *lint.File, node ast.Node) *ast.FuncDecl {
@@ -2795,88 +2736,85 @@ func (c *Checker) CheckDeprecated(f *lint.File) {
 }
 
 func (c *Checker) checkCalls(f *lint.File, rules map[string]CallRule) {
-	fn := func(node ast.Node) bool {
-		call, ok := node.(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-		ssafn := c.nodeFns[call]
-		if ssafn == nil {
-			return true
-		}
-		v, _ := ssafn.ValueForExpr(call)
-		if v == nil {
-			return true
-		}
-		ssacall, ok := v.(*ssa.Call)
-		if !ok {
-			return true
-		}
-
-		callee := ssacall.Common().StaticCallee()
-		if callee == nil {
-			return true
-		}
-		obj, ok := callee.Object().(*types.Func)
-		if !ok {
-			return true
-		}
-
-		r := rules[obj.FullName()]
-		if len(r.Arguments) == 0 {
-			return true
-		}
-		type argError struct {
-			arg ast.Expr
-			err error
-		}
-		errs := make([]*argError, len(r.Arguments))
-		for i, ar := range r.Arguments {
-			idx := ar.Index()
-			if ssacall.Common().Signature().Recv() != nil {
-				idx++
-			}
-			arg := ssacall.Common().Args[idx]
-			if iarg, ok := arg.(*ssa.MakeInterface); ok {
-				arg = iarg.X
-			}
-			err := ar.Validate(arg, ssafn, c)
-			if err != nil {
-				errs[i] = &argError{call.Args[ar.Index()], err}
-			}
-		}
-
-		switch r.Mode {
-		case InvalidIndependent:
-			for _, err := range errs {
-				if err != nil {
-					f.Errorf(err.arg, "%s", err.err)
-				}
-			}
-		case InvalidIfAny:
-			for _, err := range errs {
-				if err == nil {
+	for _, ssafn := range c.funcsForFile(f) {
+		for _, b := range ssafn.Blocks {
+		insLoop:
+			for _, ins := range b.Instrs {
+				ssacall, ok := ins.(*ssa.Call)
+				if !ok {
 					continue
 				}
-				f.Errorf(call, "%s", err.err)
-				return true
-			}
-		case InvalidIfAll:
-			var first error
-			for _, err := range errs {
-				if err == nil {
-					return true
+				callee := ssacall.Common().StaticCallee()
+				if callee == nil {
+					continue
 				}
-				if first == nil {
-					first = err.err
+				obj, ok := callee.Object().(*types.Func)
+				if !ok {
+					continue
 				}
-			}
-			f.Errorf(call, "%s", first)
-		}
 
-		return true
+				r := rules[obj.FullName()]
+				if len(r.Arguments) == 0 {
+					continue
+				}
+				type argError struct {
+					arg lint.Positioner
+					err error
+				}
+				errs := make([]*argError, len(r.Arguments))
+				for i, ar := range r.Arguments {
+					idx := ar.Index()
+					if ssacall.Common().Signature().Recv() != nil {
+						idx++
+					}
+					arg := ssacall.Common().Args[idx]
+					if iarg, ok := arg.(*ssa.MakeInterface); ok {
+						arg = iarg.X
+					}
+					err := ar.Validate(arg, ssafn, c)
+					if err != nil {
+						path, _ := astutil.PathEnclosingInterval(f.File, ssacall.Pos(), ssacall.Pos())
+						if len(path) < 2 {
+							continue insLoop
+						}
+						call, ok := path[0].(*ast.CallExpr)
+						if !ok {
+							continue insLoop
+						}
+						errs[i] = &argError{call.Args[ar.Index()], err}
+					}
+				}
+
+				switch r.Mode {
+				case InvalidIndependent:
+					for _, err := range errs {
+						if err != nil {
+							f.Errorf(err.arg, "%s", err.err)
+						}
+					}
+				case InvalidIfAny:
+					for _, err := range errs {
+						if err == nil {
+							continue insLoop
+						}
+						f.Errorf(ssacall, "%s", err.err)
+						continue
+					}
+				case InvalidIfAll:
+					var first error
+					for _, err := range errs {
+						if err == nil {
+							continue insLoop
+						}
+						if first == nil {
+							first = err.err
+						}
+					}
+					f.Errorf(ssacall, "%s", first)
+				}
+			}
+		}
 	}
-	f.Walk(fn)
 }
 
 var checkListenAddressRules = map[string]CallRule{
