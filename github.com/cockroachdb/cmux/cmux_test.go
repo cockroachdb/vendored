@@ -65,6 +65,10 @@ func newChanListener() *chanListener {
 	return &chanListener{connCh: make(chan net.Conn, 1)}
 }
 
+func (l *chanListener) Close() error {
+	return nil
+}
+
 func (l *chanListener) Accept() (net.Conn, error) {
 	if c, ok := <-l.connCh; ok {
 		return c, nil
@@ -418,6 +422,22 @@ func TestClose(t *testing.T) {
 	}
 }
 
+func TestCloseListenerWithoutServe(t *testing.T) {
+	defer leakCheck(t)()
+
+	l := newChanListener()
+	muxl := New(l)
+	anyl := muxl.Match(Any())
+
+	if err := anyl.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := anyl.Accept(); err != ErrListenerClosed {
+		t.Fatal(err)
+	}
+}
+
 // Cribbed from google.golang.org/grpc/test/end2end_test.go.
 
 // interestingGoroutines returns all goroutines we care about for the purpose
@@ -437,6 +457,7 @@ func interestingGoroutines() (gs []string) {
 
 		if stack == "" ||
 			strings.Contains(stack, "testing.Main(") ||
+			strings.Contains(stack, "testing.tRunner(") ||
 			strings.Contains(stack, "runtime.goexit") ||
 			strings.Contains(stack, "created by runtime.gc") ||
 			strings.Contains(stack, "interestingGoroutines") ||
