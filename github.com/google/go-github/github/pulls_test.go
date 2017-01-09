@@ -68,7 +68,7 @@ func TestPullRequestsService_Get(t *testing.T) {
 	}
 }
 
-func TestPullRequestService_GetRawDiff(t *testing.T) {
+func TestPullRequestsService_GetRawDiff(t *testing.T) {
 	setup()
 	defer teardown()
 	const rawStr = "@@diff content"
@@ -89,7 +89,7 @@ func TestPullRequestService_GetRawDiff(t *testing.T) {
 	}
 }
 
-func TestPullRequestService_GetRawPatch(t *testing.T) {
+func TestPullRequestsService_GetRawPatch(t *testing.T) {
 	setup()
 	defer teardown()
 	const rawStr = "@@patch content"
@@ -110,7 +110,7 @@ func TestPullRequestService_GetRawPatch(t *testing.T) {
 	}
 }
 
-func TestPullRequestService_GetRawInvalid(t *testing.T) {
+func TestPullRequestsService_GetRawInvalid(t *testing.T) {
 	setup()
 	defer teardown()
 
@@ -432,5 +432,55 @@ func TestPullRequestsService_Merge(t *testing.T) {
 	}
 	if !reflect.DeepEqual(merge, want) {
 		t.Errorf("PullRequests.Merge returned %+v, want %+v", merge, want)
+	}
+}
+
+// Test that different merge options produce expected PUT requests. See issue https://github.com/google/go-github/issues/500.
+func TestPullRequestsService_Merge_options(t *testing.T) {
+	setup()
+	defer teardown()
+
+	tests := []struct {
+		options  *PullRequestOptions
+		wantBody string
+	}{
+		{
+			options:  nil,
+			wantBody: `{"commit_message":"merging pull request"}`,
+		},
+		{
+			options:  &PullRequestOptions{},
+			wantBody: `{"commit_message":"merging pull request"}`,
+		},
+		{
+			options:  &PullRequestOptions{MergeMethod: "rebase"},
+			wantBody: `{"commit_message":"merging pull request","merge_method":"rebase"}`,
+		},
+		{
+			options:  &PullRequestOptions{SHA: "6dcb09b5b57875f334f61aebed695e2e4193db5e"},
+			wantBody: `{"commit_message":"merging pull request","sha":"6dcb09b5b57875f334f61aebed695e2e4193db5e"}`,
+		},
+		{
+			options: &PullRequestOptions{
+				CommitTitle: "Extra detail",
+				SHA:         "6dcb09b5b57875f334f61aebed695e2e4193db5e",
+				MergeMethod: "squash",
+			},
+			wantBody: `{"commit_message":"merging pull request","commit_title":"Extra detail","merge_method":"squash","sha":"6dcb09b5b57875f334f61aebed695e2e4193db5e"}`,
+		},
+	}
+
+	for i, test := range tests {
+		madeRequest := false
+		mux.HandleFunc(fmt.Sprintf("/repos/o/r/pulls/%d/merge", i), func(w http.ResponseWriter, r *http.Request) {
+			testMethod(t, r, "PUT")
+			testHeader(t, r, "Accept", mediaTypeSquashPreview)
+			testBody(t, r, test.wantBody+"\n")
+			madeRequest = true
+		})
+		_, _, _ = client.PullRequests.Merge("o", "r", i, "merging pull request", test.options)
+		if !madeRequest {
+			t.Errorf("%d: PullRequests.Merge(%#v): expected request was not made", i, test.options)
+		}
 	}
 }

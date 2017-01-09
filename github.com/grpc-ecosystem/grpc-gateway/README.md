@@ -204,14 +204,15 @@ To use the same port for custom HTTP handlers (e.g. serving `swagger.json`), gRP
 * Method parameters in request body
 * Method parameters in request path
 * Method parameters in query string
-* Mapping streaming APIs to JSON streams
+* Enum fields in path parameter (including repeated enum fields).
+* Mapping streaming APIs to newline-delimited JSON streams
 * Mapping HTTP headers with `Grpc-Metadata-` prefix to gRPC metadata
 * Optionally emitting API definition for [Swagger](http://swagger.io).
 * Setting [gRPC timeouts](http://www.grpc.io/docs/guides/wire.html) through inbound HTTP `Grpc-Timeout` header.
 
 ### Want to support
 But not yet.
-* bytes and enum fields in path parameter. #5
+* bytes fields in path parameter. #5
 * Optionally generating the entrypoint. #8
 * `import_path` parameter
 
@@ -229,6 +230,7 @@ But patch is welcome.
 * HTTP request host is added as `X-Forwarded-Host` gRPC request header
 * HTTP `Authorization` header is added as `authorization` gRPC request header 
 * Remaining HTTP header keys are prefixed with `Grpc-Metadata-` and added with their values to gRPC request header
+* While configurable, the default {un,}marshaling uses [jsonpb](https://godoc.org/github.com/golang/protobuf/jsonpb) with `OrigName: true`.
 
 # Contribution
 See [CONTRIBUTING.md](http://github.com/grpc-ecosystem/grpc-gateway/blob/master/CONTRIBUTING.md).

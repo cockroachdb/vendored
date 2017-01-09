@@ -64,6 +64,8 @@ var stdlibDescs = map[string]Function{
 	"strings.TrimRightFunc":  Function{Pure: true},
 	"strings.TrimSpace":      Function{Pure: true},
 	"strings.TrimSuffix":     Function{Pure: true},
+
+	"(*net/http.Request).WithContext": Function{Pure: true},
 }
 
 type FunctionDescriptions map[string]Function
@@ -148,7 +150,7 @@ func (c *Checker) Funcs() map[string]lint.Func {
 		"SA5003": c.CheckDeferInInfiniteLoop,
 		"SA5004": c.CheckLoopEmptyDefault,
 		"SA5005": c.CheckCyclicFinalizer,
-		"SA5006": c.CheckSliceOutOfBounds,
+		// "SA5006": c.CheckSliceOutOfBounds,
 		"SA5007": c.CheckInfiniteRecursion,
 
 		"SA9000": c.CheckDubiousSyncPoolPointers,

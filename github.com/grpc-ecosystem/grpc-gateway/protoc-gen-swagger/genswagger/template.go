@@ -62,7 +62,6 @@ func renderMessagesAsDefinition(messages messageMap, d swaggerDefinitionsObject,
 			schemaCore: schemaCore{
 				Type: "object",
 			},
-			Properties: make(map[string]swaggerSchemaObject),
 		}
 		msgComments := protoComments(reg, msg.File, msg.Outers, "MessageType", int32(msg.Index))
 		if err := updateSwaggerDataFromComments(&schema, msgComments); err != nil {
@@ -78,7 +77,7 @@ func renderMessagesAsDefinition(messages messageMap, d swaggerDefinitionsObject,
 				panic(err)
 			}
 
-			schema.Properties[f.GetName()] = fieldValue
+			schema.Properties = append(schema.Properties, keyVal{f.GetName(), fieldValue})
 		}
 		d[fullyQualifiedNameToSwaggerName(msg.FQMN(), reg)] = schema
 	}
@@ -386,7 +385,7 @@ func renderServices(services []*descriptor.Service, paths swaggerPathsObject, re
 							},
 						}
 					} else {
-						lastField := b.Body.FieldPath[len(b.Body.FieldPath) - 1]
+						lastField := b.Body.FieldPath[len(b.Body.FieldPath)-1]
 						schema = schemaOfField(lastField.Target, reg)
 					}
 
@@ -399,7 +398,7 @@ func renderServices(services []*descriptor.Service, paths swaggerPathsObject, re
 						Description: desc,
 						In:          "body",
 						Required:    true,
-						Schema: &schema,
+						Schema:      &schema,
 					})
 				}
 
@@ -445,6 +444,9 @@ func renderServices(services []*descriptor.Service, paths swaggerPathsObject, re
 					break
 				case "PUT":
 					pathItemObject.Put = operationObject
+					break
+				case "PATCH":
+					pathItemObject.Patch = operationObject
 					break
 				}
 				paths[templateToSwaggerPath(b.PathTmpl.Template)] = pathItemObject
@@ -565,7 +567,7 @@ func updateSwaggerDataFromComments(swaggerObject interface{}, comment string) er
 		return nil
 	}
 
-	return fmt.Errorf("No description nor summary property.")
+	return fmt.Errorf("no description nor summary property")
 }
 
 func protoComments(reg *descriptor.Registry, file *descriptor.File, outers []string, typeName string, typeIndex int32, fieldPaths ...int32) string {
@@ -693,15 +695,15 @@ func isProtoPathMatches(paths []int32, outerPaths []int32, typeName string, type
 func protoPathIndex(descriptorType reflect.Type, what string) int32 {
 	field, ok := descriptorType.Elem().FieldByName(what)
 	if !ok {
-		panic(fmt.Errorf("Could not find protobuf descriptor type id for %s.", what))
+		panic(fmt.Errorf("could not find protobuf descriptor type id for %s", what))
 	}
 	pbtag := field.Tag.Get("protobuf")
 	if pbtag == "" {
-		panic(fmt.Errorf("No Go tag 'protobuf' on protobuf descriptor for %s.", what))
+		panic(fmt.Errorf("no Go tag 'protobuf' on protobuf descriptor for %s", what))
 	}
 	path, err := strconv.Atoi(strings.Split(pbtag, ",")[1])
 	if err != nil {
-		panic(fmt.Errorf("Protobuf descriptor id for %s cannot be converted to a number: %s", what, err.Error()))
+		panic(fmt.Errorf("protobuf descriptor id for %s cannot be converted to a number: %s", what, err.Error()))
 	}
 
 	return int32(path)
