@@ -1,13 +1,11 @@
-package returncheck_test
+package returncheck
 
 import (
 	"fmt"
-
-	"github.com/kkaneda/returncheck/internal"
 )
 
 func ExampleRun() {
-	if err := returncheck.Run([]string{"testdata/test.go"}, "testdata/test.go", "Error"); err != nil {
+	if err := Run([]string{"testdata/test.go"}, "testdata/test.go", "Error"); err != nil {
 		fmt.Printf("failed to run return check: %s\n", err)
 		return
 	}
