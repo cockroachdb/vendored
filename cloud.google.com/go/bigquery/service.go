@@ -394,6 +394,7 @@ type createTableConf struct {
 	viewQuery                     string
 	schema                        *bq.TableSchema
 	useStandardSQL                bool
+	timePartitioning              *TimePartitioning
 }
 
 // createTable creates a table in the BigQuery service.
@@ -410,7 +411,7 @@ func (s *bigqueryService) createTable(ctx context.Context, conf *createTableConf
 		},
 	}
 	if !conf.expiration.IsZero() {
-		table.ExpirationTime = conf.expiration.UnixNano() / 1000
+		table.ExpirationTime = conf.expiration.UnixNano() / 1e6
 	}
 	// TODO(jba): make it impossible to provide both a view query and a schema.
 	if conf.viewQuery != "" {
@@ -419,11 +420,17 @@ func (s *bigqueryService) createTable(ctx context.Context, conf *createTableConf
 		}
 		if conf.useStandardSQL {
 			table.View.UseLegacySql = false
-			table.ForceSendFields = append(table.ForceSendFields, "UseLegacySql")
+			table.View.ForceSendFields = append(table.View.ForceSendFields, "UseLegacySql")
 		}
 	}
 	if conf.schema != nil {
 		table.Schema = conf.schema
+	}
+	if conf.timePartitioning != nil {
+		table.TimePartitioning = &bq.TimePartitioning{
+			Type:         "DAY",
+			ExpirationMs: int64(conf.timePartitioning.Expiration.Seconds() * 1000),
+		}
 	}
 
 	_, err := s.s.Tables.Insert(conf.projectID, conf.datasetID, table).Context(ctx).Do()
@@ -459,6 +466,9 @@ func bqTableToMetadata(t *bq.Table) *TableMetadata {
 	}
 	if t.View != nil {
 		md.View = t.View.Query
+	}
+	if t.TimePartitioning != nil {
+		md.TimePartitioning = &TimePartitioning{time.Duration(t.TimePartitioning.ExpirationMs) * time.Millisecond}
 	}
 
 	return md

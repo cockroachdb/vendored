@@ -18,7 +18,6 @@ import (
 	"go/types"
 	"io/ioutil"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -26,6 +25,7 @@ import (
 	"golang.org/x/tools/go/ast/astutil"
 	"golang.org/x/tools/go/loader"
 	"honnef.co/go/tools/ssa"
+	"honnef.co/go/tools/ssa/ssautil"
 )
 
 type Ignore struct {
@@ -86,30 +86,6 @@ type Linter struct {
 	Ignores []Ignore
 }
 
-func buildPackage(pkg *types.Package, files []*ast.File, info *types.Info, fset *token.FileSet, mode ssa.BuilderMode) *ssa.Package {
-	prog := ssa.NewProgram(fset, mode)
-
-	// Create SSA packages for all imports.
-	// Order is not significant.
-	created := make(map[*types.Package]bool)
-	var createAll func(pkgs []*types.Package)
-	createAll = func(pkgs []*types.Package) {
-		for _, p := range pkgs {
-			if !created[p] {
-				created[p] = true
-				prog.CreatePackage(p, nil, nil, true)
-				createAll(p.Imports())
-			}
-		}
-	}
-	createAll(pkg.Imports())
-
-	// Create and build the primary package.
-	ssapkg := prog.CreatePackage(pkg, files, info, false)
-	ssapkg.Build()
-	return ssapkg
-}
-
 func (l *Linter) ignore(f *File, check string) bool {
 	for _, ig := range l.Ignores {
 		pkg := f.Pkg.TypesPkg.Path()
@@ -130,9 +106,11 @@ func (l *Linter) ignore(f *File, check string) bool {
 }
 
 func (l *Linter) Lint(lprog *loader.Program) map[string][]Problem {
+	ssaprog := ssautil.CreateProgram(lprog, ssa.GlobalDebug)
 	var pkgs []*Pkg
+	wg := &sync.WaitGroup{}
 	for _, pkginfo := range lprog.InitialPackages() {
-		ssapkg := buildPackage(pkginfo.Pkg, pkginfo.Files, &pkginfo.Info, lprog.Fset, ssa.GlobalDebug)
+		ssapkg := ssaprog.Package(pkginfo.Pkg)
 		pkg := &Pkg{
 			TypesPkg:  pkginfo.Pkg,
 			TypesInfo: pkginfo.Info,
@@ -140,7 +118,14 @@ func (l *Linter) Lint(lprog *loader.Program) map[string][]Problem {
 			PkgInfo:   pkginfo,
 		}
 		pkgs = append(pkgs, pkg)
+
+		wg.Add(1)
+		go func() {
+			ssapkg.Build()
+			wg.Done()
+		}()
 	}
+	wg.Wait()
 	prog := &Program{
 		Prog:     lprog,
 		Packages: pkgs,
@@ -159,10 +144,11 @@ func (l *Linter) Lint(lprog *loader.Program) map[string][]Problem {
 		path     string
 		problems []Problem
 	}
-	work := make(chan *Pkg, runtime.NumCPU())
-	res := make(chan result, runtime.NumCPU())
-	worker := func(wg *sync.WaitGroup, work chan *Pkg, res chan result) {
-		for pkg := range work {
+	wg = &sync.WaitGroup{}
+	for _, pkg := range pkgs {
+		pkg := pkg
+		wg.Add(1)
+		go func() {
 			for _, file := range pkg.PkgInfo.Files {
 				path := lprog.Fset.Position(file.Pos()).Filename
 				for _, k := range keys {
@@ -185,28 +171,13 @@ func (l *Linter) Lint(lprog *loader.Program) map[string][]Problem {
 					fn(f)
 				}
 			}
-			sort.Sort(ByPosition(pkg.problems))
-			res <- result{pkg.PkgInfo.Pkg.Path(), pkg.problems}
-		}
-		wg.Done()
+			wg.Done()
+		}()
 	}
-	wg := &sync.WaitGroup{}
-	for i := 0; i < runtime.NumCPU(); i++ {
-		wg.Add(1)
-		go worker(wg, work, res)
-	}
-	go func() {
-		wg.Wait()
-		close(res)
-	}()
-	go func() {
-		for _, pkg := range pkgs {
-			work <- pkg
-		}
-		close(work)
-	}()
-	for r := range res {
-		out[r.path] = r.problems
+	wg.Wait()
+	for _, pkg := range pkgs {
+		sort.Sort(ByPosition(pkg.problems))
+		out[pkg.PkgInfo.Pkg.Path()] = pkg.problems
 	}
 	return out
 }

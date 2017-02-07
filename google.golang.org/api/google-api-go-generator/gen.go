@@ -185,7 +185,7 @@ func getAPIs() []*API {
 	apiListFile := filepath.Join(genDirRoot(), "api-list.json")
 	if *useCache {
 		if !*publicOnly {
-			log.Fatalf("-cached=true not compatible with -publiconly=false")
+			log.Fatalf("-cache=true not compatible with -publiconly=false")
 		}
 		var err error
 		bytes, err = ioutil.ReadFile(apiListFile)
@@ -689,8 +689,9 @@ type Schema struct {
 }
 
 type Property struct {
-	s *Schema // the containing Schema
-	p *disco.Property
+	s              *Schema // the containing Schema
+	p              *disco.Property
+	assignedGoName string
 }
 
 func (p *Property) Type() *disco.Schema {
@@ -1140,6 +1141,12 @@ func (s *Schema) writeSchemaStruct(api *API) {
 			s.api.p("\n")
 		}
 		pname := np.Get(p.GoName())
+		if pname[0] == '@' {
+			// HACK(cbro): ignore JSON-LD special fields until we can figure out
+			// the correct Go representation for them.
+			continue
+		}
+		p.assignedGoName = pname
 		des := p.Description()
 		if des != "" {
 			s.api.p("%s", asComment("\t", fmt.Sprintf("%s: %s", pname, des)))
@@ -1204,6 +1211,7 @@ func (s *Schema) writeSchemaStruct(api *API) {
 
 	s.api.pn("}")
 	s.writeSchemaMarshal(forceSendName, nullFieldsName)
+	s.writeSchemaUnmarshal()
 }
 
 // writeSchemaMarshal writes a custom MarshalJSON function for s, which allows
@@ -1217,6 +1225,49 @@ func (s *Schema) writeSchemaMarshal(forceSendFieldName, nullFieldsName string) {
 	s.api.pn("\traw := noMethod(*s)")
 	s.api.pn("\treturn gensupport.MarshalJSON(raw, s.%s, s.%s)", forceSendFieldName, nullFieldsName)
 	s.api.pn("}")
+}
+
+func (s *Schema) writeSchemaUnmarshal() {
+	var floatProps []*Property
+	for _, p := range s.properties() {
+		if p.p.Schema.Type == "number" {
+			floatProps = append(floatProps, p)
+		}
+	}
+	if len(floatProps) == 0 {
+		return
+	}
+	pn := s.api.pn
+	pn("\nfunc (s *%s) UnmarshalJSON(data []byte) error {", s.GoName())
+	pn("  type noMethod %s", s.GoName()) // avoid infinite recursion
+	pn("  var s1 struct {")
+	// Hide the float64 fields of the schema with fields that correctly
+	// unmarshal special values.
+	for _, p := range floatProps {
+		typ := "gensupport.JSONFloat64"
+		if p.forcePointerType() {
+			typ = "*" + typ
+		}
+		pn("%s %s `json:\"%s\"`", p.assignedGoName, typ, p.p.Name)
+	}
+	pn("    *noMethod") // embed the schema
+	pn("  }")
+	// Set the schema value into the wrapper so its other fields are unmarshaled.
+	pn("  s1.noMethod = (*noMethod)(s)")
+	pn("  if err := json.Unmarshal(data, &s1); err != nil {")
+	pn("    return err")
+	pn("  }")
+	// Copy each shadowing field into the field it shadows.
+	for _, p := range floatProps {
+		n := p.assignedGoName
+		if p.forcePointerType() {
+			pn("if s1.%s != nil { s.%s = (*float64)(s1.%s) }", n, n, n)
+		} else {
+			pn("s.%s = float64(s1.%s)", n, n)
+		}
+	}
+	pn(" return nil")
+	pn("}")
 }
 
 // isResponseType returns true for all types that are used as a response.
@@ -1348,47 +1399,92 @@ func (m *Method) supportsMediaDownload() bool {
 	return m.m.SupportsMediaDownload
 }
 
-func (m *Method) supportsPaging() (callField, respField string, ok bool) {
-	if m.m.HTTPMethod != "GET" {
-		// Probably a POST, like "calendar.acl.watch",
-		// which, despite having a pageToken parameter,
-		// isn't actually a paged method.
-		return "", "", false
-	}
-	matches := m.grepParams(func(p *Param) bool { return p.p.Name == "pageToken" })
-	if len(matches) == 0 {
-		return "", "", false
-	} else {
-		pt := matches[0]
-		if pt.p.Required {
-			// The page token is a required parameter (e.g. because there is
-			// a separate API call to start an iteration), and so the relevant
-			// call factory method takes the page token instead.
-			return "", "", false
-		}
+func (m *Method) supportsPaging() (*pageTokenGenerator, string, bool) {
+	ptg := m.pageTokenGenerator()
+	if ptg == nil {
+		return nil, "", false
 	}
 
 	// Check that the response type has the next page token.
-	// It may appear under different names.
 	s := m.responseType()
 	if s == nil || s.typ.Kind != disco.StructKind {
-		return "", "", false
+		return nil, "", false
 	}
-	props := s.properties()
-
-	opts := [...]string{
-		"nextPageToken",
-		"pageToken",
-	}
-	for _, n := range opts {
-		for _, prop := range props {
-			if prop.p.Name == n && prop.Type().Type == "string" {
-				return "PageToken", prop.GoName(), true
-			}
+	for _, prop := range s.properties() {
+		if isPageTokenName(prop.p.Name) && prop.Type().Type == "string" {
+			return ptg, prop.GoName(), true
 		}
 	}
 
-	return "", "", false
+	return nil, "", false
+}
+
+type pageTokenGenerator struct {
+	isParam     bool   // is the page token a URL parameter?
+	name        string // param or request field name
+	requestName string // empty for URL param
+}
+
+func (p *pageTokenGenerator) genGet() string {
+	if p.isParam {
+		return fmt.Sprintf("c.urlParams_.Get(%q)", p.name)
+	}
+	return fmt.Sprintf("c.%s.%s", p.requestName, p.name)
+}
+
+func (p *pageTokenGenerator) genSet(valueExpr string) string {
+	if p.isParam {
+		return fmt.Sprintf("c.%s(%s)", initialCap(p.name), valueExpr)
+	}
+	return fmt.Sprintf("c.%s.%s = %s", p.requestName, p.name, valueExpr)
+}
+
+func (p *pageTokenGenerator) genDeferBody() string {
+	if p.isParam {
+		return p.genSet(p.genGet())
+	}
+	return fmt.Sprintf("func (pt string) { %s }(%s)", p.genSet("pt"), p.genGet())
+}
+
+// pageTokenGenerator returns a pageTokenGenerator that will generate code to
+// get/set the page token for a subsequent page in the context of the generated
+// Pages method. It returns nil if there is no page token.
+func (m *Method) pageTokenGenerator() *pageTokenGenerator {
+	matches := m.grepParams(func(p *Param) bool { return isPageTokenName(p.p.Name) })
+	switch len(matches) {
+	case 1:
+		if matches[0].p.Required {
+			// The page token is a required parameter (e.g. because there is
+			// a separate API call to start an iteration), and so the relevant
+			// call factory method takes the page token instead.
+			return nil
+		}
+		n := matches[0].p.Name
+		return &pageTokenGenerator{true, n, ""}
+
+	case 0: // No URL parameter, but maybe a request field.
+		if m.m.Request == nil {
+			return nil
+		}
+		rs := m.m.Request
+		if rs.RefSchema != nil {
+			rs = rs.RefSchema
+		}
+		for _, p := range rs.Properties {
+			if isPageTokenName(p.Name) {
+				return &pageTokenGenerator{false, initialCap(p.Name), validGoIdentifer(strings.ToLower(rs.Name))}
+			}
+		}
+		return nil
+
+	default:
+		panicf("too many page token parameters for method %s", m.m.Name)
+		return nil
+	}
+}
+
+func isPageTokenName(s string) bool {
+	return s == "pageToken" || s == "nextPageToken"
 }
 
 func (m *Method) Params() []*Param {
@@ -1855,7 +1951,7 @@ func (meth *Method) generateCode() {
 	pn("// %s\n", string(bs))
 	pn("}")
 
-	if cname, rname, ok := meth.supportsPaging(); ok {
+	if ptg, rname, ok := meth.supportsPaging(); ok {
 		// We can assume retType is non-empty.
 		pn("")
 		pn("// Pages invokes f for each page of results.")
@@ -1863,13 +1959,13 @@ func (meth *Method) generateCode() {
 		pn("// The provided context supersedes any context provided to the Context method.")
 		pn("func (c *%s) Pages(ctx context.Context, f func(%s) error) error {", callName, retType)
 		pn(" c.ctx_ = ctx")
-		pn(` defer c.%s(c.urlParams_.Get(%q)) // reset paging to original point`, cname, "pageToken")
+		pn(` defer %s  // reset paging to original point`, ptg.genDeferBody())
 		pn(" for {")
 		pn("  x, err := c.Do()")
 		pn("  if err != nil { return err }")
 		pn("  if err := f(x); err != nil { return err }")
 		pn(`  if x.%s == "" { return nil }`, rname)
-		pn("  c.%s(x.%s)", cname, rname)
+		pn(ptg.genSet("x." + rname))
 		pn(" }")
 		pn("}")
 	}

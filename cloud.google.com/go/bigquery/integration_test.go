@@ -42,6 +42,7 @@ var (
 		{Name: "name", Type: StringFieldType},
 		{Name: "num", Type: IntegerFieldType},
 	}
+	fiveMinutesFromNow time.Time
 )
 
 func TestMain(m *testing.M) {
@@ -98,6 +99,24 @@ func TestIntegration_Create(t *testing.T) {
 	}
 }
 
+func TestIntegration_CreateView(t *testing.T) {
+	if client == nil {
+		t.Skip("Integration tests skipped")
+	}
+	ctx := context.Background()
+	table := newTable(t, schema)
+	defer table.Delete(ctx)
+
+	// Test that standard SQL views work.
+	view := dataset.Table("t_view_standardsql")
+	query := ViewQuery(fmt.Sprintf("SELECT APPROX_COUNT_DISTINCT(name) FROM `%s.%s.%s`", dataset.ProjectID, dataset.DatasetID, table.TableID))
+	err := view.Create(context.Background(), UseStandardSQL(), query)
+	if err != nil {
+		t.Fatalf("table.create: Did not expect an error, got: %v", err)
+	}
+	view.Delete(ctx)
+}
+
 func TestIntegration_TableMetadata(t *testing.T) {
 	if client == nil {
 		t.Skip("Integration tests skipped")
@@ -116,6 +135,41 @@ func TestIntegration_TableMetadata(t *testing.T) {
 	}
 	if got, want := md.Type, RegularTable; got != want {
 		t.Errorf("metadata.Type: got %v, want %v", got, want)
+	}
+	if got, want := md.ExpirationTime, fiveMinutesFromNow; !got.Equal(want) {
+		t.Errorf("metadata.Type: got %v, want %v", got, want)
+	}
+
+	// Check that timePartitioning is nil by default
+	if md.TimePartitioning != nil {
+		t.Errorf("metadata.TimePartitioning: got %v, want %v", md.TimePartitioning, nil)
+	}
+
+	// Create tables that have time partitioning
+	partitionCases := []struct {
+		timePartitioning   TimePartitioning
+		expectedExpiration time.Duration
+	}{
+		{TimePartitioning{}, time.Duration(0)},
+		{TimePartitioning{time.Second}, time.Second},
+	}
+	for i, c := range partitionCases {
+		table := dataset.Table(fmt.Sprintf("t_metadata_partition_%v", i))
+		err = table.Create(context.Background(), schema, c.timePartitioning, TableExpiration(time.Now().Add(5*time.Minute)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer table.Delete(ctx)
+		md, err = table.Metadata(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		got := md.TimePartitioning
+		want := &TimePartitioning{c.expectedExpiration}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("metadata.TimePartitioning: got %v, want %v", got, want)
+		}
 	}
 }
 
@@ -586,9 +640,10 @@ func TestIntegration_TimeTypes(t *testing.T) {
 
 // Creates a new, temporary table with a unique name and the given schema.
 func newTable(t *testing.T, s Schema) *Table {
+	fiveMinutesFromNow = time.Now().Add(5 * time.Minute).Round(time.Second)
 	name := fmt.Sprintf("t%d", time.Now().UnixNano())
 	table := dataset.Table(name)
-	err := table.Create(context.Background(), s, TableExpiration(time.Now().Add(5*time.Minute)))
+	err := table.Create(context.Background(), s, TableExpiration(fiveMinutesFromNow))
 	if err != nil {
 		t.Fatal(err)
 	}

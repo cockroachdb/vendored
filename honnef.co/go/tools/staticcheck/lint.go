@@ -10,6 +10,7 @@ import (
 	"go/types"
 	htmltemplate "html/template"
 	"net/http"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -22,7 +23,6 @@ import (
 	"honnef.co/go/tools/staticcheck/vrp"
 
 	"golang.org/x/tools/go/ast/astutil"
-	"golang.org/x/tools/go/loader"
 )
 
 type Function struct {
@@ -105,7 +105,7 @@ func unmarshalPointer(name string, arg int) CallCheck {
 
 func pointlessIntMath(call *Call) {
 	if ConvertedFromInt(call.Args[0].Value) {
-		call.Invalid(fmt.Sprintf("calling %s on a converted integer is pointless", callName(call.Instr)))
+		call.Invalid(fmt.Sprintf("calling %s on a converted integer is pointless", callName(call.Instr.Common())))
 	}
 }
 
@@ -232,8 +232,6 @@ type Checker struct {
 	deprecatedObjs map[types.Object]string
 	nodeFns        map[ast.Node]*ssa.Function
 	funcs          map[*token.File][]*ssa.Function
-
-	tmpDeprecatedObjs map[*types.Package]map[types.Object]string
 }
 
 func NewChecker() *Checker {
@@ -265,6 +263,7 @@ func (c *Checker) Funcs() map[string]lint.Func {
 		"SA1020": c.callChecker(checkListenAddressRules),
 		"SA1021": c.callChecker(checkBytesEqualIPRules),
 		"SA1022": c.CheckFlagUsage,
+		"SA1023": c.CheckWriterBufferModified,
 
 		"SA2000": c.CheckWaitgroupAdd,
 		"SA2001": c.CheckEmptyCriticalSection,
@@ -339,7 +338,6 @@ func (c *Checker) Init(prog *lint.Program) {
 	c.funcDescs = FunctionDescriptions{}
 	c.deprecatedObjs = map[types.Object]string{}
 	c.nodeFns = map[ast.Node]*ssa.Function{}
-	c.tmpDeprecatedObjs = map[*types.Package]map[types.Object]string{}
 
 	for fn, desc := range stdlibDescs {
 		c.funcDescs[fn] = desc
@@ -450,45 +448,75 @@ func (c *Checker) Init(prog *lint.Program) {
 	}()
 	rwg.Wait()
 
+	wg := &sync.WaitGroup{}
+	chNodeFns := make(chan map[ast.Node]*ssa.Function, runtime.NumCPU()*2)
 	for _, pkg := range prog.Packages {
+		pkg := pkg
 		for _, f := range pkg.PkgInfo.Files {
-			ast.Walk(&globalVisitor{c.nodeFns, pkg, f}, f)
+			f := f
+			wg.Add(1)
+			go func() {
+				m := map[ast.Node]*ssa.Function{}
+				ast.Walk(&globalVisitor{m, pkg, f}, f)
+				chNodeFns <- m
+				wg.Done()
+			}()
+		}
+	}
+	go func() {
+		wg.Wait()
+		close(chNodeFns)
+	}()
+
+	for nodeFns := range chNodeFns {
+		for k, v := range nodeFns {
+			c.nodeFns[k] = v
 		}
 	}
 
-	for _, pkginfo := range prog.Prog.AllPackages {
-		c.tmpDeprecatedObjs[pkginfo.Pkg] = map[types.Object]string{}
-	}
-	var wg sync.WaitGroup
+	chDeprecated := make(chan struct {
+		obj types.Object
+		msg string
+	}, runtime.NumCPU()*2)
+	wg = &sync.WaitGroup{}
 	for _, pkginfo := range prog.Prog.AllPackages {
 		pkginfo := pkginfo
-		wg.Add(1)
-		go func() {
-			scope := pkginfo.Pkg.Scope()
-			names := scope.Names()
-			for _, name := range names {
+		scope := pkginfo.Pkg.Scope()
+		names := scope.Names()
+		for _, name := range names {
+			name := name
+			wg.Add(1)
+			go func() {
 				obj := scope.Lookup(name)
-				c.buildDeprecatedMap(pkginfo, prog.Prog, obj)
+				msg := c.deprecationMessage(pkginfo.Files, prog.Prog.Fset, obj)
+				chDeprecated <- struct {
+					obj types.Object
+					msg string
+				}{obj, msg}
 				if typ, ok := obj.Type().Underlying().(*types.Struct); ok {
 					n := typ.NumFields()
 					for i := 0; i < n; i++ {
 						// FIXME(dh): This code will not find deprecated
 						// fields in anonymous structs.
 						field := typ.Field(i)
-						c.buildDeprecatedMap(pkginfo, prog.Prog, field)
+						msg := c.deprecationMessage(pkginfo.Files, prog.Prog.Fset, field)
+						chDeprecated <- struct {
+							obj types.Object
+							msg string
+						}{field, msg}
 					}
 				}
-			}
-			wg.Done()
-		}()
-	}
-	wg.Wait()
-	for _, m := range c.tmpDeprecatedObjs {
-		for k, v := range m {
-			c.deprecatedObjs[k] = v
+				wg.Done()
+			}()
 		}
 	}
-	c.tmpDeprecatedObjs = nil
+	go func() {
+		wg.Wait()
+		close(chDeprecated)
+	}()
+	for dep := range chDeprecated {
+		c.deprecatedObjs[dep.obj] = dep.msg
+	}
 }
 
 // TODO(adonovan): make this a method: func (*token.File) Contains(token.Pos)
@@ -516,11 +544,10 @@ func pathEnclosingInterval(files []*ast.File, fset *token.FileSet, start, end to
 	return nil, false
 }
 
-func (c *Checker) buildDeprecatedMap(info *loader.PackageInfo, prog *loader.Program, obj types.Object) {
-	path, _ := pathEnclosingInterval(info.Files, prog.Fset, obj.Pos(), obj.Pos())
+func (c *Checker) deprecationMessage(files []*ast.File, fset *token.FileSet, obj types.Object) (message string) {
+	path, _ := pathEnclosingInterval(files, fset, obj.Pos(), obj.Pos())
 	if len(path) <= 2 {
-		c.tmpDeprecatedObjs[info.Pkg][obj] = ""
-		return
+		return ""
 	}
 	var docs []*ast.CommentGroup
 	switch n := path[1].(type) {
@@ -543,8 +570,7 @@ func (c *Checker) buildDeprecatedMap(info *loader.PackageInfo, prog *loader.Prog
 			}
 		}
 	default:
-		c.tmpDeprecatedObjs[info.Pkg][obj] = ""
-		return
+		return ""
 	}
 
 	for _, doc := range docs {
@@ -558,10 +584,9 @@ func (c *Checker) buildDeprecatedMap(info *loader.PackageInfo, prog *loader.Prog
 		}
 		alt := last[len("Deprecated: "):]
 		alt = strings.Replace(alt, "\n", " ", -1)
-		c.tmpDeprecatedObjs[info.Pkg][obj] = alt
-		return
+		return alt
 	}
-	c.tmpDeprecatedObjs[info.Pkg][obj] = ""
+	return ""
 }
 
 type globalVisitor struct {
@@ -705,7 +730,7 @@ func detectInfiniteLoops(fn *ssa.Function) {
 			if !ok {
 				continue
 			}
-			if !isCallTo(call, "time.Tick") {
+			if !isCallTo(call.Common(), "time.Tick") {
 				continue
 			}
 			// XXX check if we're extracting ok from our unop
@@ -2200,7 +2225,7 @@ func (c *Checker) CheckCyclicFinalizer(f *lint.File) {
 				if !ok {
 					continue
 				}
-				if !isCallTo(call, "runtime.SetFinalizer") {
+				if !isCallTo(call.Common(), "runtime.SetFinalizer") {
 					continue
 				}
 
@@ -2260,61 +2285,65 @@ func (c *Checker) CheckSliceOutOfBounds(f *lint.File) {
 }
 
 func (c *Checker) CheckDeferLock(f *lint.File) {
-	fn := func(node ast.Node) bool {
-		block, ok := node.(*ast.BlockStmt)
-		if !ok {
-			return true
+	for _, ssafn := range c.funcsForFile(f) {
+		for _, block := range ssafn.Blocks {
+			if len(block.Instrs) < 2 {
+				continue
+			}
+			instrs := filterDebug(block.Instrs)
+			for i, ins := range instrs[:len(instrs)-1] {
+				call, ok := ins.(*ssa.Call)
+				if !ok {
+					continue
+				}
+				if !isCallTo(call.Common(), "(*sync.Mutex).Lock") && !isCallTo(call.Common(), "(*sync.RWMutex).RLock") {
+					continue
+				}
+				nins, ok := instrs[i+1].(*ssa.Defer)
+				if !ok {
+					continue
+				}
+				if !isCallTo(&nins.Call, "(*sync.Mutex).Lock") && !isCallTo(&nins.Call, "(*sync.RWMutex).RLock") {
+					continue
+				}
+				if call.Common().Args[0] != nins.Call.Args[0] {
+					continue
+				}
+				name := shortCallName(call.Common())
+				alt := ""
+				switch name {
+				case "Lock":
+					alt = "Unlock"
+				case "RLock":
+					alt = "RUnlock"
+				}
+				f.Errorf(nins, "deferring %s right after having locked already; did you mean to defer %s?", name, alt)
+			}
 		}
-		if len(block.List) < 2 {
-			return true
-		}
-		for i, stmt := range block.List[:len(block.List)-1] {
-			expr, ok := stmt.(*ast.ExprStmt)
-			if !ok {
-				continue
-			}
-			call, ok := expr.X.(*ast.CallExpr)
-			if !ok {
-				continue
-			}
-			sel, ok := call.Fun.(*ast.SelectorExpr)
-			if !ok || (sel.Sel.Name != "Lock" && sel.Sel.Name != "RLock") || len(call.Args) != 0 {
-				continue
-			}
-			d, ok := block.List[i+1].(*ast.DeferStmt)
-			if !ok || len(d.Call.Args) != 0 {
-				continue
-			}
-			dsel, ok := d.Call.Fun.(*ast.SelectorExpr)
-			if !ok || dsel.Sel.Name != sel.Sel.Name || f.Render(dsel.X) != f.Render(sel.X) {
-				continue
-			}
-			unlock := "Unlock"
-			if sel.Sel.Name[0] == 'R' {
-				unlock = "RUnlock"
-			}
-			f.Errorf(d, "deferring %s right after having locked already; did you mean to defer %s?", sel.Sel.Name, unlock)
-		}
-		return true
 	}
-	f.Walk(fn)
 }
 
 func (c *Checker) CheckNaNComparison(f *lint.File) {
-	isNaN := func(x ast.Expr) bool {
-		return f.IsFunctionCallName(x, "math.NaN")
-	}
-	fn := func(node ast.Node) bool {
-		op, ok := node.(*ast.BinaryExpr)
+	isNaN := func(v ssa.Value) bool {
+		call, ok := v.(*ssa.Call)
 		if !ok {
-			return true
+			return false
 		}
-		if isNaN(op.X) || isNaN(op.Y) {
-			f.Errorf(op, "no value is equal to NaN, not even NaN itself")
-		}
-		return true
+		return isCallTo(call.Common(), "math.NaN")
 	}
-	f.Walk(fn)
+	for _, ssafn := range c.funcsForFile(f) {
+		for _, block := range ssafn.Blocks {
+			for _, ins := range block.Instrs {
+				ins, ok := ins.(*ssa.BinOp)
+				if !ok {
+					continue
+				}
+				if isNaN(ins.X) || isNaN(ins.Y) {
+					f.Errorf(ins, "no value is equal to NaN, not even NaN itself")
+				}
+			}
+		}
+	}
 }
 
 func (c *Checker) CheckInfiniteRecursion(f *lint.File) {
@@ -2512,30 +2541,37 @@ func (c *Checker) CheckRepeatedIfElse(f *lint.File) {
 }
 
 func (c *Checker) CheckSillyBitwiseOps(f *lint.File) {
-	fn := func(node ast.Node) bool {
-		expr, ok := node.(*ast.BinaryExpr)
-		if !ok {
-			return true
-		}
-		// We check for a literal 0, not a constant expression
-		// evaluating to 0. The latter tend to be false positives due
-		// to system-dependent constants.
-		if !lint.IsZero(expr.Y) {
-			return true
-		}
-		switch expr.Op {
-		case token.AND:
-			f.Errorf(expr, "x & 0 always equals 0")
-		case token.OR, token.XOR:
-			f.Errorf(expr, "x %s 0 always equals x", expr.Op)
-		case token.SHL, token.SHR:
-			// we do not flag shifts because too often, x<<0 is part
-			// of a pattern, x<<0, x<<8, x<<16, ...
-		}
-		return true
-	}
+	for _, ssafn := range c.funcsForFile(f) {
+		for _, block := range ssafn.Blocks {
+			for _, ins := range block.Instrs {
+				ins, ok := ins.(*ssa.BinOp)
+				if !ok {
+					continue
+				}
 
-	f.Walk(fn)
+				if c, ok := ins.Y.(*ssa.Const); !ok || c.Value == nil || c.Value.Kind() != constant.Int || c.Uint64() != 0 {
+					continue
+				}
+				path, _ := astutil.PathEnclosingInterval(f.File, ins.Pos(), ins.Pos())
+				if len(path) == 0 {
+					continue
+				}
+				if node, ok := path[0].(*ast.BinaryExpr); !ok || !lint.IsZero(node.Y) {
+					continue
+				}
+
+				switch ins.Op {
+				case token.AND:
+					f.Errorf(ins, "x & 0 always equals 0")
+				case token.OR, token.XOR:
+					f.Errorf(ins, "x %s 0 always equals x", ins.Op)
+				case token.SHL, token.SHR:
+					// we do not flag shifts because too often, x<<0 is part
+					// of a pattern, x<<0, x<<8, x<<16, ...
+				}
+			}
+		}
+	}
 }
 
 func (c *Checker) CheckNonOctalFileMode(f *lint.File) {
@@ -2795,19 +2831,41 @@ func unwrapFunction(val ssa.Value) *ssa.Function {
 	}
 }
 
-func callName(call *ssa.Call) string {
-	callee := call.Common().StaticCallee()
-	if callee == nil {
+func shortCallName(call *ssa.CallCommon) string {
+	if call.IsInvoke() {
 		return ""
 	}
-	obj, ok := callee.Object().(*types.Func)
-	if !ok {
-		return ""
+	switch v := call.Value.(type) {
+	case *ssa.Function:
+		fn, ok := v.Object().(*types.Func)
+		if !ok {
+			return ""
+		}
+		return fn.Name()
+	case *ssa.Builtin:
+		return v.Name()
 	}
-	return obj.FullName()
+	return ""
 }
 
-func isCallTo(call *ssa.Call, name string) bool {
+func callName(call *ssa.CallCommon) string {
+	if call.IsInvoke() {
+		return ""
+	}
+	switch v := call.Value.(type) {
+	case *ssa.Function:
+		fn, ok := v.Object().(*types.Func)
+		if !ok {
+			return ""
+		}
+		return fn.FullName()
+	case *ssa.Builtin:
+		return v.Name()
+	}
+	return ""
+}
+
+func isCallTo(call *ssa.CallCommon, name string) bool {
 	return callName(call) == name
 }
 
@@ -2817,7 +2875,7 @@ func hasCallTo(block *ssa.BasicBlock, name string) bool {
 		if !ok {
 			continue
 		}
-		if isCallTo(call, name) {
+		if isCallTo(call.Common(), name) {
 			return true
 		}
 	}
@@ -2830,4 +2888,53 @@ func deref(typ types.Type) types.Type {
 		return p.Elem()
 	}
 	return typ
+}
+
+func (c *Checker) CheckWriterBufferModified(f *lint.File) {
+	// TODO(dh): this might be a good candidate for taint analysis.
+	// Taint the argument as MUST_NOT_MODIFY, then propagate that
+	// through functions like bytes.Split
+	for _, ssafn := range c.funcsForFile(f) {
+		sig := ssafn.Signature
+		if ssafn.Name() != "Write" || sig.Recv() == nil || sig.Params().Len() != 1 || sig.Results().Len() != 2 {
+			continue
+		}
+		tArg, ok := sig.Params().At(0).Type().(*types.Slice)
+		if !ok {
+			continue
+		}
+		if basic, ok := tArg.Elem().(*types.Basic); !ok || basic.Kind() != types.Byte {
+			continue
+		}
+		if basic, ok := sig.Results().At(0).Type().(*types.Basic); !ok || basic.Kind() != types.Int {
+			continue
+		}
+		if named, ok := sig.Results().At(1).Type().(*types.Named); !ok || types.TypeString(named, nil) != "error" {
+			continue
+		}
+
+		for _, block := range ssafn.Blocks {
+			for _, ins := range block.Instrs {
+				switch ins := ins.(type) {
+				case *ssa.Store:
+					addr, ok := ins.Addr.(*ssa.IndexAddr)
+					if !ok {
+						continue
+					}
+					if addr.X != ssafn.Params[1] {
+						continue
+					}
+					f.Errorf(ins, "io.Writer.Write must not modify the provided buffer, not even temporarily")
+				case *ssa.Call:
+					if !isCallTo(ins.Common(), "append") {
+						continue
+					}
+					if ins.Common().Args[0] != ssafn.Params[1] {
+						continue
+					}
+					f.Errorf(ins, "io.Writer.Write must not modify the provided buffer, not even temporarily")
+				}
+			}
+		}
+	}
 }

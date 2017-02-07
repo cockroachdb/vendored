@@ -22,7 +22,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pborman/uuid"
 	"golang.org/x/tools/cover"
 )
 
@@ -45,6 +44,7 @@ var (
 	extraFlags Flags
 	pkg        = flag.String("package", "", "Go package")
 	verbose    = flag.Bool("v", false, "Pass '-v' argument to 'go test'")
+	debug      = flag.Bool("debug", false, "Enable debug output")
 	coverprof  = flag.String("coverprofile", "", "If supplied, use a go cover profile")
 	covermode  = flag.String("covermode", "count", "sent as covermode argument to go test")
 	repotoken  = flag.String("repotoken", os.Getenv("COVERALLS_TOKEN"), "Repository Token on coveralls")
@@ -218,9 +218,8 @@ func process() error {
 		jobId = travisJobId
 	} else if circleCiJobId := os.Getenv("CIRCLE_BUILD_NUM"); circleCiJobId != "" {
 		jobId = circleCiJobId
-	} else {
-		jobId = uuid.New()
 	}
+
 	if *repotoken == "" {
 		repotoken = nil // remove the entry from json
 	}
@@ -243,11 +242,16 @@ func process() error {
 	j := Job{
 		RunAt:              time.Now(),
 		RepoToken:          repotoken,
-		ServiceJobId:       jobId,
 		ServicePullRequest: pullRequest,
 		Git:                collectGitInfo(),
 		SourceFiles:        sourceFiles,
-		ServiceName:        *service,
+	}
+
+	// Only include a job ID if it's known, otherwise, Coveralls looks
+	// for the job and can't find it.
+	if jobId != "" {
+		j.ServiceJobId = jobId
+		j.ServiceName = *service
 	}
 
 	// Ignore files
@@ -272,6 +276,14 @@ func process() error {
 			files = append(files, file)
 		}
 		j.SourceFiles = files
+	}
+
+	if *debug {
+		b, err := json.MarshalIndent(j, "", "  ")
+		if err != nil {
+			return err
+		}
+		log.Printf("Posting data: %s", b)
 	}
 
 	b, err := json.Marshal(j)

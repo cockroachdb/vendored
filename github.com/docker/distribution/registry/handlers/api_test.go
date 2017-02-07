@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -28,6 +29,8 @@ import (
 	"github.com/docker/distribution/reference"
 	"github.com/docker/distribution/registry/api/errcode"
 	"github.com/docker/distribution/registry/api/v2"
+	storagedriver "github.com/docker/distribution/registry/storage/driver"
+	"github.com/docker/distribution/registry/storage/driver/factory"
 	_ "github.com/docker/distribution/registry/storage/driver/testdriver"
 	"github.com/docker/distribution/testutil"
 	"github.com/docker/libtrust"
@@ -277,7 +280,7 @@ func makeBlobArgs(t *testing.T) blobArgs {
 		layerFile:   layerFile,
 		layerDigest: layerDigest,
 	}
-	args.imageName, _ = reference.ParseNamed("foo/bar")
+	args.imageName, _ = reference.WithName("foo/bar")
 	return args
 }
 
@@ -702,7 +705,7 @@ func TestDeleteDisabled(t *testing.T) {
 	env := newTestEnv(t, false)
 	defer env.Shutdown()
 
-	imageName, _ := reference.ParseNamed("foo/bar")
+	imageName, _ := reference.WithName("foo/bar")
 	// "build" our layer file
 	layerFile, layerDigest, err := testutil.CreateRandomTarFile()
 	if err != nil {
@@ -729,7 +732,7 @@ func TestDeleteReadOnly(t *testing.T) {
 	env := newTestEnv(t, true)
 	defer env.Shutdown()
 
-	imageName, _ := reference.ParseNamed("foo/bar")
+	imageName, _ := reference.WithName("foo/bar")
 	// "build" our layer file
 	layerFile, layerDigest, err := testutil.CreateRandomTarFile()
 	if err != nil {
@@ -759,7 +762,7 @@ func TestStartPushReadOnly(t *testing.T) {
 	defer env.Shutdown()
 	env.app.readOnly = true
 
-	imageName, _ := reference.ParseNamed("foo/bar")
+	imageName, _ := reference.WithName("foo/bar")
 
 	layerUploadURL, err := env.builder.BuildBlobUploadURL(imageName)
 	if err != nil {
@@ -797,8 +800,8 @@ type manifestArgs struct {
 }
 
 func TestManifestAPI(t *testing.T) {
-	schema1Repo, _ := reference.ParseNamed("foo/schema1")
-	schema2Repo, _ := reference.ParseNamed("foo/schema2")
+	schema1Repo, _ := reference.WithName("foo/schema1")
+	schema2Repo, _ := reference.WithName("foo/schema2")
 
 	deleteEnabled := false
 	env1 := newTestEnv(t, deleteEnabled)
@@ -815,9 +818,96 @@ func TestManifestAPI(t *testing.T) {
 	testManifestAPIManifestList(t, env2, schema2Args)
 }
 
+// storageManifestErrDriverFactory implements the factory.StorageDriverFactory interface.
+type storageManifestErrDriverFactory struct{}
+
+const (
+	repositoryWithManifestNotFound    = "manifesttagnotfound"
+	repositoryWithManifestInvalidPath = "manifestinvalidpath"
+	repositoryWithManifestBadLink     = "manifestbadlink"
+	repositoryWithGenericStorageError = "genericstorageerr"
+)
+
+func (factory *storageManifestErrDriverFactory) Create(parameters map[string]interface{}) (storagedriver.StorageDriver, error) {
+	// Initialize the mock driver
+	var errGenericStorage = errors.New("generic storage error")
+	return &mockErrorDriver{
+		returnErrs: []mockErrorMapping{
+			{
+				pathMatch: fmt.Sprintf("%s/_manifests/tags", repositoryWithManifestNotFound),
+				content:   nil,
+				err:       storagedriver.PathNotFoundError{},
+			},
+			{
+				pathMatch: fmt.Sprintf("%s/_manifests/tags", repositoryWithManifestInvalidPath),
+				content:   nil,
+				err:       storagedriver.InvalidPathError{},
+			},
+			{
+				pathMatch: fmt.Sprintf("%s/_manifests/tags", repositoryWithManifestBadLink),
+				content:   []byte("this is a bad sha"),
+				err:       nil,
+			},
+			{
+				pathMatch: fmt.Sprintf("%s/_manifests/tags", repositoryWithGenericStorageError),
+				content:   nil,
+				err:       errGenericStorage,
+			},
+		},
+	}, nil
+}
+
+type mockErrorMapping struct {
+	pathMatch string
+	content   []byte
+	err       error
+}
+
+// mockErrorDriver implements StorageDriver to force storage error on manifest request
+type mockErrorDriver struct {
+	storagedriver.StorageDriver
+	returnErrs []mockErrorMapping
+}
+
+func (dr *mockErrorDriver) GetContent(ctx context.Context, path string) ([]byte, error) {
+	for _, returns := range dr.returnErrs {
+		if strings.Contains(path, returns.pathMatch) {
+			return returns.content, returns.err
+		}
+	}
+	return nil, errors.New("Unknown storage error")
+}
+
+func TestGetManifestWithStorageError(t *testing.T) {
+	factory.Register("storagemanifesterror", &storageManifestErrDriverFactory{})
+	config := configuration.Configuration{
+		Storage: configuration.Storage{
+			"storagemanifesterror": configuration.Parameters{},
+			"maintenance": configuration.Parameters{"uploadpurging": map[interface{}]interface{}{
+				"enabled": false,
+			}},
+		},
+	}
+	config.HTTP.Headers = headerConfig
+	env1 := newTestEnvWithConfig(t, &config)
+	defer env1.Shutdown()
+
+	repo, _ := reference.WithName(repositoryWithManifestNotFound)
+	testManifestWithStorageError(t, env1, repo, http.StatusNotFound, v2.ErrorCodeManifestUnknown)
+
+	repo, _ = reference.WithName(repositoryWithGenericStorageError)
+	testManifestWithStorageError(t, env1, repo, http.StatusInternalServerError, errcode.ErrorCodeUnknown)
+
+	repo, _ = reference.WithName(repositoryWithManifestInvalidPath)
+	testManifestWithStorageError(t, env1, repo, http.StatusInternalServerError, errcode.ErrorCodeUnknown)
+
+	repo, _ = reference.WithName(repositoryWithManifestBadLink)
+	testManifestWithStorageError(t, env1, repo, http.StatusInternalServerError, errcode.ErrorCodeUnknown)
+}
+
 func TestManifestDelete(t *testing.T) {
-	schema1Repo, _ := reference.ParseNamed("foo/schema1")
-	schema2Repo, _ := reference.ParseNamed("foo/schema2")
+	schema1Repo, _ := reference.WithName("foo/schema1")
+	schema2Repo, _ := reference.WithName("foo/schema2")
 
 	deleteEnabled := true
 	env := newTestEnv(t, deleteEnabled)
@@ -829,7 +919,7 @@ func TestManifestDelete(t *testing.T) {
 }
 
 func TestManifestDeleteDisabled(t *testing.T) {
-	schema1Repo, _ := reference.ParseNamed("foo/schema1")
+	schema1Repo, _ := reference.WithName("foo/schema1")
 	deleteEnabled := false
 	env := newTestEnv(t, deleteEnabled)
 	defer env.Shutdown()
@@ -850,6 +940,26 @@ func testManifestDeleteDisabled(t *testing.T, env *testEnv, imageName reference.
 	defer resp.Body.Close()
 
 	checkResponse(t, "status of disabled delete of manifest", resp, http.StatusMethodNotAllowed)
+}
+
+func testManifestWithStorageError(t *testing.T, env *testEnv, imageName reference.Named, expectedStatusCode int, expectedErrorCode errcode.ErrorCode) {
+	tag := "latest"
+	tagRef, _ := reference.WithTag(imageName, tag)
+	manifestURL, err := env.builder.BuildManifestURL(tagRef)
+	if err != nil {
+		t.Fatalf("unexpected error getting manifest url: %v", err)
+	}
+
+	// -----------------------------
+	// Attempt to fetch the manifest
+	resp, err := http.Get(manifestURL)
+	if err != nil {
+		t.Fatalf("unexpected error getting manifest: %v", err)
+	}
+	defer resp.Body.Close()
+	checkResponse(t, "getting non-existent manifest", resp, expectedStatusCode)
+	checkBodyHasErrorCodes(t, "getting non-existent manifest", resp, expectedErrorCode)
+	return
 }
 
 func testManifestAPISchema1(t *testing.T, env *testEnv, imageName reference.Named) manifestArgs {
@@ -2293,7 +2403,7 @@ func checkErr(t *testing.T, err error, msg string) {
 }
 
 func createRepository(env *testEnv, t *testing.T, imageName string, tag string) digest.Digest {
-	imageNameRef, err := reference.ParseNamed(imageName)
+	imageNameRef, err := reference.WithName(imageName)
 	if err != nil {
 		t.Fatalf("unable to parse reference: %v", err)
 	}
@@ -2364,7 +2474,7 @@ func TestRegistryAsCacheMutationAPIs(t *testing.T) {
 	env := newTestEnvMirror(t, deleteEnabled)
 	defer env.Shutdown()
 
-	imageName, _ := reference.ParseNamed("foo/bar")
+	imageName, _ := reference.WithName("foo/bar")
 	tag := "latest"
 	tagRef, _ := reference.WithTag(imageName, tag)
 	manifestURL, err := env.builder.BuildManifestURL(tagRef)
@@ -2457,7 +2567,7 @@ func TestProxyManifestGetByTag(t *testing.T) {
 	}
 	truthConfig.HTTP.Headers = headerConfig
 
-	imageName, _ := reference.ParseNamed("foo/bar")
+	imageName, _ := reference.WithName("foo/bar")
 	tag := "latest"
 
 	truthEnv := newTestEnvWithConfig(t, &truthConfig)
