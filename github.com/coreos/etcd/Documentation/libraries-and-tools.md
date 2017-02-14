@@ -14,6 +14,7 @@
 - [etcdtool](https://github.com/mickep76/etcdtool) - Export/Import/Edit etcd directory as JSON/YAML/TOML and Validate directory using JSON schema
 - [etcd-rest](https://github.com/mickep76/etcd-rest) - Create generic REST API in Go using etcd as a backend with validation using JSON schema
 - [etcdsh](https://github.com/kamilhark/etcdsh) - A command line client with support of command history and tab completion. Supports v2
+- [etcdloadtest](https://github.com/sinsharat/etcdloadtest) - A command line load test client for etcd version 3.0 and above.
 
 **Go libraries**
 
@@ -58,6 +59,7 @@
 
 **C libraries**
 
+- [apache/celix/etcdlib](https://github.com/apache/celix/tree/develop/etcdlib) - Supports v2
 - [jdarcy/etcd-api](https://github.com/jdarcy/etcd-api) - Supports v2
 - [shafreeck/cetcd](https://github.com/shafreeck/cetcd) - Supports v2
 
@@ -103,6 +105,10 @@
 
 - [efrecon/etcd-tcl](https://github.com/efrecon/etcd-tcl) - Supports v2, except wait.
 
+**Rust libraries**
+
+- [jimmycuadra/rust-etcd](https://github.com/jimmycuadra/rust-etcd) - Supports v2
+
 **Gradle Plugins**
 
 - [gradle-etcd-rest-plugin](https://github.com/cdancy/gradle-etcd-rest-plugin) - Supports v2
@@ -122,6 +128,7 @@
 
 **Projects using etcd**
 
+- [apache/celix](https://github.com/apache/celix) - an implementation of the OSGi specification adapted to C and C++
 - [binocarlos/yoda](https://github.com/binocarlos/yoda) - etcd + ZeroMQ
 - [blox/blox](https://github.com/blox/blox) - a collection of open source projects for container management and orchestration with AWS ECS
 - [calavera/active-proxy](https://github.com/calavera/active-proxy) - HTTP Proxy configured with etcd
@@ -134,7 +141,6 @@
 - [mattn/etcdenv](https://github.com/mattn/etcdenv) - "env" shebang with etcd integration
 - [kelseyhightower/confd](https://github.com/kelseyhightower/confd) - Manage local app config files using templates and data from etcd
 - [configdb](https://git.autistici.org/ai/configdb/tree/master) - A REST relational abstraction on top of arbitrary database backends, aimed at storing configs and inventories.
-- [scrz](https://github.com/scrz/scrz) - Container manager, stores configuration in etcd.
 - [fleet](https://github.com/coreos/fleet) - Distributed init system
 - [kubernetes/kubernetes](https://github.com/kubernetes/kubernetes) - Container cluster manager introduced by Google.
 - [mailgun/vulcand](https://github.com/mailgun/vulcand) - HTTP proxy that uses etcd as a configuration backend.

@@ -616,6 +616,8 @@ Empty field.
 | value | value is the value, in bytes, to associate with the key in the key-value store. | bytes |
 | lease | lease is the lease ID to associate with the key in the key-value store. A lease value of 0 indicates no lease. | int64 |
 | prev_kv | If prev_kv is set, etcd gets the previous key-value pair before changing it. The previous key-value pair will be returned in the put response. | bool |
+| ignore_value | If ignore_value is set, etcd updates the key using its current value. Returns an error if the key does not exist. | bool |
+| ignore_lease | If ignore_lease is set, etcd updates the key using its current lease. Returns an error if the key does not exist. | bool |
 
 
 
@@ -633,8 +635,8 @@ Empty field.
 | Field | Description | Type |
 | ----- | ----------- | ---- |
 | key | default, no sorting lowest target value first highest target value first key is the first key for the range. If range_end is not given, the request only looks up key. | bytes |
-| range_end | range_end is the upper bound on the requested range [key, range_end). If range_end is '\0', the range is all keys >= key. If the range_end is one bit larger than the given key, then the range requests get the all keys with the prefix (the given key). If both key and range_end are '\0', then range requests returns all keys. | bytes |
-| limit | limit is a limit on the number of keys returned for the request. | int64 |
+| range_end | range_end is the upper bound on the requested range [key, range_end). If range_end is '\0', the range is all keys >= key. If range_end is key plus one (e.g., "aa"+1 == "ab", "a\xff"+1 == "b"), then the range request gets all keys prefixed with key. If both key and range_end are '\0', then the range request returns all keys. | bytes |
+| limit | limit is a limit on the number of keys returned for the request. When limit is set to 0, it is treated as no limit. | int64 |
 | revision | revision is the point-in-time of the key-value store to use for the range. If revision is less or equal to zero, the range is over the newest key-value store. If the revision has been compacted, ErrCompacted is returned as a response. | int64 |
 | sort_order | sort_order is the order for returned sorted results. | SortOrder |
 | sort_target | sort_target is the key-value field to use for sorting. | SortTarget |

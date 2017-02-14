@@ -27,11 +27,18 @@ type kvProxy struct {
 	cache cache.Cache
 }
 
-func NewKvProxy(c *clientv3.Client) pb.KVServer {
-	return &kvProxy{
+func NewKvProxy(c *clientv3.Client) (pb.KVServer, <-chan struct{}) {
+	kv := &kvProxy{
 		kv:    c.KV,
 		cache: cache.NewCache(cache.DefaultMaxEntries),
 	}
+	donec := make(chan struct{})
+	go func() {
+		defer close(donec)
+		<-c.Ctx().Done()
+		kv.cache.Close()
+	}()
+	return kv, donec
 }
 
 func (p *kvProxy) Range(ctx context.Context, r *pb.RangeRequest) (*pb.RangeResponse, error) {
@@ -183,6 +190,9 @@ func RangeRequestToOp(r *pb.RangeRequest) clientv3.Op {
 	opts = append(opts, clientv3.WithMinCreateRev(r.MinCreateRevision))
 	opts = append(opts, clientv3.WithMaxModRev(r.MaxModRevision))
 	opts = append(opts, clientv3.WithMinModRev(r.MinModRevision))
+	if r.CountOnly {
+		opts = append(opts, clientv3.WithCountOnly())
+	}
 
 	if r.Serializable {
 		opts = append(opts, clientv3.WithSerializable())
@@ -194,7 +204,12 @@ func RangeRequestToOp(r *pb.RangeRequest) clientv3.Op {
 func PutRequestToOp(r *pb.PutRequest) clientv3.Op {
 	opts := []clientv3.OpOption{}
 	opts = append(opts, clientv3.WithLease(clientv3.LeaseID(r.Lease)))
-
+	if r.IgnoreValue {
+		opts = append(opts, clientv3.WithIgnoreValue())
+	}
+	if r.IgnoreLease {
+		opts = append(opts, clientv3.WithIgnoreLease())
+	}
 	return clientv3.OpPut(string(r.Key), string(r.Value), opts...)
 }
 

@@ -50,7 +50,7 @@ import:
 - package: github.com/kr/pty
   version: f7ee69f31298ecbe5d2b349c711e2547a617d398
 - package: github.com/olekukonko/tablewriter
-  version: cca8bbc0798408af109aaaa239cbd2634846b340
+  version: a0225b3f23b5ce0cbec6d7a66a968f8a59eca9c4
 - package: github.com/prometheus/client_golang
   version: v0.8.0
   subpackages:
@@ -60,7 +60,7 @@ import:
 - package: github.com/spf13/pflag
   version: 08b1a584251b5b62f458943640fc8ebd4d50aaa5
 - package: github.com/ugorji/go
-  version: 9c7f9b7a2bc3a520f7c7b30b34b7f85f47fe27b6
+  version: ded73eae5db7e7a0ef6f55aace87a2873c5d2b74
   subpackages:
   - codec
 - package: github.com/urfave/cli
@@ -75,7 +75,7 @@ import:
   - bcrypt
   - blowfish
 - package: golang.org/x/net
-  version: 6acef71eb69611914f7a30939ea9f6e194c78172
+  version: f2499483f923065a842d38eb4c7f1927e6fc6e6d
   subpackages:
   - context
   - http2
@@ -105,4 +105,3 @@ import:
   version: 976c720a22c8eb4eb6a0b4348ad85ad12491a506
   subpackages:
   - assert
-

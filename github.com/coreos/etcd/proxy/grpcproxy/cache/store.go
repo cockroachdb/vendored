@@ -35,6 +35,7 @@ type Cache interface {
 	Compact(revision int64)
 	Invalidate(key []byte, endkey []byte)
 	Size() int
+	Close()
 }
 
 // keyFunc returns the key of an request, which is used to look up in the cache for it's caching response.
@@ -53,6 +54,8 @@ func NewCache(maxCacheEntries int) Cache {
 		compactedRev: -1,
 	}
 }
+
+func (c *cache) Close() {}
 
 // cache implements Cache
 type cache struct {

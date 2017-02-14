@@ -28,7 +28,7 @@ To start etcd automatically using custom settings at startup in Linux, using a [
 
 ### --snapshot-count
 + Number of committed transactions to trigger a snapshot to disk.
-+ default: "10000"
++ default: "100000"
 + env variable: ETCD_SNAPSHOT_COUNT
 
 ### --heartbeat-interval
@@ -139,6 +139,12 @@ To start etcd automatically using custom settings at startup in Linux, using a [
 + Auto compaction retention for mvcc key value store in hour. 0 means disable auto compaction.
 + default: 0
 + env variable: ETCD_AUTO_COMPACTION_RETENTION
+
+
+### --enable-v2
++ Accept etcd V2 client requests
++ default: true
++ env variable: ETCD_ENABLE_V2
 
 ## Proxy flags
 
