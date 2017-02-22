@@ -35,6 +35,8 @@ var Funcs = map[string]lint.Func{
 	"S1017": LintTrim,
 	"S1018": LintLoopSlide,
 	"S1019": LintMakeLenCap,
+	"S1020": LintAssertNotNil,
+	"S1021": LintDeclareAssign,
 }
 
 type Checker struct {
@@ -1404,6 +1406,112 @@ func LintMakeLenCap(f *lint.File) {
 			}
 		}
 		return false
+	}
+	f.Walk(fn)
+}
+
+func LintAssertNotNil(f *lint.File) {
+	isNilCheck := func(ident *ast.Ident, expr ast.Expr) bool {
+		xbinop, ok := expr.(*ast.BinaryExpr)
+		if !ok || xbinop.Op != token.NEQ {
+			return false
+		}
+		xident, ok := xbinop.X.(*ast.Ident)
+		if !ok || xident.Obj != ident.Obj {
+			return false
+		}
+		if !f.IsNil(xbinop.Y) {
+			return false
+		}
+		return true
+	}
+	isOKCheck := func(ident *ast.Ident, expr ast.Expr) bool {
+		yident, ok := expr.(*ast.Ident)
+		if !ok || yident.Obj != ident.Obj {
+			return false
+		}
+		return true
+	}
+	fn := func(node ast.Node) bool {
+		ifstmt, ok := node.(*ast.IfStmt)
+		if !ok {
+			return true
+		}
+		assign, ok := ifstmt.Init.(*ast.AssignStmt)
+		if !ok || len(assign.Lhs) != 2 || len(assign.Rhs) != 1 || !lint.IsBlank(assign.Lhs[0]) {
+			return true
+		}
+		assert, ok := assign.Rhs[0].(*ast.TypeAssertExpr)
+		if !ok {
+			return true
+		}
+		binop, ok := ifstmt.Cond.(*ast.BinaryExpr)
+		if !ok || binop.Op != token.LAND {
+			return true
+		}
+		assertIdent, ok := assert.X.(*ast.Ident)
+		if !ok {
+			return true
+		}
+		assignIdent, ok := assign.Lhs[1].(*ast.Ident)
+		if !ok {
+			return true
+		}
+		if !(isNilCheck(assertIdent, binop.X) && isOKCheck(assignIdent, binop.Y)) &&
+			!(isNilCheck(assertIdent, binop.Y) && isOKCheck(assignIdent, binop.X)) {
+			return true
+		}
+		f.Errorf(ifstmt, "when %s is true, %s can't be nil", f.Render(assignIdent), f.Render(assertIdent))
+		return true
+	}
+	f.Walk(fn)
+}
+
+func LintDeclareAssign(f *lint.File) {
+	fn := func(node ast.Node) bool {
+		block, ok := node.(*ast.BlockStmt)
+		if !ok {
+			return true
+		}
+		if len(block.List) < 2 {
+			return true
+		}
+		for i, stmt := range block.List[:len(block.List)-1] {
+			_ = i
+			decl, ok := stmt.(*ast.DeclStmt)
+			if !ok {
+				continue
+			}
+			gdecl, ok := decl.Decl.(*ast.GenDecl)
+			if !ok || gdecl.Tok != token.VAR || len(gdecl.Specs) != 1 {
+				continue
+			}
+			vspec, ok := gdecl.Specs[0].(*ast.ValueSpec)
+			if !ok || len(vspec.Names) != 1 || len(vspec.Values) != 0 {
+				continue
+			}
+
+			assign, ok := block.List[i+1].(*ast.AssignStmt)
+			if !ok || assign.Tok != token.ASSIGN {
+				continue
+			}
+			if len(assign.Lhs) != 1 || len(assign.Rhs) != 1 {
+				continue
+			}
+			ident, ok := assign.Lhs[0].(*ast.Ident)
+			if !ok {
+				continue
+			}
+			if vspec.Names[0].Obj != ident.Obj {
+				continue
+			}
+
+			if refersTo(f.Pkg.TypesInfo, assign.Rhs[0], ident) {
+				continue
+			}
+			f.Errorf(decl, "should merge variable declaration with assignment on next line")
+		}
+		return true
 	}
 	f.Walk(fn)
 }
