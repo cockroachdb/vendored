@@ -1505,6 +1505,10 @@ class MockPersistentCache : public PersistentCache {
 
   bool IsCompressed() override { return is_compressed_; }
 
+  std::string GetPrintableOptions() const override {
+    return "MockPersistentCache";
+  }
+
   port::Mutex lock_;
   std::map<std::string, std::string> data_;
   const bool is_compressed_ = true;
@@ -2212,8 +2216,40 @@ TEST_F(DBTest2, ManualCompactionOverlapManualCompaction) {
 
   rocksdb::SyncPoint::GetInstance()->DisableProcessing();
 }
+
+TEST_F(DBTest2, OptimizeForPointLookup) {
+  Options options = CurrentOptions();
+  Close();
+  options.OptimizeForPointLookup(2);
+  ASSERT_OK(DB::Open(options, dbname_, &db_));
+
+  ASSERT_OK(Put("foo", "v1"));
+  ASSERT_EQ("v1", Get("foo"));
+  Flush();
+  ASSERT_EQ("v1", Get("foo"));
+}
 #endif  // ROCKSDB_LITE
 
+TEST_F(DBTest2, DirectIO) {
+  if (!IsDirectIOSupported()) {
+    return;
+  }
+  Options options = CurrentOptions();
+  options.use_direct_reads = options.use_direct_writes = true;
+  options.allow_mmap_reads = options.allow_mmap_writes = false;
+  DestroyAndReopen(options);
+
+  ASSERT_OK(Put(Key(0), "a"));
+  ASSERT_OK(Put(Key(5), "a"));
+  ASSERT_OK(Flush());
+
+  ASSERT_OK(Put(Key(10), "a"));
+  ASSERT_OK(Put(Key(15), "a"));
+  ASSERT_OK(Flush());
+
+  ASSERT_OK(db_->CompactRange(CompactRangeOptions(), nullptr, nullptr));
+  Reopen(options);
+}
 }  // namespace rocksdb
 
 int main(int argc, char** argv) {

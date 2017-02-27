@@ -231,6 +231,20 @@ class SpecialEnv : public EnvWrapper {
           return base_->Append(data);
         }
       }
+      Status PositionedAppend(const Slice& data, uint64_t offset) override {
+        if (env_->table_write_callback_) {
+          (*env_->table_write_callback_)();
+        }
+        if (env_->drop_writes_.load(std::memory_order_acquire)) {
+          // Drop writes on the floor
+          return Status::OK();
+        } else if (env_->no_space_.load(std::memory_order_acquire)) {
+          return Status::NoSpace("No space left on device");
+        } else {
+          env_->bytes_written_ += data.size();
+          return base_->PositionedAppend(data, offset);
+        }
+      }
       Status Truncate(uint64_t size) override { return base_->Truncate(size); }
       Status Close() override {
 // SyncPoint is not supported in Released Windows Mode.
@@ -256,6 +270,9 @@ class SpecialEnv : public EnvWrapper {
       }
       Env::IOPriority GetIOPriority() override {
         return base_->GetIOPriority();
+      }
+      bool use_direct_io() const override {
+        return base_->use_direct_io();
       }
     };
     class ManifestFile : public WritableFile {
@@ -358,7 +375,14 @@ class SpecialEnv : public EnvWrapper {
       return Status::IOError("simulated write error");
     }
 
-    Status s = target()->NewWritableFile(f, r, soptions);
+    EnvOptions optimized = soptions;
+    if (strstr(f.c_str(), "MANIFEST") != nullptr ||
+        strstr(f.c_str(), "log") != nullptr) {
+      optimized.use_mmap_writes = false;
+      optimized.use_direct_writes = false;
+    }
+
+    Status s = target()->NewWritableFile(f, r, optimized);
     if (s.ok()) {
       if (strstr(f.c_str(), ".sst") != nullptr) {
         r->reset(new SSTableFile(this, std::move(*r)));
@@ -692,6 +716,8 @@ class DBTestBase : public testing::Test {
 
   Status TryReopen(const Options& options);
 
+  bool IsDirectIOSupported();
+
   Status Flush(int cf = 0);
 
   Status Put(const Slice& k, const Slice& v, WriteOptions wo = WriteOptions());
@@ -831,10 +857,10 @@ class DBTestBase : public testing::Test {
 
   std::vector<std::uint64_t> ListTableFiles(Env* env, const std::string& path);
 
-  void VerifyDBFromMap(std::map<std::string, std::string> true_data,
-                       size_t* total_reads_res = nullptr,
-                       bool tailing_iter = false,
-                       std::map<std::string, Status> status = {});
+  void VerifyDBFromMap(
+      std::map<std::string, std::string> true_data,
+      size_t* total_reads_res = nullptr, bool tailing_iter = false,
+      std::map<std::string, Status> status = std::map<std::string, Status>());
 
   void VerifyDBInternal(
       std::vector<std::pair<std::string, std::string>> true_data);
