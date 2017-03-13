@@ -16,69 +16,14 @@ import (
 	"sync"
 	texttemplate "text/template"
 
+	"honnef.co/go/tools/functions"
 	"honnef.co/go/tools/gcsizes"
 	"honnef.co/go/tools/lint"
 	"honnef.co/go/tools/ssa"
-	"honnef.co/go/tools/staticcheck/pure"
 	"honnef.co/go/tools/staticcheck/vrp"
 
 	"golang.org/x/tools/go/ast/astutil"
 )
-
-type Function struct {
-	// The function is known to be pure
-	Pure bool
-	// The function is known to never return (panics notwithstanding)
-	Infinite bool
-	// Variable ranges
-	Ranges vrp.Ranges
-}
-
-func (fn Function) Merge(other Function) Function {
-	r := fn.Ranges
-	if r == nil {
-		r = other.Ranges
-	}
-	return Function{
-		Pure:     fn.Pure || other.Pure,
-		Infinite: fn.Infinite || other.Infinite,
-		Ranges:   r,
-	}
-}
-
-var stdlibDescs = map[string]Function{
-	"strings.Map":            Function{Pure: true},
-	"strings.Repeat":         Function{Pure: true},
-	"strings.Replace":        Function{Pure: true},
-	"strings.Title":          Function{Pure: true},
-	"strings.ToLower":        Function{Pure: true},
-	"strings.ToLowerSpecial": Function{Pure: true},
-	"strings.ToTitle":        Function{Pure: true},
-	"strings.ToTitleSpecial": Function{Pure: true},
-	"strings.ToUpper":        Function{Pure: true},
-	"strings.ToUpperSpecial": Function{Pure: true},
-	"strings.Trim":           Function{Pure: true},
-	"strings.TrimFunc":       Function{Pure: true},
-	"strings.TrimLeft":       Function{Pure: true},
-	"strings.TrimLeftFunc":   Function{Pure: true},
-	"strings.TrimPrefix":     Function{Pure: true},
-	"strings.TrimRight":      Function{Pure: true},
-	"strings.TrimRightFunc":  Function{Pure: true},
-	"strings.TrimSpace":      Function{Pure: true},
-	"strings.TrimSuffix":     Function{Pure: true},
-
-	"(*net/http.Request).WithContext": Function{Pure: true},
-}
-
-type FunctionDescriptions map[string]Function
-
-func (d FunctionDescriptions) Get(fn *ssa.Function) Function {
-	return d[fn.RelString(nil)]
-}
-
-func (d FunctionDescriptions) Merge(fn *ssa.Function, desc Function) {
-	d[fn.RelString(nil)] = d[fn.RelString(nil)].Merge(desc)
-}
 
 func validRegexp(call *Call) {
 	arg := call.Args[0]
@@ -105,7 +50,7 @@ func unmarshalPointer(name string, arg int) CallCheck {
 
 func pointlessIntMath(call *Call) {
 	if ConvertedFromInt(call.Args[0].Value) {
-		call.Invalid(fmt.Sprintf("calling %s on a converted integer is pointless", callName(call.Instr.Common())))
+		call.Invalid(fmt.Sprintf("calling %s on a converted integer is pointless", lint.CallName(call.Instr.Common())))
 	}
 }
 
@@ -136,7 +81,7 @@ var (
 	checkEncodingBinaryRules = map[string]CallCheck{
 		"encoding/binary.Write": func(call *Call) {
 			arg := call.Args[2]
-			if !CanBinaryMarshal(arg.Value) {
+			if !CanBinaryMarshal(call.Job, arg.Value) {
 				arg.Invalid(fmt.Sprintf("value of type %s cannot be used with binary.Write", arg.Value.Value.Type()))
 			}
 		},
@@ -225,13 +170,19 @@ var (
 			}
 		},
 	}
+
+	checkRegexpMatchLoopRules = map[string]CallCheck{
+		"regexp.Match":       loopedRegexp("regexp.Match"),
+		"regexp.MatchReader": loopedRegexp("regexp.MatchReader"),
+		"regexp.MatchString": loopedRegexp("regexp.MatchString"),
+	}
 )
 
 type Checker struct {
-	funcDescs      FunctionDescriptions
+	CheckGenerated bool
+	funcDescs      *functions.Descriptions
 	deprecatedObjs map[types.Object]string
 	nodeFns        map[ast.Node]*ssa.Function
-	funcs          map[*token.File][]*ssa.Function
 }
 
 func NewChecker() *Checker {
@@ -284,7 +235,7 @@ func (c *Checker) Funcs() map[string]lint.Func {
 		"SA4007": nil,
 		"SA4008": c.CheckLoopCondition,
 		"SA4009": c.CheckArgOverwritten,
-		"SA4010": c.CheckIneffectiveAppend,
+		"SA4010": nil,
 		"SA4011": c.CheckScopedBreak,
 		"SA4012": c.CheckNaNComparison,
 		"SA4013": c.CheckDoubleNegation,
@@ -302,108 +253,41 @@ func (c *Checker) Funcs() map[string]lint.Func {
 		// "SA5006": c.CheckSliceOutOfBounds,
 		"SA5007": c.CheckInfiniteRecursion,
 
+		"SA6000": c.callChecker(checkRegexpMatchLoopRules),
+
 		"SA9000": c.callChecker(checkDubiousSyncPoolSizeRules),
 		"SA9001": c.CheckDubiousDeferInChannelRangeLoop,
 		"SA9002": c.CheckNonOctalFileMode,
+		"SA9003": c.CheckEmptyBranch,
 	}
 }
 
-func (c *Checker) funcsForFile(f *lint.File) []*ssa.Function {
-	return c.funcs[f.Program.Fset.File(f.File.Pos())]
-}
-
-// terminates reports whether fn is supposed to return, that is if it
-// has at least one theoretic path that returns from the function.
-// Explicit panics do not count as terminating.
-func terminates(fn *ssa.Function) (ret bool) {
-	if fn.Blocks == nil {
-		// assuming that a function terminates is the conservative
-		// choice
-		return true
+func (c *Checker) filterGenerated(files []*ast.File) []*ast.File {
+	if c.CheckGenerated {
+		return files
 	}
-
-	for _, block := range fn.Blocks {
-		if len(block.Instrs) == 0 {
-			continue
-		}
-		if _, ok := block.Instrs[len(block.Instrs)-1].(*ssa.Return); ok {
-			return true
+	var out []*ast.File
+	for _, f := range files {
+		if !lint.IsGenerated(f) {
+			out = append(out, f)
 		}
 	}
-	return false
+	return out
 }
 
 func (c *Checker) Init(prog *lint.Program) {
-	c.funcs = map[*token.File][]*ssa.Function{}
-	c.funcDescs = FunctionDescriptions{}
+	c.funcDescs = functions.NewDescriptions(prog.SSA)
 	c.deprecatedObjs = map[types.Object]string{}
 	c.nodeFns = map[ast.Node]*ssa.Function{}
 
-	for fn, desc := range stdlibDescs {
-		c.funcDescs[fn] = desc
-	}
+	fns := prog.AllFunctions
 
-	var fns []*ssa.Function
-	for _, pkg := range prog.Packages {
-		for _, m := range pkg.SSAPkg.Members {
-			if fn, ok := m.(*ssa.Function); ok {
-				fns = append(fns, fn)
-			}
-			if typ, ok := m.(*ssa.Type); ok {
-				ttyp := typ.Type().(*types.Named)
-				if _, ok := ttyp.Underlying().(*types.Interface); ok {
-					continue
-				}
-				ptr := types.NewPointer(ttyp)
-				ms := pkg.SSAPkg.Prog.MethodSets.MethodSet(ptr)
-				for i := 0; i < ms.Len(); i++ {
-					fns = append(fns, pkg.SSAPkg.Prog.MethodValue(ms.At(i)))
-				}
-				ms = pkg.SSAPkg.Prog.MethodSets.MethodSet(ttyp)
-				for i := 0; i < ms.Len(); i++ {
-					fns = append(fns, pkg.SSAPkg.Prog.MethodValue(ms.At(i)))
-				}
-			}
-		}
-	}
-
-	s := &pure.State{}
-	var processPure func(*ssa.Function)
-	processPure = func(fn *ssa.Function) {
-		// TODO(dh): parallelize this
-		s.IsPure(fn)
-		for _, anon := range fn.AnonFuncs {
-			processPure(anon)
-		}
-	}
-	for _, fn := range fns {
-		processPure(fn)
-	}
-
-	type desc struct {
-		fn   *ssa.Function
-		desc Function
-	}
-	descs := make(chan desc)
-	funcs := make(chan *ssa.Function)
 	var pwg sync.WaitGroup
 	var processFn func(*ssa.Function)
 	processFn = func(fn *ssa.Function) {
 		if fn.Blocks != nil {
-			detectInfiniteLoops(fn)
+			applyStdlibKnowledge(fn)
 			ssa.OptimizeBlocks(fn)
-
-			funcs <- fn
-			descs <- desc{fn, Function{
-				Pure:     s.IsPure(fn),
-				Ranges:   vrp.BuildGraph(fn).Solve(),
-				Infinite: !terminates(fn),
-			}}
-
-		}
-		for _, anon := range fn.AnonFuncs {
-			pwg.Add(1)
-			processFn(anon)
 		}
 		pwg.Done()
 	}
@@ -411,74 +295,15 @@ func (c *Checker) Init(prog *lint.Program) {
 		pwg.Add(1)
 		go processFn(fn)
 	}
-	go func() {
-		pwg.Wait()
-		close(descs)
-		close(funcs)
-	}()
+	pwg.Wait()
 
-	var rwg sync.WaitGroup
-	rwg.Add(2)
-	go func() {
-		for fn := range funcs {
-			if fn.Synthetic != "" && (fn.Package() == nil || fn != fn.Package().Members["init"]) {
-				// Don't track synthetic functions, unless they're the
-				// init function
-				continue
-			}
-			pos := fn.Pos()
-			if pos == 0 {
-				for _, pkg := range prog.Packages {
-					if pkg.SSAPkg == fn.Pkg {
-						pos = pkg.PkgInfo.Files[0].Pos()
-						break
-					}
-				}
-			}
-			f := prog.Prog.Fset.File(pos)
-			c.funcs[f] = append(c.funcs[f], fn)
-		}
-		rwg.Done()
-	}()
-	go func() {
-		for desc := range descs {
-			c.funcDescs.Merge(desc.fn, desc.desc)
-		}
-		rwg.Done()
-	}()
-	rwg.Wait()
-
-	wg := &sync.WaitGroup{}
-	chNodeFns := make(chan map[ast.Node]*ssa.Function, runtime.NumCPU()*2)
-	for _, pkg := range prog.Packages {
-		pkg := pkg
-		for _, f := range pkg.PkgInfo.Files {
-			f := f
-			wg.Add(1)
-			go func() {
-				m := map[ast.Node]*ssa.Function{}
-				ast.Walk(&globalVisitor{m, pkg, f}, f)
-				chNodeFns <- m
-				wg.Done()
-			}()
-		}
-	}
-	go func() {
-		wg.Wait()
-		close(chNodeFns)
-	}()
-
-	for nodeFns := range chNodeFns {
-		for k, v := range nodeFns {
-			c.nodeFns[k] = v
-		}
-	}
+	c.nodeFns = lint.NodeFns(prog.Packages)
 
 	chDeprecated := make(chan struct {
 		obj types.Object
 		msg string
 	}, runtime.NumCPU()*2)
-	wg = &sync.WaitGroup{}
+	wg := &sync.WaitGroup{}
 	for _, pkginfo := range prog.Prog.AllPackages {
 		pkginfo := pkginfo
 		scope := pkginfo.Pkg.Scope()
@@ -488,7 +313,7 @@ func (c *Checker) Init(prog *lint.Program) {
 			wg.Add(1)
 			go func() {
 				obj := scope.Lookup(name)
-				msg := c.deprecationMessage(pkginfo.Files, prog.Prog.Fset, obj)
+				msg := c.deprecationMessage(pkginfo.Files, prog.SSA.Fset, obj)
 				chDeprecated <- struct {
 					obj types.Object
 					msg string
@@ -499,7 +324,7 @@ func (c *Checker) Init(prog *lint.Program) {
 						// FIXME(dh): This code will not find deprecated
 						// fields in anonymous structs.
 						field := typ.Field(i)
-						msg := c.deprecationMessage(pkginfo.Files, prog.Prog.Fset, field)
+						msg := c.deprecationMessage(pkginfo.Files, prog.SSA.Fset, field)
 						chDeprecated <- struct {
 							obj types.Object
 							msg string
@@ -589,108 +414,8 @@ func (c *Checker) deprecationMessage(files []*ast.File, fset *token.FileSet, obj
 	return ""
 }
 
-type globalVisitor struct {
-	m   map[ast.Node]*ssa.Function
-	pkg *lint.Pkg
-	f   *ast.File
-}
-
-func (v *globalVisitor) Visit(node ast.Node) ast.Visitor {
-	switch node := node.(type) {
-	case *ast.CallExpr:
-		v.m[node] = v.pkg.SSAPkg.Func("init")
-		return v
-	case *ast.FuncDecl:
-		nv := &fnVisitor{v.m, v.f, v.pkg, nil}
-		return nv.Visit(node)
-	default:
-		return v
-	}
-}
-
-type fnVisitor struct {
-	m     map[ast.Node]*ssa.Function
-	f     *ast.File
-	pkg   *lint.Pkg
-	ssafn *ssa.Function
-}
-
-func (v *fnVisitor) Visit(node ast.Node) ast.Visitor {
-	switch node := node.(type) {
-	case *ast.FuncDecl:
-		var ssafn *ssa.Function
-		ssafn = v.pkg.SSAPkg.Prog.FuncValue(v.pkg.TypesInfo.ObjectOf(node.Name).(*types.Func))
-		v.m[node] = ssafn
-		if ssafn == nil {
-			return nil
-		}
-		return &fnVisitor{v.m, v.f, v.pkg, ssafn}
-	case *ast.FuncLit:
-		var ssafn *ssa.Function
-		path, _ := astutil.PathEnclosingInterval(v.f, node.Pos(), node.Pos())
-		ssafn = ssa.EnclosingFunction(v.pkg.SSAPkg, path)
-		v.m[node] = ssafn
-		if ssafn == nil {
-			return nil
-		}
-		return &fnVisitor{v.m, v.f, v.pkg, ssafn}
-	case nil:
-		return nil
-	default:
-		v.m[node] = v.ssafn
-		return v
-	}
-}
-
-func allPredsBut(b, but *ssa.BasicBlock, list []*ssa.BasicBlock) []*ssa.BasicBlock {
-outer:
-	for _, pred := range b.Preds {
-		if pred == but {
-			continue
-		}
-		for _, p := range list {
-			// TODO improve big-o complexity of this function
-			if pred == p {
-				continue outer
-			}
-		}
-		list = append(list, pred)
-		list = allPredsBut(pred, but, list)
-	}
-	return list
-}
-
-type loopSet map[*ssa.BasicBlock]bool
-
-func findLoops(fn *ssa.Function) []loopSet {
-	if fn.Blocks == nil {
-		return nil
-	}
-	tree := fn.DomPreorder()
-	var sets []loopSet
-	for _, h := range tree {
-		for _, n := range h.Preds {
-			if !h.Dominates(n) {
-				continue
-			}
-			// n is a back-edge to h
-			// h is the loop header
-			if n == h {
-				sets = append(sets, loopSet{n: true})
-				continue
-			}
-			set := loopSet{h: true, n: true}
-			for _, b := range allPredsBut(n, h, nil) {
-				set[b] = true
-			}
-			sets = append(sets, set)
-		}
-	}
-	return sets
-}
-
-func isInLoop(b *ssa.BasicBlock) bool {
-	sets := findLoops(b.Parent())
+func (c *Checker) isInLoop(b *ssa.BasicBlock) bool {
+	sets := c.funcDescs.Get(b.Parent()).Loops
 	for _, set := range sets {
 		if set[b] {
 			return true
@@ -699,13 +424,16 @@ func isInLoop(b *ssa.BasicBlock) bool {
 	return false
 }
 
-func detectInfiniteLoops(fn *ssa.Function) {
+func applyStdlibKnowledge(fn *ssa.Function) {
 	if len(fn.Blocks) == 0 {
 		return
 	}
 
-	// Detect loops that can terminate from a compiler POV, but can't
-	// due to stdlib behaviour
+	// comma-ok receiving from a time.Tick channel will never return
+	// ok == false, so any branching on the value of ok can be
+	// replaced with an unconditional jump. This will primarily match
+	// `for range time.Tick(x)` loops, but it can also match
+	// user-written code.
 	for _, block := range fn.Blocks {
 		if len(block.Instrs) < 3 {
 			continue
@@ -730,21 +458,19 @@ func detectInfiniteLoops(fn *ssa.Function) {
 			if !ok {
 				continue
 			}
-			if !isCallTo(call.Common(), "time.Tick") {
+			if !lint.IsCallTo(call.Common(), "time.Tick") {
 				continue
 			}
-			// XXX check if we're extracting ok from our unop
-			if _, ok := (*instrs[i+1]).(*ssa.Extract); !ok {
-				continue
-			}
-			// XXX check that we're branching on our extract result
-			if _, ok := (*instrs[i+2]).(*ssa.If); !ok {
+			ex, ok := (*instrs[i+1]).(*ssa.Extract)
+			if !ok || ex.Tuple != unop || ex.Index != 1 {
 				continue
 			}
 
-			if !isInLoop(block) {
+			ifstmt, ok := (*instrs[i+2]).(*ssa.If)
+			if !ok || ifstmt.Cond != ex {
 				continue
 			}
+
 			*instrs[i+2] = ssa.NewJump(block)
 			succ := block.Succs[1]
 			block.Succs = block.Succs[0:1]
@@ -753,61 +479,63 @@ func detectInfiniteLoops(fn *ssa.Function) {
 	}
 }
 
-func hasType(f *lint.File, expr ast.Expr, name string) bool {
-	return types.TypeString(f.Pkg.TypesInfo.TypeOf(expr), nil) == name
+func hasType(j *lint.Job, expr ast.Expr, name string) bool {
+	return types.TypeString(j.Program.Info.TypeOf(expr), nil) == name
 }
 
-func (c *Checker) CheckUntrappableSignal(f *lint.File) {
+func (c *Checker) CheckUntrappableSignal(j *lint.Job) {
 	fn := func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
 		if !ok {
 			return true
 		}
-		if !f.IsFunctionCallNameAny(call,
+		if !j.IsFunctionCallNameAny(call,
 			"os/signal.Ignore", "os/signal.Notify", "os/signal.Reset") {
 			return true
 		}
 		for _, arg := range call.Args {
-			if conv, ok := arg.(*ast.CallExpr); ok && isName(f, conv.Fun, "os.Signal") {
+			if conv, ok := arg.(*ast.CallExpr); ok && isName(j, conv.Fun, "os.Signal") {
 				arg = conv.Args[0]
 			}
 
-			if isName(f, arg, "os.Kill") || isName(f, arg, "syscall.SIGKILL") {
-				f.Errorf(arg, "%s cannot be trapped (did you mean syscall.SIGTERM?)", f.Render(arg))
+			if isName(j, arg, "os.Kill") || isName(j, arg, "syscall.SIGKILL") {
+				j.Errorf(arg, "%s cannot be trapped (did you mean syscall.SIGTERM?)", j.Render(arg))
 			}
-			if isName(f, arg, "syscall.SIGSTOP") {
-				f.Errorf(arg, "%s signal cannot be trapped", f.Render(arg))
+			if isName(j, arg, "syscall.SIGSTOP") {
+				j.Errorf(arg, "%s signal cannot be trapped", j.Render(arg))
 			}
 		}
 		return true
 	}
-	f.Walk(fn)
+	for _, f := range j.Program.Files {
+		ast.Inspect(f, fn)
+	}
 }
 
-func (c *Checker) CheckTemplate(f *lint.File) {
+func (c *Checker) CheckTemplate(j *lint.Job) {
 	fn := func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
 		if !ok {
 			return true
 		}
 		var kind string
-		if f.IsFunctionCallName(call, "(*text/template.Template).Parse") {
+		if j.IsFunctionCallName(call, "(*text/template.Template).Parse") {
 			kind = "text"
-		} else if f.IsFunctionCallName(call, "(*html/template.Template).Parse") {
+		} else if j.IsFunctionCallName(call, "(*html/template.Template).Parse") {
 			kind = "html"
 		} else {
 			return true
 		}
 		sel := call.Fun.(*ast.SelectorExpr)
-		if !f.IsFunctionCallName(sel.X, "text/template.New") &&
-			!f.IsFunctionCallName(sel.X, "html/template.New") {
+		if !j.IsFunctionCallName(sel.X, "text/template.New") &&
+			!j.IsFunctionCallName(sel.X, "html/template.New") {
 			// TODO(dh): this is a cheap workaround for templates with
 			// different delims. A better solution with less false
 			// negatives would use data flow analysis to see where the
 			// template comes from and where it has been
 			return true
 		}
-		s, ok := f.ExprToString(call.Args[0])
+		s, ok := j.ExprToString(call.Args[0])
 		if !ok {
 			return true
 		}
@@ -821,21 +549,23 @@ func (c *Checker) CheckTemplate(f *lint.File) {
 		if err != nil {
 			// TODO(dominikh): whitelist other parse errors, if any
 			if strings.Contains(err.Error(), "unexpected") {
-				f.Errorf(call.Args[0], "%s", err)
+				j.Errorf(call.Args[0], "%s", err)
 			}
 		}
 		return true
 	}
-	f.Walk(fn)
+	for _, f := range j.Program.Files {
+		ast.Inspect(f, fn)
+	}
 }
 
-func (c *Checker) CheckTimeSleepConstant(f *lint.File) {
+func (c *Checker) CheckTimeSleepConstant(j *lint.Job) {
 	fn := func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
 		if !ok {
 			return true
 		}
-		if !f.IsFunctionCallName(call, "time.Sleep") {
+		if !j.IsFunctionCallName(call, "time.Sleep") {
 			return true
 		}
 		lit, ok := call.Args[0].(*ast.BasicLit)
@@ -856,13 +586,15 @@ func (c *Checker) CheckTimeSleepConstant(f *lint.File) {
 		if n != 1 {
 			recommendation = fmt.Sprintf("time.Sleep(%d * time.Nanosecond)", n)
 		}
-		f.Errorf(call.Args[0], "sleeping for %d nanoseconds is probably a bug. Be explicit if it isn't: %s", n, recommendation)
+		j.Errorf(call.Args[0], "sleeping for %d nanoseconds is probably a bug. Be explicit if it isn't: %s", n, recommendation)
 		return true
 	}
-	f.Walk(fn)
+	for _, f := range j.Program.Files {
+		ast.Inspect(f, fn)
+	}
 }
 
-func (c *Checker) CheckWaitgroupAdd(f *lint.File) {
+func (c *Checker) CheckWaitgroupAdd(j *lint.Job) {
 	fn := func(node ast.Node) bool {
 		g, ok := node.(*ast.GoStmt)
 		if !ok {
@@ -887,32 +619,36 @@ func (c *Checker) CheckWaitgroupAdd(f *lint.File) {
 		if !ok {
 			return true
 		}
-		fn, ok := f.Pkg.TypesInfo.ObjectOf(sel.Sel).(*types.Func)
+		fn, ok := j.Program.Info.ObjectOf(sel.Sel).(*types.Func)
 		if !ok {
 			return true
 		}
 		if fn.FullName() == "(*sync.WaitGroup).Add" {
-			f.Errorf(sel, "should call %s before starting the goroutine to avoid a race",
-				f.Render(stmt))
+			j.Errorf(sel, "should call %s before starting the goroutine to avoid a race",
+				j.Render(stmt))
 		}
 		return true
 	}
-	f.Walk(fn)
+	for _, f := range j.Program.Files {
+		ast.Inspect(f, fn)
+	}
 }
 
-func (c *Checker) CheckInfiniteEmptyLoop(f *lint.File) {
+func (c *Checker) CheckInfiniteEmptyLoop(j *lint.Job) {
 	fn := func(node ast.Node) bool {
 		loop, ok := node.(*ast.ForStmt)
 		if !ok || len(loop.Body.List) != 0 || loop.Cond != nil || loop.Init != nil {
 			return true
 		}
-		f.Errorf(loop, "should not use an infinite empty loop. It will spin. Consider select{} instead.")
+		j.Errorf(loop, "should not use an infinite empty loop. It will spin. Consider select{} instead.")
 		return true
 	}
-	f.Walk(fn)
+	for _, f := range j.Program.Files {
+		ast.Inspect(f, fn)
+	}
 }
 
-func (c *Checker) CheckDeferInInfiniteLoop(f *lint.File) {
+func (c *Checker) CheckDeferInInfiniteLoop(j *lint.Job) {
 	fn := func(node ast.Node) bool {
 		mightExit := false
 		var defers []ast.Stmt
@@ -945,20 +681,22 @@ func (c *Checker) CheckDeferInInfiniteLoop(f *lint.File) {
 			return true
 		}
 		for _, stmt := range defers {
-			f.Errorf(stmt, "defers in this infinite loop will never run")
+			j.Errorf(stmt, "defers in this infinite loop will never run")
 		}
 		return true
 	}
-	f.Walk(fn)
+	for _, f := range j.Program.Files {
+		ast.Inspect(f, fn)
+	}
 }
 
-func (c *Checker) CheckDubiousDeferInChannelRangeLoop(f *lint.File) {
+func (c *Checker) CheckDubiousDeferInChannelRangeLoop(j *lint.Job) {
 	fn := func(node ast.Node) bool {
 		loop, ok := node.(*ast.RangeStmt)
 		if !ok {
 			return true
 		}
-		typ := f.Pkg.TypesInfo.TypeOf(loop.X)
+		typ := j.Program.Info.TypeOf(loop.X)
 		_, ok = typ.Underlying().(*types.Chan)
 		if !ok {
 			return true
@@ -966,7 +704,7 @@ func (c *Checker) CheckDubiousDeferInChannelRangeLoop(f *lint.File) {
 		fn2 := func(node ast.Node) bool {
 			switch stmt := node.(type) {
 			case *ast.DeferStmt:
-				f.Errorf(stmt, "defers in this range loop won't run unless the channel gets closed")
+				j.Errorf(stmt, "defers in this range loop won't run unless the channel gets closed")
 			case *ast.FuncLit:
 				// Don't look into function bodies
 				return false
@@ -976,16 +714,18 @@ func (c *Checker) CheckDubiousDeferInChannelRangeLoop(f *lint.File) {
 		ast.Inspect(loop.Body, fn2)
 		return true
 	}
-	f.Walk(fn)
+	for _, f := range j.Program.Files {
+		ast.Inspect(f, fn)
+	}
 }
 
-func (c *Checker) CheckTestMainExit(f *lint.File) {
+func (c *Checker) CheckTestMainExit(j *lint.Job) {
 	fn := func(node ast.Node) bool {
-		if !IsTestMain(f, node) {
+		if !isTestMain(j, node) {
 			return true
 		}
 
-		arg := f.Pkg.TypesInfo.ObjectOf(node.(*ast.FuncDecl).Type.Params.List[0].Names[0])
+		arg := j.Program.Info.ObjectOf(node.(*ast.FuncDecl).Type.Params.List[0].Names[0])
 		callsRun := false
 		fn2 := func(node ast.Node) bool {
 			call, ok := node.(*ast.CallExpr)
@@ -1000,7 +740,7 @@ func (c *Checker) CheckTestMainExit(f *lint.File) {
 			if !ok {
 				return true
 			}
-			if arg != f.Pkg.TypesInfo.ObjectOf(ident) {
+			if arg != j.Program.Info.ObjectOf(ident) {
 				return true
 			}
 			if sel.Sel.Name == "Run" {
@@ -1013,7 +753,7 @@ func (c *Checker) CheckTestMainExit(f *lint.File) {
 
 		callsExit := false
 		fn3 := func(node ast.Node) bool {
-			if f.IsFunctionCallName(node, "os.Exit") {
+			if j.IsFunctionCallName(node, "os.Exit") {
 				callsExit = true
 				return false
 			}
@@ -1021,14 +761,16 @@ func (c *Checker) CheckTestMainExit(f *lint.File) {
 		}
 		ast.Inspect(node.(*ast.FuncDecl).Body, fn3)
 		if !callsExit && callsRun {
-			f.Errorf(node, "TestMain should call os.Exit to set exit code")
+			j.Errorf(node, "TestMain should call os.Exit to set exit code")
 		}
 		return true
 	}
-	f.Walk(fn)
+	for _, f := range j.Program.Files {
+		ast.Inspect(f, fn)
+	}
 }
 
-func IsTestMain(f *lint.File, node ast.Node) bool {
+func isTestMain(j *lint.Job, node ast.Node) bool {
 	decl, ok := node.(*ast.FuncDecl)
 	if !ok {
 		return false
@@ -1043,33 +785,35 @@ func IsTestMain(f *lint.File, node ast.Node) bool {
 	if len(arg.Names) != 1 {
 		return false
 	}
-	typ := f.Pkg.TypesInfo.TypeOf(arg.Type)
+	typ := j.Program.Info.TypeOf(arg.Type)
 	return typ != nil && typ.String() == "*testing.M"
 }
 
-func (c *Checker) CheckExec(f *lint.File) {
+func (c *Checker) CheckExec(j *lint.Job) {
 	fn := func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
 		if !ok {
 			return true
 		}
-		if !f.IsFunctionCallName(call, "os/exec.Command") {
+		if !j.IsFunctionCallName(call, "os/exec.Command") {
 			return true
 		}
-		val, ok := f.ExprToString(call.Args[0])
+		val, ok := j.ExprToString(call.Args[0])
 		if !ok {
 			return true
 		}
 		if !strings.Contains(val, " ") || strings.Contains(val, `\`) {
 			return true
 		}
-		f.Errorf(call.Args[0], "first argument to exec.Command looks like a shell command, but a program name or path are expected")
+		j.Errorf(call.Args[0], "first argument to exec.Command looks like a shell command, but a program name or path are expected")
 		return true
 	}
-	f.Walk(fn)
+	for _, f := range j.Program.Files {
+		ast.Inspect(f, fn)
+	}
 }
 
-func (c *Checker) CheckLoopEmptyDefault(f *lint.File) {
+func (c *Checker) CheckLoopEmptyDefault(j *lint.Job) {
 	fn := func(node ast.Node) bool {
 		loop, ok := node.(*ast.ForStmt)
 		if !ok || len(loop.Body.List) != 1 || loop.Cond != nil || loop.Init != nil {
@@ -1081,15 +825,17 @@ func (c *Checker) CheckLoopEmptyDefault(f *lint.File) {
 		}
 		for _, c := range sel.Body.List {
 			if comm, ok := c.(*ast.CommClause); ok && comm.Comm == nil && len(comm.Body) == 0 {
-				f.Errorf(comm, "should not have an empty default case in a for+select loop. The loop will spin.")
+				j.Errorf(comm, "should not have an empty default case in a for+select loop. The loop will spin.")
 			}
 		}
 		return true
 	}
-	f.Walk(fn)
+	for _, f := range j.Program.Files {
+		ast.Inspect(f, fn)
+	}
 }
 
-func (c *Checker) CheckLhsRhsIdentical(f *lint.File) {
+func (c *Checker) CheckLhsRhsIdentical(j *lint.Job) {
 	fn := func(node ast.Node) bool {
 		op, ok := node.(*ast.BinaryExpr)
 		if !ok {
@@ -1097,7 +843,7 @@ func (c *Checker) CheckLhsRhsIdentical(f *lint.File) {
 		}
 		switch op.Op {
 		case token.EQL, token.NEQ:
-			if basic, ok := f.Pkg.TypesInfo.TypeOf(op.X).(*types.Basic); ok {
+			if basic, ok := j.Program.Info.TypeOf(op.X).(*types.Basic); ok {
 				if kind := basic.Kind(); kind == types.Float32 || kind == types.Float64 {
 					// f == f and f != f might be used to check for NaN
 					return true
@@ -1111,16 +857,18 @@ func (c *Checker) CheckLhsRhsIdentical(f *lint.File) {
 			return true
 		}
 
-		if f.Render(op.X) != f.Render(op.Y) {
+		if j.Render(op.X) != j.Render(op.Y) {
 			return true
 		}
-		f.Errorf(op, "identical expressions on the left and right side of the '%s' operator", op.Op)
+		j.Errorf(op, "identical expressions on the left and right side of the '%s' operator", op.Op)
 		return true
 	}
-	f.Walk(fn)
+	for _, f := range j.Program.Files {
+		ast.Inspect(f, fn)
+	}
 }
 
-func (c *Checker) CheckScopedBreak(f *lint.File) {
+func (c *Checker) CheckScopedBreak(j *lint.Job) {
 	fn := func(node ast.Node) bool {
 		loop, ok := node.(*ast.ForStmt)
 		if !ok {
@@ -1165,22 +913,24 @@ func (c *Checker) CheckScopedBreak(f *lint.File) {
 					if !ok || branch.Tok != token.BREAK || branch.Label != nil {
 						continue
 					}
-					f.Errorf(branch, "ineffective break statement. Did you mean to break out of the outer loop?")
+					j.Errorf(branch, "ineffective break statement. Did you mean to break out of the outer loop?")
 				}
 			}
 		}
 		return true
 	}
-	f.Walk(fn)
+	for _, f := range j.Program.Files {
+		ast.Inspect(f, fn)
+	}
 }
 
-func (c *Checker) CheckUnsafePrintf(f *lint.File) {
+func (c *Checker) CheckUnsafePrintf(j *lint.Job) {
 	fn := func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
 		if !ok {
 			return true
 		}
-		if !f.IsFunctionCallNameAny(call, "fmt.Printf", "fmt.Sprintf", "log.Printf") {
+		if !j.IsFunctionCallNameAny(call, "fmt.Printf", "fmt.Sprintf", "log.Printf") {
 			return true
 		}
 		if len(call.Args) != 1 {
@@ -1191,13 +941,15 @@ func (c *Checker) CheckUnsafePrintf(f *lint.File) {
 		default:
 			return true
 		}
-		f.Errorf(call.Args[0], "printf-style function with dynamic first argument and no further arguments should use print-style function instead")
+		j.Errorf(call.Args[0], "printf-style function with dynamic first argument and no further arguments should use print-style function instead")
 		return true
 	}
-	f.Walk(fn)
+	for _, f := range j.Program.Files {
+		ast.Inspect(f, fn)
+	}
 }
 
-func (c *Checker) CheckEarlyDefer(f *lint.File) {
+func (c *Checker) CheckEarlyDefer(j *lint.Job) {
 	fn := func(node ast.Node) bool {
 		block, ok := node.(*ast.BlockStmt)
 		if !ok {
@@ -1227,7 +979,7 @@ func (c *Checker) CheckEarlyDefer(f *lint.File) {
 			if !ok {
 				continue
 			}
-			sig, ok := f.Pkg.TypesInfo.TypeOf(call.Fun).(*types.Signature)
+			sig, ok := j.Program.Info.TypeOf(call.Fun).(*types.Signature)
 			if !ok {
 				continue
 			}
@@ -1262,11 +1014,13 @@ func (c *Checker) CheckEarlyDefer(f *lint.File) {
 			if sel.Sel.Name != "Close" {
 				continue
 			}
-			f.Errorf(def, "should check returned error before deferring %s", f.Render(def.Call))
+			j.Errorf(def, "should check returned error before deferring %s", j.Render(def.Call))
 		}
 		return true
 	}
-	f.Walk(fn)
+	for _, f := range j.Program.Files {
+		ast.Inspect(f, fn)
+	}
 }
 
 func selectorX(sel *ast.SelectorExpr) ast.Node {
@@ -1278,7 +1032,7 @@ func selectorX(sel *ast.SelectorExpr) ast.Node {
 	}
 }
 
-func (c *Checker) CheckEmptyCriticalSection(f *lint.File) {
+func (c *Checker) CheckEmptyCriticalSection(j *lint.Job) {
 	mutexParams := func(s ast.Stmt) (x ast.Expr, funcName string, ok bool) {
 		expr, ok := s.(*ast.ExprStmt)
 		if !ok {
@@ -1293,7 +1047,7 @@ func (c *Checker) CheckEmptyCriticalSection(f *lint.File) {
 			return nil, "", false
 		}
 
-		fn, ok := f.Pkg.TypesInfo.ObjectOf(sel.Sel).(*types.Func)
+		fn, ok := j.Program.Info.ObjectOf(sel.Sel).(*types.Func)
 		if !ok {
 			return nil, "", false
 		}
@@ -1317,39 +1071,43 @@ func (c *Checker) CheckEmptyCriticalSection(f *lint.File) {
 			sel1, method1, ok1 := mutexParams(block.List[i])
 			sel2, method2, ok2 := mutexParams(block.List[i+1])
 
-			if !ok1 || !ok2 || f.Render(sel1) != f.Render(sel2) {
+			if !ok1 || !ok2 || j.Render(sel1) != j.Render(sel2) {
 				continue
 			}
 			if (method1 == "Lock" && method2 == "Unlock") ||
 				(method1 == "RLock" && method2 == "RUnlock") {
-				f.Errorf(block.List[i+1], "empty critical section")
+				j.Errorf(block.List[i+1], "empty critical section")
 			}
 		}
 		return true
 	}
-	f.Walk(fn)
+	for _, f := range j.Program.Files {
+		ast.Inspect(f, fn)
+	}
 }
 
-func (c *Checker) CheckIneffectiveCopy(f *lint.File) {
+func (c *Checker) CheckIneffectiveCopy(j *lint.Job) {
 	fn := func(node ast.Node) bool {
 		if unary, ok := node.(*ast.UnaryExpr); ok {
 			if _, ok := unary.X.(*ast.StarExpr); ok && unary.Op == token.AND {
-				f.Errorf(unary, "&*x will be simplified to x. It will not copy x.")
+				j.Errorf(unary, "&*x will be simplified to x. It will not copy x.")
 			}
 		}
 
 		if star, ok := node.(*ast.StarExpr); ok {
 			if unary, ok := star.X.(*ast.UnaryExpr); ok && unary.Op == token.AND {
-				f.Errorf(star, "*&x will be simplified to x. It will not copy x.")
+				j.Errorf(star, "*&x will be simplified to x. It will not copy x.")
 			}
 		}
 		return true
 	}
-	f.Walk(fn)
+	for _, f := range j.Program.Files {
+		ast.Inspect(f, fn)
+	}
 }
 
-func (c *Checker) CheckDiffSizeComparison(f *lint.File) {
-	for _, ssafn := range c.funcsForFile(f) {
+func (c *Checker) CheckDiffSizeComparison(j *lint.Job) {
+	for _, ssafn := range j.Program.InitialFunctions {
 		for _, b := range ssafn.Blocks {
 			for _, ins := range b.Instrs {
 				binop, ok := ins.(*ssa.BinOp)
@@ -1371,14 +1129,14 @@ func (c *Checker) CheckDiffSizeComparison(f *lint.File) {
 					continue
 				}
 				if r1.Length.Intersection(r2.Length).Empty() {
-					f.Errorf(binop, "comparing strings of different sizes for equality will always return false")
+					j.Errorf(binop, "comparing strings of different sizes for equality will always return false")
 				}
 			}
 		}
 	}
 }
 
-func (c *Checker) CheckCanonicalHeaderKey(f *lint.File) {
+func (c *Checker) CheckCanonicalHeaderKey(j *lint.Job) {
 	fn := func(node ast.Node) bool {
 		assign, ok := node.(*ast.AssignStmt)
 		if ok {
@@ -1390,7 +1148,7 @@ func (c *Checker) CheckCanonicalHeaderKey(f *lint.File) {
 				if !ok {
 					continue
 				}
-				if hasType(f, op.X, "net/http.Header") {
+				if hasType(j, op.X, "net/http.Header") {
 					return false
 				}
 			}
@@ -1400,23 +1158,25 @@ func (c *Checker) CheckCanonicalHeaderKey(f *lint.File) {
 		if !ok {
 			return true
 		}
-		if !hasType(f, op.X, "net/http.Header") {
+		if !hasType(j, op.X, "net/http.Header") {
 			return true
 		}
-		s, ok := f.ExprToString(op.Index)
+		s, ok := j.ExprToString(op.Index)
 		if !ok {
 			return true
 		}
 		if s == http.CanonicalHeaderKey(s) {
 			return true
 		}
-		f.Errorf(op, "keys in http.Header are canonicalized, %q is not canonical; fix the constant or use http.CanonicalHeaderKey", s)
+		j.Errorf(op, "keys in http.Header are canonicalized, %q is not canonical; fix the constant or use http.CanonicalHeaderKey", s)
 		return true
 	}
-	f.Walk(fn)
+	for _, f := range j.Program.Files {
+		ast.Inspect(f, fn)
+	}
 }
 
-func (c *Checker) CheckBenchmarkN(f *lint.File) {
+func (c *Checker) CheckBenchmarkN(j *lint.Job) {
 	fn := func(node ast.Node) bool {
 		assign, ok := node.(*ast.AssignStmt)
 		if !ok {
@@ -1432,20 +1192,23 @@ func (c *Checker) CheckBenchmarkN(f *lint.File) {
 		if sel.Sel.Name != "N" {
 			return true
 		}
-		if !hasType(f, sel.X, "*testing.B") {
+		if !hasType(j, sel.X, "*testing.B") {
 			return true
 		}
-		f.Errorf(assign, "should not assign to %s", f.Render(sel))
+		j.Errorf(assign, "should not assign to %s", j.Render(sel))
 		return true
 	}
-	f.Walk(fn)
+	for _, f := range j.Program.Files {
+		ast.Inspect(f, fn)
+	}
 }
 
-func (c *Checker) CheckIneffecitiveFieldAssignments(f *lint.File) {
-	for _, ssafn := range c.funcsForFile(f) {
-		if f.Fset.File(f.File.Pos()) != f.Fset.File(ssafn.Pos()) {
-			continue
-		}
+func (c *Checker) CheckIneffecitiveFieldAssignments(j *lint.Job) {
+	for _, ssafn := range j.Program.InitialFunctions {
+		// fset := j.Program.SSA.Fset
+		// if fset.File(f.File.Pos()) != fset.File(ssafn.Pos()) {
+		// 	continue
+		// }
 		if ssafn.Signature.Recv() == nil {
 			continue
 		}
@@ -1541,14 +1304,14 @@ func (c *Checker) CheckIneffecitiveFieldAssignments(f *lint.File) {
 				fa := write.(*ssa.FieldAddr)
 				if !hasRead(block, fa) {
 					name := recv.Type().Underlying().(*types.Struct).Field(fa.Field).Name()
-					f.Errorf(fa, "ineffective assignment to field %s", name)
+					j.Errorf(fa, "ineffective assignment to field %s", name)
 				}
 			}
 		}
 	}
 }
 
-func (c *Checker) CheckUnreadVariableValues(f *lint.File) {
+func (c *Checker) CheckUnreadVariableValues(j *lint.Job) {
 	fn := func(node ast.Node) bool {
 		fn, ok := node.(*ast.FuncDecl)
 		if !ok {
@@ -1584,12 +1347,12 @@ func (c *Checker) CheckUnreadVariableValues(f *lint.File) {
 					if exrefs == nil {
 						continue
 					}
-					if len(filterDebug(*exrefs)) == 0 {
+					if len(lint.FilterDebug(*exrefs)) == 0 {
 						lhs := assign.Lhs[ex.Index]
 						if ident, ok := lhs.(*ast.Ident); !ok || ok && ident.Name == "_" {
 							continue
 						}
-						f.Errorf(lhs, "this value of %s is never used", lhs)
+						j.Errorf(lhs, "this value of %s is never used", lhs)
 					}
 				}
 				return true
@@ -1609,19 +1372,21 @@ func (c *Checker) CheckUnreadVariableValues(f *lint.File) {
 					// TODO investigate why refs can be nil
 					return true
 				}
-				if len(filterDebug(*refs)) == 0 {
-					f.Errorf(lhs, "this value of %s is never used", lhs)
+				if len(lint.FilterDebug(*refs)) == 0 {
+					j.Errorf(lhs, "this value of %s is never used", lhs)
 				}
 			}
 			return true
 		})
 		return true
 	}
-	f.Walk(fn)
+	for _, f := range j.Program.Files {
+		ast.Inspect(f, fn)
+	}
 }
 
-func (c *Checker) CheckPredeterminedBooleanExprs(f *lint.File) {
-	for _, ssafn := range c.funcsForFile(f) {
+func (c *Checker) CheckPredeterminedBooleanExprs(j *lint.Job) {
+	for _, ssafn := range j.Program.InitialFunctions {
 		for _, block := range ssafn.Blocks {
 			for _, ins := range block.Instrs {
 				ssabinop, ok := ins.(*ssa.BinOp)
@@ -1656,7 +1421,7 @@ func (c *Checker) CheckPredeterminedBooleanExprs(f *lint.File) {
 				}
 				b := trues != 0
 				if trues == 0 || trues == len(xs)*len(ys) {
-					f.Errorf(ssabinop, "binary expression is always %t for all possible values (%s %s %s)",
+					j.Errorf(ssabinop, "binary expression is always %t for all possible values (%s %s %s)",
 						b, xs, ssabinop.Op, ys)
 				}
 			}
@@ -1664,8 +1429,8 @@ func (c *Checker) CheckPredeterminedBooleanExprs(f *lint.File) {
 	}
 }
 
-func (c *Checker) CheckNilMaps(f *lint.File) {
-	for _, ssafn := range c.funcsForFile(f) {
+func (c *Checker) CheckNilMaps(j *lint.Job) {
+	for _, ssafn := range j.Program.InitialFunctions {
 		for _, block := range ssafn.Blocks {
 			for _, ins := range block.Instrs {
 				mu, ok := ins.(*ssa.MapUpdate)
@@ -1679,19 +1444,19 @@ func (c *Checker) CheckNilMaps(f *lint.File) {
 				if c.Value != nil {
 					continue
 				}
-				f.Errorf(mu, "assignment to nil map")
+				j.Errorf(mu, "assignment to nil map")
 			}
 		}
 	}
 }
 
-func (c *Checker) CheckUnsignedComparison(f *lint.File) {
+func (c *Checker) CheckUnsignedComparison(j *lint.Job) {
 	fn := func(node ast.Node) bool {
 		expr, ok := node.(*ast.BinaryExpr)
 		if !ok {
 			return true
 		}
-		tx := f.Pkg.TypesInfo.TypeOf(expr.X)
+		tx := j.Program.Info.TypeOf(expr.X)
 		basic, ok := tx.Underlying().(*types.Basic)
 		if !ok {
 			return true
@@ -1705,24 +1470,15 @@ func (c *Checker) CheckUnsignedComparison(f *lint.File) {
 		}
 		switch expr.Op {
 		case token.GEQ:
-			f.Errorf(expr, "unsigned values are always >= 0")
+			j.Errorf(expr, "unsigned values are always >= 0")
 		case token.LSS:
-			f.Errorf(expr, "unsigned values are never < 0")
-		case token.LEQ:
-			f.Errorf(expr, "'x <= 0' for unsigned values of x is the same as 'x == 0'")
+			j.Errorf(expr, "unsigned values are never < 0")
 		}
 		return true
 	}
-	f.Walk(fn)
-}
-func filterDebug(instr []ssa.Instruction) []ssa.Instruction {
-	var out []ssa.Instruction
-	for _, ins := range instr {
-		if _, ok := ins.(*ssa.DebugRef); !ok {
-			out = append(out, ins)
-		}
+	for _, f := range j.Program.Files {
+		ast.Inspect(f, fn)
 	}
-	return out
 }
 
 func consts(val ssa.Value, out []*ssa.Const, visitedPhis map[string]bool) ([]*ssa.Const, bool) {
@@ -1766,7 +1522,7 @@ func consts(val ssa.Value, out []*ssa.Const, visitedPhis map[string]bool) ([]*ss
 	return uniq, true
 }
 
-func (c *Checker) CheckLoopCondition(f *lint.File) {
+func (c *Checker) CheckLoopCondition(j *lint.Job) {
 	fn := func(node ast.Node) bool {
 		loop, ok := node.(*ast.ForStmt)
 		if !ok {
@@ -1798,7 +1554,7 @@ func (c *Checker) CheckLoopCondition(f *lint.File) {
 			return true
 		}
 
-		ssafn := f.EnclosingSSAFunction(cond)
+		ssafn := j.EnclosingSSAFunction(cond)
 		if ssafn == nil {
 			return true
 		}
@@ -1826,14 +1582,16 @@ func (c *Checker) CheckLoopCondition(f *lint.File) {
 		case *ssa.UnOp:
 			return true
 		}
-		f.Errorf(cond, "variable in loop condition never changes")
+		j.Errorf(cond, "variable in loop condition never changes")
 
 		return true
 	}
-	f.Walk(fn)
+	for _, f := range j.Program.Files {
+		ast.Inspect(f, fn)
+	}
 }
 
-func (c *Checker) CheckArgOverwritten(f *lint.File) {
+func (c *Checker) CheckArgOverwritten(j *lint.Job) {
 	fn := func(node ast.Node) bool {
 		fn, ok := node.(*ast.FuncDecl)
 		if !ok {
@@ -1851,7 +1609,7 @@ func (c *Checker) CheckArgOverwritten(f *lint.File) {
 		}
 		for _, field := range fn.Type.Params.List {
 			for _, arg := range field.Names {
-				obj := f.Pkg.TypesInfo.ObjectOf(arg)
+				obj := j.Program.Info.ObjectOf(arg)
 				var ssaobj *ssa.Parameter
 				for _, param := range ssafn.Params {
 					if param.Object() == obj {
@@ -1866,7 +1624,7 @@ func (c *Checker) CheckArgOverwritten(f *lint.File) {
 				if refs == nil {
 					continue
 				}
-				if len(filterDebug(*refs)) != 0 {
+				if len(lint.FilterDebug(*refs)) != 0 {
 					continue
 				}
 
@@ -1881,7 +1639,7 @@ func (c *Checker) CheckArgOverwritten(f *lint.File) {
 						if !ok {
 							continue
 						}
-						if f.Pkg.TypesInfo.ObjectOf(ident) == obj {
+						if j.Program.Info.ObjectOf(ident) == obj {
 							assigned = true
 							return false
 						}
@@ -1889,16 +1647,18 @@ func (c *Checker) CheckArgOverwritten(f *lint.File) {
 					return true
 				})
 				if assigned {
-					f.Errorf(arg, "argument %s is overwritten before first use", arg)
+					j.Errorf(arg, "argument %s is overwritten before first use", arg)
 				}
 			}
 		}
 		return true
 	}
-	f.Walk(fn)
+	for _, f := range j.Program.Files {
+		ast.Inspect(f, fn)
+	}
 }
 
-func (c *Checker) CheckIneffectiveLoop(f *lint.File) {
+func (c *Checker) CheckIneffectiveLoop(j *lint.Job) {
 	// This check detects some, but not all unconditional loop exits.
 	// We give up in the following cases:
 	//
@@ -1933,7 +1693,7 @@ func (c *Checker) CheckIneffectiveLoop(f *lint.File) {
 				body = node.Body
 				loop = node
 			case *ast.RangeStmt:
-				typ := f.Pkg.TypesInfo.TypeOf(node.X)
+				typ := j.Program.Info.TypeOf(node.X)
 				if _, ok := typ.Underlying().(*types.Map); ok {
 					// looping once over a map is a valid pattern for
 					// getting an arbitrary element.
@@ -1993,16 +1753,18 @@ func (c *Checker) CheckIneffectiveLoop(f *lint.File) {
 				return true
 			})
 			if unconditionalExit != nil {
-				f.Errorf(unconditionalExit, "the surrounding loop is unconditionally terminated")
+				j.Errorf(unconditionalExit, "the surrounding loop is unconditionally terminated")
 			}
 			return true
 		})
 		return true
 	}
-	f.Walk(fn)
+	for _, f := range j.Program.Files {
+		ast.Inspect(f, fn)
+	}
 }
 
-func (c *Checker) CheckNilContext(f *lint.File) {
+func (c *Checker) CheckNilContext(j *lint.Job) {
 	fn := func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
 		if !ok {
@@ -2011,10 +1773,10 @@ func (c *Checker) CheckNilContext(f *lint.File) {
 		if len(call.Args) == 0 {
 			return true
 		}
-		if typ, ok := f.Pkg.TypesInfo.TypeOf(call.Args[0]).(*types.Basic); !ok || typ.Kind() != types.UntypedNil {
+		if typ, ok := j.Program.Info.TypeOf(call.Args[0]).(*types.Basic); !ok || typ.Kind() != types.UntypedNil {
 			return true
 		}
-		sig, ok := f.Pkg.TypesInfo.TypeOf(call.Fun).(*types.Signature)
+		sig, ok := j.Program.Info.TypeOf(call.Fun).(*types.Signature)
 		if !ok {
 			return true
 		}
@@ -2024,14 +1786,16 @@ func (c *Checker) CheckNilContext(f *lint.File) {
 		if types.TypeString(sig.Params().At(0).Type(), nil) != "context.Context" {
 			return true
 		}
-		f.Errorf(call.Args[0],
+		j.Errorf(call.Args[0],
 			"do not pass a nil Context, even if a function permits it; pass context.TODO if you are unsure about which Context to use")
 		return true
 	}
-	f.Walk(fn)
+	for _, f := range j.Program.Files {
+		ast.Inspect(f, fn)
+	}
 }
 
-func (c *Checker) CheckSeeker(f *lint.File) {
+func (c *Checker) CheckSeeker(j *lint.Job) {
 	fn := func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
 		if !ok {
@@ -2063,104 +1827,16 @@ func (c *Checker) CheckSeeker(f *lint.File) {
 		if pkg.Name != "io" {
 			return true
 		}
-		f.Errorf(call, "the first argument of io.Seeker is the offset, but an io.Seek* constant is being used instead")
+		j.Errorf(call, "the first argument of io.Seeker is the offset, but an io.Seek* constant is being used instead")
 		return true
 	}
-	f.Walk(fn)
-}
-
-func (c *Checker) CheckIneffectiveAppend(f *lint.File) {
-	fn := func(node ast.Node) bool {
-		assign, ok := node.(*ast.AssignStmt)
-		if !ok || len(assign.Lhs) != 1 || len(assign.Rhs) != 1 {
-			return true
-		}
-		ident, ok := assign.Lhs[0].(*ast.Ident)
-		if !ok || ident.Name == "_" {
-			return true
-		}
-		call, ok := assign.Rhs[0].(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-		if callIdent, ok := call.Fun.(*ast.Ident); !ok || callIdent.Name != "append" {
-			// XXX check that it's the built-in append
-			return true
-		}
-		ssafn := f.EnclosingSSAFunction(assign)
-		if ssafn == nil {
-			return true
-		}
-		tfn, ok := ssafn.Object().(*types.Func)
-		if ok {
-			res := tfn.Type().(*types.Signature).Results()
-			for i := 0; i < res.Len(); i++ {
-				if res.At(i) == f.Pkg.TypesInfo.ObjectOf(ident) {
-					// Don't flag appends assigned to named return arguments
-					return true
-				}
-			}
-		}
-		isAppend := func(ins ssa.Value) bool {
-			call, ok := ins.(*ssa.Call)
-			if !ok {
-				return false
-			}
-			if call.Call.IsInvoke() {
-				return false
-			}
-			if builtin, ok := call.Call.Value.(*ssa.Builtin); !ok || builtin.Name() != "append" {
-				return false
-			}
-			return true
-		}
-		isUsed := false
-		visited := map[ssa.Instruction]bool{}
-		var walkRefs func(refs []ssa.Instruction)
-		walkRefs = func(refs []ssa.Instruction) {
-		loop:
-			for _, ref := range refs {
-				if visited[ref] {
-					continue
-				}
-				visited[ref] = true
-				if _, ok := ref.(*ssa.DebugRef); ok {
-					continue
-				}
-				switch ref := ref.(type) {
-				case *ssa.Phi:
-					walkRefs(*ref.Referrers())
-				case ssa.Value:
-					if !isAppend(ref) {
-						isUsed = true
-					} else {
-						walkRefs(*ref.Referrers())
-					}
-				case ssa.Instruction:
-					isUsed = true
-					break loop
-				}
-			}
-		}
-		expr, _ := ssafn.ValueForExpr(call)
-		if expr == nil {
-			return true
-		}
-		refs := expr.Referrers()
-		if refs == nil {
-			return true
-		}
-		walkRefs(*refs)
-		if !isUsed {
-			f.Errorf(assign, "this result of append is never used, except maybe in other appends")
-		}
-		return true
+	for _, f := range j.Program.Files {
+		ast.Inspect(f, fn)
 	}
-	f.Walk(fn)
 }
 
-func (c *Checker) CheckConcurrentTesting(f *lint.File) {
-	for _, ssafn := range c.funcsForFile(f) {
+func (c *Checker) CheckConcurrentTesting(j *lint.Job) {
+	for _, ssafn := range j.Program.InitialFunctions {
 		for _, block := range ssafn.Blocks {
 			for _, ins := range block.Instrs {
 				gostmt, ok := ins.(*ssa.Go)
@@ -2209,7 +1885,7 @@ func (c *Checker) CheckConcurrentTesting(f *lint.File) {
 						default:
 							continue
 						}
-						f.Errorf(gostmt, "the goroutine calls T.%s, which must be called in the same goroutine as the test", name)
+						j.Errorf(gostmt, "the goroutine calls T.%s, which must be called in the same goroutine as the test", name)
 					}
 				}
 			}
@@ -2217,51 +1893,45 @@ func (c *Checker) CheckConcurrentTesting(f *lint.File) {
 	}
 }
 
-func (c *Checker) CheckCyclicFinalizer(f *lint.File) {
-	for _, ssafn := range c.funcsForFile(f) {
-		for _, b := range ssafn.Blocks {
-			for _, ins := range b.Instrs {
-				call, ok := ins.(*ssa.Call)
-				if !ok {
-					continue
-				}
-				if !isCallTo(call.Common(), "runtime.SetFinalizer") {
-					continue
-				}
-
-				arg0 := call.Common().Args[0]
-				if iface, ok := arg0.(*ssa.MakeInterface); ok {
-					arg0 = iface.X
-				}
-				unop, ok := arg0.(*ssa.UnOp)
-				if !ok {
-					continue
-				}
-				v, ok := unop.X.(*ssa.Alloc)
-				if !ok {
-					continue
-				}
-				arg1 := call.Common().Args[1]
-				if iface, ok := arg1.(*ssa.MakeInterface); ok {
-					arg1 = iface.X
-				}
-				mc, ok := arg1.(*ssa.MakeClosure)
-				if !ok {
-					continue
-				}
-				for _, b := range mc.Bindings {
-					if b == v {
-						pos := f.Fset.Position(mc.Fn.Pos())
-						f.Errorf(call, "the finalizer closes over the object, preventing the finalizer from ever running (at %s)", pos)
-					}
+func (c *Checker) CheckCyclicFinalizer(j *lint.Job) {
+	for _, ssafn := range j.Program.InitialFunctions {
+		node := c.funcDescs.CallGraph.CreateNode(ssafn)
+		for _, edge := range node.Out {
+			if edge.Callee.Func.RelString(nil) != "runtime.SetFinalizer" {
+				continue
+			}
+			arg0 := edge.Site.Common().Args[0]
+			if iface, ok := arg0.(*ssa.MakeInterface); ok {
+				arg0 = iface.X
+			}
+			unop, ok := arg0.(*ssa.UnOp)
+			if !ok {
+				continue
+			}
+			v, ok := unop.X.(*ssa.Alloc)
+			if !ok {
+				continue
+			}
+			arg1 := edge.Site.Common().Args[1]
+			if iface, ok := arg1.(*ssa.MakeInterface); ok {
+				arg1 = iface.X
+			}
+			mc, ok := arg1.(*ssa.MakeClosure)
+			if !ok {
+				continue
+			}
+			for _, b := range mc.Bindings {
+				if b == v {
+					pos := j.Program.SSA.Fset.Position(mc.Fn.Pos())
+					j.Errorf(edge.Site, "the finalizer closes over the object, preventing the finalizer from ever running (at %s)", pos)
 				}
 			}
 		}
 	}
 }
 
-func (c *Checker) CheckSliceOutOfBounds(f *lint.File) {
-	for _, ssafn := range c.funcsForFile(f) {
+func (c *Checker) CheckSliceOutOfBounds(j *lint.Job) {
+	for _, ssafn := range j.Program.InitialFunctions {
 		for _, block := range ssafn.Blocks {
 			for _, ins := range block.Instrs {
 				ia, ok := ins.(*ssa.IndexAddr)
@@ -2277,33 +1947,33 @@ func (c *Checker) CheckSliceOutOfBounds(f *lint.File) {
 					continue
 				}
 				if idxr.Lower.Cmp(sr.Length.Upper) >= 0 {
-					f.Errorf(ia, "index out of bounds")
+					j.Errorf(ia, "index out of bounds")
 				}
 			}
 		}
 	}
 }
 
-func (c *Checker) CheckDeferLock(f *lint.File) {
-	for _, ssafn := range c.funcsForFile(f) {
+func (c *Checker) CheckDeferLock(j *lint.Job) {
+	for _, ssafn := range j.Program.InitialFunctions {
 		for _, block := range ssafn.Blocks {
 			if len(block.Instrs) < 2 {
 				continue
 			}
-			instrs := filterDebug(block.Instrs)
+			instrs := lint.FilterDebug(block.Instrs)
 			for i, ins := range instrs[:len(instrs)-1] {
 				call, ok := ins.(*ssa.Call)
 				if !ok {
 					continue
 				}
-				if !isCallTo(call.Common(), "(*sync.Mutex).Lock") && !isCallTo(call.Common(), "(*sync.RWMutex).RLock") {
+				if !lint.IsCallTo(call.Common(), "(*sync.Mutex).Lock") && !lint.IsCallTo(call.Common(), "(*sync.RWMutex).RLock") {
 					continue
 				}
 				nins, ok := instrs[i+1].(*ssa.Defer)
 				if !ok {
 					continue
 				}
-				if !isCallTo(&nins.Call, "(*sync.Mutex).Lock") && !isCallTo(&nins.Call, "(*sync.RWMutex).RLock") {
+				if !lint.IsCallTo(&nins.Call, "(*sync.Mutex).Lock") && !lint.IsCallTo(&nins.Call, "(*sync.RWMutex).RLock") {
 					continue
 				}
 				if call.Common().Args[0] != nins.Call.Args[0] {
@@ -2317,21 +1987,21 @@ func (c *Checker) CheckDeferLock(f *lint.File) {
 				case "RLock":
 					alt = "RUnlock"
 				}
-				f.Errorf(nins, "deferring %s right after having locked already; did you mean to defer %s?", name, alt)
+				j.Errorf(nins, "deferring %s right after having locked already; did you mean to defer %s?", name, alt)
 			}
 		}
 	}
 }
 
-func (c *Checker) CheckNaNComparison(f *lint.File) {
+func (c *Checker) CheckNaNComparison(j *lint.Job) {
 	isNaN := func(v ssa.Value) bool {
 		call, ok := v.(*ssa.Call)
 		if !ok {
 			return false
 		}
-		return isCallTo(call.Common(), "math.NaN")
+		return lint.IsCallTo(call.Common(), "math.NaN")
 	}
-	for _, ssafn := range c.funcsForFile(f) {
+	for _, ssafn := range j.Program.InitialFunctions {
 		for _, block := range ssafn.Blocks {
 			for _, ins := range block.Instrs {
 				ins, ok := ins.(*ssa.BinOp)
@@ -2339,47 +2009,39 @@ func (c *Checker) CheckNaNComparison(f *lint.File) {
 					continue
 				}
 				if isNaN(ins.X) || isNaN(ins.Y) {
-					f.Errorf(ins, "no value is equal to NaN, not even NaN itself")
+					j.Errorf(ins, "no value is equal to NaN, not even NaN itself")
 				}
 			}
 		}
 	}
 }
 
-func (c *Checker) CheckInfiniteRecursion(f *lint.File) {
-	for _, ssafn := range c.funcsForFile(f) {
-		for _, block := range ssafn.Blocks {
-			for _, ins := range block.Instrs {
-				call, ok := ins.(*ssa.Call)
-				if !ok {
-					continue
-				}
-				if call.Common().IsInvoke() {
-					continue
-				}
-				subfn, ok := call.Common().Value.(*ssa.Function)
-				if !ok || subfn != ssafn {
-					continue
-				}
-
-				canReturn := false
-				for _, b := range subfn.Blocks {
-					if block.Dominates(b) {
-						continue
-					}
-					if len(b.Instrs) == 0 {
-						continue
-					}
-					if _, ok := b.Instrs[len(b.Instrs)-1].(*ssa.Return); ok {
-						canReturn = true
-						break
-					}
-				}
-				if canReturn {
-					continue
-				}
-				f.Errorf(call, "infinite recursive call")
+func (c *Checker) CheckInfiniteRecursion(j *lint.Job) {
+	for _, ssafn := range j.Program.InitialFunctions {
+		node := c.funcDescs.CallGraph.CreateNode(ssafn)
+		for _, edge := range node.Out {
+			if edge.Callee != node {
+				continue
 			}
+
+			block := edge.Site.Block()
+			canReturn := false
+			for _, b := range ssafn.Blocks {
+				if block.Dominates(b) {
+					continue
+				}
+				if len(b.Instrs) == 0 {
+					continue
+				}
+				if _, ok := b.Instrs[len(b.Instrs)-1].(*ssa.Return); ok {
+					canReturn = true
+					break
+				}
+			}
+			if canReturn {
+				continue
+			}
+			j.Errorf(edge.Site, "infinite recursive call")
 		}
 	}
 }
@@ -2400,66 +2062,38 @@ func objectName(obj types.Object) string {
 	return name
 }
 
-func isName(f *lint.File, expr ast.Expr, name string) bool {
+func isName(j *lint.Job, expr ast.Expr, name string) bool {
 	var obj types.Object
 	switch expr := expr.(type) {
 	case *ast.Ident:
-		obj = f.Pkg.TypesInfo.ObjectOf(expr)
+		obj = j.Program.Info.ObjectOf(expr)
 	case *ast.SelectorExpr:
-		obj = f.Pkg.TypesInfo.ObjectOf(expr.Sel)
+		obj = j.Program.Info.ObjectOf(expr.Sel)
 	}
 	return objectName(obj) == name
 }
 
-func (c *Checker) CheckLeakyTimeTick(f *lint.File) {
-	if f.IsMain() || f.IsTest() {
-		return
-	}
-	var flowTerminates func(start, b *ssa.BasicBlock, seen map[*ssa.BasicBlock]bool) bool
-	flowTerminates = func(start, b *ssa.BasicBlock, seen map[*ssa.BasicBlock]bool) bool {
-		if seen == nil {
-			seen = map[*ssa.BasicBlock]bool{}
+func (c *Checker) CheckLeakyTimeTick(j *lint.Job) {
+	for _, ssafn := range j.Program.InitialFunctions {
+		if j.IsInMain(ssafn) || j.IsInTest(ssafn) {
+			continue
 		}
-		if seen[b] {
-			return false
-		}
-		seen[b] = true
-		for _, ins := range b.Instrs {
-			if _, ok := ins.(*ssa.Return); ok {
-				return true
-			}
-		}
-		if b == start {
-			if flowTerminates(start, b.Succs[0], seen) {
-				return true
-			}
-		} else {
-			for _, succ := range b.Succs {
-				if flowTerminates(start, succ, seen) {
-					return true
+		for _, block := range ssafn.Blocks {
+			for _, ins := range block.Instrs {
+				call, ok := ins.(*ssa.Call)
+				if !ok || !lint.IsCallTo(call.Common(), "time.Tick") {
+					continue
 				}
+				if c.funcDescs.Get(call.Parent()).Infinite {
+					continue
+				}
+				j.Errorf(call, "using time.Tick leaks the underlying ticker, consider using it only in endless functions, tests and the main package, and use time.NewTicker here")
 			}
 		}
-		return false
 	}
-	fn := func(node ast.Node) bool {
-		if !f.IsFunctionCallName(node, "time.Tick") {
-			return true
-		}
-		ssafn := c.nodeFns[node]
-		if ssafn == nil {
-			return false
-		}
-		if c.funcDescs.Get(ssafn).Infinite {
-			return true
-		}
-		f.Errorf(node, "using time.Tick leaks the underlying ticker, consider using it only in endless functions, tests and the main package, and use time.NewTicker here")
-		return true
-	}
-	f.Walk(fn)
 }
 
-func (c *Checker) CheckDoubleNegation(f *lint.File) {
+func (c *Checker) CheckDoubleNegation(j *lint.Job) {
 	fn := func(node ast.Node) bool {
 		unary1, ok := node.(*ast.UnaryExpr)
 		if !ok {
@@ -2472,13 +2106,15 @@ func (c *Checker) CheckDoubleNegation(f *lint.File) {
 		if unary1.Op != token.NOT || unary2.Op != token.NOT {
 			return true
 		}
-		f.Errorf(unary1, "negating a boolean twice has no effect; is this a typo?")
+		j.Errorf(unary1, "negating a boolean twice has no effect; is this a typo?")
 		return true
 	}
-	f.Walk(fn)
+	for _, f := range j.Program.Files {
+		ast.Inspect(f, fn)
+	}
 }
 
-func (c *Checker) CheckRepeatedIfElse(f *lint.File) {
+func (c *Checker) CheckRepeatedIfElse(j *lint.Job) {
 	seen := map[ast.Node]bool{}
 
 	var collectConds func(ifstmt *ast.IfStmt, inits []ast.Stmt, conds []ast.Expr) ([]ast.Stmt, []ast.Expr)
@@ -2529,19 +2165,21 @@ func (c *Checker) CheckRepeatedIfElse(f *lint.File) {
 		}
 		counts := map[string]int{}
 		for _, cond := range conds {
-			s := f.Render(cond)
+			s := j.Render(cond)
 			counts[s]++
 			if counts[s] == 2 {
-				f.Errorf(cond, "this condition occurs multiple times in this if/else if chain")
+				j.Errorf(cond, "this condition occurs multiple times in this if/else if chain")
 			}
 		}
 		return true
 	}
-	f.Walk(fn)
+	for _, f := range j.Program.Files {
+		ast.Inspect(f, fn)
+	}
 }
 
-func (c *Checker) CheckSillyBitwiseOps(f *lint.File) {
-	for _, ssafn := range c.funcsForFile(f) {
+func (c *Checker) CheckSillyBitwiseOps(j *lint.Job) {
+	for _, ssafn := range j.Program.InitialFunctions {
 		for _, block := range ssafn.Blocks {
 			for _, ins := range block.Instrs {
 				ins, ok := ins.(*ssa.BinOp)
@@ -2552,7 +2190,14 @@ func (c *Checker) CheckSillyBitwiseOps(f *lint.File) {
 				if c, ok := ins.Y.(*ssa.Const); !ok || c.Value == nil || c.Value.Kind() != constant.Int || c.Uint64() != 0 {
 					continue
 				}
-				path, _ := astutil.PathEnclosingInterval(f.File, ins.Pos(), ins.Pos())
+				switch ins.Op {
+				case token.AND, token.OR, token.XOR:
+				default:
+					// we do not flag shifts because too often, x<<0 is part
+					// of a pattern, x<<0, x<<8, x<<16, ...
+					continue
+				}
+				path, _ := astutil.PathEnclosingInterval(j.File(ins), ins.Pos(), ins.Pos())
 				if len(path) == 0 {
 					continue
 				}
@@ -2562,25 +2207,22 @@ func (c *Checker) CheckSillyBitwiseOps(f *lint.File) {
 
 				switch ins.Op {
 				case token.AND:
-					f.Errorf(ins, "x & 0 always equals 0")
+					j.Errorf(ins, "x & 0 always equals 0")
 				case token.OR, token.XOR:
-					f.Errorf(ins, "x %s 0 always equals x", ins.Op)
-				case token.SHL, token.SHR:
-					// we do not flag shifts because too often, x<<0 is part
-					// of a pattern, x<<0, x<<8, x<<16, ...
+					j.Errorf(ins, "x %s 0 always equals x", ins.Op)
 				}
 			}
 		}
 	}
 }
 
-func (c *Checker) CheckNonOctalFileMode(f *lint.File) {
+func (c *Checker) CheckNonOctalFileMode(j *lint.Job) {
 	fn := func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
 		if !ok {
 			return true
 		}
-		sig, ok := f.Pkg.TypesInfo.TypeOf(call.Fun).(*types.Signature)
+		sig, ok := j.Program.Info.TypeOf(call.Fun).(*types.Signature)
 		if !ok {
 			return true
 		}
@@ -2607,18 +2249,20 @@ func (c *Checker) CheckNonOctalFileMode(f *lint.File) {
 				if err != nil {
 					continue
 				}
-				f.Errorf(call.Args[i], "file mode '%s' evaluates to %#o; did you mean '0%s'?", lit.Value, v, lit.Value)
+				j.Errorf(call.Args[i], "file mode '%s' evaluates to %#o; did you mean '0%s'?", lit.Value, v, lit.Value)
 			}
 		}
 		return true
 	}
-	f.Walk(fn)
+	for _, f := range j.Program.Files {
+		ast.Inspect(f, fn)
+	}
 }
 
-func (c *Checker) CheckPureFunctions(f *lint.File) {
+func (c *Checker) CheckPureFunctions(j *lint.Job) {
 fnLoop:
-	for _, ssafn := range c.funcsForFile(f) {
-		if f.IsTest() {
+	for _, ssafn := range j.Program.InitialFunctions {
+		if j.IsInTest(ssafn) {
 			params := ssafn.Signature.Params()
 			for i := 0; i < params.Len(); i++ {
 				param := params.At(i)
@@ -2642,7 +2286,7 @@ fnLoop:
 					continue
 				}
 				refs := ins.Referrers()
-				if refs == nil || len(filterDebug(*refs)) > 0 {
+				if refs == nil || len(lint.FilterDebug(*refs)) > 0 {
 					continue
 				}
 				callee := ins.Common().StaticCallee()
@@ -2650,7 +2294,7 @@ fnLoop:
 					continue
 				}
 				if c.funcDescs.Get(callee).Pure {
-					f.Errorf(ins, "%s is a pure function but its return value is ignored", callee.Name())
+					j.Errorf(ins, "%s is a pure function but its return value is ignored", callee.Name())
 					continue
 				}
 			}
@@ -2658,8 +2302,9 @@ fnLoop:
 	}
 }
 
-func enclosingFunction(f *lint.File, node ast.Node) *ast.FuncDecl {
-	path, _ := astutil.PathEnclosingInterval(f.File, node.Pos(), node.Pos())
+func enclosingFunction(j *lint.Job, node ast.Node) *ast.FuncDecl {
+	f := j.File(node)
+	path, _ := astutil.PathEnclosingInterval(f, node.Pos(), node.Pos())
 	for _, e := range path {
 		fn, ok := e.(*ast.FuncDecl)
 		if !ok {
@@ -2673,8 +2318,8 @@ func enclosingFunction(f *lint.File, node ast.Node) *ast.FuncDecl {
 	return nil
 }
 
-func (c *Checker) isDeprecated(f *lint.File, ident *ast.Ident) (bool, string) {
-	obj := f.Pkg.TypesInfo.ObjectOf(ident)
+func (c *Checker) isDeprecated(j *lint.Job, ident *ast.Ident) (bool, string) {
+	obj := j.Program.Info.ObjectOf(ident)
 	if obj.Pkg() == nil {
 		return false, ""
 	}
@@ -2682,106 +2327,105 @@ func (c *Checker) isDeprecated(f *lint.File, ident *ast.Ident) (bool, string) {
 	return alt != "", alt
 }
 
-func (c *Checker) CheckDeprecated(f *lint.File) {
+func (c *Checker) CheckDeprecated(j *lint.Job) {
 	fn := func(node ast.Node) bool {
 		sel, ok := node.(*ast.SelectorExpr)
 		if !ok {
 			return true
 		}
-		if fn := enclosingFunction(f, sel); fn != nil {
-			if ok, _ := c.isDeprecated(f, fn.Name); ok {
+		if fn := enclosingFunction(j, sel); fn != nil {
+			if ok, _ := c.isDeprecated(j, fn.Name); ok {
 				// functions that are deprecated may use deprecated
 				// symbols
 				return true
 			}
 		}
 
-		obj := f.Pkg.TypesInfo.ObjectOf(sel.Sel)
+		obj := j.Program.Info.ObjectOf(sel.Sel)
 		if obj.Pkg() == nil {
 			return true
 		}
-		if f.Pkg.PkgInfo.Pkg == obj.Pkg() || obj.Pkg().Path()+"_test" == f.Pkg.PkgInfo.Pkg.Path() {
+		nodePkg := j.NodePackage(node).Pkg
+		if nodePkg == obj.Pkg() || obj.Pkg().Path()+"_test" == nodePkg.Path() {
 			// Don't flag stuff in our own package
 			return true
 		}
-		if ok, alt := c.isDeprecated(f, sel.Sel); ok {
-			f.Errorf(sel, "%s is deprecated: %s", f.Render(sel), alt)
+		if ok, alt := c.isDeprecated(j, sel.Sel); ok {
+			j.Errorf(sel, "%s is deprecated: %s", j.Render(sel), alt)
 			return true
 		}
 		return true
 	}
-	f.Walk(fn)
-}
-
-func (c *Checker) callChecker(rules map[string]CallCheck) func(f *lint.File) {
-	return func(f *lint.File) {
-		c.checkCalls(f, rules)
+	for _, f := range j.Program.Files {
+		ast.Inspect(f, fn)
 	}
 }
 
-func (c *Checker) checkCalls(f *lint.File, rules map[string]CallCheck) {
-	for _, ssafn := range c.funcsForFile(f) {
-		for _, b := range ssafn.Blocks {
-			for _, ins := range b.Instrs {
-				ssacall, ok := ins.(*ssa.Call)
-				if !ok {
-					continue
-				}
-				callee := ssacall.Common().StaticCallee()
-				if callee == nil {
-					continue
-				}
-				obj, ok := callee.Object().(*types.Func)
-				if !ok {
-					continue
-				}
+func (c *Checker) callChecker(rules map[string]CallCheck) func(j *lint.Job) {
+	return func(j *lint.Job) {
+		c.checkCalls(j, rules)
+	}
+}
 
-				r, ok := rules[obj.FullName()]
-				if !ok {
-					continue
+func (c *Checker) checkCalls(j *lint.Job, rules map[string]CallCheck) {
+	for _, ssafn := range j.Program.InitialFunctions {
+		node := c.funcDescs.CallGraph.CreateNode(ssafn)
+		for _, edge := range node.Out {
+			callee := edge.Callee.Func
+			obj, ok := callee.Object().(*types.Func)
+			if !ok {
+				continue
+			}
+
+			r, ok := rules[obj.FullName()]
+			if !ok {
+				continue
+			}
+			var args []*Argument
+			ssaargs := edge.Site.Common().Args
+			if callee.Signature.Recv() != nil {
+				ssaargs = ssaargs[1:]
+			}
+			for _, arg := range ssaargs {
+				if iarg, ok := arg.(*ssa.MakeInterface); ok {
+					arg = iarg.X
 				}
-				var args []*Argument
-				ssaargs := ssacall.Common().Args
-				if ssacall.Common().Signature().Recv() != nil {
-					ssaargs = ssaargs[1:]
+				vr := c.funcDescs.Get(edge.Site.Parent()).Ranges[arg]
+				args = append(args, &Argument{Value: Value{arg, vr}})
+			}
+			call := &Call{
+				Job:     j,
+				Instr:   edge.Site,
+				Args:    args,
+				Checker: c,
+				Parent:  edge.Site.Parent(),
+			}
+			r(call)
+			for idx, arg := range call.Args {
+				_ = idx
+				for _, e := range arg.invalids {
+					// path, _ := astutil.PathEnclosingInterval(f.File, edge.Site.Pos(), edge.Site.Pos())
+					// if len(path) < 2 {
+					// 	continue
+					// }
+					// astcall, ok := path[0].(*ast.CallExpr)
+					// if !ok {
+					// 	continue
+					// }
+					// j.Errorf(astcall.Args[idx], "%s", e)
+
+					j.Errorf(edge.Site, "%s", e)
 				}
-				for _, arg := range ssaargs {
-					if iarg, ok := arg.(*ssa.MakeInterface); ok {
-						arg = iarg.X
-					}
-					vr := c.funcDescs.Get(ssacall.Parent()).Ranges[arg]
-					args = append(args, &Argument{Value: Value{arg, vr}})
-				}
-				call := &Call{
-					Instr:   ssacall,
-					Args:    args,
-					Checker: c,
-					Parent:  ssacall.Parent(),
-				}
-				r(call)
-				for idx, arg := range call.Args {
-					for _, e := range arg.invalids {
-						path, _ := astutil.PathEnclosingInterval(f.File, ssacall.Pos(), ssacall.Pos())
-						if len(path) < 2 {
-							continue
-						}
-						astcall, ok := path[0].(*ast.CallExpr)
-						if !ok {
-							continue
-						}
-						f.Errorf(astcall.Args[idx], "%s", e)
-					}
-				}
-				for _, e := range call.invalids {
-					f.Errorf(call.Instr.Common(), "%s", e)
-				}
+			}
+			for _, e := range call.invalids {
+				j.Errorf(call.Instr.Common(), "%s", e)
 			}
 		}
 	}
 }
 
-func (c *Checker) CheckFlagUsage(f *lint.File) {
-	for _, ssafn := range c.funcsForFile(f) {
+func (c *Checker) CheckFlagUsage(j *lint.Job) {
+	for _, ssafn := range j.Program.InitialFunctions {
 		for _, block := range ssafn.Blocks {
 			for _, ins := range block.Instrs {
 				store, ok := ins.(*ssa.Store)
@@ -2811,7 +2455,7 @@ func (c *Checker) CheckFlagUsage(f *lint.File) {
 				}
 				for _, oblock := range fn.Blocks {
 					if hasCallTo(oblock, "os.Exit") {
-						f.Errorf(store, "the function assigned to Usage shouldn't call os.Exit, but it does")
+						j.Errorf(store, "the function assigned to Usage shouldn't call os.Exit, but it does")
 						break
 					}
 				}
@@ -2848,34 +2492,13 @@ func shortCallName(call *ssa.CallCommon) string {
 	return ""
 }
 
-func callName(call *ssa.CallCommon) string {
-	if call.IsInvoke() {
-		return ""
-	}
-	switch v := call.Value.(type) {
-	case *ssa.Function:
-		fn, ok := v.Object().(*types.Func)
-		if !ok {
-			return ""
-		}
-		return fn.FullName()
-	case *ssa.Builtin:
-		return v.Name()
-	}
-	return ""
-}
-
-func isCallTo(call *ssa.CallCommon, name string) bool {
-	return callName(call) == name
-}
-
 func hasCallTo(block *ssa.BasicBlock, name string) bool {
 	for _, ins := range block.Instrs {
 		call, ok := ins.(*ssa.Call)
 		if !ok {
 			continue
 		}
-		if isCallTo(call.Common(), name) {
+		if lint.IsCallTo(call.Common(), name) {
 			return true
 		}
 	}
@@ -2890,11 +2513,12 @@ func deref(typ types.Type) types.Type {
 	return typ
 }
 
-func (c *Checker) CheckWriterBufferModified(f *lint.File) {
+func (c *Checker) CheckWriterBufferModified(j *lint.Job) {
 	// TODO(dh): this might be a good candidate for taint analysis.
 	// Taint the argument as MUST_NOT_MODIFY, then propagate that
 	// through functions like bytes.Split
-	for _, ssafn := range c.funcsForFile(f) {
+
+	for _, ssafn := range j.Program.InitialFunctions {
 		sig := ssafn.Signature
 		if ssafn.Name() != "Write" || sig.Recv() == nil || sig.Params().Len() != 1 || sig.Results().Len() != 2 {
 			continue
@@ -2924,17 +2548,53 @@ func (c *Checker) CheckWriterBufferModified(f *lint.File) {
 					if addr.X != ssafn.Params[1] {
 						continue
 					}
-					f.Errorf(ins, "io.Writer.Write must not modify the provided buffer, not even temporarily")
+					j.Errorf(ins, "io.Writer.Write must not modify the provided buffer, not even temporarily")
 				case *ssa.Call:
-					if !isCallTo(ins.Common(), "append") {
+					if !lint.IsCallTo(ins.Common(), "append") {
 						continue
 					}
 					if ins.Common().Args[0] != ssafn.Params[1] {
 						continue
 					}
-					f.Errorf(ins, "io.Writer.Write must not modify the provided buffer, not even temporarily")
+					j.Errorf(ins, "io.Writer.Write must not modify the provided buffer, not even temporarily")
 				}
 			}
 		}
+	}
+}
+
+func loopedRegexp(name string) CallCheck {
+	return func(call *Call) {
+		if len(extractConsts(call.Args[0].Value.Value)) == 0 {
+			return
+		}
+		if !call.Checker.isInLoop(call.Instr.Block()) {
+			return
+		}
+		call.Invalid(fmt.Sprintf("calling %s in a loop has poor performance, consider using regexp.Compile", name))
+	}
+}
+
+func (c *Checker) CheckEmptyBranch(j *lint.Job) {
+	fn := func(node ast.Node) bool {
+		ifstmt, ok := node.(*ast.IfStmt)
+		if !ok {
+			return true
+		}
+		if ifstmt.Else != nil {
+			b, ok := ifstmt.Else.(*ast.BlockStmt)
+			if !ok || len(b.List) != 0 {
+				return true
+			}
+			j.Errorf(ifstmt.Else, "empty branch")
+		}
+		if len(ifstmt.Body.List) != 0 {
+			return true
+		}
+		j.Errorf(ifstmt, "empty branch")
+		return true
+	}
+	for _, f := range c.filterGenerated(j.Program.Files) {
+		ast.Inspect(f, fn)
 	}
 }

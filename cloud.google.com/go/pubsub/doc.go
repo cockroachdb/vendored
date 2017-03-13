@@ -32,9 +32,14 @@ using the pubsub package like so:
 
 Messages may then be published to a topic:
 
- msgIDs, err := topic.Publish(ctx, &pubsub.Message{
-	Data: []byte("payload"),
- })
+ res := topic.Publish(ctx, &pubsub.Message{Data: []byte("payload")})
+
+Publish queues the message for publishing and returns immediately. When enough
+messages have accumulated, or enough time has elapsed, the batch of messages is
+sent to the Pub/Sub service.
+
+Publish returns a PublishResult, which behaves like a future: its Get method
+blocks until the message has been sent to the service.
 
 Receiving
 
@@ -111,5 +116,10 @@ process messages, and the redelivery delay if messages fail to be acknowledged
 increases the available time for client code to process messages.  However, if
 the client code neglects to call Message.Done, a large MaxExtension will
 increase the delay before the message is redelivered.
+
+Authentication
+
+See examples of authorization and authentication at
+https://godoc.org/cloud.google.com/go#pkg-examples.
 */
 package pubsub // import "cloud.google.com/go/pubsub"

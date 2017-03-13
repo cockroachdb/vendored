@@ -109,11 +109,13 @@ Make sure that your `$GOPATH/bin` is in your `$PATH`.
      protoc -I/usr/local/include -I. \
        -I$GOPATH/src \
        -I$GOPATH/src/github.com/grpc-ecosystem/grpc-gateway/third_party/googleapis \
-       --plugin=protoc-gen-grpc-ruby=grpc_ruby_plugin \
+       --plugin=protoc-gen-grpc=grpc_ruby_plugin \
        --grpc-ruby_out=. \
        path/to/your/service.proto
      ```
-   2. Implement your service
+   2. Add the googleapis-common-protos gem (or your language equivalent) as a dependency to your project.
+   3. Implement your service
+   
 5. Generate reverse-proxy
    
    ```sh
@@ -130,6 +132,7 @@ Make sure that your `$GOPATH/bin` is in your `$PATH`.
    Now you need to write an entrypoint of the proxy server.
    ```go
    package main
+
    import (
      "flag"
      "net/http"
@@ -158,8 +161,7 @@ Make sure that your `$GOPATH/bin` is in your `$PATH`.
        return err
      }
    
-     http.ListenAndServe(":8080", mux)
-     return nil
+     return http.ListenAndServe(":8080", mux)
    }
    
    func main() {

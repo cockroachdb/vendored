@@ -107,6 +107,7 @@ regenerate:
 	make -C test/data regenerate
 	make -C test/typedecl regenerate
 	make -C test/issue260 regenerate
+	make -C test/issue261 regenerate
 	make -C test/issue262 regenerate
 	make -C test/enumdecl regenerate
 	make -C test/typedecl_all regenerate
@@ -130,8 +131,10 @@ drone:
 	(cd $(GOPATH)/src/github.com/gogo/protobuf && make buildserverall)
 
 testall:
+	go get -u github.com/golang/protobuf/proto
 	make -C protoc-gen-gogo/testdata test
 	make -C vanity/test test
+	make -C test/registration test
 	make tests
 
 bench:

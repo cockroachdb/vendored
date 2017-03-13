@@ -118,6 +118,7 @@ func StartEtcd(inCfg *Config) (e *Etcd, err error) {
 		QuotaBackendBytes:       cfg.QuotaBackendBytes,
 		StrictReconfigCheck:     cfg.StrictReconfigCheck,
 		ClientCertAuthEnabled:   cfg.ClientTLSInfo.ClientCertAuth,
+		AuthToken:               cfg.AuthToken,
 	}
 
 	if e.Server, err = etcdserver.NewServer(srvcfg); err != nil {
@@ -290,8 +291,11 @@ func startClientListeners(cfg *Config) (sctxs map[string]*serveCtx, err error) {
 			sctx.userHandlers[k] = cfg.UserHandlers[k]
 		}
 		sctx.serviceRegister = cfg.ServiceRegister
-		if cfg.EnablePprof {
+		if cfg.EnablePprof || cfg.Debug {
 			sctx.registerPprof()
+		}
+		if cfg.Debug {
+			sctx.registerTrace()
 		}
 		sctxs[u.Host] = sctx
 	}

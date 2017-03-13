@@ -3,6 +3,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+//go:generate go run gen-accessors.go
+
 package github
 
 import (
@@ -25,7 +27,7 @@ import (
 )
 
 const (
-	libraryVersion = "3"
+	libraryVersion = "4"
 	defaultBaseURL = "https://api.github.com/"
 	uploadBaseURL  = "https://uploads.github.com/"
 	userAgent      = "go-github/" + libraryVersion

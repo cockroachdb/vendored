@@ -9,7 +9,7 @@
 # PKG=./wal ./test
 # PKG=snap ./test
 #
-# Run code coverage 
+# Run code coverage
 # COVERDIR must either be a absolute path or a relative path to the etcd root
 # COVERDIR=coverage PASSES="build_cov cov" ./test
 set -e
@@ -35,7 +35,7 @@ TESTABLE_AND_FORMATTABLE=`echo "$TEST_PKGS" | egrep -v "$INTEGRATION_PKGS"`
 
 # TODO: 'client' pkg fails with gosimple from generated files
 # TODO: 'rafttest' is failing with unused
-GOSIMPLE_UNUSED_PATHS=`find . -name \*.go | while read a; do dirname $a; done | sort | uniq | egrep -v "$IGNORE_PKGS" | grep -v 'client'`
+STATIC_ANALYSIS_PATHS=`find . -name \*.go | while read a; do dirname $a; done | sort | uniq | egrep -v "$IGNORE_PKGS" | grep -v 'client'`
 
 if [ -z "$GOARCH" ]; then
 	GOARCH=$(go env GOARCH);
@@ -84,7 +84,7 @@ function integration_pass {
 function cov_pass {
 	echo "Running code coverage..."
 	# install gocovmerge before running code coverage from github.com/wadey/gocovmerge
-	# gocovmerge merges coverage files 
+	# gocovmerge merges coverage files
 	if ! which gocovmerge >/dev/null; then
 		echo "gocovmerge not installed"
 		exit 255
@@ -103,19 +103,21 @@ function cov_pass {
 	mkdir -p "$COVERDIR"
 
 	# PKGS_DELIM contains all the core etcd pkgs delimited by ',' which will be profiled for code coverage.
-	# Integration tests will generate code coverage for those pkgs 
+	# Integration tests will generate code coverage for those pkgs
 	PKGS_DELIM=$(echo $TEST | sed 's/ /,/g')
 
 	PKGS=`echo "$TEST_PKGS" | egrep -v "(e2e|functional-tester)"`
 	# run code coverage for unit and integration tests
 	for t in ${PKGS}; do
 		tf=`echo $t | tr / _`
+		# cache package compilation data for faster repeated builds
+		go test -covermode=set -coverpkg $PKGS_DELIM -i -v ${REPO_PATH}/$t
 		# uses -run=Test to skip examples because clientv3/ example tests will leak goroutines
 		go test -covermode=set -coverpkg $PKGS_DELIM -timeout 15m -run=Test -v -coverprofile "$COVERDIR/${tf}.coverprofile"  ${REPO_PATH}/$t
 	done
 
 	# run code coverage for e2e tests
-	# use 30m timeout because e2e coverage takes longer 
+	# use 30m timeout because e2e coverage takes longer
 	# due to many tests cause etcd process to wait
 	# on leadership transfer timeout during gracefully shutdown
 	go test -tags cov -timeout 30m -v ${REPO_PATH}"/e2e"
@@ -151,7 +153,7 @@ function grpcproxy_pass {
 function release_pass {
 	rm -f ./bin/etcd-last-release
 	# to grab latest patch release; bump this up for every minor release
-	UPGRADE_VER=$(git tag -l --sort=-version:refname "v3.0.*" | head -1)
+	UPGRADE_VER=$(git tag -l --sort=-version:refname "v3.1.*" | head -1)
 	if [ -n "$MANUAL_VER" ]; then
 		# in case, we need to test against different version
 		UPGRADE_VER=$MANUAL_VER
@@ -206,6 +208,14 @@ function fmt_pass {
 		fi
 	done
 
+	echo "Checking documentation style..."
+	# eschew you
+	yous=`find . -name \*.md | xargs egrep --color "[Yy]ou[r]?[ '.,;]" | grep -v /v2/ || true`
+	if [ ! -z "$yous" ]; then
+		echo -e "found 'you' in documentation:\n${yous}"
+		exit 255
+	fi
+
 	if which goword >/dev/null; then
 		echo "Checking goword..."
 		# get all go files to process
@@ -224,28 +234,43 @@ function fmt_pass {
 
 	if which gosimple >/dev/null; then
 		echo "Checking gosimple..."
-		for path in $GOSIMPLE_UNUSED_PATHS; do
-			simplResult=`gosimple ${path} 2>&1 || true`
-			if [ -n "${simplResult}" ]; then
-				echo -e "gosimple checking ${path} failed:\n${simplResult}"
-				exit 255
-			fi
-		done
+		simplResult=`gosimple ${STATIC_ANALYSIS_PATHS} 2>&1 || true`
+		if [ -n "${simplResult}" ]; then
+			echo -e "gosimple checking failed:\n${simplResult}"
+			exit 255
+		fi
 	else
 		echo "Skipping gosimple..."
 	fi
 
 	if which unused >/dev/null; then
 		echo "Checking unused..."
-		for path in $GOSIMPLE_UNUSED_PATHS; do
-			unusedResult=`unused ${path} 2>&1 || true`
-			if [ -n "${unusedResult}" ]; then
-				echo -e "unused checking ${path} failed:\n${unusedResult}"
-				exit 255
-			fi
-		done
+		unusedResult=`unused ${STATIC_ANALYSIS_PATHS} 2>&1 || true`
+		if [ -n "${unusedResult}" ]; then
+			echo -e "unused checking failed:\n${unusedResult}"
+			exit 255
+		fi
 	else
 		echo "Skipping unused..."
+	fi
+
+	if which staticcheck >/dev/null; then
+		echo "Checking staticcheck..."
+		staticcheckResult=`staticcheck ${STATIC_ANALYSIS_PATHS} 2>&1 || true`
+		if [ ! -n "${staticcheckResult}" ]; then
+			continue
+		fi
+		# TODO: resolve these after go1.8 migration
+		# See https://github.com/dominikh/go-tools/tree/master/cmd/staticcheck
+		STATIC_CHECK_MASK="SA(1016|1019|2002)"
+		if egrep -v "$STATIC_CHECK_MASK" "${staticcheckResult}"; then
+			echo -e "staticcheck checking ${path} failed:\n${staticcheckResult}"
+			exit 255
+		else
+			echo -e "staticcheck warning:\n${staticcheckResult}"
+		fi
+	else
+		echo "Skipping staticcheck..."
 	fi
 
 	echo "Checking for license header..."
@@ -299,7 +324,8 @@ function build_cov_pass {
 	if [ -n "${BINDIR}" ]; then out="${BINDIR}"; fi
 	PKGS=$TEST
 	ETCD_PKGS_DELIM=$(echo $PKGS | sed 's/ /,/g')
-	go test -c -covermode=set -coverpkg=$ETCD_PKGS_DELIM -o ${out}/etcd_test 
+	go test -c -covermode=set -coverpkg=$ETCD_PKGS_DELIM -o ${out}/etcd_test
+	go test -tags cov -c -covermode=set -coverpkg=$ETCD_PKGS_DELIM -o ${out}/etcdctl_test ${REPO_PATH}/etcdctl/
 }
 
 function compile_pass {

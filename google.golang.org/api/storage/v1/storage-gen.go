@@ -177,7 +177,8 @@ type Bucket struct {
 	// Etag: HTTP 1.1 Entity tag for the bucket.
 	Etag string `json:"etag,omitempty"`
 
-	// Id: The ID of the bucket.
+	// Id: The ID of the bucket. For buckets, the id and name properities
+	// are the same.
 	Id string `json:"id,omitempty"`
 
 	// Kind: The kind of item this is. For buckets, this is always
@@ -990,7 +991,8 @@ type Object struct {
 	// versioning.
 	Generation int64 `json:"generation,omitempty,string"`
 
-	// Id: The ID of the object.
+	// Id: The ID of the object, including the bucket name, object name, and
+	// generation number.
 	Id string `json:"id,omitempty"`
 
 	// Kind: The kind of item this is. For objects, this is always
@@ -1014,7 +1016,7 @@ type Object struct {
 	// of a particular generation of a particular object.
 	Metageneration int64 `json:"metageneration,omitempty,string"`
 
-	// Name: The name of this object. Required if not specified by URL
+	// Name: The name of the object. Required if not specified by URL
 	// parameter.
 	Name string `json:"name,omitempty"`
 
@@ -2792,7 +2794,8 @@ func (r *BucketsService) List(projectid string) *BucketsListCall {
 }
 
 // MaxResults sets the optional parameter "maxResults": Maximum number
-// of buckets to return.
+// of buckets to return in a single response. The service will use this
+// parameter or 1,000 items, whichever is smaller.
 func (c *BucketsListCall) MaxResults(maxResults int64) *BucketsListCall {
 	c.urlParams_.Set("maxResults", fmt.Sprint(maxResults))
 	return c
@@ -2924,7 +2927,8 @@ func (c *BucketsListCall) Do(opts ...googleapi.CallOption) (*Buckets, error) {
 	//   ],
 	//   "parameters": {
 	//     "maxResults": {
-	//       "description": "Maximum number of buckets to return.",
+	//       "default": "1000",
+	//       "description": "Maximum number of buckets to return in a single response. The service will use this parameter or 1,000 items, whichever is smaller.",
 	//       "format": "uint32",
 	//       "location": "query",
 	//       "minimum": "0",
@@ -6957,9 +6961,10 @@ func (c *ObjectsListCall) Delimiter(delimiter string) *ObjectsListCall {
 }
 
 // MaxResults sets the optional parameter "maxResults": Maximum number
-// of items plus prefixes to return. As duplicate prefixes are omitted,
-// fewer total results may be returned than requested. The default value
-// of this parameter is 1,000 items.
+// of items plus prefixes to return in a single page of responses. As
+// duplicate prefixes are omitted, fewer total results may be returned
+// than requested. The service will use this parameter or 1,000 items,
+// whichever is smaller.
 func (c *ObjectsListCall) MaxResults(maxResults int64) *ObjectsListCall {
 	c.urlParams_.Set("maxResults", fmt.Sprint(maxResults))
 	return c
@@ -7113,7 +7118,8 @@ func (c *ObjectsListCall) Do(opts ...googleapi.CallOption) (*Objects, error) {
 	//       "type": "string"
 	//     },
 	//     "maxResults": {
-	//       "description": "Maximum number of items plus prefixes to return. As duplicate prefixes are omitted, fewer total results may be returned than requested. The default value of this parameter is 1,000 items.",
+	//       "default": "1000",
+	//       "description": "Maximum number of items plus prefixes to return in a single page of responses. As duplicate prefixes are omitted, fewer total results may be returned than requested. The service will use this parameter or 1,000 items, whichever is smaller.",
 	//       "format": "uint32",
 	//       "location": "query",
 	//       "minimum": "0",
@@ -8199,9 +8205,10 @@ func (c *ObjectsWatchAllCall) Delimiter(delimiter string) *ObjectsWatchAllCall {
 }
 
 // MaxResults sets the optional parameter "maxResults": Maximum number
-// of items plus prefixes to return. As duplicate prefixes are omitted,
-// fewer total results may be returned than requested. The default value
-// of this parameter is 1,000 items.
+// of items plus prefixes to return in a single page of responses. As
+// duplicate prefixes are omitted, fewer total results may be returned
+// than requested. The service will use this parameter or 1,000 items,
+// whichever is smaller.
 func (c *ObjectsWatchAllCall) MaxResults(maxResults int64) *ObjectsWatchAllCall {
 	c.urlParams_.Set("maxResults", fmt.Sprint(maxResults))
 	return c
@@ -8347,7 +8354,8 @@ func (c *ObjectsWatchAllCall) Do(opts ...googleapi.CallOption) (*Channel, error)
 	//       "type": "string"
 	//     },
 	//     "maxResults": {
-	//       "description": "Maximum number of items plus prefixes to return. As duplicate prefixes are omitted, fewer total results may be returned than requested. The default value of this parameter is 1,000 items.",
+	//       "default": "1000",
+	//       "description": "Maximum number of items plus prefixes to return in a single page of responses. As duplicate prefixes are omitted, fewer total results may be returned than requested. The service will use this parameter or 1,000 items, whichever is smaller.",
 	//       "format": "uint32",
 	//       "location": "query",
 	//       "minimum": "0",

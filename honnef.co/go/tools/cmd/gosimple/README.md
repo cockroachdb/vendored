@@ -29,12 +29,6 @@ code, while golint flags common style issues. Furthermore, gosimple
 always targets the latest Go version. If a new Go release adds a
 simpler way of doing something, gosimple will suggest that way.
 
-Gosimple will never contain rules that are also present in golint,
-even if they would fit into gosimple. If golint should merge one of
-gosimple's rules, it will be removed from gosimple shortly after, to
-avoid duplicate results. It is strongly suggested that you use golint
-and gosimple together and consider gosimple an addon to golint.
-
 ## Checks
 
 Gosimple makes the following recommendations for avoiding unsimple
@@ -64,6 +58,9 @@ constructs:
 | S1019 | `make(T, 0)` or `make(T, x, x)`                                             | `make(T)` or `make(T, x)`                                              |
 | S1020 | `if _, ok := i.(T); ok && i != nil`                                         | `if _, ok := i.(T); ok`                                                |
 | S1021 | `var x uint; x = 1`                                                         | `var x uint = 1`                                                       |
+| S1022 | `x, _ = someMap[key]`                                                       | `x = someMap[key]`                                                     |
+| S1023 | `break` as the final statement of a `case` clause                           | Go doesn't have automatic fallthrough, making final `break` redundant  |
+| S1024 | `t.Sub(time.Now())`                                                         | `time.Until(t)`                                                        |
 
 ## gofmt -r
 
