@@ -50,7 +50,7 @@ type Program struct {
 	GoVersion        int
 
 	tokenFileMap map[*token.File]*ast.File
-	astFileMap   map[*ast.File]*ssa.Package
+	astFileMap   map[*ast.File]*Pkg
 }
 
 type Func func(*Job)
@@ -137,6 +137,7 @@ func (ps byPosition) Swap(i int, j int) {
 func (l *Linter) Lint(lprog *loader.Program) []Problem {
 	ssaprog := ssautil.CreateProgram(lprog, ssa.GlobalDebug)
 	ssaprog.Build()
+	pkgMap := map[*ssa.Package]*Pkg{}
 	var pkgs []*Pkg
 	for _, pkginfo := range lprog.InitialPackages() {
 		ssapkg := ssaprog.Package(pkginfo.Pkg)
@@ -144,6 +145,7 @@ func (l *Linter) Lint(lprog *loader.Program) []Problem {
 			Package: ssapkg,
 			Info:    pkginfo,
 		}
+		pkgMap[ssapkg] = pkg
 		pkgs = append(pkgs, pkg)
 	}
 	prog := &Program{
@@ -160,7 +162,7 @@ func (l *Linter) Lint(lprog *loader.Program) []Problem {
 		},
 		GoVersion:    l.GoVersion,
 		tokenFileMap: map[*token.File]*ast.File{},
-		astFileMap:   map[*ast.File]*ssa.Package{},
+		astFileMap:   map[*ast.File]*Pkg{},
 	}
 	for fn := range ssautil.AllFunctions(ssaprog) {
 		prog.AllFunctions = append(prog.AllFunctions, fn)
@@ -182,7 +184,7 @@ func (l *Linter) Lint(lprog *loader.Program) []Problem {
 		for _, f := range pkginfo.Files {
 			tf := lprog.Fset.File(f.Pos())
 			prog.tokenFileMap[tf] = f
-			prog.astFileMap[f] = ssapkg
+			prog.astFileMap[f] = pkgMap[ssapkg]
 		}
 	}
 	for _, pkginfo := range lprog.InitialPackages() {
@@ -257,6 +259,17 @@ type Pkg struct {
 
 type packager interface {
 	Package() *ssa.Package
+}
+
+func IsExample(fn *ssa.Function) bool {
+	if !strings.HasPrefix(fn.Name(), "Example") {
+		return false
+	}
+	f := fn.Prog.Fset.File(fn.Pos())
+	if f == nil {
+		return false
+	}
+	return strings.HasSuffix(f.Name(), "_test.go")
 }
 
 func (j *Job) IsInTest(node Positioner) bool {
@@ -377,16 +390,9 @@ func (j *Job) ExprToString(expr ast.Expr) (string, bool) {
 	return constant.StringVal(val), true
 }
 
-func (j *Job) NodePackage(node Positioner) *ssa.Package {
+func (j *Job) NodePackage(node Positioner) *Pkg {
 	f := j.File(node)
 	return j.Program.astFileMap[f]
-}
-
-func (j *Job) EnclosingSSAFunction(node Positioner) *ssa.Function {
-	f := j.File(node)
-	path, _ := astutil.PathEnclosingInterval(f, node.Pos(), node.Pos())
-	pkg := j.Program.astFileMap[f]
-	return ssa.EnclosingFunction(pkg, path)
 }
 
 func IsGenerated(f *ast.File) bool {
@@ -499,7 +505,7 @@ func (v *globalVisitor) Visit(node ast.Node) ast.Visitor {
 	case *ast.CallExpr:
 		v.m[node] = v.pkg.Func("init")
 		return v
-	case *ast.FuncDecl:
+	case *ast.FuncDecl, *ast.FuncLit:
 		nv := &fnVisitor{v.m, v.f, v.pkg, nil}
 		return nv.Visit(node)
 	default:

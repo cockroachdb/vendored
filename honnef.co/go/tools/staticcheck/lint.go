@@ -254,6 +254,7 @@ func (c *Checker) Funcs() map[string]lint.Func {
 		"SA5007": c.CheckInfiniteRecursion,
 
 		"SA6000": c.callChecker(checkRegexpMatchLoopRules),
+		"SA6001": c.CheckMapBytesKey,
 
 		"SA9000": c.callChecker(checkDubiousSyncPoolSizeRules),
 		"SA9001": c.CheckDubiousDeferInChannelRangeLoop,
@@ -870,11 +871,16 @@ func (c *Checker) CheckLhsRhsIdentical(j *lint.Job) {
 
 func (c *Checker) CheckScopedBreak(j *lint.Job) {
 	fn := func(node ast.Node) bool {
-		loop, ok := node.(*ast.ForStmt)
-		if !ok {
+		var body *ast.BlockStmt
+		switch node := node.(type) {
+		case *ast.ForStmt:
+			body = node.Body
+		case *ast.RangeStmt:
+			body = node.Body
+		default:
 			return true
 		}
-		for _, stmt := range loop.Body.List {
+		for _, stmt := range body.List {
 			var blocks [][]ast.Stmt
 			switch stmt := stmt.(type) {
 			case *ast.SwitchStmt:
@@ -1033,6 +1039,17 @@ func selectorX(sel *ast.SelectorExpr) ast.Node {
 }
 
 func (c *Checker) CheckEmptyCriticalSection(j *lint.Job) {
+	// Initially it might seem like this check would be easier to
+	// implement in SSA. After all, we're only checking for two
+	// consecutive method calls. In reality, however, there may be any
+	// number of other instructions between the lock and unlock, while
+	// still constituting an empty critical section. For example,
+	// given `m.x().Lock(); m.x().Unlock()`, there will be a call to
+	// x(). In the AST-based approach, this has a tiny potential for a
+	// false positive (the second call to x might be doing work that
+	// is protected by the mutex). In an SSA-based approach, however,
+	// it would miss a lot of real bugs.
+
 	mutexParams := func(s ast.Stmt) (x ast.Expr, funcName string, ok bool) {
 		expr, ok := s.(*ast.ExprStmt)
 		if !ok {
@@ -1313,15 +1330,20 @@ func (c *Checker) CheckIneffecitiveFieldAssignments(j *lint.Job) {
 
 func (c *Checker) CheckUnreadVariableValues(j *lint.Job) {
 	fn := func(node ast.Node) bool {
-		fn, ok := node.(*ast.FuncDecl)
-		if !ok {
+		switch node.(type) {
+		case *ast.FuncDecl, *ast.FuncLit:
+		default:
 			return true
 		}
-		ssafn := c.nodeFns[fn]
+
+		ssafn := c.nodeFns[node]
 		if ssafn == nil {
 			return true
 		}
-		ast.Inspect(fn, func(node ast.Node) bool {
+		if lint.IsExample(ssafn) {
+			return true
+		}
+		ast.Inspect(node, func(node ast.Node) bool {
 			assign, ok := node.(*ast.AssignStmt)
 			if !ok {
 				return true
@@ -1554,7 +1576,7 @@ func (c *Checker) CheckLoopCondition(j *lint.Job) {
 			return true
 		}
 
-		ssafn := j.EnclosingSSAFunction(cond)
+		ssafn := c.nodeFns[cond]
 		if ssafn == nil {
 			return true
 		}
@@ -1593,21 +1615,27 @@ func (c *Checker) CheckLoopCondition(j *lint.Job) {
 
 func (c *Checker) CheckArgOverwritten(j *lint.Job) {
 	fn := func(node ast.Node) bool {
-		fn, ok := node.(*ast.FuncDecl)
-		if !ok {
+		var typ *ast.FuncType
+		var body *ast.BlockStmt
+		switch fn := node.(type) {
+		case *ast.FuncDecl:
+			typ = fn.Type
+			body = fn.Body
+		case *ast.FuncLit:
+			typ = fn.Type
+			body = fn.Body
+		}
+		if body == nil {
 			return true
 		}
-		if fn.Body == nil {
-			return true
-		}
-		ssafn := c.nodeFns[fn]
+		ssafn := c.nodeFns[node]
 		if ssafn == nil {
 			return true
 		}
-		if len(fn.Type.Params.List) == 0 {
+		if len(typ.Params.List) == 0 {
 			return true
 		}
-		for _, field := range fn.Type.Params.List {
+		for _, field := range typ.Params.List {
 			for _, arg := range field.Names {
 				obj := j.Program.Info.ObjectOf(arg)
 				var ssaobj *ssa.Parameter
@@ -1629,7 +1657,7 @@ func (c *Checker) CheckArgOverwritten(j *lint.Job) {
 				}
 
 				assigned := false
-				ast.Inspect(fn.Body, func(node ast.Node) bool {
+				ast.Inspect(body, func(node ast.Node) bool {
 					assign, ok := node.(*ast.AssignStmt)
 					if !ok {
 						return true
@@ -1668,15 +1696,20 @@ func (c *Checker) CheckIneffectiveLoop(j *lint.Job) {
 	// - any nested, unlabelled continue, even if it is in another
 	// loop or closure.
 	fn := func(node ast.Node) bool {
-		fn, ok := node.(*ast.FuncDecl)
-		if !ok {
+		var body *ast.BlockStmt
+		switch fn := node.(type) {
+		case *ast.FuncDecl:
+			body = fn.Body
+		case *ast.FuncLit:
+			body = fn.Body
+		default:
 			return true
 		}
-		if fn.Body == nil {
+		if body == nil {
 			return true
 		}
 		labels := map[*ast.Object]ast.Stmt{}
-		ast.Inspect(fn.Body, func(node ast.Node) bool {
+		ast.Inspect(body, func(node ast.Node) bool {
 			label, ok := node.(*ast.LabeledStmt)
 			if !ok {
 				return true
@@ -1685,7 +1718,7 @@ func (c *Checker) CheckIneffectiveLoop(j *lint.Job) {
 			return true
 		})
 
-		ast.Inspect(fn.Body, func(node ast.Node) bool {
+		ast.Inspect(body, func(node ast.Node) bool {
 			var loop ast.Node
 			var body *ast.BlockStmt
 			switch node := node.(type) {
@@ -1957,10 +1990,10 @@ func (c *Checker) CheckSliceOutOfBounds(j *lint.Job) {
 func (c *Checker) CheckDeferLock(j *lint.Job) {
 	for _, ssafn := range j.Program.InitialFunctions {
 		for _, block := range ssafn.Blocks {
-			if len(block.Instrs) < 2 {
+			instrs := lint.FilterDebug(block.Instrs)
+			if len(instrs) < 2 {
 				continue
 			}
-			instrs := lint.FilterDebug(block.Instrs)
 			for i, ins := range instrs[:len(instrs)-1] {
 				call, ok := ins.(*ssa.Call)
 				if !ok {
@@ -2581,6 +2614,10 @@ func (c *Checker) CheckEmptyBranch(j *lint.Job) {
 		if !ok {
 			return true
 		}
+		ssafn := c.nodeFns[node]
+		if lint.IsExample(ssafn) {
+			return true
+		}
 		if ifstmt.Else != nil {
 			b, ok := ifstmt.Else.(*ast.BlockStmt)
 			if !ok || len(b.List) != 0 {
@@ -2596,5 +2633,56 @@ func (c *Checker) CheckEmptyBranch(j *lint.Job) {
 	}
 	for _, f := range c.filterGenerated(j.Program.Files) {
 		ast.Inspect(f, fn)
+	}
+}
+
+func (c *Checker) CheckMapBytesKey(j *lint.Job) {
+	for _, fn := range j.Program.InitialFunctions {
+		for _, b := range fn.Blocks {
+		insLoop:
+			for _, ins := range b.Instrs {
+				// find []byte -> string conversions
+				conv, ok := ins.(*ssa.Convert)
+				if !ok || conv.Type() != types.Universe.Lookup("string").Type() {
+					continue
+				}
+				if s, ok := conv.X.Type().(*types.Slice); !ok || s.Elem() != types.Universe.Lookup("byte").Type() {
+					continue
+				}
+				refs := conv.Referrers()
+				// need at least two (DebugRef) references: the
+				// conversion and the *ast.Ident
+				if refs == nil || len(*refs) < 2 {
+					continue
+				}
+				ident := false
+				// skip first reference, that's the conversion itself
+				for _, ref := range (*refs)[1:] {
+					switch ref := ref.(type) {
+					case *ssa.DebugRef:
+						if _, ok := ref.Expr.(*ast.Ident); !ok {
+							// the string seems to be used somewhere
+							// unexpected; the default branch should
+							// catch this already, but be safe
+							continue insLoop
+						} else {
+							ident = true
+						}
+					case *ssa.Lookup:
+					default:
+						// the string is used somewhere else than a
+						// map lookup
+						continue insLoop
+					}
+				}
+
+				// the result of the conversion wasn't assigned to an
+				// identifier
+				if !ident {
+					continue
+				}
+				j.Errorf(conv, "m[string(key)] would be more efficient than k := string(key); m[k]")
+			}
+		}
 	}
 }

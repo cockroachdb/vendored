@@ -5,8 +5,7 @@ set -eu
 
 rm -rf internal/*
 find . -type l -not -path './.git/*' -exec rm {} \;
-curl -sL https://github.com/jemalloc/jemalloc/releases/download/4.4.0/jemalloc-4.4.0.tar.bz2 | tar jxf - -C internal --strip-components=1
-patch -p1 -d internal < secure_getenv.patch
+curl -sfSL https://github.com/jemalloc/jemalloc/releases/download/4.5.0/jemalloc-4.5.0.tar.bz2 | tar jxf - -C internal --strip-components=1
 
 # symlink so cgo compiles them
 for source_file in $($MAKE sources); do
@@ -18,7 +17,7 @@ done
 
 # You need to manually run the following code.
 # on OSX:
-# (cd internal && MACOSX_DEPLOYMENT_TARGET=10.9 ./configure --enable-prof --with-jemalloc-prefix='')
+# (cd internal && MACOSX_DEPLOYMENT_TARGET=10.9 ./configure)
 # <compare "Build parameters" in internal/Makefile to cgo flags in cgo_flags.go> and adjust the latter.
 # rm -r darwin_includes
 # git clean -Xn -- internal/include/jemalloc | sed 's/.* //' | xargs -I % rsync -R % darwin_includes/
@@ -40,11 +39,11 @@ done
 # git clean -Xn -- internal/include/jemalloc | sed 's/.* //' | xargs -I % rsync -R % linux_includes/
 #
 # on FreeBSD:
-# (cd internal && ./configure --enable-prof)
+# (cd internal && ./configure)
 # <compare "Build parameters" in internal/Makefile to cgo flags in cgo_flags.go> and adjust the latter.
 # rm -r freebsd_includes
 # git clean -Xn -- internal/include/jemalloc | sed 's/.* //' | xargs -I % rsync -R % freebsd_includes/
 #
 # After committing locally you should run the command below to ensure your repo
 # is in a clean state and then build/test cockroachdb with the new version:
-#   git clean -dxf
+#   git clean -dXf

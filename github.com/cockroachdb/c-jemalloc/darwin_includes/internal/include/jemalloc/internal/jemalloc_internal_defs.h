@@ -6,8 +6,8 @@
  * public APIs to be prefixed.  This makes it possible, with some care, to use
  * multiple allocators simultaneously.
  */
-/* #undef JEMALLOC_PREFIX */
-/* #undef JEMALLOC_CPREFIX */
+#define JEMALLOC_PREFIX "je_"
+#define JEMALLOC_CPREFIX "JE_"
 
 /*
  * JEMALLOC_PRIVATE_NAMESPACE is used as a prefix for all library-private APIs.
@@ -240,7 +240,6 @@
  * Darwin (OS X) uses zones to work around Mach-O symbol override shortcomings.
  */
 #define JEMALLOC_ZONE 
-#define JEMALLOC_ZONE_VERSION 8
 
 /*
  * Methods for determining whether the OS overcommits.
@@ -255,6 +254,12 @@
 #define JEMALLOC_HAVE_MADVISE 
 
 /*
+ * Defined if transparent huge pages are supported via the MADV_[NO]HUGEPAGE
+ * arguments to madvise(2).
+ */
+/* #undef JEMALLOC_HAVE_MADVISE_HUGE */
+
+/*
  * Methods for purging unused pages differ between operating systems.
  *
  *   madvise(..., MADV_FREE) : This marks pages as being unused, such that they
@@ -266,10 +271,7 @@
 #define JEMALLOC_PURGE_MADVISE_FREE 
 #define JEMALLOC_PURGE_MADVISE_DONTNEED 
 
-/*
- * Defined if transparent huge pages are supported via the MADV_[NO]HUGEPAGE
- * arguments to madvise(2).
- */
+/* Defined if transparent huge page support is enabled. */
 /* #undef JEMALLOC_THP */
 
 /* Define if operating system has alloca.h header. */

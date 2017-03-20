@@ -61,6 +61,10 @@ constructs:
 | S1022 | `x, _ = someMap[key]`                                                       | `x = someMap[key]`                                                     |
 | S1023 | `break` as the final statement of a `case` clause                           | Go doesn't have automatic fallthrough, making final `break` redundant  |
 | S1024 | `t.Sub(time.Now())`                                                         | `time.Until(t)`                                                        |
+| S1025 | `fmt.Sprintf("%s", x)` where `x` is already a string                        | `x`                                                                    |
+|       | `fmt.Sprintf("%s", x)` where `x`'s underlying type is a string              | `string(x)`                                                            |
+|       | `fmt.Sprintf("%s", x)` where `x` has a String method                        | `x.String()`                                                           |
+| S1026 | Copies of strings, like `string([]byte(x))` or `"" + x`                     | `x`                                                                    |
 
 ## gofmt -r
 

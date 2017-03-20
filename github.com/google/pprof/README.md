@@ -1,4 +1,5 @@
 [![Build Status](https://travis-ci.org/google/pprof.svg?branch=master)](https://travis-ci.org/google/pprof)
+[![codecov](https://codecov.io/gh/google/pprof/graph/badge.svg)](https://codecov.io/gh/google/pprof)
 
 # Introduction
 
@@ -36,6 +37,10 @@ Prerequisites:
 To build and install it, use the `go get` tool.
 
     go get github.com/google/pprof
+
+Remember to set GOPATH to the directory where you want pprof to be
+installed.  The binary will be in $GOPATH/bin and the sources under
+$GOPATH/src/github.com/google/pprof.
 
 # Basic usage
 

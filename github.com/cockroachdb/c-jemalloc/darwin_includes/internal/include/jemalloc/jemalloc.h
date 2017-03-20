@@ -56,27 +56,27 @@ extern "C" {
  * these macro definitions.
  */
 #ifndef JEMALLOC_NO_RENAME
-#  define je_malloc_conf malloc_conf
-#  define je_malloc_message malloc_message
-#  define je_malloc malloc
-#  define je_calloc calloc
-#  define je_posix_memalign posix_memalign
-#  define je_aligned_alloc aligned_alloc
-#  define je_realloc realloc
-#  define je_free free
-#  define je_mallocx mallocx
-#  define je_rallocx rallocx
-#  define je_xallocx xallocx
-#  define je_sallocx sallocx
-#  define je_dallocx dallocx
-#  define je_sdallocx sdallocx
-#  define je_nallocx nallocx
-#  define je_mallctl mallctl
-#  define je_mallctlnametomib mallctlnametomib
-#  define je_mallctlbymib mallctlbymib
-#  define je_malloc_stats_print malloc_stats_print
-#  define je_malloc_usable_size malloc_usable_size
-#  define je_valloc valloc
+#  define je_malloc_conf je_malloc_conf
+#  define je_malloc_message je_malloc_message
+#  define je_malloc je_malloc
+#  define je_calloc je_calloc
+#  define je_posix_memalign je_posix_memalign
+#  define je_aligned_alloc je_aligned_alloc
+#  define je_realloc je_realloc
+#  define je_free je_free
+#  define je_mallocx je_mallocx
+#  define je_rallocx je_rallocx
+#  define je_xallocx je_xallocx
+#  define je_sallocx je_sallocx
+#  define je_dallocx je_dallocx
+#  define je_sdallocx je_sdallocx
+#  define je_nallocx je_nallocx
+#  define je_mallctl je_mallctl
+#  define je_mallctlnametomib je_mallctlnametomib
+#  define je_mallctlbymib je_mallctlbymib
+#  define je_malloc_stats_print je_malloc_stats_print
+#  define je_malloc_usable_size je_malloc_usable_size
+#  define je_valloc je_valloc
 #endif
 
 #include <stdlib.h>
@@ -85,12 +85,12 @@ extern "C" {
 #include <limits.h>
 #include <strings.h>
 
-#define	JEMALLOC_VERSION "4.4.0-0-gf1f76357313e7dcad7262f17a48ff0a2e005fcdc"
+#define	JEMALLOC_VERSION "4.5.0-0-g04380e79f1e2428bd0ad000bbc6e3d2dfc6b66a5"
 #define	JEMALLOC_VERSION_MAJOR 4
-#define	JEMALLOC_VERSION_MINOR 4
+#define	JEMALLOC_VERSION_MINOR 5
 #define	JEMALLOC_VERSION_BUGFIX 0
 #define	JEMALLOC_VERSION_NREV 0
-#define	JEMALLOC_VERSION_GID "f1f76357313e7dcad7262f17a48ff0a2e005fcdc"
+#define	JEMALLOC_VERSION_GID "04380e79f1e2428bd0ad000bbc6e3d2dfc6b66a5"
 
 #  define MALLOCX_LG_ALIGN(la)	((int)(la))
 #  if LG_SIZEOF_PTR == 2
