@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/lightstep/lightstep-tracer-go/lightstep_thrift"
-	"github.com/lightstep/lightstep-tracer-go/thrift_0_9_2/lib/go/thrift"
 	"github.com/opentracing/opentracing-go/log"
 )
 
@@ -25,27 +24,30 @@ type logFieldEncoder struct {
 }
 
 func (lfe *logFieldEncoder) EmitString(key, value string) {
-	if key == deprecatedFieldKeyEvent {
-		if len(value) > lfe.recorder.maxLogMessageLen {
-			value = value[:(lfe.recorder.maxLogMessageLen-1)] + ellipsis
-		}
-		lfe.logRecord.StableName = thrift.StringPtr(value)
+	if len(value) > lfe.recorder.maxLogMessageLen {
+		value = value[:(lfe.recorder.maxLogMessageLen-1)] + ellipsis
 	}
+	lfe.logRecord.Fields = append(lfe.logRecord.Fields, &lightstep_thrift.KeyValue{
+		Key:   key,
+		Value: value,
+	})
 }
+
 func (lfe *logFieldEncoder) EmitObject(key string, value interface{}) {
-	if key == deprecatedFieldKeyPayload {
-		var thriftPayload string
-		jsonString, err := json.Marshal(value)
-		if err != nil {
-			thriftPayload = fmt.Sprintf("Error encoding payload object: %v", err)
-		} else {
-			thriftPayload = string(jsonString)
-		}
-		if len(thriftPayload) > lfe.recorder.maxLogMessageLen {
-			thriftPayload = thriftPayload[:(lfe.recorder.maxLogMessageLen-1)] + ellipsis
-		}
-		lfe.logRecord.PayloadJson = thrift.StringPtr(thriftPayload)
+	var thriftPayload string
+	jsonString, err := json.Marshal(value)
+	if err != nil {
+		thriftPayload = fmt.Sprintf("Error encoding payload object: %v", err)
+	} else {
+		thriftPayload = string(jsonString)
 	}
+	if len(thriftPayload) > lfe.recorder.maxLogMessageLen {
+		thriftPayload = thriftPayload[:(lfe.recorder.maxLogMessageLen-1)] + ellipsis
+	}
+	lfe.logRecord.Fields = append(lfe.logRecord.Fields, &lightstep_thrift.KeyValue{
+		Key:   key,
+		Value: thriftPayload,
+	})
 }
 
 func (lfe *logFieldEncoder) EmitBool(key string, value bool) {
