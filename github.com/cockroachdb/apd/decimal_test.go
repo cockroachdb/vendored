@@ -26,7 +26,7 @@ var (
 )
 
 func (d *Decimal) GoString() string {
-	return fmt.Sprintf(`{Coeff: %s, Exponent: %d}`, d.Coeff.String(), d.Exponent)
+	return fmt.Sprintf(`{Coeff: %s, Exponent: %d, Negative: %v, Form: %s}`, d.Coeff.String(), d.Exponent, d.Negative, d.Form)
 }
 
 // testExponentError skips t if err was caused by an exponent being outside
@@ -148,6 +148,7 @@ func TestModf(t *testing.T) {
 		{x: "1.0e2", i: "1.0E+2", f: "0"},
 		{x: "1.0e-1", i: "0", f: "0.10"},
 		{x: "1.0e-2", i: "0", f: "0.010"},
+		{x: "1.1", i: "1", f: "0.1"},
 		{x: "1234.56", i: "1234", f: "0.56"},
 		{x: "1234.56e2", i: "123456", f: "0"},
 		{x: "1234.56e4", i: "1.23456E+7", f: "0"},
@@ -157,20 +158,21 @@ func TestModf(t *testing.T) {
 		{x: "123456e-8", i: "0", f: "0.00123456"},
 		{x: ".123456e8", i: "1.23456E+7", f: "0"},
 
-		{x: "-1", i: "-1", f: "0"},
-		{x: "-1.0", i: "-1", f: "0.0"},
-		{x: "-1.0e1", i: "-10", f: "0"},
-		{x: "-1.0e2", i: "-1.0E+2", f: "0"},
-		{x: "-1.0e-1", i: "0", f: "-0.10"},
-		{x: "-1.0e-2", i: "0", f: "-0.010"},
+		{x: "-1", i: "-1", f: "-0"},
+		{x: "-1.0", i: "-1", f: "-0.0"},
+		{x: "-1.0e1", i: "-10", f: "-0"},
+		{x: "-1.0e2", i: "-1.0E+2", f: "-0"},
+		{x: "-1.0e-1", i: "-0", f: "-0.10"},
+		{x: "-1.0e-2", i: "-0", f: "-0.010"},
+		{x: "-1.1", i: "-1", f: "-0.1"},
 		{x: "-1234.56", i: "-1234", f: "-0.56"},
-		{x: "-1234.56e2", i: "-123456", f: "0"},
-		{x: "-1234.56e4", i: "-1.23456E+7", f: "0"},
+		{x: "-1234.56e2", i: "-123456", f: "-0"},
+		{x: "-1234.56e4", i: "-1.23456E+7", f: "-0"},
 		{x: "-1234.56e-2", i: "-12", f: "-0.3456"},
-		{x: "-1234.56e-4", i: "0", f: "-0.123456"},
-		{x: "-1234.56e-6", i: "0", f: "-0.00123456"},
-		{x: "-123456e-8", i: "0", f: "-0.00123456"},
-		{x: "-.123456e8", i: "-1.23456E+7", f: "0"},
+		{x: "-1234.56e-4", i: "-0", f: "-0.123456"},
+		{x: "-1234.56e-6", i: "-0", f: "-0.00123456"},
+		{x: "-123456e-8", i: "-0", f: "-0.00123456"},
+		{x: "-.123456e8", i: "-1.23456E+7", f: "-0"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.x, func(t *testing.T) {
@@ -368,13 +370,15 @@ func TestFloor(t *testing.T) {
 
 func TestToStandard(t *testing.T) {
 	tests := map[string]string{
-		"0":          "0",
-		"0.0":        "0.0",
-		"0E2":        "000",
-		"0E-2":       "0.00",
-		"123.456E10": "1234560000000",
-		".9":         "0.9",
-		"-.9":        "-0.9",
+		"0":           "0",
+		"0.0":         "0.0",
+		"0E2":         "000",
+		"0E-2":        "0.00",
+		"123.456E10":  "1234560000000",
+		".9":          "0.9",
+		"-.9":         "-0.9",
+		"-123.456E10": "-1234560000000",
+		"-0E-2":       "-0.00",
 	}
 
 	for c, r := range tests {
@@ -462,6 +466,78 @@ func TestQuantize(t *testing.T) {
 			s := d.String()
 			if s != tc.expect {
 				t.Fatalf("expected: %s, got: %s", tc.expect, s)
+			}
+		})
+	}
+}
+
+func TestCmpOrder(t *testing.T) {
+	tests := []struct {
+		s     string
+		order int
+	}{
+		{s: "-NaN", order: -4},
+		{s: "-sNaN", order: -3},
+		{s: "-Infinity", order: -2},
+		{s: "-127", order: -1},
+		{s: "-1.00", order: -1},
+		{s: "-1", order: -1},
+		{s: "-0.000", order: -1},
+		{s: "-0", order: -1},
+		{s: "0", order: 1},
+		{s: "1.2300", order: 1},
+		{s: "1.23", order: 1},
+		{s: "1E+9", order: 1},
+		{s: "Infinity", order: 2},
+		{s: "sNaN", order: 3},
+		{s: "NaN", order: 4},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.s, func(t *testing.T) {
+			d, _, err := NewFromString(tc.s)
+			if err != nil {
+				t.Fatal(err)
+			}
+			o := d.cmpOrder()
+			if o != tc.order {
+				t.Fatalf("got %d, expected %d", o, tc.order)
+			}
+		})
+	}
+}
+
+func TestIsZero(t *testing.T) {
+	tests := []struct {
+		s    string
+		zero bool
+	}{
+		{s: "-NaN", zero: false},
+		{s: "-sNaN", zero: false},
+		{s: "-Infinity", zero: false},
+		{s: "-127", zero: false},
+		{s: "-1.00", zero: false},
+		{s: "-1", zero: false},
+		{s: "-0.000", zero: true},
+		{s: "-0", zero: true},
+		{s: "0", zero: true},
+		{s: "1.2300", zero: false},
+		{s: "1.23", zero: false},
+		{s: "1E+9", zero: false},
+		{s: "Infinity", zero: false},
+		{s: "sNaN", zero: false},
+		{s: "NaN", zero: false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.s, func(t *testing.T) {
+			d, _, err := NewFromString(tc.s)
+			if err != nil {
+				t.Fatal(err)
+			}
+			z := d.IsZero()
+			if z != tc.zero {
+				t.Fatalf("got %v, expected %v", z, tc.zero)
 			}
 		})
 	}

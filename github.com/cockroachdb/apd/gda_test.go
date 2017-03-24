@@ -24,9 +24,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -81,10 +81,8 @@ func ParseDecTest(r io.Reader) ([]TestCase, error) {
 		Extended: true,
 	}
 	var err error
-	negZero := regexp.MustCompile(`^-0(\.0+)?(E.*)?$`)
 	var res []TestCase
 
-Loop:
 	for scanner.Scan() {
 		text := scanner.Text()
 		// TODO(mjibson): support these test cases
@@ -147,9 +145,6 @@ Loop:
 					line = line[i+1:]
 					break
 				}
-				if o := strings.ToLower(o); strings.Contains(o, "inf") || strings.Contains(o, "nan") {
-					continue Loop
-				}
 				o = cleanNumber(o)
 				ops = append(ops, o)
 			}
@@ -157,10 +152,6 @@ Loop:
 				return nil, fmt.Errorf("bad test case line: %q", text)
 			}
 			tc.Result = strings.ToUpper(cleanNumber(line[0]))
-			// We don't currently support -0.
-			if negZero.MatchString(tc.Result) {
-				continue
-			}
 			tc.Conditions = line[1:]
 			res = append(res, tc)
 		}
@@ -207,6 +198,7 @@ var GDAfiles = []string{
 	"add",
 	"base",
 	"compare",
+	"comparetotal",
 	"divide",
 	"divideint",
 	"exp",
@@ -216,6 +208,7 @@ var GDAfiles = []string{
 	"multiply",
 	"plus",
 	"power",
+	"powersqrt",
 	"quantize",
 	"randoms",
 	"reduce",
@@ -250,6 +243,8 @@ func (tc TestCase) Run(c *Context, done chan error, d, x, y *Decimal) (res Condi
 		res, err = c.Abs(d, x)
 	case "add":
 		res, err = c.Add(d, x, y)
+	case "compare":
+		res, err = c.Cmp(d, x, y)
 	case "cuberoot":
 		res, err = c.Cbrt(d, x)
 	case "divide":
@@ -286,8 +281,8 @@ func (tc TestCase) Run(c *Context, done chan error, d, x, y *Decimal) (res Condi
 		res, err = c.ToIntegralX(d, x)
 
 	// Below used only in benchmarks. Tests call it themselves.
-	case "compare":
-		x.Cmp(y)
+	case "comparetotal":
+		x.CmpTotal(y)
 	case "tosci":
 		x.ToSci()
 
@@ -312,15 +307,8 @@ func BenchmarkGDA(b *testing.B) {
 					if GDAignore[tc.ID] || tc.Result == "?" || tc.HasNull() {
 						continue
 					}
-					if tc.Result == "NAN" {
-						continue
-					}
 					switch tc.Operation {
 					case "apply", "toeng":
-						continue
-					}
-					// Can't do inf either, and need to support -inf.
-					if strings.Contains(tc.Result, "INFINITY") {
 						continue
 					}
 					operands := make([]*Decimal, 2)
@@ -357,19 +345,16 @@ func readGDA(t testing.TB, name string) (string, []TestCase) {
 }
 
 func (tc TestCase) Context(t testing.TB) *Context {
-	mode, ok := rounders[tc.Rounding]
-	if !ok || mode == nil {
+	_, ok := Roundings[tc.Rounding]
+	if !ok {
 		t.Fatalf("unsupported rounding mode %s", tc.Rounding)
 	}
 	c := &Context{
 		Precision:   uint32(tc.Precision),
 		MaxExponent: int32(tc.MaxExponent),
 		MinExponent: int32(tc.MinExponent),
-		Rounding:    mode,
-		Traps:       DefaultTraps,
-	}
-	if tc.Extended {
-		c.Traps &= ^(Subnormal | Underflow)
+		Rounding:    tc.Rounding,
+		Traps:       0,
 	}
 	return c
 }
@@ -406,14 +391,6 @@ func gdaTest(t *testing.T, path string, tcs []TestCase) {
 			if tc.HasNull() {
 				t.Skip("has null")
 			}
-			// We currently return an error instead of NaN for bad syntax.
-			if tc.Result == "NAN" {
-				t.Skip("NaN")
-			}
-			// Can't do inf either, and need to support -inf.
-			if strings.Contains(tc.Result, "INFINITY") {
-				t.Skip("Infinity")
-			}
 			switch tc.Operation {
 			case "toeng", "apply":
 				t.Skip("unsupported")
@@ -425,8 +402,8 @@ func gdaTest(t *testing.T, path string, tcs []TestCase) {
 			t.Logf("%s:/^%s ", path, tc.ID)
 			t.Logf("%s %s = %s (%s)", tc.Operation, strings.Join(tc.Operands, " "), tc.Result, strings.Join(tc.Conditions, " "))
 			t.Logf("prec: %d, round: %s, Emax: %d, Emin: %d", tc.Precision, tc.Rounding, tc.MaxExponent, tc.MinExponent)
-			mode, ok := rounders[tc.Rounding]
-			if !ok || mode == nil {
+			_, ok := Roundings[tc.Rounding]
+			if !ok {
 				t.Fatalf("unsupported rounding mode %s", tc.Rounding)
 			}
 			operands := make([]*Decimal, 2)
@@ -435,10 +412,17 @@ func gdaTest(t *testing.T, path string, tcs []TestCase) {
 			opctx := c
 			if tc.SkipPrecision() {
 				opctx = opctx.WithPrecision(1000)
+				opctx.MaxExponent = MaxExponent
+				opctx.MinExponent = MinExponent
 			}
 			for i, o := range tc.Operands {
 				d, ores, err := opctx.NewFromString(o)
+				expectError := tc.Result == "NAN" && strings.Join(tc.Conditions, "") == "conversion_syntax"
 				if err != nil {
+					if expectError {
+						// Successfully detected bad syntax.
+						return
+					}
 					switch tc.Operation {
 					case "tosci":
 						// Skip cases with exponents larger than we will parse.
@@ -450,7 +434,10 @@ func gdaTest(t *testing.T, path string, tcs []TestCase) {
 					if tc.Result == "?" {
 						return
 					}
+					t.Logf("%v, %v, %v", tc.Result, tc.Conditions, tc.Operation)
 					t.Fatalf("operand %d: %s: %+v", i, o, err)
+				} else if expectError {
+					t.Fatalf("expected error, got %s", d)
 				}
 				operands[i] = d
 				opres |= ores
@@ -465,9 +452,22 @@ func gdaTest(t *testing.T, path string, tcs []TestCase) {
 				if tmp.Cmp(New(int64(c.MaxExponent), 0)) >= 0 {
 					t.Skip("x ** large y")
 				}
+			case "quantize":
+				if operands[1].Form != Finite {
+					t.Skip("quantize requires finite second operand")
+				}
 			}
 			var s string
-			d := new(Decimal)
+			// Fill d with bogus data to make sure all fields are correctly set.
+			d := &Decimal{
+				Form:     -2,
+				Negative: true,
+				Exponent: -6437897,
+			}
+			// Use d1 and d2 to verify that the result can be the same as the first and
+			// second operand.
+			var d1, d2 *Decimal
+			d.Coeff.SetInt64(9221)
 			start := time.Now()
 			defer func() {
 				t.Logf("duration: %s", time.Since(start))
@@ -477,18 +477,39 @@ func gdaTest(t *testing.T, path string, tcs []TestCase) {
 			var err error
 			go func() {
 				switch tc.Operation {
-				case "compare":
-					var c int
-					c = operands[0].Cmp(operands[1])
-					d.SetCoefficient(int64(c))
 				case "tosci":
 					s = operands[0].ToSci()
 					// non-extended tests don't retain exponents for 0
-					if !tc.Extended && operands[0].Sign() == 0 {
+					if !tc.Extended && operands[0].IsZero() {
 						s = "0"
 					}
+					// Clear d's bogus data.
+					d.Set(operands[0])
+					// Set d1 to prevent the result-equals-operand check failing.
+					d1 = d
+				case "comparetotal":
+					var c int
+					c = operands[0].CmpTotal(operands[1])
+					d.SetInt64(int64(c))
 				default:
+					var wg sync.WaitGroup
+					wg.Add(2)
+					// Check that the result is correct even if it is either argument. Use some
+					// go routines since we are running tc.Run three times.
+					go func() {
+						d1 = new(Decimal).Set(operands[0])
+						tc.Run(c, done, d1, d1, operands[1])
+						wg.Done()
+					}()
+					go func() {
+						if operands[1] != nil {
+							d2 = new(Decimal).Set(operands[1])
+							tc.Run(c, done, d2, operands[0], d2)
+						}
+						wg.Done()
+					}()
 					res, err = tc.Run(c, done, d, operands[0], operands[1])
+					wg.Wait()
 				}
 				done <- nil
 			}()
@@ -497,15 +518,29 @@ func gdaTest(t *testing.T, path string, tcs []TestCase) {
 				if err != nil {
 					t.Fatal(err)
 				}
-			case <-time.After(time.Second * 120):
+			case <-time.After(time.Second * 5):
 				t.Fatalf("timeout")
+			}
+			if d.Coeff.Sign() < 0 {
+				t.Fatalf("negative coeff: %s", d.Coeff.String())
+			}
+			// Make sure the bogus Form above got cleared.
+			if d.Form < 0 {
+				t.Fatalf("unexpected form: %#v", d)
 			}
 			// Verify the operands didn't change.
 			for i, o := range tc.Operands {
 				v := newDecimal(t, opctx, o)
-				if v.Cmp(operands[i]) != 0 {
+				if v.CmpTotal(operands[i]) != 0 {
 					t.Fatalf("operand %d changed from %s to %s", i, o, operands[i])
 				}
+			}
+			// Verify the result-equals-operand worked correctly.
+			if d1 != nil && d.CmpTotal(d1) != 0 {
+				t.Errorf("first operand as result mismatch: got %s, expected %s", d1, d)
+			}
+			if d2 != nil && d.CmpTotal(d2) != 0 {
+				t.Errorf("second operand as result mismatch: got %s, expected %s", d2, d)
 			}
 			if !GDAignoreFlags[tc.ID] {
 				var rcond Condition
@@ -557,7 +592,7 @@ func gdaTest(t *testing.T, path string, tcs []TestCase) {
 				rcond &= ^Rounded
 
 				switch tc.Operation {
-				case "log10", "power":
+				case "log10":
 					// TODO(mjibson): Under certain conditions these are exact, but we don't
 					// correctly mark them. Ignore these flags for now.
 					// squareroot sometimes marks things exact when GDA says they should be
@@ -616,26 +651,40 @@ func gdaTest(t *testing.T, path string, tcs []TestCase) {
 			}
 			switch tc.Operation {
 			case "tosci", "toeng":
-				if s != tc.Result {
-					if s != tc.Result {
-						t.Fatalf("expected %s, got %s", tc.Result, s)
-					}
+				if strings.HasPrefix(tc.Result, "-NAN") {
+					tc.Result = "-NaN"
+				}
+				if strings.HasPrefix(tc.Result, "-SNAN") {
+					tc.Result = "-sNaN"
+				}
+				if strings.HasPrefix(tc.Result, "NAN") {
+					tc.Result = "NaN"
+				}
+				if strings.HasPrefix(tc.Result, "SNAN") {
+					tc.Result = "sNaN"
+				}
+				if !strings.EqualFold(s, tc.Result) {
+					t.Fatalf("expected %s, got %s", tc.Result, s)
 				}
 				return
 			}
 			r := newDecimal(t, testCtx, tc.Result)
-			if d.Cmp(r) != 0 {
+			var equal bool
+			if d.Form == Finite {
+				// Don't worry about trailing zeros being inequal in CmpTotal.
+				equal = d.Cmp(r) == 0 && d.Negative == r.Negative
+			} else {
+				equal = d.CmpTotal(r) == 0
+			}
+			if !equal {
 				t.Logf("want: %s", tc.Result)
 				t.Logf("got: %s (%#v)", d, d)
 				// Some operations allow 1ulp of error in tests.
 				switch tc.Operation {
 				case "exp", "ln", "log10", "power":
-					if d.Cmp(r) < 0 {
-						d.Coeff.Add(&d.Coeff, bigOne)
-					} else {
-						r.Coeff.Add(&r.Coeff, bigOne)
-					}
-					if d.Cmp(r) == 0 {
+					nc := c.WithPrecision(0)
+					nc.Sub(d, d, r)
+					if d.Coeff.Cmp(bigOne) == 0 {
 						t.Logf("pass: within 1ulp: %s, %s", d, r)
 						return
 					}
@@ -656,17 +705,6 @@ func gdaTest(t *testing.T, path string, tcs []TestCase) {
 			}
 		}
 	}
-}
-
-var rounders = map[string]Rounder{
-	"ceiling":   RoundCeiling,
-	"down":      RoundDown,
-	"floor":     RoundFloor,
-	"half_down": RoundHalfDown,
-	"half_even": RoundHalfEven,
-	"half_up":   RoundHalfUp,
-	"up":        RoundUp,
-	"05up":      Round05Up,
 }
 
 // CheckPython returns true if python outputs d for this test case. It prints
@@ -731,7 +769,7 @@ print %s`
 	}
 	so := strings.TrimSpace(string(out))
 	r := newDecimal(t, testCtx, so)
-	c := d.Cmp(r)
+	c := d.CmpTotal(r)
 	if c != 0 {
 		t.Errorf("python's result: %s", so)
 	} else {
@@ -751,6 +789,64 @@ var GDAignore = map[string]bool{
 	"powx4302": true,
 	"powx4303": true,
 
+	// Invalid context
+	"expx901":  true,
+	"expx902":  true,
+	"expx903":  true,
+	"expx905":  true,
+	"lnx901":   true,
+	"lnx902":   true,
+	"lnx903":   true,
+	"lnx905":   true,
+	"logx901":  true,
+	"logx902":  true,
+	"logx903":  true,
+	"logx905":  true,
+	"powx4001": true,
+	"powx4002": true,
+	"powx4003": true,
+	"powx4005": true,
+
+	// NaN payloads with weird digits
+	"basx725": true,
+	"basx745": true,
+
+	// NaN payloads
+	"cotx970": true,
+	"cotx973": true,
+	"cotx974": true,
+	"cotx977": true,
+	"cotx980": true,
+	"cotx983": true,
+	"cotx984": true,
+	"cotx987": true,
+	"cotx994": true,
+
+	// too large exponents, supposed to fail anyway
+	"quax525": true,
+	"quax531": true,
+	"quax805": true,
+	"quax806": true,
+	"quax807": true,
+	"quax808": true,
+	"quax809": true,
+	"quax810": true,
+	"quax811": true,
+	"quax812": true,
+	"quax813": true,
+	"quax814": true,
+	"quax815": true,
+	"quax816": true,
+	"quax817": true,
+	"quax818": true,
+	"quax819": true,
+	"quax820": true,
+	"quax821": true,
+	"quax822": true,
+	"quax861": true,
+	"quax862": true,
+	"quax866": true,
+
 	// TODO(mjibson): fix tests below
 
 	// log10(x) with large exponents, overflows
@@ -768,37 +864,9 @@ var GDAignore = map[string]bool{
 	"logx1309": true,
 	"logx1310": true,
 
-	// The Vienna case
-	"powx219": true,
-
-	// shouldn't overflow, but does
-	"expx055":  true,
-	"expx056":  true,
-	"expx057":  true,
-	"expx058":  true,
-	"expx059":  true,
-	"expx1236": true,
-	"expx709":  true,
-	"expx711":  true,
-	"expx722":  true,
-	"expx724":  true,
-	"expx726":  true,
-	"expx732":  true,
-	"expx733":  true,
-	"expx736":  true,
-	"expx737":  true,
-	"expx758":  true,
-	"expx759":  true,
-	"expx760":  true,
-	"expx761":  true,
-	"expx762":  true,
-	"expx763":  true,
-	"expx764":  true,
-	"expx765":  true,
-	"expx766":  true,
-	"expx769":  true,
-	"expx770":  true,
-	"expx771":  true,
+	// overflows to infinity
+	"powx4125": true,
+	"powx4145": true,
 
 	// exceeds system overflow
 	"expx291": true,
@@ -815,6 +883,14 @@ var GDAignore = map[string]bool{
 	"addx61633": true,
 	"addx61634": true,
 	"addx61638": true,
+
+	// should be -0E-398, got -1E-398
+	"addx1613":  true,
+	"addx1614":  true,
+	"addx1618":  true,
+	"addx61613": true,
+	"addx61614": true,
+	"addx61618": true,
 
 	// extreme input range, but should work
 	"lnx0902":  true,
@@ -913,4 +989,9 @@ var GDAignoreFlags = map[string]bool{
 	"sqtx9039": true,
 	"sqtx9040": true,
 	"sqtx9045": true,
+
+	// missing underflow, subnormal
+	"expx048": true,
+	"expx756": true,
+	"expx757": true,
 }
