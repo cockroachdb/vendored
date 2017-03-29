@@ -76,7 +76,6 @@ func TestConstraintCheck(t *testing.T) {
 		{">=0", "0.0.1-alpha", true},
 		{">0", "0", false},
 		{">=0", "0", true},
-		{"=0", "1", false},
 	}
 
 	for _, tc := range tests {
@@ -152,11 +151,6 @@ func TestConstraintsCheck(t *testing.T) {
 	}{
 		{"*", "1.2.3", true},
 		{"~0.0.0", "1.2.3", true},
-		{"0.x.x", "1.2.3", false},
-		{"0.0.x", "1.2.3", false},
-		{"0.0.0", "1.2.3", false},
-		{"*", "1.2.3", true},
-		{"^0.0.0", "1.2.3", false},
 		{"= 2.0", "1.2.3", false},
 		{"= 2.0", "2.0.0", true},
 		{"4.1", "4.1.0", true},
