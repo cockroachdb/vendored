@@ -22,7 +22,6 @@ import (
 	ltesting "cloud.google.com/go/logging/internal/testing"
 	"golang.org/x/net/context"
 	"google.golang.org/api/iterator"
-	itesting "google.golang.org/api/iterator/testing"
 )
 
 const testMetricIDPrefix = "GO-CLIENT-TEST-METRIC"
@@ -118,12 +117,15 @@ func TestListMetrics(t *testing.T) {
 	ctx := context.Background()
 
 	var metrics []*Metric
+	want := map[string]*Metric{}
 	for i := 0; i < 10; i++ {
-		metrics = append(metrics, &Metric{
+		m := &Metric{
 			ID:          ltesting.UniqueID(testMetricIDPrefix),
 			Description: "DESC",
 			Filter:      "FILTER",
-		})
+		}
+		metrics = append(metrics, m)
+		want[m.ID] = m
 	}
 	for _, m := range metrics {
 		if err := client.CreateMetric(ctx, m); err != nil {
@@ -132,10 +134,23 @@ func TestListMetrics(t *testing.T) {
 		defer client.DeleteMetric(ctx, m.ID)
 	}
 
-	msg, ok := itesting.TestIterator(metrics,
-		func() interface{} { return client.Metrics(ctx) },
-		func(it interface{}) (interface{}, error) { return it.(*MetricIterator).Next() })
-	if !ok {
-		t.Fatal(msg)
+	got := map[string]*Metric{}
+	it := client.Metrics(ctx)
+	for {
+		m, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		// If tests run simultaneously, we may have more metrics than we
+		// created. So only check for our own.
+		if _, ok := want[m.ID]; ok {
+			got[m.ID] = m
+		}
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %+v, want %+v", got, want)
 	}
 }

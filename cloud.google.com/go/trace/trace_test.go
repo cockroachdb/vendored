@@ -143,7 +143,7 @@ func makeRequests(t *testing.T, span *Span, rt *fakeRoundTripper, synchronous bo
 		}
 		dspb.RegisterDatastoreServer(srv.Gsrv, &fakeDatastoreServer{fail: fail})
 		srv.Start()
-		conn, err := grpc.Dial(srv.Addr, grpc.WithInsecure(), EnableGRPCTracingDialOption)
+		conn, err := grpc.Dial(srv.Addr, grpc.WithInsecure(), grpc.WithUnaryInterceptor(GRPCClientInterceptor()))
 		if err != nil {
 			t.Fatalf("connecting to test datastore server: %v", err)
 		}
@@ -270,7 +270,7 @@ func TestNewSpan(t *testing.T) {
 						Name:   "/google.datastore.v1.Datastore/Lookup",
 					},
 					{
-						Kind:   "RPC_SERVER",
+						Kind:   "SPAN_KIND_UNSPECIFIED",
 						Labels: map[string]string{},
 						Name:   "/foo",
 					},
