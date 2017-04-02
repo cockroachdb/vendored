@@ -39,6 +39,7 @@ import (
 	"google.golang.org/api/transport"
 
 	"cloud.google.com/go/internal/optional"
+	"cloud.google.com/go/internal/version"
 	"golang.org/x/net/context"
 	"google.golang.org/api/googleapi"
 	raw "google.golang.org/api/storage/v1"
@@ -64,6 +65,12 @@ const (
 	// data in Google Cloud Storage.
 	ScopeReadWrite = raw.DevstorageReadWriteScope
 )
+
+var xGoogHeader = fmt.Sprintf("gl-go/%s gccl/%s", version.Go(), version.Repo)
+
+func setClientHeader(headers http.Header) {
+	headers.Set("x-goog-api-client", xGoogHeader)
+}
 
 // Client is a client for interacting with Google Cloud Storage.
 //
@@ -202,7 +209,7 @@ type SignedURLOptions struct {
 	// If provided, the client should provide the exact value on the request
 	// header in order to use the signed URL.
 	// Optional.
-	MD5 []byte
+	MD5 string
 }
 
 // SignedURL returns a URL for the specified object. Signed URLs allow
@@ -225,6 +232,12 @@ func SignedURL(bucket, name string, opts *SignedURLOptions) (string, error) {
 	if opts.Expires.IsZero() {
 		return "", errors.New("storage: missing required expires option")
 	}
+	if opts.MD5 != "" {
+		md5, err := base64.StdEncoding.DecodeString(opts.MD5)
+		if err != nil || len(md5) != 16 {
+			return "", errors.New("storage: invalid MD5 checksum")
+		}
+	}
 
 	signBytes := opts.SignBytes
 	if opts.PrivateKey != nil {
@@ -241,8 +254,6 @@ func SignedURL(bucket, name string, opts *SignedURLOptions) (string, error) {
 				sum[:],
 			)
 		}
-	} else {
-		signBytes = opts.SignBytes
 	}
 
 	u := &url.URL{
@@ -341,6 +352,7 @@ func (o *ObjectHandle) Attrs(ctx context.Context) (*ObjectAttrs, error) {
 	}
 	var obj *raw.Object
 	var err error
+	setClientHeader(call.Header())
 	err = runWithRetry(ctx, func() error { obj, err = call.Do(); return err })
 	if e, ok := err.(*googleapi.Error); ok && e.Code == http.StatusNotFound {
 		return nil, ErrObjectNotExist
@@ -414,6 +426,7 @@ func (o *ObjectHandle) Update(ctx context.Context, uattrs ObjectAttrsToUpdate) (
 	}
 	var obj *raw.Object
 	var err error
+	setClientHeader(call.Header())
 	err = runWithRetry(ctx, func() error { obj, err = call.Do(); return err })
 	if e, ok := err.(*googleapi.Error); ok && e.Code == http.StatusNotFound {
 		return nil, ErrObjectNotExist
@@ -454,6 +467,7 @@ func (o *ObjectHandle) Delete(ctx context.Context) error {
 	if err := applyConds("Delete", o.gen, o.conds, call); err != nil {
 		return err
 	}
+	setClientHeader(call.Header())
 	err := runWithRetry(ctx, func() error { return call.Do() })
 	switch e := err.(type) {
 	case nil:

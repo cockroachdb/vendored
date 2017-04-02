@@ -9,6 +9,10 @@ import (
 	chk "gopkg.in/check.v1"
 )
 
+type StorageTableSuite struct{}
+
+var _ = chk.Suite(&StorageTableSuite{})
+
 type TableClient struct{}
 
 func getTableClient(c *chk.C) TableServiceClient {
@@ -46,7 +50,7 @@ func (c *CustomEntity) SetRowKey(s string) error {
 	return nil
 }
 
-func (s *StorageBlobSuite) Test_CreateAndDeleteTable(c *chk.C) {
+func (s *StorageTableSuite) Test_CreateAndDeleteTable(c *chk.C) {
 	cli := getTableClient(c)
 
 	tn := AzureTable(randTable())
@@ -58,7 +62,7 @@ func (s *StorageBlobSuite) Test_CreateAndDeleteTable(c *chk.C) {
 	c.Assert(err, chk.IsNil)
 }
 
-func (s *StorageBlobSuite) Test_InsertEntities(c *chk.C) {
+func (s *StorageTableSuite) Test_InsertEntities(c *chk.C) {
 	cli := getTableClient(c)
 
 	tn := AzureTable(randTable())
@@ -77,17 +81,7 @@ func (s *StorageBlobSuite) Test_InsertEntities(c *chk.C) {
 	}
 }
 
-func (s *StorageBlobSuite) Test_InsertEntitiesRandomTableFails(c *chk.C) {
-	cli := getTableClient(c)
-
-	tn := AzureTable(randTable())
-
-	ce := &CustomEntity{Name: "Luke", Surname: "Skywalker", Number: 1543, PKey: "pkey", RKey: "5"}
-	err := cli.InsertEntity(tn, ce)
-	c.Assert(err, chk.NotNil)
-}
-
-func (s *StorageBlobSuite) Test_InsertOrReplaceEntities(c *chk.C) {
+func (s *StorageTableSuite) Test_InsertOrReplaceEntities(c *chk.C) {
 	cli := getTableClient(c)
 
 	tn := AzureTable(randTable())
@@ -106,7 +100,7 @@ func (s *StorageBlobSuite) Test_InsertOrReplaceEntities(c *chk.C) {
 	c.Assert(err, chk.IsNil)
 }
 
-func (s *StorageBlobSuite) Test_InsertOrMergeEntities(c *chk.C) {
+func (s *StorageTableSuite) Test_InsertOrMergeEntities(c *chk.C) {
 	cli := getTableClient(c)
 
 	tn := AzureTable(randTable())
@@ -125,7 +119,7 @@ func (s *StorageBlobSuite) Test_InsertOrMergeEntities(c *chk.C) {
 	c.Assert(err, chk.IsNil)
 }
 
-func (s *StorageBlobSuite) Test_InsertAndGetEntities(c *chk.C) {
+func (s *StorageTableSuite) Test_InsertAndGetEntities(c *chk.C) {
 	cli := getTableClient(c)
 
 	tn := AzureTable(randTable())
@@ -150,7 +144,7 @@ func (s *StorageBlobSuite) Test_InsertAndGetEntities(c *chk.C) {
 	c.Assert(entries[1].(*CustomEntity), chk.DeepEquals, ce)
 }
 
-func (s *StorageBlobSuite) Test_InsertAndQueryEntities(c *chk.C) {
+func (s *StorageTableSuite) Test_InsertAndQueryEntities(c *chk.C) {
 	cli := getTableClient(c)
 
 	tn := AzureTable(randTable())
@@ -173,7 +167,7 @@ func (s *StorageBlobSuite) Test_InsertAndQueryEntities(c *chk.C) {
 	c.Assert(ce.RowKey(), chk.Equals, entries[0].RowKey())
 }
 
-func (s *StorageBlobSuite) Test_InsertAndDeleteEntities(c *chk.C) {
+func (s *StorageTableSuite) Test_InsertAndDeleteEntities(c *chk.C) {
 	cli := getTableClient(c)
 
 	tn := AzureTable(randTable())
@@ -205,7 +199,7 @@ func (s *StorageBlobSuite) Test_InsertAndDeleteEntities(c *chk.C) {
 	c.Assert(len(entries), chk.Equals, 1)
 }
 
-func (s *StorageBlobSuite) Test_ContinuationToken(c *chk.C) {
+func (s *StorageTableSuite) Test_ContinuationToken(c *chk.C) {
 	cli := getTableClient(c)
 
 	tn := AzureTable(randTable())
@@ -273,7 +267,7 @@ func appendTablePermission(policies []TableAccessPolicy, ID string,
 	return policies
 }
 
-func (s *StorageBlobSuite) TestSetTablePermissionsSuccessfully(c *chk.C) {
+func (s *StorageTableSuite) TestSetTablePermissionsSuccessfully(c *chk.C) {
 	cli := getTableClient(c)
 	tn := AzureTable(randTable())
 	err := cli.CreateTable(tn)
@@ -287,7 +281,7 @@ func (s *StorageBlobSuite) TestSetTablePermissionsSuccessfully(c *chk.C) {
 	c.Assert(err, chk.IsNil)
 }
 
-func (s *StorageBlobSuite) TestSetTablePermissionsUnsuccessfully(c *chk.C) {
+func (s *StorageTableSuite) TestSetTablePermissionsUnsuccessfully(c *chk.C) {
 	cli := getTableClient(c)
 	tn := AzureTable("nonexistingtable")
 
@@ -298,7 +292,7 @@ func (s *StorageBlobSuite) TestSetTablePermissionsUnsuccessfully(c *chk.C) {
 	c.Assert(err, chk.NotNil)
 }
 
-func (s *StorageBlobSuite) TestSetThenGetTablePermissionsSuccessfully(c *chk.C) {
+func (s *StorageTableSuite) TestSetThenGetTablePermissionsSuccessfully(c *chk.C) {
 	cli := getTableClient(c)
 	tn := AzureTable(randTable())
 	err := cli.CreateTable(tn)

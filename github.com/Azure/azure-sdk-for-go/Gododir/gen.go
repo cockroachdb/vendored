@@ -26,7 +26,15 @@ type service struct {
 	Output      string
 	Swagger     string
 	SubServices []service
+	Modeler     modeler
 }
+
+type modeler string
+
+const (
+	swagger     modeler = "Swagger"
+	compSwagger modeler = "CompositeSwagger"
+)
 
 type mapping struct {
 	Plane       string
@@ -59,31 +67,31 @@ var (
 					Version: "2016-07-07",
 					Input:   "apimanagement",
 				},
-				// {
-				// 	Name:    "authorization",
-				// 	Version: "2015-07-01",
-				// },
-				// {
-				// 	Name:    "batch",
-				// 	Version: "2017-01-01",
-				// 	Swagger: "BatchManagement",
-				// },
+				{
+					Name:    "authorization",
+					Version: "2015-07-01",
+				},
+				{
+					Name:    "batch",
+					Version: "2017-01-01",
+					Swagger: "BatchManagement",
+				},
 				{
 					Name:    "billing",
 					Version: "2017-02-27-preview",
 				},
-				// {
-				// 	Name:    "cdn",
-				// 	Version: "2016-10-02",
-				// },
+				{
+					Name:    "cdn",
+					Version: "2016-10-02",
+				},
 				{
 					Name:    "cognitiveservices",
 					Version: "2016-02-01-preview",
 				},
-				// {
-				// 	Name:    "commerce",
-				// 	Version: "2015-06-01-preview",
-				// },
+				{
+					Name:    "commerce",
+					Version: "2015-06-01-preview",
+				},
 				{
 					Name:    "compute",
 					Version: "2016-04-30-preview",
@@ -120,30 +128,30 @@ var (
 						},
 					},
 				},
-				// {
-				// 	Name:    "devtestlabs",
-				// 	Version: "2016-05-15",
-				// 	Swagger: "DTL",
-				// },
+				{
+					Name:    "devtestlabs",
+					Version: "2016-05-15",
+					Swagger: "DTL",
+				},
 				{
 					Name:    "disk",
 					Version: "2016-04-30-preview",
 					Swagger: "disk",
 					Input:   "compute",
 				},
-				// {
-				// 	Name:    "dns",
-				// 	Version: "2016-04-01",
-				// },
+				{
+					Name:    "dns",
+					Version: "2016-04-01",
+				},
 				{
 					Name:    "documentdb",
 					Version: "2015-04-08",
 				},
-				// {
-				// 	Name:    "eventhub",
-				// 	Version: "2015-08-01",
-				// 	Swagger: "EventHub",
-				// },
+				{
+					Name:    "eventhub",
+					Version: "2015-08-01",
+					Swagger: "EventHub",
+				},
 				{
 					Name:    "graphrbac",
 					Version: "1.6",
@@ -165,11 +173,11 @@ var (
 					Name:    "keyvault",
 					Version: "2015-06-01",
 				},
-				// {
-				// 	Name:    "logic",
-				// 	Version: "2016-06-01",
-				// 	// composite swagger
-				// },
+				{
+					Name:    "logic",
+					Version: "2016-06-01",
+					// composite swagger
+				},
 				{
 					Name: "machinelearning",
 					SubServices: []service{
@@ -206,10 +214,10 @@ var (
 					Swagger: "networkWatcher",
 					Input:   "network",
 				},
-				// {
-				// 	Name:    "notificationhubs",
-				// 	Version: "2016-03-01",
-				// },
+				{
+					Name:    "notificationhubs",
+					Version: "2016-03-01",
+				},
 				{
 					Name:    "operationalinsights",
 					Version: "2015-11-01-preview",
@@ -228,17 +236,17 @@ var (
 				// 	Version: "2016-06-01",
 				// 	// composite swagger
 				// },
-				// {
-				// 	Name:    "redis",
-				// 	Version: "2016-04-01",
-				// },
+				{
+					Name:    "redis",
+					Version: "2016-04-01",
+				},
 				{
 					Name: "resources",
 					SubServices: []service{
-						// {
-						// 	Name:    "features",
-						// 	Version: "2015-12-01",
-						// },
+						{
+							Name:    "features",
+							Version: "2015-12-01",
+						},
 						{
 							Name:    "links",
 							Version: "2016-09-01",
@@ -255,10 +263,10 @@ var (
 							Name:    "resources",
 							Version: "2016-09-01",
 						},
-						// {
-						// 	Name:    "subscriptions",
-						// 	Version: "2016-06-01",
-						// },
+						{
+							Name:    "subscriptions",
+							Version: "2016-06-01",
+						},
 					},
 				},
 				{
@@ -273,10 +281,10 @@ var (
 					Name:    "servermanagement",
 					Version: "2016-07-01-preview",
 				},
-				// {
-				// 	Name:    "servicebus",
-				// 	Version: "2015-08-01",
-				// },
+				{
+					Name:    "servicebus",
+					Version: "2015-08-01",
+				},
 				{
 					Name:    "service-map",
 					Version: "2015-11-01-preview",
@@ -287,29 +295,66 @@ var (
 				// 	Version: "2014-04-01",
 				// 	Swagger: "sql.core",
 				// },
-				// {
-				// 	Name:    "storage",
-				// 	Version: "2016-12-01",
-				// },
-				// {
-				// 	Name:    "storageimportexport",
-				// 	Version: "2016-11-01",
-				// },
+				{
+					Name:    "storage",
+					Version: "2016-12-01",
+				},
+				{
+					Name:    "storageimportexport",
+					Version: "2016-11-01",
+				},
 				{
 					Name:    "trafficmanager",
 					Version: "2015-11-01",
 				},
 				{
 					Name:    "web",
-					Version: "2015-08-01",
-					Swagger: "service",
-					// enormous composite swagger
+					Swagger: "compositeWebAppClient",
+					Modeler: compSwagger,
 				},
 			},
 		},
+		//{
+		// Plane:       "dataplane",
+		// InputPrefix: "",
+		// Services: []service{
+		// 	{
+		// 		Name:    "batch",
+		// 		Version: "2016-07-01.3.1",
+		// 		Swagger: "BatchService",
+		// 	},
+		// 	{
+		// 		Name: "insights",
+		// 		// composite swagger
+		// 	},
+		// 	{
+		// 		Name:    "keyvault",
+		// 		Version: "2015-06-01",
+		// 	},
+		// 	{
+		// 		Name: "search",
+		// 		SubServices: []service{
+		// 			{
+		// 				Name:    "searchindex",
+		// 				Version: "2015-02-28",
+		// 				Input:   "search",
+		// 			},
+		// 			{
+		// 				Name:    "searchservice",
+		// 				Version: "2015-02-28",
+		// 				Input:   "search",
+		// 			},
+		// 		},
+		// 	},
+		// 	{
+		// 		Name:    "servicefabric",
+		// 		Version: "2016-01-28",
+		// 	},
+		// },
+		//},
 		{
-			Plane:       "dataplane",
-			InputPrefix: "",
+			Plane:       "",
+			InputPrefix: "arm-",
 			Services: []service{
 				// 	{
 				// 		Name:    "batch",
@@ -337,6 +382,16 @@ var (
 				// 				Version: "2015-02-28",
 				// 				Input:   "search",
 				// 			},
+				// {
+				// 	Name: "datalake-analytics",
+				// 	SubServices: []service{
+				// 		{
+				// 			Name:    "catalog",
+				// 			Version: "2016-11-01",
+				// 		},
+				// 		{
+				// 			Name:    "job",
+				// 			Version: "2016-11-01",
 				// 		},
 				// 	},
 				// 	{
@@ -393,14 +448,19 @@ func initAndAddService(service *service, inputPrefix, plane string) {
 	}
 	packages := append(service.Packages, service.Name)
 	service.TaskName = fmt.Sprintf("%s>%s", plane, strings.Join(packages, ">"))
-	service.Fullname = fmt.Sprintf("%s/%s", plane, strings.Join(packages, "/"))
-	if service.Input == "" {
-		service.Input = fmt.Sprintf("%s%s/%s/swagger/%s", inputPrefix, strings.Join(packages, "/"), service.Version, service.Swagger)
+	service.Fullname = filepath.Join(plane, strings.Join(packages, "/"))
+	if service.Modeler == compSwagger {
+		service.Input = filepath.Join(inputPrefix+strings.Join(packages, "/"), service.Swagger)
 	} else {
-		service.Input = fmt.Sprintf("%s%s/%s/swagger/%s", inputPrefix, service.Input, service.Version, service.Swagger)
+		if service.Input == "" {
+			service.Input = filepath.Join(inputPrefix+strings.Join(packages, "/"), service.Version, "swagger", service.Swagger)
+		} else {
+			service.Input = filepath.Join(inputPrefix+service.Input, service.Version, "swagger", service.Swagger)
+		}
+		service.Modeler = swagger
 	}
-	service.Namespace = fmt.Sprintf("github.com/Azure/azure-sdk-for-go/%s", service.Fullname)
-	service.Output = fmt.Sprintf("%s/src/%s", gopath, service.Namespace)
+	service.Namespace = filepath.Join("github.com", "Azure", "azure-sdk-for-go", service.Fullname)
+	service.Output = filepath.Join(gopath, "src", service.Namespace)
 
 	if service.SubServices != nil {
 		for _, subs := range service.SubServices {
@@ -415,7 +475,7 @@ func initAndAddService(service *service, inputPrefix, plane string) {
 }
 
 func tasks(p *do.Project) {
-	p.Task("default", do.S{"setvars", "generate:all", "storage"}, nil)
+	p.Task("default", do.S{"setvars", "generate:all", "management"}, nil)
 	p.Task("setvars", nil, setVars)
 	p.Use("generate", generateTasks)
 	p.Use("gofmt", formatTasks)
@@ -423,7 +483,7 @@ func tasks(p *do.Project) {
 	p.Use("golint", lintTasks)
 	p.Use("govet", vetTasks)
 	p.Use("delete", deleteTasks)
-	p.Task("storage", do.S{"setvars"}, storageVersion)
+	p.Task("management", do.S{"setvars"}, managementVersion)
 }
 
 func setVars(c *do.Context) {
@@ -444,26 +504,17 @@ func generate(service *service) {
 	fmt.Printf("Generating %s...\n\n", service.Fullname)
 	delete(service)
 
-	fmt.Println("Running AutoRest...")
-	_, err := exec.LookPath("gulp")
-	if err != nil {
-		panic("You need gulp (and some other tools) to run AutoRest. See https://github.com/Azure/autorest/pull/1827")
-	}
-
-	autorest := exec.Command("gulp",
+	autorest := exec.Command(
 		"autorest",
 		"-Input", filepath.Join(swaggersDir, "azure-rest-api-specs", service.Input+".json"),
 		"-CodeGenerator", "Go",
 		"-Header", "MICROSOFT_APACHE",
 		"-Namespace", service.Name,
 		"-OutputDirectory", service.Output,
-		"-Modeler", "Swagger",
-		"-pv", sdkVersion,
-		"-SkipValidation",
-	)
+		"-Modeler", string(service.Modeler),
+		"-pv", sdkVersion)
 	autorest.Dir = filepath.Join(autorestDir, "autorest")
-	err = runner(autorest)
-	if err != nil {
+	if err := runner(autorest); err != nil {
 		panic(fmt.Errorf("Autorest error: %s", err))
 	}
 
@@ -517,7 +568,7 @@ func lintTasks(p *do.Project) {
 
 func lint(service *service) {
 	fmt.Printf("Linting %s...\n\n", service.Fullname)
-	golint := exec.Command(fmt.Sprintf("%s/bin/golint", gopath), service.Namespace)
+	golint := exec.Command(filepath.Join(gopath, "bin", "golint"), service.Namespace)
 	err := runner(golint)
 	if err != nil {
 		panic(fmt.Errorf("golint error: %s", err))
@@ -537,16 +588,20 @@ func vet(service *service) {
 	}
 }
 
-func storageVersion(c *do.Context) {
-	versionFile := "storage/version.go"
+func managementVersion(c *do.Context) {
+	version("management")
+}
+
+func version(packageName string) {
+	versionFile := filepath.Join(packageName, "version.go")
 	os.Remove(versionFile)
-	template := `package storage
+	template := `package %s
 
 var (
 	sdkVersion = "%s"
 )
-	`
-	data := []byte(fmt.Sprintf(template, sdkVersion))
+`
+	data := []byte(fmt.Sprintf(template, packageName, sdkVersion))
 	ioutil.WriteFile(versionFile, data, 0644)
 }
 
