@@ -160,7 +160,7 @@ func TestIntegration_ConditionalDelete(t *testing.T) {
 	}
 
 	gen := wc.Attrs().Generation
-	metaGen := wc.Attrs().MetaGeneration
+	metaGen := wc.Attrs().Metageneration
 
 	if err := o.Generation(gen - 1).Delete(ctx); err == nil {
 		t.Fatalf("Unexpected successful delete with Generation")
@@ -216,6 +216,9 @@ func TestObjects(t *testing.T) {
 			t.Errorf("Can't create a reader for %v, errored with %v", obj, err)
 			continue
 		}
+		if !rc.checkCRC {
+			t.Errorf("%v: not checking CRC", obj)
+		}
 		slurp, err := ioutil.ReadAll(rc)
 		if err != nil {
 			t.Errorf("Can't ReadAll object %v, errored with %v", obj, err)
@@ -230,6 +233,23 @@ func TestObjects(t *testing.T) {
 			t.Errorf("ContentType (%q) = %q; want %q", obj, got, want)
 		}
 		rc.Close()
+
+		// Check early close.
+		buf := make([]byte, 1)
+		rc, err = bkt.Object(obj).NewReader(ctx)
+		if err != nil {
+			t.Fatalf("%v: %v", obj, err)
+		}
+		_, err = rc.Read(buf)
+		if err != nil {
+			t.Fatalf("%v: %v", obj, err)
+		}
+		if got, want := buf, contents[obj][:1]; !bytes.Equal(got, want) {
+			t.Errorf("Contents[0] (%q) = %q; want %q", obj, got, want)
+		}
+		if err := rc.Close(); err != nil {
+			t.Errorf("%v Close: %v", obj, err)
+		}
 
 		// Test SignedURL
 		opts := &SignedURLOptions{
@@ -773,6 +793,7 @@ func TestWriterContentType(t *testing.T) {
 }
 
 func TestZeroSizedObject(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	client, bucket := testConfig(ctx, t)
 	defer client.Close()
@@ -953,6 +974,7 @@ func TestIntegration_Encryption(t *testing.T) {
 }
 
 func TestIntegration_NonexistentBucket(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	client, bucket := testConfig(ctx, t)
 	defer client.Close()

@@ -576,13 +576,35 @@ func (o *ObjectHandle) NewRangeReader(ctx context.Context, offset, length int64)
 		body.Close()
 		body = emptyBody
 	}
-
+	var (
+		checkCRC bool
+		crc      uint32
+	)
+	// Even if there is a CRC header, we can't compute the hash on partial data.
+	if remain == size {
+		crc, checkCRC = parseCRC32c(res)
+	}
 	return &Reader{
 		body:        body,
 		size:        size,
 		remain:      remain,
 		contentType: res.Header.Get("Content-Type"),
+		wantCRC:     crc,
+		checkCRC:    checkCRC,
 	}, nil
+}
+
+func parseCRC32c(res *http.Response) (uint32, bool) {
+	const prefix = "crc32c="
+	for _, spec := range res.Header["X-Goog-Hash"] {
+		if strings.HasPrefix(spec, prefix) {
+			c, err := decodeUint32(spec[len(prefix):])
+			if err == nil {
+				return c, true
+			}
+		}
+	}
+	return 0, false
 }
 
 var emptyBody = ioutil.NopCloser(strings.NewReader(""))
@@ -734,12 +756,12 @@ type ObjectAttrs struct {
 	// This field is read-only.
 	Generation int64
 
-	// MetaGeneration is the version of the metadata for this
+	// Metageneration is the version of the metadata for this
 	// object at this generation. This field is used for preconditions
 	// and for detecting changes in metadata. A metageneration number
 	// is only meaningful in the context of a particular generation
 	// of a particular object. This field is read-only.
-	MetaGeneration int64
+	Metageneration int64
 
 	// StorageClass is the storage class of the object.
 	// This value defines how objects in the bucket are stored and
@@ -802,11 +824,7 @@ func newObject(o *raw.Object) *ObjectAttrs {
 		owner = o.Owner.Entity
 	}
 	md5, _ := base64.StdEncoding.DecodeString(o.Md5Hash)
-	var crc32c uint32
-	d, err := base64.StdEncoding.DecodeString(o.Crc32c)
-	if err == nil && len(d) == 4 {
-		crc32c = uint32(d[0])<<24 + uint32(d[1])<<16 + uint32(d[2])<<8 + uint32(d[3])
-	}
+	crc32c, _ := decodeUint32(o.Crc32c)
 	var sha256 string
 	if o.CustomerEncryption != nil {
 		sha256 = o.CustomerEncryption.KeySha256
@@ -826,13 +844,25 @@ func newObject(o *raw.Object) *ObjectAttrs {
 		MediaLink:         o.MediaLink,
 		Metadata:          o.Metadata,
 		Generation:        o.Generation,
-		MetaGeneration:    o.Metageneration,
+		Metageneration:    o.Metageneration,
 		StorageClass:      o.StorageClass,
 		CustomerKeySHA256: sha256,
 		Created:           convertTime(o.TimeCreated),
 		Deleted:           convertTime(o.TimeDeleted),
 		Updated:           convertTime(o.Updated),
 	}
+}
+
+// Decode a uint32 encoded in Base64 in big-endian order.
+func decodeUint32(b64 string) (uint32, error) {
+	d, err := base64.StdEncoding.DecodeString(b64)
+	if err != nil {
+		return 0, err
+	}
+	if len(d) != 4 {
+		return 0, fmt.Errorf("storage: %q does not encode a 32-bit value", d)
+	}
+	return uint32(d[0])<<24 + uint32(d[1])<<16 + uint32(d[2])<<8 + uint32(d[3]), nil
 }
 
 // Query represents a query to filter objects from a bucket.
