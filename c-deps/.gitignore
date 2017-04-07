@@ -1,0 +1,11 @@
+# Compilation artifacts.
+*.la
+*.[od]
+.libs
+.deps
+
+# Autotools.
+config.*
+/jemalloc/Makefile
+/snappy/Makefile
+/rocksdb/Makefile
