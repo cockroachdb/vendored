@@ -643,18 +643,9 @@ func TestEmptyObjectIterator(t *testing.T) {
 		t.Fatal(err)
 	}
 	it := client.Bucket("b").Objects(ctx, nil)
-	c := make(chan error, 1)
-	go func() {
-		_, err := it.Next()
-		c <- err
-	}()
-	select {
-	case err := <-c:
-		if err != iterator.Done {
-			t.Errorf("got %v, want Done", err)
-		}
-	case <-time.After(50 * time.Millisecond):
-		t.Error("timed out")
+	_, err = it.Next()
+	if err != iterator.Done {
+		t.Errorf("got %v, want Done", err)
 	}
 }
 
@@ -673,18 +664,24 @@ func TestEmptyBucketIterator(t *testing.T) {
 		t.Fatal(err)
 	}
 	it := client.Buckets(ctx, "project")
-	c := make(chan error, 1)
-	go func() {
-		_, err := it.Next()
-		c <- err
-	}()
-	select {
-	case err := <-c:
-		if err != iterator.Done {
-			t.Errorf("got %v, want Done", err)
+	_, err = it.Next()
+	if err != iterator.Done {
+		t.Errorf("got %v, want Done", err)
+	}
+
+}
+
+func TestCodecUint32(t *testing.T) {
+	t.Parallel()
+	for _, u := range []uint32{0, 1, 256, 0xFFFFFFFF} {
+		s := encodeUint32(u)
+		d, err := decodeUint32(s)
+		if err != nil {
+			t.Fatal(err)
 		}
-	case <-time.After(50 * time.Millisecond):
-		t.Error("timed out")
+		if d != u {
+			t.Errorf("got %d, want input %d", d, u)
+		}
 	}
 }
 
