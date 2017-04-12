@@ -1,1 +1,0 @@
-../../internal/src/google/protobuf/compiler/java/java_extension_lite.cc

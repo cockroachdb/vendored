@@ -1,1 +1,0 @@
-internal/tools/sst_dump_tool.cc

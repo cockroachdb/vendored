@@ -1,1 +1,0 @@
-internal/src/google/protobuf/text_format.cc

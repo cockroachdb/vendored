@@ -1,1 +1,0 @@
-internal/db/external_sst_file_ingestion_job.cc

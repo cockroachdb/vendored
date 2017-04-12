@@ -1,1 +1,0 @@
-internal/src/google/protobuf/stubs/bytestream.cc

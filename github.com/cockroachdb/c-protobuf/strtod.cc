@@ -1,1 +1,0 @@
-internal/src/google/protobuf/io/strtod.cc
