@@ -251,7 +251,7 @@ Some other misspelling correctors:
 
 * https://github.com/vlajos/misspell_fixer
 * https://github.com/lyda/misspell-check
-* https://github.com/lucasdemarchi
+* https://github.com/lucasdemarchi/codespell
 
 They all work but had problems that prevented me from using them at scale:
 
@@ -266,14 +266,14 @@ than this project!
 <a name="performance"></a>
 ### How fast is it?
 
-Misspell is Easily 100x to 1000x faster than other spelling correctors.  You
+Misspell is easily 100x to 1000x faster than other spelling correctors.  You
 should be able to check and correct 1000 files in under 250ms.
 
 This uses the mighty power of golang's
 [strings.Replacer](https://golang.org/pkg/strings/#Replacer) which is
 a implementation or variation of the
 [Aho–Corasick algorithm](https://en.wikipedia.org/wiki/Aho–Corasick_algorithm).
-This makes multiple substring matches *simultaneously*
+This makes multiple substring matches *simultaneously*.
 
 In addition this uses multiple CPU cores to work on multiple files.
 
@@ -289,7 +289,7 @@ Either way, please file bugs and we'll fix them!
 Since it operates in parallel to make corrections, it can be non-obvious to
 determine exactly what word was corrected.
 
-<a name="#debug"></a>
+<a name="debug"></a>
 ### It's making mistakes.  How can I debug?
 
 Run using `-debug` flag on the file you want.  It should then print what word
@@ -297,7 +297,7 @@ it is trying to correct.  Then [file a
 bug](https://github.com/client9/misspell/issues) describing the problem.
 Thanks!
 
-<a name="#missing"></a>
+<a name="missing"></a>
 ### Why is it making mistakes or missing items in golang files?
 
 The matching function is *case-sensitive*, so variable names that are multiple
@@ -336,7 +336,7 @@ Variations of UK and US spellings are based on many sources including:
 American English is more accepting of spelling variations than is British
 English, so "what is American or not" is subject to opinion.  Corrections and help welcome.
 
-<a name="otherideas">
+<a name="otherideas"></a>
 ### What are some other enhancements that could be done?
 
 Here's some ideas for enhancements:
@@ -352,17 +352,5 @@ locale would correct "advisor" to "adviser".
 
 *Feedback*  Mistakes would be sent to some server for agregation and feedback review.
 
-
-## Github Emoji Test :imp:
-
-:imp:  😻
-
-Bold **:imp::**
-
-```
-This is an :imp:
-```
-
-This is an `:imp:`
-
-
+*Contractions and Apostrophes* This would optionally correct "isnt" to
+"isn't", etc.
