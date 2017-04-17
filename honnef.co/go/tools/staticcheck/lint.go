@@ -10,7 +10,6 @@ import (
 	"go/types"
 	htmltemplate "html/template"
 	"net/http"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -281,44 +280,32 @@ func (c *Checker) Init(prog *lint.Program) {
 	c.deprecatedObjs = map[types.Object]string{}
 	c.nodeFns = map[ast.Node]*ssa.Function{}
 
-	fns := prog.AllFunctions
-
-	var pwg sync.WaitGroup
-	var processFn func(*ssa.Function)
-	processFn = func(fn *ssa.Function) {
+	for _, fn := range prog.AllFunctions {
 		if fn.Blocks != nil {
 			applyStdlibKnowledge(fn)
 			ssa.OptimizeBlocks(fn)
 		}
-		pwg.Done()
 	}
-	for _, fn := range fns {
-		pwg.Add(1)
-		go processFn(fn)
-	}
-	pwg.Wait()
 
 	c.nodeFns = lint.NodeFns(prog.Packages)
 
-	chDeprecated := make(chan struct {
-		obj types.Object
-		msg string
-	}, runtime.NumCPU()*2)
+	deprecated := []map[types.Object]string{}
 	wg := &sync.WaitGroup{}
 	for _, pkginfo := range prog.Prog.AllPackages {
 		pkginfo := pkginfo
 		scope := pkginfo.Pkg.Scope()
 		names := scope.Names()
-		for _, name := range names {
-			name := name
-			wg.Add(1)
-			go func() {
+		wg.Add(1)
+
+		m := map[types.Object]string{}
+		deprecated = append(deprecated, m)
+		go func(m map[types.Object]string) {
+			for _, name := range names {
 				obj := scope.Lookup(name)
 				msg := c.deprecationMessage(pkginfo.Files, prog.SSA.Fset, obj)
-				chDeprecated <- struct {
-					obj types.Object
-					msg string
-				}{obj, msg}
+				if msg != "" {
+					m[obj] = msg
+				}
 				if typ, ok := obj.Type().Underlying().(*types.Struct); ok {
 					n := typ.NumFields()
 					for i := 0; i < n; i++ {
@@ -326,22 +313,20 @@ func (c *Checker) Init(prog *lint.Program) {
 						// fields in anonymous structs.
 						field := typ.Field(i)
 						msg := c.deprecationMessage(pkginfo.Files, prog.SSA.Fset, field)
-						chDeprecated <- struct {
-							obj types.Object
-							msg string
-						}{field, msg}
+						if msg != "" {
+							m[field] = msg
+						}
 					}
 				}
-				wg.Done()
-			}()
-		}
+			}
+			wg.Done()
+		}(m)
 	}
-	go func() {
-		wg.Wait()
-		close(chDeprecated)
-	}()
-	for dep := range chDeprecated {
-		c.deprecatedObjs[dep.obj] = dep.msg
+	wg.Wait()
+	for _, m := range deprecated {
+		for k, v := range m {
+			c.deprecatedObjs[k] = v
+		}
 	}
 }
 
@@ -803,7 +788,7 @@ func (c *Checker) CheckExec(j *lint.Job) {
 		if !ok {
 			return true
 		}
-		if !strings.Contains(val, " ") || strings.Contains(val, `\`) {
+		if !strings.Contains(val, " ") || strings.Contains(val, `\`) || strings.Contains(val, "/") {
 			return true
 		}
 		j.Errorf(call.Args[0], "first argument to exec.Command looks like a shell command, but a program name or path are expected")

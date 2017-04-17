@@ -16,9 +16,9 @@ pflag is a drop-in replacement of Go's native flag package. If you import
 pflag under the name "flag" then all code should continue to function
 with no changes.
 
-	import flag "github.com/ogier/pflag"
+	import flag "github.com/spf13/pflag"
 
-	There is one exception to this: if you directly instantiate the Flag struct
+There is one exception to this: if you directly instantiate the Flag struct
 there is one more field "Shorthand" that you will need to set.
 Most code never instantiates this struct directly, and instead uses
 functions such as String(), BoolVar(), and Var(), and is therefore
@@ -147,7 +147,6 @@ type FlagSet struct {
 	shorthands        map[byte]*Flag
 	args              []string // arguments after flags
 	argsLenAtDash     int      // len(args) when a '--' was located when parsing, or -1 if no --
-	exitOnError       bool     // does the program exit if there's an error?
 	errorHandling     ErrorHandling
 	output            io.Writer // nil means stderr; use out() accessor
 	interspersed      bool      // allow interspersed option/non-option args
