@@ -203,6 +203,8 @@ func (cfg *configYAML) configFromFile(path string) error {
 		return err
 	}
 
+	defaultInitialCluster := cfg.InitialCluster
+
 	err = yaml.Unmarshal(b, cfg)
 	if err != nil {
 		return err
@@ -246,6 +248,10 @@ func (cfg *configYAML) configFromFile(path string) error {
 		cfg.ACUrls = []url.URL(u)
 	}
 
+	// If a discovery flag is set, clear default initial cluster set by InitialClusterFromName
+	if (cfg.Durl != "" || cfg.DNSCluster != "") && cfg.InitialCluster == defaultInitialCluster {
+		cfg.InitialCluster = ""
+	}
 	if cfg.ClusterState == "" {
 		cfg.ClusterState = ClusterStateFlagNew
 	}
@@ -306,6 +312,7 @@ func (cfg *Config) Validate() error {
 
 // PeerURLsMapAndToken sets up an initial peer URLsMap and cluster token for bootstrap or discovery.
 func (cfg *Config) PeerURLsMapAndToken(which string) (urlsmap types.URLsMap, token string, err error) {
+	token = cfg.InitialClusterToken
 	switch {
 	case cfg.Durl != "":
 		urlsmap = types.URLsMap{}
@@ -315,7 +322,7 @@ func (cfg *Config) PeerURLsMapAndToken(which string) (urlsmap types.URLsMap, tok
 		token = cfg.Durl
 	case cfg.DNSCluster != "":
 		var clusterStr string
-		clusterStr, token, err = discovery.SRVGetCluster(cfg.Name, cfg.DNSCluster, cfg.InitialClusterToken, cfg.APUrls)
+		clusterStr, err = discovery.SRVGetCluster(cfg.Name, cfg.DNSCluster, cfg.APUrls)
 		if err != nil {
 			return nil, "", err
 		}
@@ -333,7 +340,6 @@ func (cfg *Config) PeerURLsMapAndToken(which string) (urlsmap types.URLsMap, tok
 	default:
 		// We're statically configured, and cluster has appropriately been set.
 		urlsmap, err = types.NewURLsMap(cfg.InitialCluster)
-		token = cfg.InitialClusterToken
 	}
 	return urlsmap, token, err
 }

@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/coreos/etcd/clientv3"
+	pb "github.com/coreos/etcd/etcdserver/etcdserverpb"
 	"github.com/coreos/etcd/integration"
 	"github.com/coreos/etcd/pkg/testutil"
 	"golang.org/x/net/context"
@@ -71,6 +72,27 @@ func testDialSetEndpoints(t *testing.T, setBefore bool) {
 	cancel()
 }
 
+// TestSwitchSetEndpoints ensures SetEndpoints can switch one endpoint
+// with a new one that doesn't include original endpoint.
+func TestSwitchSetEndpoints(t *testing.T) {
+	defer testutil.AfterTest(t)
+	clus := integration.NewClusterV3(t, &integration.ClusterConfig{Size: 3})
+	defer clus.Terminate(t)
+
+	// get non partitioned members endpoints
+	eps := []string{clus.Members[1].GRPCAddr(), clus.Members[2].GRPCAddr()}
+
+	cli := clus.Client(0)
+	clus.Members[0].InjectPartition(t, clus.Members[1:])
+
+	cli.SetEndpoints(eps...)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if _, err := cli.Get(ctx, "foo"); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestRejectOldCluster(t *testing.T) {
 	defer testutil.AfterTest(t)
 	// 2 endpoints to test multi-endpoint Status
@@ -87,4 +109,27 @@ func TestRejectOldCluster(t *testing.T) {
 		t.Fatal(err)
 	}
 	cli.Close()
+}
+
+// TestDialForeignEndpoint checks an endpoint that is not registered
+// with the balancer can be dialed.
+func TestDialForeignEndpoint(t *testing.T) {
+	defer testutil.AfterTest(t)
+	clus := integration.NewClusterV3(t, &integration.ClusterConfig{Size: 2})
+	defer clus.Terminate(t)
+
+	conn, err := clus.Client(0).Dial(clus.Client(1).Endpoints()[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	// grpc can return a lazy connection that's not connected yet; confirm
+	// that it can communicate with the cluster.
+	kvc := clientv3.NewKVFromKVClient(pb.NewKVClient(conn))
+	ctx, cancel := context.WithTimeout(context.TODO(), 5*time.Second)
+	defer cancel()
+	if _, gerr := kvc.Get(ctx, "abc"); gerr != nil {
+		t.Fatal(err)
+	}
 }

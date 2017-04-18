@@ -175,3 +175,56 @@ func TestStopRaftWhenWaitingForApplyDone(t *testing.T) {
 		t.Fatalf("failed to stop raft loop")
 	}
 }
+
+// TestConfgChangeBlocksApply ensures apply blocks if committed entries contain config-change.
+func TestConfgChangeBlocksApply(t *testing.T) {
+	n := newNopReadyNode()
+
+	waitApplyc := make(chan struct{})
+
+	srv := &EtcdServer{r: raftNode{
+		Node:        n,
+		storage:     mockstorage.NewStorageRecorder(""),
+		raftStorage: raft.NewMemoryStorage(),
+		transport:   rafthttp.NewNopTransporter(),
+		ticker:      &time.Ticker{},
+	}}
+
+	rh := &raftReadyHandler{
+		updateLeadership: func() {},
+		waitForApply: func() {
+			<-waitApplyc
+		},
+	}
+
+	srv.r.start(rh)
+	defer srv.r.Stop()
+
+	n.readyc <- raft.Ready{
+		SoftState:        &raft.SoftState{RaftState: raft.StateFollower},
+		CommittedEntries: []raftpb.Entry{{Type: raftpb.EntryConfChange}},
+	}
+	<-srv.r.applyc
+
+	continueC := make(chan struct{})
+	go func() {
+		n.readyc <- raft.Ready{}
+		<-srv.r.applyc
+		close(continueC)
+	}()
+
+	select {
+	case <-continueC:
+		t.Fatalf("unexpected execution: raft routine should block waiting for apply")
+	case <-time.After(time.Second):
+	}
+
+	// finish apply, unblock raft routine
+	close(waitApplyc)
+
+	select {
+	case <-continueC:
+	case <-time.After(time.Second):
+		t.Fatalf("unexpected blocking on execution")
+	}
+}

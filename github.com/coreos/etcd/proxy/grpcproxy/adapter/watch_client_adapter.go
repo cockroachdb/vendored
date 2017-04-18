@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package grpcproxy
+package adapter
 
 import (
 	"errors"
@@ -20,10 +20,9 @@ import (
 	pb "github.com/coreos/etcd/etcdserver/etcdserverpb"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/metadata"
 )
 
-var errAlreadySentHeader = errors.New("grpcproxy: already send header")
+var errAlreadySentHeader = errors.New("adapter: already sent header")
 
 type ws2wc struct{ wserv pb.WatchServer }
 
@@ -32,29 +31,10 @@ func WatchServerToWatchClient(wserv pb.WatchServer) pb.WatchClient {
 }
 
 func (s *ws2wc) Watch(ctx context.Context, opts ...grpc.CallOption) (pb.Watch_WatchClient, error) {
-	// ch1 is buffered so server can send error on close
-	ch1, ch2 := make(chan interface{}, 1), make(chan interface{})
-	headerc, trailerc := make(chan metadata.MD, 1), make(chan metadata.MD, 1)
-
-	cctx, ccancel := context.WithCancel(ctx)
-	cli := &chanStream{recvc: ch1, sendc: ch2, ctx: cctx, cancel: ccancel}
-	wclient := &ws2wcClientStream{chanClientStream{headerc, trailerc, cli}}
-
-	sctx, scancel := context.WithCancel(ctx)
-	srv := &chanStream{recvc: ch2, sendc: ch1, ctx: sctx, cancel: scancel}
-	wserver := &ws2wcServerStream{chanServerStream{headerc, trailerc, srv, nil}}
-	go func() {
-		if err := s.wserv.Watch(wserver); err != nil {
-			select {
-			case srv.sendc <- err:
-			case <-sctx.Done():
-			case <-cctx.Done():
-			}
-		}
-		scancel()
-		ccancel()
-	}()
-	return wclient, nil
+	cs := newPipeStream(ctx, func(ss chanServerStream) error {
+		return s.wserv.Watch(&ws2wcServerStream{ss})
+	})
+	return &ws2wcClientStream{cs}, nil
 }
 
 // ws2wcClientStream implements Watch_WatchClient

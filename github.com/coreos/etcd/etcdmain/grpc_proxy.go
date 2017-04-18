@@ -23,7 +23,9 @@ import (
 	"time"
 
 	"github.com/coreos/etcd/clientv3"
+	"github.com/coreos/etcd/clientv3/namespace"
 	pb "github.com/coreos/etcd/etcdserver/etcdserverpb"
+	"github.com/coreos/etcd/pkg/debugutil"
 	"github.com/coreos/etcd/pkg/transport"
 	"github.com/coreos/etcd/proxy/grpcproxy"
 
@@ -35,14 +37,21 @@ import (
 )
 
 var (
-	grpcProxyListenAddr         string
-	grpcProxyEndpoints          []string
-	grpcProxyCert               string
-	grpcProxyKey                string
-	grpcProxyCA                 string
+	grpcProxyListenAddr        string
+	grpcProxyEndpoints         []string
+	grpcProxyDNSCluster        string
+	grpcProxyInsecureDiscovery bool
+	grpcProxyCert              string
+	grpcProxyKey               string
+	grpcProxyCA                string
+
 	grpcProxyAdvertiseClientURL string
 	grpcProxyResolverPrefix     string
 	grpcProxyResolverTTL        int
+
+	grpcProxyNamespace string
+
+	grpcProxyEnablePprof bool
 )
 
 func init() {
@@ -68,6 +77,8 @@ func newGRPCProxyStartCommand() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&grpcProxyListenAddr, "listen-addr", "127.0.0.1:23790", "listen address")
+	cmd.Flags().StringVar(&grpcProxyDNSCluster, "discovery-srv", "", "DNS domain used to bootstrap initial cluster")
+	cmd.Flags().BoolVar(&grpcProxyInsecureDiscovery, "insecure-discovery", false, "accept insecure SRV records")
 	cmd.Flags().StringSliceVar(&grpcProxyEndpoints, "endpoints", []string{"127.0.0.1:2379"}, "comma separated etcd cluster endpoints")
 	cmd.Flags().StringVar(&grpcProxyCert, "cert", "", "identify secure connections with etcd servers using this TLS certificate file")
 	cmd.Flags().StringVar(&grpcProxyKey, "key", "", "identify secure connections with etcd servers using this TLS key file")
@@ -75,6 +86,8 @@ func newGRPCProxyStartCommand() *cobra.Command {
 	cmd.Flags().StringVar(&grpcProxyAdvertiseClientURL, "advertise-client-url", "127.0.0.1:23790", "advertise address to register (must be reachable by client)")
 	cmd.Flags().StringVar(&grpcProxyResolverPrefix, "resolver-prefix", "", "prefix to use for registering proxy (must be shared with other grpc-proxy members)")
 	cmd.Flags().IntVar(&grpcProxyResolverTTL, "resolver-ttl", 0, "specify TTL, in seconds, when registering proxy endpoints")
+	cmd.Flags().StringVar(&grpcProxyNamespace, "namespace", "", "string to prefix to all keys for namespacing requests")
+	cmd.Flags().BoolVar(&grpcProxyEnablePprof, "enable-pprof", false, `Enable runtime profiling data via HTTP server. Address is at client URL + "/debug/pprof/"`)
 
 	return &cmd
 }
@@ -91,6 +104,10 @@ func startGRPCProxy(cmd *cobra.Command, args []string) {
 	if grpcProxyResolverPrefix != "" && grpcProxyResolverTTL > 0 && grpcProxyAdvertiseClientURL == "" {
 		fmt.Fprintln(os.Stderr, fmt.Errorf("invalid advertise-client-url %q", grpcProxyAdvertiseClientURL))
 		os.Exit(1)
+	}
+
+	if eps := discoverEndpoints(grpcProxyDNSCluster, grpcProxyCA, grpcProxyInsecureDiscovery); len(eps) != 0 {
+		grpcProxyEndpoints = eps
 	}
 
 	l, err := net.Listen("tcp", grpcProxyListenAddr)
@@ -119,6 +136,12 @@ func startGRPCProxy(cmd *cobra.Command, args []string) {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
+	}
+
+	if len(grpcProxyNamespace) > 0 {
+		client.KV = namespace.NewKV(client.KV, grpcProxyNamespace)
+		client.Watcher = namespace.NewWatcher(client.Watcher, grpcProxyNamespace)
+		client.Lease = namespace.NewLease(client.Lease, grpcProxyNamespace)
 	}
 
 	kvp, _ := grpcproxy.NewKvProxy(client)
@@ -150,6 +173,13 @@ func startGRPCProxy(cmd *cobra.Command, args []string) {
 	httpmux := http.NewServeMux()
 	httpmux.HandleFunc("/", http.NotFound)
 	httpmux.Handle("/metrics", prometheus.Handler())
+	if grpcProxyEnablePprof {
+		for p, h := range debugutil.PProfHandlers() {
+			httpmux.Handle(p, h)
+		}
+		plog.Infof("pprof is enabled under %s", debugutil.HTTPPrefixPProf)
+	}
+
 	srvhttp := &http.Server{
 		Handler: httpmux,
 	}

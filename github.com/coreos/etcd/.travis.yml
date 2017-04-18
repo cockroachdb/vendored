@@ -4,7 +4,7 @@ go_import_path: github.com/coreos/etcd
 sudo: false
 
 go:
-  - 1.8
+  - 1.8.1
   - tip
 
 notifications:
@@ -41,10 +41,10 @@ addons:
     - libhunspell-dev
 
 before_install:
- - go get -v github.com/chzchzchz/goword
- - go get -v honnef.co/go/tools/cmd/gosimple
- - go get -v honnef.co/go/tools/cmd/unused
- - go get -v honnef.co/go/tools/cmd/staticcheck
+ - go get -v -u github.com/chzchzchz/goword
+ - go get -v -u honnef.co/go/tools/cmd/gosimple
+ - go get -v -u honnef.co/go/tools/cmd/unused
+ - go get -v -u honnef.co/go/tools/cmd/staticcheck
 
 # disable godep restore override
 install:

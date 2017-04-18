@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"path"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -64,7 +64,7 @@ func TestEmbedEtcd(t *testing.T) {
 	tests[7].cfg.LCUrls = []url.URL{*dnsURL}
 	tests[8].cfg.LPUrls = []url.URL{*dnsURL}
 
-	dir := path.Join(os.TempDir(), fmt.Sprintf("embed-etcd"))
+	dir := filepath.Join(os.TempDir(), fmt.Sprintf("embed-etcd"))
 	os.RemoveAll(dir)
 	defer os.RemoveAll(dir)
 
@@ -94,6 +94,11 @@ func TestEmbedEtcd(t *testing.T) {
 			t.Errorf("%d: expected %d clients, got %d", i, tt.wclients, len(e.Clients))
 		}
 		e.Close()
+		select {
+		case err := <-e.Err():
+			t.Errorf("#%d: unexpected error on close (%v)", i, err)
+		default:
+		}
 	}
 }
 

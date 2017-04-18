@@ -77,6 +77,14 @@ func New(cfg Config) (*Client, error) {
 	return newClient(&cfg)
 }
 
+// NewCtxClient creates a client with a context but no underlying grpc
+// connection. This is useful for embedded cases that override the
+// service interface implementations and do not need connection management.
+func NewCtxClient(ctx context.Context) *Client {
+	cctx, cancel := context.WithCancel(ctx)
+	return &Client{ctx: cctx, cancel: cancel}
+}
+
 // NewFromURL creates a new etcdv3 client from a URL.
 func NewFromURL(url string) (*Client, error) {
 	return New(Config{Endpoints: []string{url}})
@@ -87,7 +95,10 @@ func (c *Client) Close() error {
 	c.cancel()
 	c.Watcher.Close()
 	c.Lease.Close()
-	return toErr(c.ctx, c.conn.Close())
+	if c.conn != nil {
+		return toErr(c.ctx, c.conn.Close())
+	}
+	return c.ctx.Err()
 }
 
 // Ctx is a context for "out of band" messages (e.g., for sending
@@ -173,6 +184,7 @@ func parseEndpoint(endpoint string) (proto string, host string, scheme string) {
 	case "http", "https":
 	case "unix":
 		proto = "unix"
+		host = url.Host + url.Path
 	default:
 		proto, host = "", ""
 	}
@@ -207,6 +219,11 @@ func (c *Client) dialSetupOpts(endpoint string, dopts ...grpc.DialOption) (opts 
 
 	f := func(host string, t time.Duration) (net.Conn, error) {
 		proto, host, _ := parseEndpoint(c.balancer.getEndpoint(host))
+		if host == "" && endpoint != "" {
+			// dialing an endpoint not in the balancer; use
+			// endpoint passed into dial
+			proto, host, _ = parseEndpoint(endpoint)
+		}
 		if proto == "" {
 			return nil, fmt.Errorf("unknown scheme for %q", host)
 		}
@@ -283,8 +300,16 @@ func (c *Client) dial(endpoint string, dopts ...grpc.DialOption) (*grpc.ClientCo
 			tokenMu: &sync.RWMutex{},
 		}
 
-		err := c.getToken(c.ctx)
-		if err != nil {
+		ctx := c.ctx
+		if c.cfg.DialTimeout > 0 {
+			cctx, cancel := context.WithTimeout(ctx, c.cfg.DialTimeout)
+			defer cancel()
+			ctx = cctx
+		}
+		if err := c.getToken(ctx); err != nil {
+			if err == ctx.Err() && ctx.Err() != c.ctx.Err() {
+				err = grpc.ErrClientConnTimeout
+			}
 			return nil, err
 		}
 
@@ -338,8 +363,10 @@ func newClient(cfg *Config) (*Client, error) {
 	}
 
 	client.balancer = newSimpleBalancer(cfg.Endpoints)
-	conn, err := client.dial(cfg.Endpoints[0], grpc.WithBalancer(client.balancer))
+	conn, err := client.dial("", grpc.WithBalancer(client.balancer))
 	if err != nil {
+		client.cancel()
+		client.balancer.Close()
 		return nil, err
 	}
 	client.conn = conn
@@ -363,6 +390,7 @@ func newClient(cfg *Config) (*Client, error) {
 			default:
 			}
 			client.cancel()
+			client.balancer.Close()
 			conn.Close()
 			return nil, err
 		}

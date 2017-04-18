@@ -21,6 +21,7 @@
 - [etcd/clientv3](https://github.com/coreos/etcd/blob/master/clientv3) - the officially maintained Go client for v3
 - [etcd/client](https://github.com/coreos/etcd/blob/master/client) - the officially maintained Go client for v2
 - [go-etcd](https://github.com/coreos/go-etcd) - the deprecated official client. May be useful for older (<2.0.0) versions of etcd.
+- [encWrapper](https://github.com/lumjjb/etcd/tree/enc_wrapper/clientwrap/encwrapper) - encWrapper is an encryption wrapper for the etcd client Keys API/KV.
 
 **Java libraries**
 
@@ -45,6 +46,7 @@
 - [cholcombe973/autodock](https://github.com/cholcombe973/autodock) - A docker deployment automation tool
 - [lisael/aioetcd](https://github.com/lisael/aioetcd) - (Python 3.4+) Asyncio coroutines client (Supports v2)
 - [txaio-etcd](https://github.com/crossbario/txaio-etcd) - Asynchronous etcd v3-only client library for Twisted (today) and asyncio (future)
+- [dims/etcd3-gateway](https://github.com/dims/etcd3-gateway) - etcd v3 API library using the HTTP grpc gateway
 
 **Node libraries**
 
@@ -57,6 +59,7 @@
 - [iconara/etcd-rb](https://github.com/iconara/etcd-rb)
 - [jpfuentes2/etcd-ruby](https://github.com/jpfuentes2/etcd-ruby)
 - [ranjib/etcd-ruby](https://github.com/ranjib/etcd-ruby) - Supports v2
+- [davissp14/etcdv3-ruby](https://github.com/davissp14/etcdv3-ruby) - Supports v3
 
 **C libraries**
 

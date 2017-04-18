@@ -166,19 +166,11 @@ func (t *batchTx) commit(stop bool) {
 			t.backend.mu.RLock()
 			defer t.backend.mu.RUnlock()
 
-			// batchTx.commit(true) calls *bolt.Tx.Commit, which
-			// initializes *bolt.Tx.db and *bolt.Tx.meta as nil,
-			// and subsequent *bolt.Tx.Size() call panics.
-			//
-			// This nil pointer reference panic happens when:
-			//   1. batchTx.commit(false) from newBatchTx
-			//   2. batchTx.commit(true) from stopping backend
-			//   3. batchTx.commit(false) from inflight mvcc Hash call
-			//
-			// Check if db is nil to prevent this panic
-			if t.tx.DB() != nil {
-				atomic.StoreInt64(&t.backend.size, t.tx.Size())
-			}
+			// t.tx.DB()==nil if 'CommitAndStop' calls 'batchTx.commit(true)',
+			// which initializes *bolt.Tx.db and *bolt.Tx.meta as nil; panics t.tx.Size().
+			// Server must make sure 'batchTx.commit(false)' does not follow
+			// 'batchTx.commit(true)' (e.g. stopping backend, and inflight Hash call).
+			atomic.StoreInt64(&t.backend.size, t.tx.Size())
 			return
 		}
 
@@ -244,6 +236,10 @@ func (t *batchTxBuffered) commit(stop bool) {
 	// all read txs must be closed to acquire boltdb commit rwlock
 	t.backend.readTx.mu.Lock()
 	defer t.backend.readTx.mu.Unlock()
+	t.unsafeCommit(stop)
+}
+
+func (t *batchTxBuffered) unsafeCommit(stop bool) {
 	if t.backend.readTx.tx != nil {
 		if err := t.backend.readTx.tx.Rollback(); err != nil {
 			plog.Fatalf("cannot rollback tx (%s)", err)

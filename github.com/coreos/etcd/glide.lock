@@ -1,5 +1,5 @@
-hash: c8d757181c4950cd9c7d6f2091c50da1fa7ffbed6b66ca6c6a34495c0e5c84ab
-updated: 2017-03-06T19:45:05.355925876-08:00
+hash: 731f35aa7008dd526f126f5bd8f74bcd7d8639aeafccc4db8f472cb67029f88d
+updated: 2017-04-11T08:41:43.277154365-07:00
 imports:
 - name: github.com/beorn7/perks
   version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
@@ -54,7 +54,7 @@ imports:
 - name: github.com/grpc-ecosystem/go-grpc-prometheus
   version: 6b7015e65d366bf3f19b2b2a000a831940f0f7e0
 - name: github.com/grpc-ecosystem/grpc-gateway
-  version: 84398b94e188ee336f307779b57b3aa91af7063c
+  version: 18d159699f2e83fc5bb9ef2f79465ca3f3122676
   subpackages:
   - runtime
   - runtime/internal
@@ -119,7 +119,7 @@ imports:
   - bcrypt
   - blowfish
 - name: golang.org/x/net
-  version: f2499483f923065a842d38eb4c7f1927e6fc6e6d
+  version: d1e1b351919c6738fdeb9893d5c998b161464f0c
   subpackages:
   - context
   - http2
@@ -132,20 +132,30 @@ imports:
   version: e48874b42435b4347fc52bdee0424a52abc974d7
   subpackages:
   - unix
+- name: golang.org/x/text
+  version: f4b4367115ec2de254587813edaa901bc1c723a8
+  subpackages:
+  - secure/bidirule
+  - transform
+  - unicode/bidi
+  - unicode/norm
 - name: golang.org/x/time
   version: a4bde12657593d5e90d0533a3e4fd95e635124cb
   subpackages:
   - rate
 - name: google.golang.org/grpc
-  version: 777daa17ff9b5daef1cfdf915088a2ada3332bf0
+  version: 8050b9cbc271307e5a716a9d782803d09b0d6f2d
   subpackages:
   - codes
   - credentials
   - grpclog
   - internal
+  - keepalive
   - metadata
   - naming
   - peer
+  - stats
+  - tap
   - transport
 - name: gopkg.in/cheggaaa/pb.v1
   version: 226d21d43a305fac52b3a104ef83e721b15275e0

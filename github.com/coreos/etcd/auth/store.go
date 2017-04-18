@@ -21,6 +21,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/coreos/etcd/auth/authpb"
 	pb "github.com/coreos/etcd/etcdserver/etcdserverpb"
@@ -61,6 +62,7 @@ var (
 	ErrAuthOldRevision      = errors.New("auth: revision in header is old")
 	ErrInvalidAuthToken     = errors.New("auth: invalid auth token")
 	ErrInvalidAuthOpts      = errors.New("auth: invalid auth options")
+	ErrInvalidAuthMgmt      = errors.New("auth: invalid auth management")
 
 	// BcryptCost is the algorithm cost / strength for hashing auth passwords
 	BcryptCost = bcrypt.DefaultCost
@@ -173,13 +175,14 @@ type TokenProvider interface {
 }
 
 type authStore struct {
+	// atomic operations; need 64-bit align, or 32-bit tests will crash
+	revision uint64
+
 	be        backend.Backend
 	enabled   bool
 	enabledMu sync.RWMutex
 
 	rangePermCache map[string]*unifiedRangePermissions // username -> unifiedRangePermissions
-
-	revision uint64
 
 	tokenProvider TokenProvider
 }
@@ -215,7 +218,7 @@ func (as *authStore) AuthEnable() error {
 
 	as.rangePermCache = make(map[string]*unifiedRangePermissions)
 
-	as.revision = getRevision(tx)
+	as.setRevision(getRevision(tx))
 
 	plog.Noticef("Authentication enabled")
 
@@ -269,7 +272,7 @@ func (as *authStore) Authenticate(ctx context.Context, username, password string
 	// Password checking is already performed in the API layer, so we don't need to check for now.
 	// Staleness of password can be detected with OCC in the API layer, too.
 
-	token, err := as.tokenProvider.assign(ctx, username, as.revision)
+	token, err := as.tokenProvider.assign(ctx, username, as.Revision())
 	if err != nil {
 		return nil, err
 	}
@@ -308,7 +311,7 @@ func (as *authStore) Recover(be backend.Backend) {
 		}
 	}
 
-	as.revision = getRevision(tx)
+	as.setRevision(getRevision(tx))
 
 	tx.Unlock()
 
@@ -352,6 +355,11 @@ func (as *authStore) UserAdd(r *pb.AuthUserAddRequest) (*pb.AuthUserAddResponse,
 }
 
 func (as *authStore) UserDelete(r *pb.AuthUserDeleteRequest) (*pb.AuthUserDeleteResponse, error) {
+	if as.enabled && strings.Compare(r.Name, rootUser) == 0 {
+		plog.Errorf("the user root must not be deleted")
+		return nil, ErrInvalidAuthMgmt
+	}
+
 	tx := as.be.BatchTx()
 	tx.Lock()
 	defer tx.Unlock()
@@ -477,6 +485,11 @@ func (as *authStore) UserList(r *pb.AuthUserListRequest) (*pb.AuthUserListRespon
 }
 
 func (as *authStore) UserRevokeRole(r *pb.AuthUserRevokeRoleRequest) (*pb.AuthUserRevokeRoleResponse, error) {
+	if as.enabled && strings.Compare(r.Name, rootUser) == 0 && strings.Compare(r.Role, rootRole) == 0 {
+		plog.Errorf("the role root must not be revoked from the user root")
+		return nil, ErrInvalidAuthMgmt
+	}
+
 	tx := as.be.BatchTx()
 	tx.Lock()
 	defer tx.Unlock()
@@ -579,17 +592,10 @@ func (as *authStore) RoleRevokePermission(r *pb.AuthRoleRevokePermissionRequest)
 }
 
 func (as *authStore) RoleDelete(r *pb.AuthRoleDeleteRequest) (*pb.AuthRoleDeleteResponse, error) {
-	// TODO(mitake): current scheme of role deletion allows existing users to have the deleted roles
-	//
-	// Assume a case like below:
-	// create a role r1
-	// create a user u1 and grant r1 to u1
-	// delete r1
-	//
-	// After this sequence, u1 is still granted the role r1. So if admin create a new role with the name r1,
-	// the new r1 is automatically granted u1.
-	// In some cases, it would be confusing. So we need to provide an option for deleting the grant relation
-	// from all users.
+	if as.enabled && strings.Compare(r.Role, rootRole) == 0 {
+		plog.Errorf("the role root must not be deleted")
+		return nil, ErrInvalidAuthMgmt
+	}
 
 	tx := as.be.BatchTx()
 	tx.Lock()
@@ -601,6 +607,28 @@ func (as *authStore) RoleDelete(r *pb.AuthRoleDeleteRequest) (*pb.AuthRoleDelete
 	}
 
 	delRole(tx, r.Role)
+
+	users := getAllUsers(tx)
+	for _, user := range users {
+		updatedUser := &authpb.User{
+			Name:     user.Name,
+			Password: user.Password,
+		}
+
+		for _, role := range user.Roles {
+			if strings.Compare(role, r.Role) != 0 {
+				updatedUser.Roles = append(updatedUser.Roles, role)
+			}
+		}
+
+		if len(updatedUser.Roles) == len(user.Roles) {
+			continue
+		}
+
+		putUser(tx, updatedUser)
+
+		as.invalidateCachedPerm(string(user.Name))
+	}
 
 	as.commitRevision(tx)
 
@@ -632,7 +660,7 @@ func (as *authStore) RoleAdd(r *pb.AuthRoleAddRequest) (*pb.AuthRoleAddResponse,
 }
 
 func (as *authStore) authInfoFromToken(ctx context.Context, token string) (*AuthInfo, bool) {
-	return as.tokenProvider.info(ctx, token, as.revision)
+	return as.tokenProvider.info(ctx, token, as.Revision())
 }
 
 type permSlice []*authpb.Permission
@@ -702,7 +730,7 @@ func (as *authStore) isOpPermitted(userName string, revision uint64, key, rangeE
 		return ErrUserEmpty
 	}
 
-	if revision < as.revision {
+	if revision < as.Revision() {
 		return ErrAuthOldRevision
 	}
 
@@ -893,7 +921,7 @@ func NewAuthStore(be backend.Backend, tp TokenProvider) *authStore {
 		as.tokenProvider.enable()
 	}
 
-	if as.revision == 0 {
+	if as.Revision() == 0 {
 		as.commitRevision(tx)
 	}
 
@@ -913,9 +941,9 @@ func hasRootRole(u *authpb.User) bool {
 }
 
 func (as *authStore) commitRevision(tx backend.BatchTx) {
-	as.revision++
+	atomic.AddUint64(&as.revision, 1)
 	revBytes := make([]byte, revBytesLen)
-	binary.BigEndian.PutUint64(revBytes, as.revision)
+	binary.BigEndian.PutUint64(revBytes, as.Revision())
 	tx.UnsafePut(authBucketName, revisionKey, revBytes)
 }
 
@@ -929,8 +957,12 @@ func getRevision(tx backend.BatchTx) uint64 {
 	return binary.BigEndian.Uint64(vs[0])
 }
 
+func (as *authStore) setRevision(rev uint64) {
+	atomic.StoreUint64(&as.revision, rev)
+}
+
 func (as *authStore) Revision() uint64 {
-	return as.revision
+	return atomic.LoadUint64(&as.revision)
 }
 
 func (as *authStore) AuthInfoFromTLS(ctx context.Context) *AuthInfo {

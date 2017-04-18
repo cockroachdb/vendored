@@ -19,10 +19,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"os"
-	"path"
+	"path/filepath"
 	"reflect"
 	"runtime"
 	"strings"
@@ -188,8 +187,11 @@ func startEtcd(cfg *embed.Config) (<-chan struct{}, <-chan error, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	osutil.RegisterInterruptHandler(e.Server.Stop)
-	<-e.Server.ReadyNotify() // wait for e.Server to join the cluster
+	osutil.RegisterInterruptHandler(e.Close)
+	select {
+	case <-e.Server.ReadyNotify(): // wait for e.Server to join the cluster
+	case <-e.Server.StopNotify(): // publish aborted from 'ErrStopped'
+	}
 	return e.Server.StopNotify(), e.Err(), nil
 }
 
@@ -208,14 +210,14 @@ func startProxy(cfg *config) error {
 		return err
 	}
 
-	cfg.Dir = path.Join(cfg.Dir, "proxy")
+	cfg.Dir = filepath.Join(cfg.Dir, "proxy")
 	err = os.MkdirAll(cfg.Dir, fileutil.PrivateDirMode)
 	if err != nil {
 		return err
 	}
 
 	var peerURLs []string
-	clusterfile := path.Join(cfg.Dir, "cluster")
+	clusterfile := filepath.Join(cfg.Dir, "cluster")
 
 	b, err := ioutil.ReadFile(clusterfile)
 	switch {
@@ -302,18 +304,7 @@ func startProxy(cfg *config) error {
 	}
 	// Start a proxy server goroutine for each listen address
 	for _, u := range cfg.LCUrls {
-		var (
-			l      net.Listener
-			tlscfg *tls.Config
-		)
-		if !cfg.ClientTLSInfo.Empty() {
-			tlscfg, err = cfg.ClientTLSInfo.ServerConfig()
-			if err != nil {
-				return err
-			}
-		}
-
-		l, err := transport.NewListener(u.Host, u.Scheme, tlscfg)
+		l, err := transport.NewListener(u.Host, u.Scheme, &cfg.ClientTLSInfo)
 		if err != nil {
 			return err
 		}
@@ -366,6 +357,11 @@ func identifyDataDirOrDie(dir string) dirType {
 }
 
 func setupLogging(cfg *config) {
+	cfg.ClientTLSInfo.HandshakeFailure = func(conn *tls.Conn, err error) {
+		plog.Infof("rejected connection from %q (%v)", conn.RemoteAddr().String(), err)
+	}
+	cfg.PeerTLSInfo.HandshakeFailure = cfg.ClientTLSInfo.HandshakeFailure
+
 	capnslog.SetGlobalLogLevel(capnslog.INFO)
 	if cfg.Debug {
 		capnslog.SetGlobalLogLevel(capnslog.DEBUG)

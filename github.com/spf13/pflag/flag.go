@@ -142,8 +142,10 @@ type FlagSet struct {
 	parsed            bool
 	actual            map[NormalizedName]*Flag
 	orderedActual     []*Flag
+	sortedActual      []*Flag
 	formal            map[NormalizedName]*Flag
 	orderedFormal     []*Flag
+	sortedFormal      []*Flag
 	shorthands        map[byte]*Flag
 	args              []string // arguments after flags
 	argsLenAtDash     int      // len(args) when a '--' was located when parsing, or -1 if no --
@@ -199,6 +201,7 @@ func sortFlags(flags map[NormalizedName]*Flag) []*Flag {
 // "--getUrl" which may also be translated to "geturl" and everything will work.
 func (f *FlagSet) SetNormalizeFunc(n func(f *FlagSet, name string) NormalizedName) {
 	f.normalizeNameFunc = n
+	f.sortedFormal = f.sortedFormal[:0]
 	for k, v := range f.orderedFormal {
 		delete(f.formal, NormalizedName(v.Name))
 		nname := f.normalizeFlagName(v.Name)
@@ -239,9 +242,16 @@ func (f *FlagSet) SetOutput(output io.Writer) {
 // in primordial order if f.SortFlags is false, calling fn for each.
 // It visits all flags, even those not set.
 func (f *FlagSet) VisitAll(fn func(*Flag)) {
+	if len(f.formal) == 0 {
+		return
+	}
+
 	var flags []*Flag
 	if f.SortFlags {
-		flags = sortFlags(f.formal)
+		if len(f.formal) != len(f.sortedFormal) {
+			f.sortedFormal = sortFlags(f.formal)
+		}
+		flags = f.sortedFormal
 	} else {
 		flags = f.orderedFormal
 	}
@@ -278,9 +288,16 @@ func VisitAll(fn func(*Flag)) {
 // in primordial order if f.SortFlags is false, calling fn for each.
 // It visits only those flags that have been set.
 func (f *FlagSet) Visit(fn func(*Flag)) {
+	if len(f.actual) == 0 {
+		return
+	}
+
 	var flags []*Flag
 	if f.SortFlags {
-		flags = sortFlags(f.actual)
+		if len(f.actual) != len(f.sortedActual) {
+			f.sortedActual = sortFlags(f.actual)
+		}
+		flags = f.sortedActual
 	} else {
 		flags = f.orderedActual
 	}

@@ -20,14 +20,18 @@ import (
 	"sync"
 
 	"github.com/coreos/etcd/clientv3"
+	"github.com/coreos/etcd/clientv3/namespace"
 	pb "github.com/coreos/etcd/etcdserver/etcdserverpb"
 	"github.com/coreos/etcd/proxy/grpcproxy"
+	"github.com/coreos/etcd/proxy/grpcproxy/adapter"
 )
 
 var (
 	pmu     sync.Mutex
 	proxies map[*clientv3.Client]grpcClientProxy = make(map[*clientv3.Client]grpcClientProxy)
 )
+
+const proxyNamespace = "proxy-namespace"
 
 type grpcClientProxy struct {
 	grpc    grpcAPI
@@ -43,15 +47,24 @@ func toGRPC(c *clientv3.Client) grpcAPI {
 	if v, ok := proxies[c]; ok {
 		return v.grpc
 	}
+
+	// test namespacing proxy
+	c.KV = namespace.NewKV(c.KV, proxyNamespace)
+	c.Watcher = namespace.NewWatcher(c.Watcher, proxyNamespace)
+	c.Lease = namespace.NewLease(c.Lease, proxyNamespace)
+	// test coalescing/caching proxy
 	kvp, kvpch := grpcproxy.NewKvProxy(c)
 	wp, wpch := grpcproxy.NewWatchProxy(c)
 	lp, lpch := grpcproxy.NewLeaseProxy(c)
+	mp := grpcproxy.NewMaintenanceProxy(c)
+	clp, _ := grpcproxy.NewClusterProxy(c, "", "") // without registering proxy URLs
+
 	grpc := grpcAPI{
-		pb.NewClusterClient(c.ActiveConnection()),
-		grpcproxy.KvServerToKvClient(kvp),
-		grpcproxy.LeaseServerToLeaseClient(lp),
-		grpcproxy.WatchServerToWatchClient(wp),
-		pb.NewMaintenanceClient(c.ActiveConnection()),
+		adapter.ClusterServerToClusterClient(clp),
+		adapter.KvServerToKvClient(kvp),
+		adapter.LeaseServerToLeaseClient(lp),
+		adapter.WatchServerToWatchClient(wp),
+		adapter.MaintenanceServerToMaintenanceClient(mp),
 		pb.NewAuthClient(c.ActiveConnection()),
 	}
 	proxies[c] = grpcClientProxy{grpc: grpc, wdonec: wpch, kvdonec: kvpch, lpdonec: lpch}
