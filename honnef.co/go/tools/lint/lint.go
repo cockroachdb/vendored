@@ -426,7 +426,7 @@ func (j *Job) IsGoVersion(minor int) bool {
 	return j.Program.GoVersion >= minor
 }
 
-func (j *Job) IsFunctionCallName(node ast.Node, name string) bool {
+func (j *Job) IsCallToAST(node ast.Node, name string) bool {
 	call, ok := node.(*ast.CallExpr)
 	if !ok {
 		return false
@@ -439,9 +439,9 @@ func (j *Job) IsFunctionCallName(node ast.Node, name string) bool {
 	return ok && fn.FullName() == name
 }
 
-func (j *Job) IsFunctionCallNameAny(node ast.Node, names ...string) bool {
+func (j *Job) IsCallToAnyAST(node ast.Node, names ...string) bool {
 	for _, name := range names {
-		if j.IsFunctionCallName(node, name) {
+		if j.IsCallToAST(node, name) {
 			return true
 		}
 	}

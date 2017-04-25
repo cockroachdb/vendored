@@ -57,6 +57,8 @@ func (c *Checker) Funcs() map[string]lint.Func {
 		"S1024": c.LintTimeUntil,
 		"S1025": c.LintRedundantSprintf,
 		"S1026": c.LintStringCopy,
+		"S1027": c.LintRedundantReturn,
+		"S1028": c.LintErrorsNewSprintf,
 	}
 }
 
@@ -322,7 +324,7 @@ func (c *Checker) LintBytesCompare(j *lint.Job) {
 		if !ok {
 			return true
 		}
-		if !j.IsFunctionCallName(call, "bytes.Compare") {
+		if !j.IsCallToAST(call, "bytes.Compare") {
 			return true
 		}
 		value, ok := j.ExprToInt(expr.Y)
@@ -385,8 +387,8 @@ func (c *Checker) LintRegexpRaw(j *lint.Job) {
 		if !ok {
 			return true
 		}
-		if !j.IsFunctionCallName(call, "regexp.MustCompile") &&
-			!j.IsFunctionCallName(call, "regexp.Compile") {
+		if !j.IsCallToAST(call, "regexp.MustCompile") &&
+			!j.IsCallToAST(call, "regexp.Compile") {
 			return true
 		}
 		sel, ok := call.Fun.(*ast.SelectorExpr)
@@ -775,7 +777,7 @@ func (c *Checker) LintTimeSince(j *lint.Job) {
 		if !ok {
 			return true
 		}
-		if !j.IsFunctionCallName(sel.X, "time.Now") {
+		if !j.IsCallToAST(sel.X, "time.Now") {
 			return true
 		}
 		if sel.Sel.Name != "Sub" {
@@ -798,10 +800,10 @@ func (c *Checker) LintTimeUntil(j *lint.Job) {
 		if !ok {
 			return true
 		}
-		if !j.IsFunctionCallName(call, "(time.Time).Sub") {
+		if !j.IsCallToAST(call, "(time.Time).Sub") {
 			return true
 		}
-		if !j.IsFunctionCallName(call.Args[0], "time.Now") {
+		if !j.IsCallToAST(call.Args[0], "time.Now") {
 			return true
 		}
 		j.Errorf(call, "should use time.Until instead of t.Sub(time.Now())")
@@ -997,7 +999,7 @@ func (c *Checker) LintFormatInt(j *lint.Job) {
 		if !ok {
 			return true
 		}
-		if !j.IsFunctionCallName(call, "strconv.FormatInt") {
+		if !j.IsCallToAST(call, "strconv.FormatInt") {
 			return true
 		}
 		if len(call.Args) != 2 {
@@ -1677,7 +1679,7 @@ func (c *Checker) LintRedundantSprintf(j *lint.Job) {
 		if !ok {
 			return true
 		}
-		if !j.IsFunctionCallName(call, "fmt.Sprintf") {
+		if !j.IsCallToAST(call, "fmt.Sprintf") {
 			return true
 		}
 		if len(call.Args) != 2 {
@@ -1760,6 +1762,57 @@ func (c *Checker) LintStringCopy(j *lint.Job) {
 			j.Errorf(x, "should use %s instead of %s",
 				j.Render(nested.Args[0]), j.Render(x))
 		}
+		return true
+	}
+	for _, f := range c.filterGenerated(j.Program.Files) {
+		ast.Inspect(f, fn)
+	}
+}
+
+func (c *Checker) LintRedundantReturn(j *lint.Job) {
+	fn := func(node ast.Node) bool {
+		var ret *ast.FieldList
+		var body *ast.BlockStmt
+		switch x := node.(type) {
+		case *ast.FuncDecl:
+			ret = x.Type.Results
+			body = x.Body
+		case *ast.FuncLit:
+			ret = x.Type.Results
+			body = x.Body
+		default:
+			return true
+		}
+		// if the func has results, a return can't be redundant.
+		// similarly, if there are no statements, there can be
+		// no return.
+		if ret != nil || body == nil || len(body.List) < 1 {
+			return true
+		}
+		rst, ok := body.List[len(body.List)-1].(*ast.ReturnStmt)
+		if !ok {
+			return true
+		}
+		// we don't need to check rst.Results as we already
+		// checked x.Type.Results to be nil.
+		j.Errorf(rst, "redundant return statement")
+		return true
+	}
+	for _, f := range c.filterGenerated(j.Program.Files) {
+		ast.Inspect(f, fn)
+	}
+}
+
+func (c *Checker) LintErrorsNewSprintf(j *lint.Job) {
+	fn := func(node ast.Node) bool {
+		if !j.IsCallToAST(node, "errors.New") {
+			return true
+		}
+		call := node.(*ast.CallExpr)
+		if !j.IsCallToAST(call.Args[0], "fmt.Sprintf") {
+			return true
+		}
+		j.Errorf(node, "should use fmt.Errorf(...) instead of errors.New(fmt.Sprintf(...))")
 		return true
 	}
 	for _, f := range c.filterGenerated(j.Program.Files) {

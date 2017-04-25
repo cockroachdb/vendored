@@ -234,7 +234,7 @@ func (c *Checker) Funcs() map[string]lint.Func {
 		"SA4007": nil,
 		"SA4008": c.CheckLoopCondition,
 		"SA4009": c.CheckArgOverwritten,
-		"SA4010": nil,
+		"SA4010": c.CheckIneffectiveAppend,
 		"SA4011": c.CheckScopedBreak,
 		"SA4012": c.CheckNaNComparison,
 		"SA4013": c.CheckDoubleNegation,
@@ -475,7 +475,7 @@ func (c *Checker) CheckUntrappableSignal(j *lint.Job) {
 		if !ok {
 			return true
 		}
-		if !j.IsFunctionCallNameAny(call,
+		if !j.IsCallToAnyAST(call,
 			"os/signal.Ignore", "os/signal.Notify", "os/signal.Reset") {
 			return true
 		}
@@ -505,16 +505,16 @@ func (c *Checker) CheckTemplate(j *lint.Job) {
 			return true
 		}
 		var kind string
-		if j.IsFunctionCallName(call, "(*text/template.Template).Parse") {
+		if j.IsCallToAST(call, "(*text/template.Template).Parse") {
 			kind = "text"
-		} else if j.IsFunctionCallName(call, "(*html/template.Template).Parse") {
+		} else if j.IsCallToAST(call, "(*html/template.Template).Parse") {
 			kind = "html"
 		} else {
 			return true
 		}
 		sel := call.Fun.(*ast.SelectorExpr)
-		if !j.IsFunctionCallName(sel.X, "text/template.New") &&
-			!j.IsFunctionCallName(sel.X, "html/template.New") {
+		if !j.IsCallToAST(sel.X, "text/template.New") &&
+			!j.IsCallToAST(sel.X, "html/template.New") {
 			// TODO(dh): this is a cheap workaround for templates with
 			// different delims. A better solution with less false
 			// negatives would use data flow analysis to see where the
@@ -551,7 +551,7 @@ func (c *Checker) CheckTimeSleepConstant(j *lint.Job) {
 		if !ok {
 			return true
 		}
-		if !j.IsFunctionCallName(call, "time.Sleep") {
+		if !j.IsCallToAST(call, "time.Sleep") {
 			return true
 		}
 		lit, ok := call.Args[0].(*ast.BasicLit)
@@ -739,7 +739,7 @@ func (c *Checker) CheckTestMainExit(j *lint.Job) {
 
 		callsExit := false
 		fn3 := func(node ast.Node) bool {
-			if j.IsFunctionCallName(node, "os.Exit") {
+			if j.IsCallToAST(node, "os.Exit") {
 				callsExit = true
 				return false
 			}
@@ -781,7 +781,7 @@ func (c *Checker) CheckExec(j *lint.Job) {
 		if !ok {
 			return true
 		}
-		if !j.IsFunctionCallName(call, "os/exec.Command") {
+		if !j.IsCallToAST(call, "os/exec.Command") {
 			return true
 		}
 		val, ok := j.ExprToString(call.Args[0])
@@ -921,7 +921,7 @@ func (c *Checker) CheckUnsafePrintf(j *lint.Job) {
 		if !ok {
 			return true
 		}
-		if !j.IsFunctionCallNameAny(call, "fmt.Printf", "fmt.Sprintf", "log.Printf") {
+		if !j.IsCallToAnyAST(call, "fmt.Printf", "fmt.Sprintf", "log.Printf") {
 			return true
 		}
 		if len(call.Args) != 1 {
@@ -1850,6 +1850,72 @@ func (c *Checker) CheckSeeker(j *lint.Job) {
 	}
 	for _, f := range j.Program.Files {
 		ast.Inspect(f, fn)
+	}
+}
+
+func (c *Checker) CheckIneffectiveAppend(j *lint.Job) {
+	isAppend := func(ins ssa.Value) bool {
+		call, ok := ins.(*ssa.Call)
+		if !ok {
+			return false
+		}
+		if call.Call.IsInvoke() {
+			return false
+		}
+		if builtin, ok := call.Call.Value.(*ssa.Builtin); !ok || builtin.Name() != "append" {
+			return false
+		}
+		return true
+	}
+
+	for _, ssafn := range j.Program.InitialFunctions {
+		for _, block := range ssafn.Blocks {
+			for _, ins := range block.Instrs {
+				val, ok := ins.(ssa.Value)
+				if !ok || !isAppend(val) {
+					continue
+				}
+
+				isUsed := false
+				visited := map[ssa.Instruction]bool{}
+				var walkRefs func(refs []ssa.Instruction)
+				walkRefs = func(refs []ssa.Instruction) {
+				loop:
+					for _, ref := range refs {
+						if visited[ref] {
+							continue
+						}
+						visited[ref] = true
+						if _, ok := ref.(*ssa.DebugRef); ok {
+							continue
+						}
+						switch ref := ref.(type) {
+						case *ssa.Phi:
+							walkRefs(*ref.Referrers())
+						case *ssa.Sigma:
+							walkRefs(*ref.Referrers())
+						case ssa.Value:
+							if !isAppend(ref) {
+								isUsed = true
+							} else {
+								walkRefs(*ref.Referrers())
+							}
+						case ssa.Instruction:
+							isUsed = true
+							break loop
+						}
+					}
+				}
+				refs := val.Referrers()
+				if refs == nil {
+					continue
+				}
+				walkRefs(*refs)
+				if !isUsed {
+					j.Errorf(ins, "this result of append is never used, except maybe in other appends")
+				}
+			}
+		}
 	}
 }
 
