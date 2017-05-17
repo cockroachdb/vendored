@@ -41,6 +41,7 @@ import (
 	"golang.org/x/net/context"
 
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/keepalive"
 )
 
 const tlsDir = "testdata/"
@@ -66,6 +67,18 @@ func TestTLSDialTimeout(t *testing.T) {
 	}
 	if err != context.DeadlineExceeded {
 		t.Fatalf("Dial(_, _) = %v, %v, want %v", conn, err, context.DeadlineExceeded)
+	}
+}
+
+func TestDefaultAuthority(t *testing.T) {
+	target := "Non-Existent.Server:8080"
+	conn, err := Dial(target, WithInsecure())
+	if err != nil {
+		t.Fatalf("Dial(_, _) = _, %v, want _, <nil>", err)
+	}
+	conn.Close()
+	if conn.authority != target {
+		t.Fatalf("%v.authority = %v, want %v", conn, conn.authority, target)
 	}
 }
 
@@ -282,15 +295,46 @@ func (b *emptyBalancer) Close() error {
 
 func TestNonblockingDialWithEmptyBalancer(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	dialDone := make(chan struct{})
+	defer cancel()
+	dialDone := make(chan error)
 	go func() {
-		conn, err := DialContext(ctx, "Non-Existent.Server:80", WithInsecure(), WithBalancer(newEmptyBalancer()))
-		if err != nil {
-			t.Fatalf("unexpected error dialing connection: %v", err)
-		}
-		conn.Close()
-		close(dialDone)
+		dialDone <- func() error {
+			conn, err := DialContext(ctx, "Non-Existent.Server:80", WithInsecure(), WithBalancer(newEmptyBalancer()))
+			if err != nil {
+				return err
+			}
+			return conn.Close()
+		}()
 	}()
-	<-dialDone
-	cancel()
+	if err := <-dialDone; err != nil {
+		t.Fatalf("unexpected error dialing connection: %s", err)
+	}
+}
+
+func TestClientUpdatesParamsAfterGoAway(t *testing.T) {
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen. Err: %v", err)
+	}
+	defer lis.Close()
+	addr := lis.Addr().String()
+	s := NewServer()
+	go s.Serve(lis)
+	defer s.Stop()
+	cc, err := Dial(addr, WithBlock(), WithInsecure(), WithKeepaliveParams(keepalive.ClientParameters{
+		Time:                50 * time.Millisecond,
+		Timeout:             1 * time.Millisecond,
+		PermitWithoutStream: true,
+	}))
+	if err != nil {
+		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
+	}
+	defer cc.Close()
+	time.Sleep(1 * time.Second)
+	cc.mu.RLock()
+	defer cc.mu.RUnlock()
+	v := cc.mkp.Time
+	if v < 100*time.Millisecond {
+		t.Fatalf("cc.dopts.copts.Keepalive.Time = %v , want 100ms", v)
+	}
 }
