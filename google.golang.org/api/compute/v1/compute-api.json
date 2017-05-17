@@ -1,11 +1,11 @@
 {
  "kind": "discovery#restDescription",
- "etag": "\"YWOzh2SDasdU84ArJnpYek-OMdg/Jd_rZl9yiuNZcWvcgDDlnKBhwlY\"",
+ "etag": "\"YWOzh2SDasdU84ArJnpYek-OMdg/3btFW0E1ousFJmi4fe3MPtPMoc8\"",
  "discoveryVersion": "v1",
  "id": "compute:v1",
  "name": "compute",
  "version": "v1",
- "revision": "20170329",
+ "revision": "20170423",
  "title": "Compute Engine API",
  "description": "Creates and runs virtual machines on Google Cloud Platform.",
  "ownerDomain": "google.com",
@@ -699,11 +699,11 @@
    "properties": {
     "metric": {
      "type": "string",
-     "description": "The identifier of the Stackdriver Monitoring metric. The metric cannot have negative values and should be a utilization metric, which means that the number of virtual machines handling requests should increase or decrease proportionally to the metric. The metric must also have a label of compute.googleapis.com/resource_id with the value of the instance's unique ID, although this alone does not guarantee that the metric is valid.\n\nFor example, the following is a valid metric:\ncompute.googleapis.com/instance/network/received_bytes_count\nThe following is not a valid metric because it does not increase or decrease based on usage:\ncompute.googleapis.com/instance/cpu/reserved_cores"
+     "description": "The identifier (type) of the Stackdriver Monitoring metric. The metric cannot have negative values and should be a utilization metric, which means that the number of virtual machines handling requests should increase or decrease proportionally to the metric.\n\nThe metric must have a value type of INT64 or DOUBLE."
     },
     "utilizationTarget": {
      "type": "number",
-     "description": "Target value of the metric which autoscaler should maintain. Must be a positive value.",
+     "description": "The target value of the metric that autoscaler should maintain. This must be a positive value.\n\nFor example, a good metric to use as a utilization_target is compute.googleapis.com/instance/network/received_bytes_count. The autoscaler will work to keep this value constant for each of the instances.",
      "format": "double"
     },
     "utilizationTargetType": {
@@ -783,7 +783,7 @@
     },
     "maxRatePerInstance": {
      "type": "number",
-     "description": "The max requests per second (RPS) that a single backend instance can handle.This is used to calculate the capacity of the group. Can be used in either balancing mode. For RATE mode, either maxRate or maxRatePerInstance must be set.\n\nThis cannot be used for internal load balancing.",
+     "description": "The max requests per second (RPS) that a single backend instance can handle. This is used to calculate the capacity of the group. Can be used in either balancing mode. For RATE mode, either maxRate or maxRatePerInstance must be set.\n\nThis cannot be used for internal load balancing.",
      "format": "float"
     },
     "maxUtilization": {
@@ -913,6 +913,9 @@
      "items": {
       "type": "string"
      }
+    },
+    "iap": {
+     "$ref": "BackendServiceIAP"
     },
     "id": {
      "type": "string",
@@ -1059,6 +1062,26 @@
      "type": "string",
      "description": "[Output Only] Type of resource. Always compute#backendServiceGroupHealth for the health of backend services.",
      "default": "compute#backendServiceGroupHealth"
+    }
+   }
+  },
+  "BackendServiceIAP": {
+   "id": "BackendServiceIAP",
+   "type": "object",
+   "description": "Identity-Aware Proxy",
+   "properties": {
+    "enabled": {
+     "type": "boolean"
+    },
+    "oauth2ClientId": {
+     "type": "string"
+    },
+    "oauth2ClientSecret": {
+     "type": "string"
+    },
+    "oauth2ClientSecretSha256": {
+     "type": "string",
+     "description": "[Output Only] SHA256 hash value for the field oauth2_client_secret above."
     }
    }
   },
@@ -1825,7 +1848,7 @@
     },
     "kind": {
      "type": "string",
-     "description": "[Output Ony] Type of the resource. Always compute#firewall for firewall rules.",
+     "description": "[Output Only] Type of the resource. Always compute#firewall for firewall rules.",
      "default": "compute#firewall"
     },
     "name": {
@@ -1904,7 +1927,7 @@
   "ForwardingRule": {
    "id": "ForwardingRule",
    "type": "object",
-   "description": "A ForwardingRule resource. A ForwardingRule resource specifies which pool of target virtual machines to forward a packet to if it matches the given [IPAddress, IPProtocol, portRange] tuple.",
+   "description": "A ForwardingRule resource. A ForwardingRule resource specifies which pool of target virtual machines to forward a packet to if it matches the given [IPAddress, IPProtocol, ports] tuple.",
    "properties": {
     "IPAddress": {
      "type": "string",
@@ -1977,11 +2000,11 @@
     },
     "portRange": {
      "type": "string",
-     "description": "Applicable only when IPProtocol is TCP, UDP, or SCTP, only packets addressed to ports in the specified range will be forwarded to target. Forwarding rules with the same [IPAddress, IPProtocol] pair must have disjoint port ranges.\n\nThis field is not used for internal load balancing."
+     "description": "This field is used along with the target field for TargetHttpProxy, TargetHttpsProxy, TargetSslProxy, TargetTcpProxy, TargetVpnGateway, TargetPool, TargetInstance.\n\nApplicable only when IPProtocol is TCP, UDP, or SCTP, only packets addressed to ports in the specified range will be forwarded to target. Forwarding rules with the same [IPAddress, IPProtocol] pair must have disjoint port ranges.\n\nSome types of forwarding target have constraints on the acceptable ports:  \n- TargetHttpProxy: 80, 8080 \n- TargetHttpsProxy: 443 \n- TargetSslProxy: 443 \n- TargetVpnGateway: 500, 4500\n-"
     },
     "ports": {
      "type": "array",
-     "description": "This field is not used for external load balancing.\n\nWhen the load balancing scheme is INTERNAL, a single port or a comma separated list of ports can be configured. Only packets addressed to these ports will be forwarded to the backends configured with this forwarding rule.\n\nYou may specify a maximum of up to 5 ports.",
+     "description": "This field is used along with the backend_service field for internal load balancing.\n\nWhen the load balancing scheme is INTERNAL, a single port or a comma separated list of ports can be configured. Only packets addressed to these ports will be forwarded to the backends configured with this forwarding rule.\n\nYou may specify a maximum of up to 5 ports.",
      "items": {
       "type": "string"
      }
@@ -2646,7 +2669,7 @@
     },
     "guestOsFeatures": {
      "type": "array",
-     "description": "A list of features to enable on the guest OS. Applicable for bootable images only. Currently, only one feature can be enabled, VIRTIO_SCSCI_MULTIQUEUE, which allows each virtual CPU to have its own queue. For Windows images, you can only enable VIRTIO_SCSCI_MULTIQUEUE on images with driver version 1.2.0.1621 or higher. Linux images with kernel versions 3.17 and higher will support VIRTIO_SCSCI_MULTIQUEUE.\n\nFor new Windows images, the server might also populate this field with the value WINDOWS, to indicate that this is a Windows image. This value is purely informational and does not enable or disable any features.",
+     "description": "A list of features to enable on the guest OS. Applicable for bootable images only. Currently, only one feature can be enabled, VIRTIO_SCSI_MULTIQUEUE, which allows each virtual CPU to have its own queue. For Windows images, you can only enable VIRTIO_SCSI_MULTIQUEUE on images with driver version 1.2.0.1621 or higher. Linux images with kernel versions 3.17 and higher will support VIRTIO_SCSI_MULTIQUEUE.\n\nFor new Windows images, the server might also populate this field with the value WINDOWS, to indicate that this is a Windows image. This value is purely informational and does not enable or disable any features.",
      "items": {
       "$ref": "GuestOsFeature"
      }
@@ -3283,7 +3306,7 @@
    "properties": {
     "instances": {
      "type": "array",
-     "description": "The URL for one or more instances to abandon from the managed instance group.",
+     "description": "The URLs of one or more instances to abandon. This can be a full URL or a partial URL, such as zones/[ZONE]/instances/[INSTANCE_NAME].",
      "items": {
       "type": "string"
      }
@@ -3296,7 +3319,7 @@
    "properties": {
     "instances": {
      "type": "array",
-     "description": "The list of instances to delete from this managed instance group. Specify one or more instance URLs.",
+     "description": "The URLs of one or more instances to delete. This can be a full URL or a partial URL, such as zones/[ZONE]/instances/[INSTANCE_NAME].",
      "items": {
       "type": "string"
      }
@@ -3322,7 +3345,7 @@
    "properties": {
     "instances": {
      "type": "array",
-     "description": "The URL for one or more instances to recreate.",
+     "description": "The URLs of one or more instances to recreate. This can be a full URL or a partial URL, such as zones/[ZONE]/instances/[INSTANCE_NAME].",
      "items": {
       "type": "string"
      }
@@ -5258,7 +5281,7 @@
    "properties": {
     "instances": {
      "type": "array",
-     "description": "The URL for one or more instances to recreate.",
+     "description": "The URLs of one or more instances to recreate. This can be a full URL or a partial URL, such as zones/[ZONE]/instances/[INSTANCE_NAME].",
      "items": {
       "type": "string"
      }
@@ -5810,6 +5833,13 @@
     "bestRoutes": {
      "type": "array",
      "description": "Best routes for this router's network.",
+     "items": {
+      "$ref": "Route"
+     }
+    },
+    "bestRoutesForRouter": {
+     "type": "array",
+     "description": "Best routes learned by this router.",
      "items": {
       "$ref": "Route"
      }
@@ -10336,7 +10366,7 @@
      "id": "compute.globalForwardingRules.delete",
      "path": "{project}/global/forwardingRules/{forwardingRule}",
      "httpMethod": "DELETE",
-     "description": "Deletes the specified ForwardingRule resource.",
+     "description": "Deletes the specified GlobalForwardingRule resource.",
      "parameters": {
       "forwardingRule": {
        "type": "string",
@@ -10369,7 +10399,7 @@
      "id": "compute.globalForwardingRules.get",
      "path": "{project}/global/forwardingRules/{forwardingRule}",
      "httpMethod": "GET",
-     "description": "Returns the specified ForwardingRule resource. Get a list of available forwarding rules by making a list() request.",
+     "description": "Returns the specified GlobalForwardingRule resource. Get a list of available forwarding rules by making a list() request.",
      "parameters": {
       "forwardingRule": {
        "type": "string",
@@ -10403,7 +10433,7 @@
      "id": "compute.globalForwardingRules.insert",
      "path": "{project}/global/forwardingRules",
      "httpMethod": "POST",
-     "description": "Creates a ForwardingRule resource in the specified project and region using the data included in the request.",
+     "description": "Creates a GlobalForwardingRule resource in the specified project using the data included in the request.",
      "parameters": {
       "project": {
        "type": "string",
@@ -10431,7 +10461,7 @@
      "id": "compute.globalForwardingRules.list",
      "path": "{project}/global/forwardingRules",
      "httpMethod": "GET",
-     "description": "Retrieves a list of ForwardingRule resources available to the specified project.",
+     "description": "Retrieves a list of GlobalForwardingRule resources available to the specified project.",
      "parameters": {
       "filter": {
        "type": "string",
@@ -10480,7 +10510,7 @@
      "id": "compute.globalForwardingRules.setTarget",
      "path": "{project}/global/forwardingRules/{forwardingRule}/setTarget",
      "httpMethod": "POST",
-     "description": "Changes target URL for forwarding rule. The new target should be of the same type as the old target.",
+     "description": "Changes target URL for the GlobalForwardingRule resource. The new target should be of the same type as the old target.",
      "parameters": {
       "forwardingRule": {
        "type": "string",
@@ -12772,7 +12802,7 @@
      "id": "compute.instances.attachDisk",
      "path": "{project}/zones/{zone}/instances/{instance}/attachDisk",
      "httpMethod": "POST",
-     "description": "Attaches a Disk resource to an instance.",
+     "description": "Attaches an existing Disk resource to an instance. You must first create the disk before you can attach it. It is not possible to create and attach a disk at the same time. For more information, read Adding a persistent disk to your instance.",
      "parameters": {
       "instance": {
        "type": "string",
@@ -16710,7 +16740,7 @@
      "id": "compute.subnetworks.setPrivateIpGoogleAccess",
      "path": "{project}/regions/{region}/subnetworks/{subnetwork}/setPrivateIpGoogleAccess",
      "httpMethod": "POST",
-     "description": "Set whether VMs in this subnet can access Google services without assigning external IP addresses through Cloudpath.",
+     "description": "Set whether VMs in this subnet can access Google services without assigning external IP addresses through Private Google Access.",
      "parameters": {
       "project": {
        "type": "string",

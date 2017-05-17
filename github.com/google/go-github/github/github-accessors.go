@@ -620,6 +620,22 @@ func (c *CommitStats) GetTotal() int {
 	return *c.Total
 }
 
+// GetHealthPercentage returns the HealthPercentage field if it's non-nil, zero value otherwise.
+func (c *CommunityHealthMetrics) GetHealthPercentage() int {
+	if c == nil || c.HealthPercentage == nil {
+		return 0
+	}
+	return *c.HealthPercentage
+}
+
+// GetUpdatedAt returns the UpdatedAt field if it's non-nil, zero value otherwise.
+func (c *CommunityHealthMetrics) GetUpdatedAt() time.Time {
+	if c == nil || c.UpdatedAt == nil {
+		return time.Time{}
+	}
+	return *c.UpdatedAt
+}
+
 // GetAvatarURL returns the AvatarURL field if it's non-nil, zero value otherwise.
 func (c *Contributor) GetAvatarURL() string {
 	if c == nil || c.AvatarURL == nil {
@@ -2556,6 +2572,38 @@ func (m *MembershipEvent) GetScope() string {
 	return *m.Scope
 }
 
+// GetHTMLURL returns the HTMLURL field if it's non-nil, zero value otherwise.
+func (m *Metric) GetHTMLURL() string {
+	if m == nil || m.HTMLURL == nil {
+		return ""
+	}
+	return *m.HTMLURL
+}
+
+// GetKey returns the Key field if it's non-nil, zero value otherwise.
+func (m *Metric) GetKey() string {
+	if m == nil || m.Key == nil {
+		return ""
+	}
+	return *m.Key
+}
+
+// GetName returns the Name field if it's non-nil, zero value otherwise.
+func (m *Metric) GetName() string {
+	if m == nil || m.Name == nil {
+		return ""
+	}
+	return *m.Name
+}
+
+// GetURL returns the URL field if it's non-nil, zero value otherwise.
+func (m *Metric) GetURL() string {
+	if m == nil || m.URL == nil {
+		return ""
+	}
+	return *m.URL
+}
+
 // GetCreatedAt returns the CreatedAt field if it's non-nil, zero value otherwise.
 func (m *Migration) GetCreatedAt() string {
 	if m == nil || m.CreatedAt == nil {
@@ -3110,6 +3158,14 @@ func (o *Organization) GetURL() string {
 
 // GetAction returns the Action field if it's non-nil, zero value otherwise.
 func (o *OrganizationEvent) GetAction() string {
+	if o == nil || o.Action == nil {
+		return ""
+	}
+	return *o.Action
+}
+
+// GetAction returns the Action field if it's non-nil, zero value otherwise.
+func (o *OrgBlockEvent) GetAction() string {
 	if o == nil || o.Action == nil {
 		return ""
 	}
@@ -6626,6 +6682,14 @@ func (t *TreeEntry) GetType() string {
 		return ""
 	}
 	return *t.Type
+}
+
+// GetURL returns the URL field if it's non-nil, zero value otherwise.
+func (t *TreeEntry) GetURL() string {
+	if t == nil || t.URL == nil {
+		return ""
+	}
+	return *t.URL
 }
 
 // GetForce returns the Force field if it's non-nil, zero value otherwise.

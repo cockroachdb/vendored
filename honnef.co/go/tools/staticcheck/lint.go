@@ -17,6 +17,7 @@ import (
 
 	"honnef.co/go/tools/functions"
 	"honnef.co/go/tools/gcsizes"
+	"honnef.co/go/tools/internal/sharedcheck"
 	"honnef.co/go/tools/lint"
 	"honnef.co/go/tools/ssa"
 	"honnef.co/go/tools/staticcheck/vrp"
@@ -32,10 +33,23 @@ func validRegexp(call *Call) {
 	}
 }
 
+type runeSlice []rune
+
+func (rs runeSlice) Len() int               { return len(rs) }
+func (rs runeSlice) Less(i int, j int) bool { return rs[i] < rs[j] }
+func (rs runeSlice) Swap(i int, j int)      { rs[i], rs[j] = rs[j], rs[i] }
+
 func utf8Cutset(call *Call) {
 	arg := call.Args[1]
 	if InvalidUTF8(arg.Value) {
 		arg.Invalid(MsgInvalidUTF8)
+	}
+}
+
+func uniqueCutset(call *Call) {
+	arg := call.Args[1]
+	if !UniqueStringCutset(arg.Value) {
+		arg.Invalid(MsgNonUniqueCutset)
 	}
 }
 
@@ -96,7 +110,7 @@ var (
 		},
 	}
 
-	checkDubiousSyncPoolSizeRules = map[string]CallCheck{
+	checkSyncPoolSizeRules = map[string]CallCheck{
 		"(*sync.Pool).Put": func(call *Call) {
 			// TODO(dh): allow users to pass in a custom build environment
 			sizes := gcsizes.ForArch(build.Default.GOARCH)
@@ -126,6 +140,12 @@ var (
 		"strings.Trim":         utf8Cutset,
 		"strings.TrimLeft":     utf8Cutset,
 		"strings.TrimRight":    utf8Cutset,
+	}
+
+	checkUniqueCutsetRules = map[string]CallCheck{
+		"strings.Trim":      uniqueCutset,
+		"strings.TrimLeft":  uniqueCutset,
+		"strings.TrimRight": uniqueCutset,
 	}
 
 	checkUnmarshalPointerRules = map[string]CallCheck{
@@ -214,6 +234,7 @@ func (c *Checker) Funcs() map[string]lint.Func {
 		"SA1021": c.callChecker(checkBytesEqualIPRules),
 		"SA1022": c.CheckFlagUsage,
 		"SA1023": c.CheckWriterBufferModified,
+		"SA1024": c.callChecker(checkUniqueCutsetRules),
 
 		"SA2000": c.CheckWaitgroupAdd,
 		"SA2001": c.CheckEmptyCriticalSection,
@@ -254,8 +275,10 @@ func (c *Checker) Funcs() map[string]lint.Func {
 
 		"SA6000": c.callChecker(checkRegexpMatchLoopRules),
 		"SA6001": c.CheckMapBytesKey,
+		"SA6002": c.callChecker(checkSyncPoolSizeRules),
+		"SA6003": c.CheckRangeStringRunes,
 
-		"SA9000": c.callChecker(checkDubiousSyncPoolSizeRules),
+		"SA9000": nil,
 		"SA9001": c.CheckDubiousDeferInChannelRangeLoop,
 		"SA9002": c.CheckNonOctalFileMode,
 		"SA9003": c.CheckEmptyBranch,
@@ -623,10 +646,36 @@ func (c *Checker) CheckWaitgroupAdd(j *lint.Job) {
 func (c *Checker) CheckInfiniteEmptyLoop(j *lint.Job) {
 	fn := func(node ast.Node) bool {
 		loop, ok := node.(*ast.ForStmt)
-		if !ok || len(loop.Body.List) != 0 || loop.Cond != nil || loop.Init != nil {
+		if !ok || len(loop.Body.List) != 0 || loop.Post != nil {
 			return true
 		}
-		j.Errorf(loop, "should not use an infinite empty loop. It will spin. Consider select{} instead.")
+
+		if loop.Init != nil {
+			// TODO(dh): this isn't strictly necessary, it just makes
+			// the check easier.
+			return true
+		}
+		// An empty loop is bad news in two cases: 1) The loop has no
+		// condition. In that case, it's just a loop that spins
+		// forever and as fast as it can, keeping a core busy. 2) The
+		// loop condition only consists of variable or field reads and
+		// operators on those. The only way those could change their
+		// value is with unsynchronised access, which constitutes a
+		// data race.
+		//
+		// If the condition contains any function calls, its behaviour
+		// is dynamic and the loop might terminate. Similarly for
+		// channel receives.
+
+		if loop.Cond != nil && hasSideEffects(loop.Cond) {
+			return true
+		}
+
+		j.Errorf(loop, "this loop will spin, using 100%% CPU")
+		if loop.Cond != nil {
+			j.Errorf(loop, "loop condition never changes or has a race condition")
+		}
+
 		return true
 	}
 	for _, f := range j.Program.Files {
@@ -2198,6 +2247,24 @@ func (c *Checker) CheckDoubleNegation(j *lint.Job) {
 	}
 }
 
+func hasSideEffects(node ast.Node) bool {
+	dynamic := false
+	ast.Inspect(node, func(node ast.Node) bool {
+		switch node := node.(type) {
+		case *ast.CallExpr:
+			dynamic = true
+			return false
+		case *ast.UnaryExpr:
+			if node.Op == token.ARROW {
+				dynamic = true
+				return false
+			}
+		}
+		return true
+	})
+	return dynamic
+}
+
 func (c *Checker) CheckRepeatedIfElse(j *lint.Job) {
 	seen := map[ast.Node]bool{}
 
@@ -2213,23 +2280,6 @@ func (c *Checker) CheckRepeatedIfElse(j *lint.Job) {
 		}
 		return inits, conds
 	}
-	isDynamic := func(node ast.Node) bool {
-		dynamic := false
-		ast.Inspect(node, func(node ast.Node) bool {
-			switch node := node.(type) {
-			case *ast.CallExpr:
-				dynamic = true
-				return false
-			case *ast.UnaryExpr:
-				if node.Op == token.ARROW {
-					dynamic = true
-					return false
-				}
-			}
-			return true
-		})
-		return dynamic
-	}
 	fn := func(node ast.Node) bool {
 		ifstmt, ok := node.(*ast.IfStmt)
 		if !ok {
@@ -2243,7 +2293,7 @@ func (c *Checker) CheckRepeatedIfElse(j *lint.Job) {
 			return true
 		}
 		for _, cond := range conds {
-			if isDynamic(cond) {
+			if hasSideEffects(cond) {
 				return true
 			}
 		}
@@ -2736,4 +2786,8 @@ func (c *Checker) CheckMapBytesKey(j *lint.Job) {
 			}
 		}
 	}
+}
+
+func (c *Checker) CheckRangeStringRunes(j *lint.Job) {
+	sharedcheck.CheckRangeStringRunes(c.nodeFns, j)
 }

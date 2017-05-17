@@ -419,6 +419,9 @@ type AuthenticationRule struct {
 	// project.
 	AllowWithoutCredential bool `json:"allowWithoutCredential,omitempty"`
 
+	// CustomAuth: Configuration for custom authentication.
+	CustomAuth *CustomAuthRequirements `json:"customAuth,omitempty"`
+
 	// Oauth: The requirements for OAuth credentials.
 	Oauth *OAuthRequirements `json:"oauth,omitempty"`
 
@@ -538,6 +541,11 @@ type BackendRule struct {
 	// default depends on the deployment context.
 	Deadline float64 `json:"deadline,omitempty"`
 
+	// MinDeadline: Minimum deadline in seconds needed for this method.
+	// Calls having deadline
+	// value lower than this will be rejected.
+	MinDeadline float64 `json:"minDeadline,omitempty"`
+
 	// Selector: Selects the methods to which this rule applies.
 	//
 	// Refer to selector for syntax details.
@@ -569,7 +577,8 @@ func (s *BackendRule) MarshalJSON() ([]byte, error) {
 func (s *BackendRule) UnmarshalJSON(data []byte) error {
 	type noMethod BackendRule
 	var s1 struct {
-		Deadline gensupport.JSONFloat64 `json:"deadline"`
+		Deadline    gensupport.JSONFloat64 `json:"deadline"`
+		MinDeadline gensupport.JSONFloat64 `json:"minDeadline"`
 		*noMethod
 	}
 	s1.noMethod = (*noMethod)(s)
@@ -577,6 +586,7 @@ func (s *BackendRule) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	s.Deadline = float64(s1.Deadline)
+	s.MinDeadline = float64(s1.MinDeadline)
 	return nil
 }
 
@@ -699,6 +709,39 @@ type Control struct {
 
 func (s *Control) MarshalJSON() ([]byte, error) {
 	type noMethod Control
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
+}
+
+// CustomAuthRequirements: Configuration for a custom authentication
+// provider.
+type CustomAuthRequirements struct {
+	// Provider: A configuration string containing connection information
+	// for the
+	// authentication provider, typically formatted as a SmartService
+	// string
+	// (go/smartservice).
+	Provider string `json:"provider,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "Provider") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+
+	// NullFields is a list of field names (e.g. "Provider") to include in
+	// API requests with the JSON null value. By default, fields with empty
+	// values are omitted from API requests. However, any field with an
+	// empty value appearing in NullFields will be sent to the server as
+	// null. It is an error if a field in this list has a non-empty value.
+	// This may be used to include null fields in Patch requests.
+	NullFields []string `json:"-"`
+}
+
+func (s *CustomAuthRequirements) MarshalJSON() ([]byte, error) {
+	type noMethod CustomAuthRequirements
 	raw := noMethod(*s)
 	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
 }
@@ -1646,6 +1689,29 @@ type HttpRule struct {
 	// present
 	// at the top-level of response message type.
 	ResponseBody string `json:"responseBody,omitempty"`
+
+	// RestCollection: Optional. The REST collection name is by default
+	// derived from the URL
+	// pattern. If specified, this field overrides the default collection
+	// name.
+	// Example:
+	//
+	//     rpc AddressesAggregatedList(AddressesAggregatedListRequest)
+	//         returns (AddressesAggregatedListResponse) {
+	//       option (google.api.http) = {
+	//         get: "/v1/projects/{project_id}/aggregated/addresses"
+	//         rest_collection: "projects.addresses"
+	//       };
+	//     }
+	//
+	// This method has the automatically derived collection
+	// name
+	// "projects.aggregated". Because, semantically, this rpc is actually
+	// an
+	// operation on the "projects.addresses" collection, the
+	// `rest_collection`
+	// field is configured to override the derived collection name.
+	RestCollection string `json:"restCollection,omitempty"`
 
 	// Selector: Selects methods to which this rule applies.
 	//
@@ -3595,7 +3661,7 @@ func (s *SourceInfo) MarshalJSON() ([]byte, error) {
 //
 // - Workflow errors. A typical workflow has multiple steps. Each step
 // may
-//     have a `Status` message for error reporting purpose.
+//     have a `Status` message for error reporting.
 //
 // - Batch operations. If a client uses batch request and batch
 // response, the
@@ -3665,9 +3731,14 @@ type Step struct {
 	//   "DONE" - The operation or step has completed without errors.
 	//   "NOT_STARTED" - The operation or step has not started yet.
 	//   "IN_PROGRESS" - The operation or step is in progress.
-	//   "FAILED" - The operation or step has completed with errors.
+	//   "FAILED" - The operation or step has completed with errors. If the
+	// operation is
+	// rollbackable, the rollback completed with errors too.
 	//   "CANCELLED" - The operation or step has completed with
 	// cancellation.
+	//   "FAILED_ROLLED_BACK" - The operation has completed with errors but
+	// rolled back
+	// successfully if the operation is rollbackable.
 	Status string `json:"status,omitempty"`
 
 	// ForceSendFields is a list of field names (e.g. "Description") to

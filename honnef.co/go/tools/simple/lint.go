@@ -11,7 +11,9 @@ import (
 	"strconv"
 	"strings"
 
+	"honnef.co/go/tools/internal/sharedcheck"
 	"honnef.co/go/tools/lint"
+	"honnef.co/go/tools/ssa"
 
 	"golang.org/x/tools/go/types/typeutil"
 )
@@ -19,6 +21,8 @@ import (
 type Checker struct {
 	CheckGenerated bool
 	MS             *typeutil.MethodSetCache
+
+	nodeFns map[ast.Node]*ssa.Function
 }
 
 func NewChecker() *Checker {
@@ -26,7 +30,10 @@ func NewChecker() *Checker {
 		MS: &typeutil.MethodSetCache{},
 	}
 }
-func (c *Checker) Init(*lint.Program) {}
+
+func (c *Checker) Init(prog *lint.Program) {
+	c.nodeFns = lint.NodeFns(prog.Packages)
+}
 
 func (c *Checker) Funcs() map[string]lint.Func {
 	return map[string]lint.Func{
@@ -59,6 +66,7 @@ func (c *Checker) Funcs() map[string]lint.Func {
 		"S1026": c.LintStringCopy,
 		"S1027": c.LintRedundantReturn,
 		"S1028": c.LintErrorsNewSprintf,
+		"S1029": c.LintRangeStringRunes,
 	}
 }
 
@@ -910,7 +918,7 @@ func (c *Checker) LintSimplerReturn(j *lint.Job) {
 					continue
 				}
 				_, idIface := id1Obj.Type().Underlying().(*types.Interface)
-				_, retIface := j.Program.Info.TypeOf(ret.List[ret.NumFields()-1].Type).Underlying().(*types.Interface)
+				_, retIface := j.Program.Info.TypeOf(ret.List[len(ret.List)-1].Type).Underlying().(*types.Interface)
 
 				if retIface && !idIface {
 					// When the return value is an interface, but the
@@ -969,11 +977,7 @@ func (c *Checker) LintFormatInt(j *lint.Job) {
 		if !ok {
 			return false
 		}
-		switch typ.Kind() {
-		case types.Int, types.Int32:
-			return true
-		}
-		return false
+		return typ.Kind() == types.Int
 	}
 	checkConst := func(v *ast.Ident) bool {
 		c, ok := j.Program.Info.ObjectOf(v).(*types.Const)
@@ -1651,29 +1655,36 @@ func (c *Checker) LintRedundantBreak(j *lint.Job) {
 	}
 }
 
-func (c *Checker) LintRedundantSprintf(j *lint.Job) {
-	isStringer := func(typ types.Type) bool {
-		m := c.MS.MethodSet(typ).Lookup(nil, "String")
-		if m == nil {
+func (c *Checker) Implements(j *lint.Job, typ types.Type, iface string) bool {
+	// OPT(dh): we can cache the type lookup
+	idx := strings.IndexRune(iface, '.')
+	var scope *types.Scope
+	var ifaceName string
+	if idx == -1 {
+		scope = types.Universe
+		ifaceName = iface
+	} else {
+		pkgName := iface[:idx]
+		pkg := j.Program.Prog.Package(pkgName)
+		if pkg == nil {
 			return false
 		}
-		fn, ok := m.Obj().(*types.Func)
-		if !ok {
-			// String is a field, not a method
-			return false
-		}
-		sig := fn.Type().(*types.Signature)
-		if sig.Params().Len() != 0 {
-			return false
-		}
-		if sig.Results().Len() != 1 {
-			return false
-		}
-		if sig.Results().At(0).Type() != types.Universe.Lookup("string").Type() {
-			return false
-		}
-		return true
+		scope = pkg.Pkg.Scope()
+		ifaceName = iface[idx+1:]
 	}
+
+	obj := scope.Lookup(ifaceName)
+	if obj == nil {
+		return false
+	}
+	i, ok := obj.Type().Underlying().(*types.Interface)
+	if !ok {
+		return false
+	}
+	return types.Implements(typ, i)
+}
+
+func (c *Checker) LintRedundantSprintf(j *lint.Job) {
 	fn := func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
 		if !ok {
@@ -1692,7 +1703,7 @@ func (c *Checker) LintRedundantSprintf(j *lint.Job) {
 		arg := call.Args[1]
 		typ := pkg.Info.TypeOf(arg)
 
-		if isStringer(typ) {
+		if c.Implements(j, typ, "fmt.Stringer") {
 			j.Errorf(call, "should use String() instead of fmt.Sprintf")
 			return true
 		}
@@ -1738,7 +1749,24 @@ func (c *Checker) LintStringCopy(j *lint.Job) {
 			}
 			j.Errorf(x, "should use %s instead of %s",
 				j.Render(want), j.Render(x))
-		case *ast.CallExpr: // string([]byte(s))
+		case *ast.CallExpr:
+			if j.IsCallToAST(x, "fmt.Sprint") && len(x.Args) == 1 {
+				// fmt.Sprint(x)
+
+				argT := j.Program.Info.TypeOf(x.Args[0])
+				bt, ok := argT.Underlying().(*types.Basic)
+				if !ok || bt.Kind() != types.String {
+					return true
+				}
+				if c.Implements(j, argT, "fmt.Stringer") || c.Implements(j, argT, "error") {
+					return true
+				}
+
+				j.Errorf(x, "should use %s instead of %s", j.Render(x.Args[0]), j.Render(x))
+				return true
+			}
+
+			// string([]byte(s))
 			bt, ok := j.Program.Info.TypeOf(x.Fun).(*types.Basic)
 			if !ok || bt.Kind() != types.String {
 				break
@@ -1818,4 +1846,8 @@ func (c *Checker) LintErrorsNewSprintf(j *lint.Job) {
 	for _, f := range c.filterGenerated(j.Program.Files) {
 		ast.Inspect(f, fn)
 	}
+}
+
+func (c *Checker) LintRangeStringRunes(j *lint.Job) {
+	sharedcheck.CheckRangeStringRunes(c.nodeFns, j)
 }

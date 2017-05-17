@@ -1,5 +1,5 @@
 // +build amd64 amd64p32 arm
-// +build go1.6
+// +build go1.6,!go1.9
 
 package goid
 
