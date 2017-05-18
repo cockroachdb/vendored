@@ -9,9 +9,9 @@ import (
 	"time"
 
 	google_protobuf "github.com/golang/protobuf/ptypes/timestamp"
+	"github.com/lightstep/lightstep-tracer-go/basictracer"
 	cpb "github.com/lightstep/lightstep-tracer-go/collectorpb"
 	"github.com/lightstep/lightstep-tracer-go/thrift_rpc"
-	"github.com/opentracing/basictracer-go"
 	ot "github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/log"
 )

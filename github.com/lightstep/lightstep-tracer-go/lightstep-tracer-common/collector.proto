@@ -3,11 +3,8 @@ syntax = "proto3";
 package lightstep.collector;
 option go_package = "collectorpb";
 option objc_class_prefix = "LSPB";
-
-// Note: As of protobuf HEAD-b964976 (8/31/2016) the C++ generated code will not
-// compile for map<> types in the default mode or when optimized for LITE_RUNTIME.
-// Only CODE_SIZE works:
-option optimize_for = CODE_SIZE;
+option java_multiple_files = true;
+option java_package = "com.lightstep.tracer.grpc";
 
 import "google/protobuf/timestamp.proto";
 
@@ -85,7 +82,7 @@ message ReportRequest {
     Reporter reporter = 1;
     Auth auth = 2;
     repeated Span spans = 3;
-    uint32 timestamp_offset_micros = 5;
+    int32 timestamp_offset_micros = 5;
     InternalMetrics internal_metrics = 6;
 }
 

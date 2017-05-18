@@ -1,6 +1,6 @@
 package thrift_rpc
 
-import "github.com/opentracing/basictracer-go"
+import "github.com/lightstep/lightstep-tracer-go/basictracer"
 
 const defaultMaxSpans = 1000
 

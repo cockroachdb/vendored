@@ -19,11 +19,13 @@ import (
 	// N.B.(jmacd): Do not use google.golang.org/glog in this package.
 
 	google_protobuf "github.com/golang/protobuf/ptypes/timestamp"
+	"github.com/lightstep/lightstep-tracer-go/basictracer"
 	cpb "github.com/lightstep/lightstep-tracer-go/collectorpb"
 	"github.com/lightstep/lightstep-tracer-go/thrift_rpc"
-	"github.com/opentracing/basictracer-go"
 	ot "github.com/opentracing/opentracing-go"
 )
+
+// TODO: Move what's left of basictracer/* into this package.
 
 const (
 	spansDropped     = "spans.dropped"
@@ -55,7 +57,7 @@ const (
 	payloadKey        = "payload"
 
 	TracerPlatformValue = "go"
-	TracerVersionValue  = "0.9.1"
+	// Note: TracerVersionValue is generated from ./VERSION
 
 	TracerPlatformKey        = "lightstep.tracer_platform"
 	TracerPlatformVersionKey = "lightstep.tracer_platform_version"
@@ -73,6 +75,8 @@ var (
 
 	errPreviousReportInFlight = fmt.Errorf("a previous Report is still in flight; aborting Flush()")
 	errConnectionWasClosed    = fmt.Errorf("the connection was closed")
+
+	BinaryCarrier = basictracer.BinaryCarrier
 )
 
 // A set of counter values for a given time window
@@ -169,7 +173,6 @@ func (opts *Options) setDefaults() {
 // collector.
 func NewTracer(opts Options) ot.Tracer {
 	options := basictracer.DefaultOptions()
-	options.ShouldSample = func(_ uint64) bool { return true }
 
 	if opts.UseGRPC {
 		r := NewRecorder(opts)

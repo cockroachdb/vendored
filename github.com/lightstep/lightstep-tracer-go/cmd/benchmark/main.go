@@ -11,7 +11,7 @@ import (
 	"time"
 
 	ls "github.com/lightstep/lightstep-tracer-go"
-	bt "github.com/opentracing/basictracer-go"
+	bt "github.com/lightstep/lightstep-tracer-go/basictracer"
 	ot "github.com/opentracing/opentracing-go"
 )
 

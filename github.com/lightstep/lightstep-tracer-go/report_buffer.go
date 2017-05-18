@@ -3,7 +3,7 @@ package lightstep
 import (
 	"time"
 
-	"github.com/opentracing/basictracer-go"
+	"github.com/lightstep/lightstep-tracer-go/basictracer"
 )
 
 type reportBuffer struct {

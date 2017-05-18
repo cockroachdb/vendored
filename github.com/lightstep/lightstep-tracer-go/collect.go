@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/opentracing/basictracer-go"
+	"github.com/lightstep/lightstep-tracer-go/basictracer"
 	"github.com/opentracing/opentracing-go"
 )
 
