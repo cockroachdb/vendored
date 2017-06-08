@@ -1,0 +1,19 @@
+[[constraint]]
+  branch = "2.x"
+  name = "github.com/Masterminds/semver"
+
+[[constraint]]
+  name = "github.com/Masterminds/vcs"
+  version = "1.11.0"
+
+[[constraint]]
+  branch = "v2"
+  name = "github.com/go-yaml/yaml"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/pelletier/go-toml"
+
+[[constraint]]
+  name = "github.com/pkg/errors"
+  version = "0.8.0"
