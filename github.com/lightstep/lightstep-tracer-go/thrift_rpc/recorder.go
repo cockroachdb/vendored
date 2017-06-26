@@ -164,6 +164,7 @@ type Recorder struct {
 	// time, turning all potentially costly runtime operations into
 	// no-ops.
 	disabled bool
+	closech  chan struct{}
 
 	// flags replacement
 	maxLogMessageLen int
@@ -234,7 +235,8 @@ func NewRecorder(opts Options) *Recorder {
 	rec.backend = lightstep_thrift.NewReportingServiceClientFactory(
 		transport, thrift.NewTBinaryProtocolFactoryDefault())
 
-	go rec.reportLoop()
+	rec.closech = make(chan struct{})
+	go rec.reportLoop(rec.closech)
 
 	return rec
 }
@@ -385,6 +387,19 @@ func (r *Recorder) Flush() {
 	}
 }
 
+func (r *Recorder) Close() error {
+	r.lock.Lock()
+	closech := r.closech
+	r.closech = nil
+	r.lock.Unlock()
+
+	if closech != nil {
+		close(closech)
+	}
+
+	return nil
+}
+
 // caller must hold r.lock
 func (r *Recorder) thriftRuntime() *lightstep_thrift.Runtime {
 	runtimeAttrs := []*lightstep_thrift.KeyValue{}
@@ -440,7 +455,7 @@ func (r *Recorder) shouldFlush() bool {
 	return false
 }
 
-func (r *Recorder) reportLoop() {
+func (r *Recorder) reportLoop(closech chan struct{}) {
 	// (Thrift really should do this internally, but we saw some too-many-fd's
 	// errors and thrift is the most likely culprit.)
 	switch b := r.backend.(type) {
@@ -451,19 +466,26 @@ func (r *Recorder) reportLoop() {
 	}
 
 	tickerChan := time.Tick(minReportingPeriod)
-	for range tickerChan {
-		r.maybeLogInfof("reporting alarm fired")
+	for {
+		select {
+		case <-tickerChan:
+			r.maybeLogInfof("reporting alarm fired")
 
-		// Kill the reportLoop() if we've been disabled.
-		r.lock.Lock()
-		if r.disabled {
+			// Kill the reportLoop() if we've been disabled.
+			r.lock.Lock()
+			if r.disabled {
+				r.lock.Unlock()
+				break
+			}
 			r.lock.Unlock()
-			break
-		}
-		r.lock.Unlock()
 
-		if r.shouldFlush() {
+			if r.shouldFlush() {
+				r.Flush()
+			}
+
+		case <-closech:
 			r.Flush()
+			return
 		}
 	}
 }

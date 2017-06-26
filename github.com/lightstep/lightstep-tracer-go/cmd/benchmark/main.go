@@ -205,8 +205,6 @@ func main() {
 				Port:      GrpcPort,
 				Plaintext: true,
 			},
-			// Verbose: true,
-			UseGRPC: true,
 		}),
 	}
 	tc.loop()

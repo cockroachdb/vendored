@@ -2,6 +2,7 @@ package lightstep
 
 import (
 	"fmt"
+	"io"
 	"math/rand"
 	"os"
 	"path"
@@ -138,8 +139,11 @@ type Options struct {
 	// Set Verbose to true to enable more text logging.
 	Verbose bool `yaml:"verbose"`
 
-	// Note: flag is in use--do not change.
+	// DEPRECATED: set `UseThrift` to true if you do not want gRPC
 	UseGRPC bool `yaml:"usegrpc"`
+
+	// Switch to
+	UseThrift bool `yaml:"use_thrift"`
 
 	ReconnectPeriod time.Duration `yaml:"reconnect_period"`
 }
@@ -174,7 +178,7 @@ func (opts *Options) setDefaults() {
 func NewTracer(opts Options) ot.Tracer {
 	options := basictracer.DefaultOptions()
 
-	if opts.UseGRPC {
+	if !opts.UseThrift {
 		r := NewRecorder(opts)
 		if r == nil {
 			return ot.NoopTracer{}
@@ -242,6 +246,19 @@ func GetLightStepAccessToken(lsTracer ot.Tracer) (string, error) {
 	default:
 		return "", fmt.Errorf("Not a LightStep Recorder type: %v", reflect.TypeOf(basicRecorder))
 	}
+}
+
+func CloseTracer(tracer ot.Tracer) error {
+	lsTracer, ok := tracer.(basictracer.Tracer)
+	if !ok {
+		return fmt.Errorf("Not a LightStep Tracer type: %v", reflect.TypeOf(tracer))
+	}
+	recorder, ok := lsTracer.Options().Recorder.(io.Closer)
+	if !ok {
+		return fmt.Errorf("Recorder does not implement Close: %v", reflect.TypeOf(recorder))
+	}
+
+	return recorder.Close()
 }
 
 // Recorder buffers spans and forwards them to a LightStep collector.
@@ -419,9 +436,11 @@ func (r *Recorder) Close() error {
 	r.conn = nil
 	r.closech = nil
 	r.lock.Unlock()
+
 	if closech != nil {
 		close(closech)
 	}
+
 	if conn == nil {
 		return nil
 	}
@@ -722,6 +741,7 @@ func (r *Recorder) reportLoop(closech chan struct{}) {
 				r.reconnectClient(now)
 			}
 		case <-closech:
+			r.Flush()
 			return
 		}
 	}
