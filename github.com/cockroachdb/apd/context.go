@@ -984,11 +984,11 @@ func (c *Context) Exp(d, x *Decimal) (Condition, error) {
 	if err != nil {
 		return 0, errors.Wrap(err, "ki")
 	}
-	if ires, err := nc.integerPower(d, sum, ki); err != nil {
+	ires, err := nc.integerPower(d, sum, ki)
+	if err != nil {
 		return 0, errors.Wrap(err, "integer power")
-	} else {
-		res |= ires
 	}
+	res |= ires
 	nc.Precision = c.Precision
 	res |= nc.round(d, d)
 	return c.goError(res)
@@ -1226,8 +1226,9 @@ func (c *Context) toIntegralSpecials(d, x *Decimal) (bool, Condition, error) {
 	return false, 0, nil
 }
 
-// ToIntegral sets d to integral value of x. Inexact and Rounded flags are ignored and removed.
-func (c *Context) ToIntegral(d, x *Decimal) (Condition, error) {
+// RoundToIntegralValue sets d to integral value of x. Inexact and Rounded flags
+// are ignored and removed.
+func (c *Context) RoundToIntegralValue(d, x *Decimal) (Condition, error) {
 	if set, res, err := c.toIntegralSpecials(d, x); set {
 		return res, err
 	}
@@ -1236,8 +1237,8 @@ func (c *Context) ToIntegral(d, x *Decimal) (Condition, error) {
 	return c.goError(res)
 }
 
-// ToIntegralX sets d to integral value of x.
-func (c *Context) ToIntegralX(d, x *Decimal) (Condition, error) {
+// RoundToIntegralExact sets d to integral value of x.
+func (c *Context) RoundToIntegralExact(d, x *Decimal) (Condition, error) {
 	if set, res, err := c.toIntegralSpecials(d, x); set {
 		return res, err
 	}

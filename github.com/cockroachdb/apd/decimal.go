@@ -15,7 +15,7 @@
 package apd
 
 import (
-	"fmt"
+	"database/sql/driver"
 	"math"
 	"math/big"
 	"strconv"
@@ -37,17 +37,21 @@ type Decimal struct {
 	Coeff    big.Int
 }
 
+// Form specifies the form of a Decimal.
 type Form int
 
 const (
 	// These constants must be in the following order. CmpTotal assumes that
 	// the order of these constants reflects the total order on decimals.
 
+	// Finite is the finite form.
 	Finite Form = iota
+	// Infinite is the infinite form.
 	Infinite
-	// NaNSignaling will always raise the InvalidOperation condition during
-	// an operation.
+	// NaNSignaling is the signaling NaN form. It will always raise the
+	// InvalidOperation condition during an operation.
 	NaNSignaling
+	// NaN is the NaN form.
 	NaN
 )
 
@@ -193,11 +197,6 @@ func (c *Context) SetString(d *Decimal, s string) (*Decimal, Condition, error) {
 	return d, res, err
 }
 
-// String is a wrapper of ToSci.
-func (d *Decimal) String() string {
-	return d.ToSci()
-}
-
 func (d *Decimal) strSpecials() (bool, string) {
 	switch d.Form {
 	case NaN:
@@ -211,65 +210,6 @@ func (d *Decimal) strSpecials() (bool, string) {
 	default:
 		return true, "unknown"
 	}
-}
-
-// ToSci returns d in scientific notation if an exponent is needed.
-func (d *Decimal) ToSci() string {
-	// See: http://speleotrove.com/decimal/daconvs.html#reftostr
-	const adjExponentLimit = -6
-
-	set, s := d.strSpecials()
-	if !set {
-		s = d.Coeff.String()
-		adj := int(d.Exponent) + (len(s) - 1)
-		if d.Exponent <= 0 && adj >= adjExponentLimit {
-			if d.Exponent < 0 {
-				if left := -int(d.Exponent) - len(s); left > 0 {
-					s = "0." + strings.Repeat("0", left) + s
-				} else if left < 0 {
-					offset := -left
-					s = s[:offset] + "." + s[offset:]
-				} else {
-					s = "0." + s
-				}
-			}
-		} else {
-			dot := ""
-			if len(s) > 1 {
-				dot = "." + s[1:]
-			}
-			s = fmt.Sprintf("%s%sE%+d", s[:1], dot, adj)
-		}
-	}
-	if d.Negative {
-		s = "-" + s
-	}
-	return s
-}
-
-// ToStandard converts d to a standard notation string (i.e., no exponent
-// part). This can result in long strings given large exponents.
-func (d *Decimal) ToStandard() string {
-	set, s := d.strSpecials()
-	if !set {
-		s = d.Coeff.String()
-		if d.Exponent < 0 {
-			if left := -int(d.Exponent) - len(s); left > 0 {
-				s = "0." + strings.Repeat("0", left) + s
-			} else if left < 0 {
-				offset := -left
-				s = s[:offset] + "." + s[offset:]
-			} else {
-				s = "0." + s
-			}
-		} else if d.Exponent > 0 {
-			s += strings.Repeat("0", int(d.Exponent))
-		}
-	}
-	if d.Negative {
-		s = "-" + s
-	}
-	return s
 }
 
 // Set sets d's fields to the values of x and returns d.
@@ -599,9 +539,8 @@ func (d *Decimal) Cmp(x *Decimal) int {
 	if d.Form == Infinite {
 		if x.Form == Infinite {
 			return 0
-		} else {
-			return gt
 		}
+		return gt
 	} else if x.Form == Infinite {
 		return lt
 	}
@@ -676,37 +615,65 @@ func (d *Decimal) IsZero() bool {
 }
 
 // Modf sets integ to the integral part of d and frac to the fractional part
-// such that d = integ+frac. If d is negative, both integ or frac will be
-// either 0 or negative. integ.Exponent will be >= 0; frac.Exponent will be
-// <= 0.
+// such that d = integ+frac. If d is negative, both integ or frac will be either
+// 0 or negative. integ.Exponent will be >= 0; frac.Exponent will be <= 0.
+// Either argument can be nil, preventing it from being set.
 func (d *Decimal) Modf(integ, frac *Decimal) {
+	if integ == nil && frac == nil {
+		return
+	}
+
 	neg := d.Negative
 
 	// No fractional part.
 	if d.Exponent > 0 {
-		frac.Negative = neg
-		frac.Exponent = 0
-		frac.Coeff.SetInt64(0)
-		integ.Set(d)
+		if frac != nil {
+			frac.Negative = neg
+			frac.Exponent = 0
+			frac.Coeff.SetInt64(0)
+		}
+		if integ != nil {
+			integ.Set(d)
+		}
 		return
 	}
 	nd := d.NumDigits()
 	exp := -int64(d.Exponent)
 	// d < 0 because exponent is larger than number of digits.
 	if exp > nd {
-		integ.Negative = neg
-		integ.Exponent = 0
-		integ.Coeff.SetInt64(0)
-		frac.Set(d)
+		if integ != nil {
+			integ.Negative = neg
+			integ.Exponent = 0
+			integ.Coeff.SetInt64(0)
+		}
+		if frac != nil {
+			frac.Set(d)
+		}
 		return
 	}
 
 	e := tableExp10(exp, nil)
-	integ.Coeff.QuoRem(&d.Coeff, e, &frac.Coeff)
-	integ.Exponent = 0
-	frac.Exponent = d.Exponent
-	frac.Negative = neg
-	integ.Negative = neg
+
+	var icoeff *big.Int
+	if integ != nil {
+		icoeff = &integ.Coeff
+		integ.Exponent = 0
+		integ.Negative = neg
+	} else {
+		// This is the integ == nil branch, and we already checked if both integ and
+		// frac were nil above, so frac can never be nil in this branch.
+		icoeff = new(big.Int)
+	}
+
+	if frac != nil {
+		icoeff.QuoRem(&d.Coeff, e, &frac.Coeff)
+		frac.Exponent = d.Exponent
+		frac.Negative = neg
+	} else {
+		// This is the frac == nil, which means integ must not be nil since they both
+		// can't be due to the check above.
+		icoeff.Quo(&d.Coeff, e)
+	}
 }
 
 // Neg sets d to -x and returns d.
@@ -777,4 +744,66 @@ func (d *Decimal) Reduce(x *Decimal) (*Decimal, int) {
 	}
 	d.Exponent += int32(nd)
 	return d, nd
+}
+
+// Value implements the database/sql/driver.Valuer interface. It converts d to a
+// string.
+func (d Decimal) Value() (driver.Value, error) {
+	return d.String(), nil
+}
+
+// Scan implements the database/sql.Scanner interface. It supports string,
+// []byte, int64, float64.
+func (d *Decimal) Scan(src interface{}) error {
+	switch src := src.(type) {
+	case []byte:
+		_, _, err := d.SetString(string(src))
+		return err
+	case string:
+		_, _, err := d.SetString(src)
+		return err
+	case int64:
+		d.SetInt64(src)
+		return nil
+	case float64:
+		_, err := d.SetFloat64(src)
+		return err
+	default:
+		return errors.Errorf("could not convert %T to Decimal", src)
+	}
+}
+
+// NullDecimal represents a string that may be null. NullDecimal implements
+// the database/sql.Scanner interface so it can be used as a scan destination:
+//
+//  var d NullDecimal
+//  err := db.QueryRow("SELECT num FROM foo WHERE id=?", id).Scan(&d)
+//  ...
+//  if d.Valid {
+//     // use d.Decimal
+//  } else {
+//     // NULL value
+//  }
+//
+type NullDecimal struct {
+	Decimal Decimal
+	Valid   bool // Valid is true if Decimal is not NULL
+}
+
+// Scan implements the database/sql.Scanner interface.
+func (nd *NullDecimal) Scan(value interface{}) error {
+	if value == nil {
+		nd.Valid = false
+		return nil
+	}
+	nd.Valid = true
+	return nd.Decimal.Scan(value)
+}
+
+// Value implements the database/sql/driver.Valuer interface.
+func (nd NullDecimal) Value() (driver.Value, error) {
+	if !nd.Valid {
+		return nil, nil
+	}
+	return nd.Decimal.Value()
 }

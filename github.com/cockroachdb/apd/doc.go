@@ -12,12 +12,14 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-/* Package apd implements arbitrary-precision decimals.
+/*
+Package apd implements arbitrary-precision decimals.
 
 apd implements much of the decimal specification from the General
-Decimal Arithmetic (http://speleotrove.com/decimal/) description. This
-is the same specification implemented by python’s decimal module
-(https://docs.python.org/2/library/decimal.html) and GCC’s decimal extension.
+Decimal Arithmetic (http://speleotrove.com/decimal/) description, which
+is refered to here as GDA. This is the same specification implemented by
+pythons decimal module (https://docs.python.org/2/library/decimal.html)
+and GCCs decimal extension.
 
 Features
 
@@ -45,6 +47,9 @@ result is exact, is rounded, is over- or under-flowed, is subnormal
 condition. apd supports traps which will trigger an error on any of these
 conditions. This makes it possible to guarantee exactness in computations,
 if needed.
+
+SQL scan and value methods are implemented. This allows the use of Decimals as
+placeholder parameters and row result Scan destinations.
 
 Usage
 
