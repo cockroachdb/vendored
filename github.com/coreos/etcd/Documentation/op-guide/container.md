@@ -68,6 +68,37 @@ Production clusters which refer to peers by DNS name known to the local resolver
 
 In order to expose the etcd API to clients outside of Docker host, use the host IP address of the container. Please see [`docker inspect`](https://docs.docker.com/engine/reference/commandline/inspect) for more detail on how to get the IP address. Alternatively, specify `--net=host` flag to `docker run` command to skip placing the container inside of a separate network stack.
 
+### Running a single node etcd
+
+Use the host IP address when configuring etcd:
+
+```
+export NODE1=192.168.1.21
+```
+
+Run the latest version of etcd:
+
+```
+docker run \
+  -p 2379:2379 \
+  -p 2380:2380 \
+  --volume=${DATA_DIR}:/etcd-data \
+  --name etcd quay.io/coreos/etcd:latest \
+  /usr/local/bin/etcd \
+  --data-dir=/etcd-data --name node1 \
+  --initial-advertise-peer-urls http://${NODE1}:2380 --listen-peer-urls http://${NODE1}:2380 \
+  --advertise-client-urls http://${NODE1}:2379 --listen-client-urls http://${NODE1}:2379 \
+  --initial-cluster node1=http://${NODE1}:2380
+```
+
+List the cluster member:
+
+```
+etcdctl --endpoints=http://${NODE1}:2379 member list
+```
+
+### Running a 3 node etcd cluster
+
 ```
 # For each machine
 ETCD_VERSION=latest
@@ -85,41 +116,47 @@ DATA_DIR=/var/lib/etcd
 # For node 1
 THIS_NAME=${NAME_1}
 THIS_IP=${HOST_1}
-sudo docker run --net=host \
-    --volume=${DATA_DIR}:/etcd-data \
-    --name etcd quay.io/coreos/etcd:${ETCD_VERSION} \
-	/usr/local/bin/etcd \
-    --data-dir=/etcd-data --name ${THIS_NAME} \
-	--initial-advertise-peer-urls http://${THIS_IP}:2380 --listen-peer-urls http://${THIS_IP}:2380 \
-	--advertise-client-urls http://${THIS_IP}:2379 --listen-client-urls http://${THIS_IP}:2379 \
-	--initial-cluster ${CLUSTER} \
-	--initial-cluster-state ${CLUSTER_STATE} --initial-cluster-token ${TOKEN}
+docker run \
+  -p 2379:2379 \
+  -p 2380:2380 \
+  --volume=${DATA_DIR}:/etcd-data \
+  --name etcd quay.io/coreos/etcd:${ETCD_VERSION} \
+  /usr/local/bin/etcd \
+  --data-dir=/etcd-data --name ${THIS_NAME} \
+  --initial-advertise-peer-urls http://${THIS_IP}:2380 --listen-peer-urls http://${THIS_IP}:2380 \
+  --advertise-client-urls http://${THIS_IP}:2379 --listen-client-urls http://${THIS_IP}:2379 \
+  --initial-cluster ${CLUSTER} \
+  --initial-cluster-state ${CLUSTER_STATE} --initial-cluster-token ${TOKEN}
 
 # For node 2
 THIS_NAME=${NAME_2}
 THIS_IP=${HOST_2}
-sudo docker run --net=host \
-    --volume=${DATA_DIR}:/etcd-data \
-    --name etcd quay.io/coreos/etcd:${ETCD_VERSION} \
-	/usr/local/bin/etcd \
-    --data-dir=/etcd-data --name ${THIS_NAME} \
-	--initial-advertise-peer-urls http://${THIS_IP}:2380 --listen-peer-urls http://${THIS_IP}:2380 \
-	--advertise-client-urls http://${THIS_IP}:2379 --listen-client-urls http://${THIS_IP}:2379 \
-	--initial-cluster ${CLUSTER} \
-	--initial-cluster-state ${CLUSTER_STATE} --initial-cluster-token ${TOKEN}
+docker run \
+  -p 2379:2379 \
+  -p 2380:2380 \
+  --volume=${DATA_DIR}:/etcd-data \
+  --name etcd quay.io/coreos/etcd:${ETCD_VERSION} \
+  /usr/local/bin/etcd \
+  --data-dir=/etcd-data --name ${THIS_NAME} \
+  --initial-advertise-peer-urls http://${THIS_IP}:2380 --listen-peer-urls http://${THIS_IP}:2380 \
+  --advertise-client-urls http://${THIS_IP}:2379 --listen-client-urls http://${THIS_IP}:2379 \
+  --initial-cluster ${CLUSTER} \
+  --initial-cluster-state ${CLUSTER_STATE} --initial-cluster-token ${TOKEN}
 
 # For node 3
 THIS_NAME=${NAME_3}
 THIS_IP=${HOST_3}
-sudo docker run --net=host \
-    --volume=${DATA_DIR}:/etcd-data \
-    --name etcd quay.io/coreos/etcd:${ETCD_VERSION} \
-	/usr/local/bin/etcd \
-    --data-dir=/etcd-data --name ${THIS_NAME} \
-	--initial-advertise-peer-urls http://${THIS_IP}:2380 --listen-peer-urls http://${THIS_IP}:2380 \
-	--advertise-client-urls http://${THIS_IP}:2379 --listen-client-urls http://${THIS_IP}:2379 \
-	--initial-cluster ${CLUSTER} \
-	--initial-cluster-state ${CLUSTER_STATE} --initial-cluster-token ${TOKEN}
+docker run \
+  -p 2379:2379 \
+  -p 2380:2380 \
+  --volume=${DATA_DIR}:/etcd-data \
+  --name etcd quay.io/coreos/etcd:${ETCD_VERSION} \
+  /usr/local/bin/etcd \
+  --data-dir=/etcd-data --name ${THIS_NAME} \
+  --initial-advertise-peer-urls http://${THIS_IP}:2380 --listen-peer-urls http://${THIS_IP}:2380 \
+  --advertise-client-urls http://${THIS_IP}:2379 --listen-client-urls http://${THIS_IP}:2379 \
+  --initial-cluster ${CLUSTER} \
+  --initial-cluster-state ${CLUSTER_STATE} --initial-cluster-token ${TOKEN}
 ```
 
 To run `etcdctl` using API version 3:
@@ -141,17 +178,19 @@ rkt run \
   --volume etcd-ssl-certs-bundle,kind=host,source=/etc/ssl/certs/ca-certificates.crt \
   --mount volume=etcd-ssl-certs-bundle,target=/etc/ssl/certs/ca-certificates.crt \
   quay.io/coreos/etcd:latest -- --name my-name \
-	--initial-advertise-peer-urls http://localhost:2380 --listen-peer-urls http://localhost:2380 \
-	--advertise-client-urls http://localhost:2379 --listen-client-urls http://localhost:2379 \
-	--discovery https://discovery.etcd.io/c11fbcdc16972e45253491a24fcf45e1
+  --initial-advertise-peer-urls http://localhost:2380 --listen-peer-urls http://localhost:2380 \
+  --advertise-client-urls http://localhost:2379 --listen-client-urls http://localhost:2379 \
+  --discovery https://discovery.etcd.io/c11fbcdc16972e45253491a24fcf45e1
 ```
 
 ```
 docker run \
-    --volume=/etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt \
-    quay.io/coreos/etcd:latest \
-    /usr/local/bin/etcd --name my-name \
-	--initial-advertise-peer-urls http://localhost:2380 --listen-peer-urls http://localhost:2380 \
-	--advertise-client-urls http://localhost:2379 --listen-client-urls http://localhost:2379 \
-	--discovery https://discovery.etcd.io/86a9ff6c8cb8b4c4544c1a2f88f8b801
+  -p 2379:2379 \
+  -p 2380:2380 \
+  --volume=/etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt \
+  quay.io/coreos/etcd:latest \
+  /usr/local/bin/etcd --name my-name \
+  --initial-advertise-peer-urls http://localhost:2380 --listen-peer-urls http://localhost:2380 \
+  --advertise-client-urls http://localhost:2379 --listen-client-urls http://localhost:2379 \
+  --discovery https://discovery.etcd.io/86a9ff6c8cb8b4c4544c1a2f88f8b801
 ```
