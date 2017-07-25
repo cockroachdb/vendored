@@ -46,7 +46,7 @@ const (
 	// SerializableSnapshot provides serializable isolation and also checks
 	// for write conflicts.
 	SerializableSnapshot Isolation = iota
-	// Serializable reads within the same transactiona attempt return data
+	// Serializable reads within the same transaction attempt return data
 	// from the at the revision of the first read.
 	Serializable
 	// RepeatableReads reads within the same transaction attempt always
@@ -85,7 +85,7 @@ func WithPrefetch(keys ...string) stmOption {
 	return func(so *stmOptions) { so.prefetch = append(so.prefetch, keys...) }
 }
 
-// NewSTM initiates a new STM instance, using snapshot isolation by default.
+// NewSTM initiates a new STM instance, using serializable snapshot isolation by default.
 func NewSTM(c *v3.Client, apply func(STM) error, so ...stmOption) (*v3.TxnResponse, error) {
 	opts := &stmOptions{ctx: c.Ctx()}
 	for _, f := range so {
@@ -368,4 +368,19 @@ func respToValue(resp *v3.GetResponse) string {
 		return ""
 	}
 	return string(resp.Kvs[0].Value)
+}
+
+// NewSTMRepeatable is deprecated.
+func NewSTMRepeatable(ctx context.Context, c *v3.Client, apply func(STM) error) (*v3.TxnResponse, error) {
+	return NewSTM(c, apply, WithAbortContext(ctx), WithIsolation(RepeatableReads))
+}
+
+// NewSTMSerializable is deprecated.
+func NewSTMSerializable(ctx context.Context, c *v3.Client, apply func(STM) error) (*v3.TxnResponse, error) {
+	return NewSTM(c, apply, WithAbortContext(ctx), WithIsolation(Serializable))
+}
+
+// NewSTMReadCommitted is deprecated.
+func NewSTMReadCommitted(ctx context.Context, c *v3.Client, apply func(STM) error) (*v3.TxnResponse, error) {
+	return NewSTM(c, apply, WithAbortContext(ctx), WithIsolation(ReadCommitted))
 }

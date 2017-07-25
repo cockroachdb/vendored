@@ -360,12 +360,16 @@ func TestV3GetNonExistLease(t *testing.T) {
 	}
 
 	for _, client := range clus.clients {
+		// quorum-read to ensure revoke completes before TimeToLive
+		if _, err := toGRPC(client).KV.Range(ctx, &pb.RangeRequest{Key: []byte("_")}); err != nil {
+			t.Fatal(err)
+		}
 		resp, err := toGRPC(client).Lease.LeaseTimeToLive(ctx, leaseTTLr)
 		if err != nil {
 			t.Fatalf("expected non nil error, but go %v", err)
 		}
 		if resp.TTL != -1 {
-			t.Fatalf("expected TTL to be -1, but got %v \n", resp.TTL)
+			t.Fatalf("expected TTL to be -1, but got %v", resp.TTL)
 		}
 	}
 }
@@ -456,7 +460,7 @@ func TestV3LeaseFailover(t *testing.T) {
 	lreq := &pb.LeaseKeepAliveRequest{ID: lresp.ID}
 
 	md := metadata.Pairs(rpctypes.MetadataRequireLeaderKey, rpctypes.MetadataHasLeader)
-	mctx := metadata.NewContext(context.Background(), md)
+	mctx := metadata.NewOutgoingContext(context.Background(), md)
 	ctx, cancel := context.WithCancel(mctx)
 	defer cancel()
 	lac, err := lc.LeaseKeepAlive(ctx)
@@ -504,7 +508,7 @@ func TestV3LeaseRequireLeader(t *testing.T) {
 	clus.Members[2].Stop(t)
 
 	md := metadata.Pairs(rpctypes.MetadataRequireLeaderKey, rpctypes.MetadataHasLeader)
-	mctx := metadata.NewContext(context.Background(), md)
+	mctx := metadata.NewOutgoingContext(context.Background(), md)
 	ctx, cancel := context.WithCancel(mctx)
 	defer cancel()
 	lac, err := lc.LeaseKeepAlive(ctx)
@@ -524,8 +528,8 @@ func TestV3LeaseRequireLeader(t *testing.T) {
 		}
 	}()
 	select {
-	case <-time.After(time.Duration(5*electionTicks) * tickDuration):
-		t.Fatalf("did not receive leader loss error")
+	case <-time.After(5 * time.Second):
+		t.Fatal("did not receive leader loss error (in 5-sec)")
 	case <-donec:
 	}
 }

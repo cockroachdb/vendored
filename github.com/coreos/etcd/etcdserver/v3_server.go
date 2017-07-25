@@ -31,12 +31,6 @@ import (
 )
 
 const (
-	// the max request size that raft accepts.
-	// TODO: make this a flag? But we probably do not want to
-	// accept large request which might block raft stream. User
-	// specify a large value might end up with shooting in the foot.
-	maxRequestBytes = 1.5 * 1024 * 1024
-
 	// In the health case, there might be a small gap (10s of entries) between
 	// the applied index and committed index.
 	// However, if the committed entries are very heavy to apply, the gap might grow.
@@ -374,7 +368,9 @@ func (s *EtcdServer) Authenticate(ctx context.Context, r *pb.AuthenticateRequest
 	for {
 		checkedRevision, err := s.AuthStore().CheckPassword(r.Name, r.Password)
 		if err != nil {
-			plog.Errorf("invalid authentication request to user %s was issued", r.Name)
+			if err != auth.ErrAuthNotEnabled {
+				plog.Errorf("invalid authentication request to user %s was issued", r.Name)
+			}
 			return nil, err
 		}
 
@@ -603,7 +599,7 @@ func (s *EtcdServer) processInternalRaftRequestOnce(ctx context.Context, r pb.In
 		return nil, err
 	}
 
-	if len(data) > maxRequestBytes {
+	if len(data) > int(s.Cfg.MaxRequestBytes) {
 		return nil, ErrRequestTooLarge
 	}
 

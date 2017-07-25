@@ -32,6 +32,9 @@ type printer interface {
 	Txn(v3.TxnResponse)
 	Watch(v3.WatchResponse)
 
+	Grant(r v3.LeaseGrantResponse)
+	Revoke(id v3.LeaseID, r v3.LeaseRevokeResponse)
+	KeepAlive(r v3.LeaseKeepAliveResponse)
 	TimeToLive(r v3.LeaseTimeToLiveResponse, keys bool)
 
 	MemberAdd(v3.MemberAddResponse)
@@ -40,6 +43,7 @@ type printer interface {
 	MemberList(v3.MemberListResponse)
 
 	EndpointStatus([]epStatus)
+	MoveLeader(leader, target uint64, r v3.MoveLeaderResponse)
 
 	Alarm(v3.AlarmResponse)
 	DBStatus(dbstatus)
@@ -81,13 +85,18 @@ type printerRPC struct {
 	p func(interface{})
 }
 
-func (p *printerRPC) Del(r v3.DeleteResponse)                            { p.p((*pb.DeleteRangeResponse)(&r)) }
-func (p *printerRPC) Get(r v3.GetResponse)                               { p.p((*pb.RangeResponse)(&r)) }
-func (p *printerRPC) Put(r v3.PutResponse)                               { p.p((*pb.PutResponse)(&r)) }
-func (p *printerRPC) Txn(r v3.TxnResponse)                               { p.p((*pb.TxnResponse)(&r)) }
-func (p *printerRPC) Watch(r v3.WatchResponse)                           { p.p(&r) }
+func (p *printerRPC) Del(r v3.DeleteResponse)  { p.p((*pb.DeleteRangeResponse)(&r)) }
+func (p *printerRPC) Get(r v3.GetResponse)     { p.p((*pb.RangeResponse)(&r)) }
+func (p *printerRPC) Put(r v3.PutResponse)     { p.p((*pb.PutResponse)(&r)) }
+func (p *printerRPC) Txn(r v3.TxnResponse)     { p.p((*pb.TxnResponse)(&r)) }
+func (p *printerRPC) Watch(r v3.WatchResponse) { p.p(&r) }
+
+func (p *printerRPC) Grant(r v3.LeaseGrantResponse)                      { p.p(r) }
+func (p *printerRPC) Revoke(id v3.LeaseID, r v3.LeaseRevokeResponse)     { p.p(r) }
+func (p *printerRPC) KeepAlive(r v3.LeaseKeepAliveResponse)              { p.p(r) }
 func (p *printerRPC) TimeToLive(r v3.LeaseTimeToLiveResponse, keys bool) { p.p(&r) }
-func (p *printerRPC) MemberAdd(r v3.MemberAddResponse)                   { p.p((*pb.MemberAddResponse)(&r)) }
+
+func (p *printerRPC) MemberAdd(r v3.MemberAddResponse) { p.p((*pb.MemberAddResponse)(&r)) }
 func (p *printerRPC) MemberRemove(id uint64, r v3.MemberRemoveResponse) {
 	p.p((*pb.MemberRemoveResponse)(&r))
 }
@@ -96,7 +105,9 @@ func (p *printerRPC) MemberUpdate(id uint64, r v3.MemberUpdateResponse) {
 }
 func (p *printerRPC) MemberList(r v3.MemberListResponse) { p.p((*pb.MemberListResponse)(&r)) }
 func (p *printerRPC) Alarm(r v3.AlarmResponse)           { p.p((*pb.AlarmResponse)(&r)) }
-
+func (p *printerRPC) MoveLeader(leader, target uint64, r v3.MoveLeaderResponse) {
+	p.p((*pb.MoveLeaderResponse)(&r))
+}
 func (p *printerRPC) RoleAdd(_ string, r v3.AuthRoleAddResponse) { p.p((*pb.AuthRoleAddResponse)(&r)) }
 func (p *printerRPC) RoleGet(_ string, r v3.AuthRoleGetResponse) { p.p((*pb.AuthRoleGetResponse)(&r)) }
 func (p *printerRPC) RoleDelete(_ string, r v3.AuthRoleDeleteResponse) {
@@ -137,6 +148,8 @@ func newPrinterUnsupported(n string) printer {
 func (p *printerUnsupported) EndpointStatus([]epStatus) { p.p(nil) }
 func (p *printerUnsupported) DBStatus(dbstatus)         { p.p(nil) }
 
+func (p *printerUnsupported) MoveLeader(leader, target uint64, r v3.MoveLeaderResponse) { p.p(nil) }
+
 func makeMemberListTable(r v3.MemberListResponse) (hdr []string, rows [][]string) {
 	hdr = []string{"ID", "Status", "Name", "Peer Addrs", "Client Addrs"}
 	for _, m := range r.Members {
@@ -159,10 +172,10 @@ func makeEndpointStatusTable(statusList []epStatus) (hdr []string, rows [][]stri
 	hdr = []string{"endpoint", "ID", "version", "db size", "is leader", "raft term", "raft index"}
 	for _, status := range statusList {
 		rows = append(rows, []string{
-			fmt.Sprint(status.Ep),
+			status.Ep,
 			fmt.Sprintf("%x", status.Resp.Header.MemberId),
-			fmt.Sprint(status.Resp.Version),
-			fmt.Sprint(humanize.Bytes(uint64(status.Resp.DbSize))),
+			status.Resp.Version,
+			humanize.Bytes(uint64(status.Resp.DbSize)),
 			fmt.Sprint(status.Resp.Leader == status.Resp.Header.MemberId),
 			fmt.Sprint(status.Resp.RaftTerm),
 			fmt.Sprint(status.Resp.RaftIndex),

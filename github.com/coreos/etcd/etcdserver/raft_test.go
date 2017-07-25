@@ -153,13 +153,13 @@ func TestCreateConfigChangeEnts(t *testing.T) {
 
 func TestStopRaftWhenWaitingForApplyDone(t *testing.T) {
 	n := newNopReadyNode()
-	srv := &EtcdServer{r: raftNode{
+	r := newRaftNode(raftNodeConfig{
 		Node:        n,
 		storage:     mockstorage.NewStorageRecorder(""),
 		raftStorage: raft.NewMemoryStorage(),
 		transport:   rafthttp.NewNopTransporter(),
-		ticker:      &time.Ticker{},
-	}}
+	})
+	srv := &EtcdServer{r: *r}
 	srv.r.start(nil)
 	n.readyc <- raft.Ready{}
 	select {
@@ -180,31 +180,22 @@ func TestStopRaftWhenWaitingForApplyDone(t *testing.T) {
 func TestConfgChangeBlocksApply(t *testing.T) {
 	n := newNopReadyNode()
 
-	waitApplyc := make(chan struct{})
-
-	srv := &EtcdServer{r: raftNode{
+	r := newRaftNode(raftNodeConfig{
 		Node:        n,
 		storage:     mockstorage.NewStorageRecorder(""),
 		raftStorage: raft.NewMemoryStorage(),
 		transport:   rafthttp.NewNopTransporter(),
-		ticker:      &time.Ticker{},
-	}}
+	})
+	srv := &EtcdServer{r: *r}
 
-	rh := &raftReadyHandler{
-		updateLeadership: func() {},
-		waitForApply: func() {
-			<-waitApplyc
-		},
-	}
-
-	srv.r.start(rh)
+	srv.r.start(&raftReadyHandler{updateLeadership: func(bool) {}})
 	defer srv.r.Stop()
 
 	n.readyc <- raft.Ready{
 		SoftState:        &raft.SoftState{RaftState: raft.StateFollower},
 		CommittedEntries: []raftpb.Entry{{Type: raftpb.EntryConfChange}},
 	}
-	<-srv.r.applyc
+	ap := <-srv.r.applyc
 
 	continueC := make(chan struct{})
 	go func() {
@@ -220,7 +211,7 @@ func TestConfgChangeBlocksApply(t *testing.T) {
 	}
 
 	// finish apply, unblock raft routine
-	close(waitApplyc)
+	<-ap.notifyc
 
 	select {
 	case <-continueC:

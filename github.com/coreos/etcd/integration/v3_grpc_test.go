@@ -17,16 +17,19 @@ package integration
 import (
 	"bytes"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"os"
 	"reflect"
 	"testing"
 	"time"
 
-	"github.com/coreos/etcd/etcdserver/api/v3rpc"
+	"github.com/coreos/etcd/clientv3"
 	"github.com/coreos/etcd/etcdserver/api/v3rpc/rpctypes"
 	pb "github.com/coreos/etcd/etcdserver/etcdserverpb"
 	"github.com/coreos/etcd/pkg/testutil"
+	"github.com/coreos/etcd/pkg/transport"
+
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -146,7 +149,8 @@ func TestV3CompactCurrentRev(t *testing.T) {
 
 func TestV3TxnTooManyOps(t *testing.T) {
 	defer testutil.AfterTest(t)
-	clus := NewClusterV3(t, &ClusterConfig{Size: 3})
+	maxTxnOps := uint(128)
+	clus := NewClusterV3(t, &ClusterConfig{Size: 3, MaxTxnOps: maxTxnOps})
 	defer clus.Terminate(t)
 
 	kvc := toGRPC(clus.RandClient()).KV
@@ -188,16 +192,27 @@ func TestV3TxnTooManyOps(t *testing.T) {
 				},
 			})
 	}
+	addTxnOps := func(txn *pb.TxnRequest) {
+		newTxn := &pb.TxnRequest{}
+		addSuccessOps(newTxn)
+		txn.Success = append(txn.Success,
+			&pb.RequestOp{Request: &pb.RequestOp_RequestTxn{
+				RequestTxn: newTxn,
+			},
+			},
+		)
+	}
 
 	tests := []func(txn *pb.TxnRequest){
 		addCompareOps,
 		addSuccessOps,
 		addFailureOps,
+		addTxnOps,
 	}
 
 	for i, tt := range tests {
 		txn := &pb.TxnRequest{}
-		for j := 0; j < v3rpc.MaxOpsPerTxn+1; j++ {
+		for j := 0; j < int(maxTxnOps+1); j++ {
 			tt(txn)
 		}
 
@@ -232,6 +247,27 @@ func TestV3TxnDuplicateKeys(t *testing.T) {
 		},
 	},
 	}
+	txnDelReq := &pb.RequestOp{Request: &pb.RequestOp_RequestTxn{
+		RequestTxn: &pb.TxnRequest{Success: []*pb.RequestOp{delInRangeReq}},
+	},
+	}
+	txnDelReqTwoSide := &pb.RequestOp{Request: &pb.RequestOp_RequestTxn{
+		RequestTxn: &pb.TxnRequest{
+			Success: []*pb.RequestOp{delInRangeReq},
+			Failure: []*pb.RequestOp{delInRangeReq}},
+	},
+	}
+
+	txnPutReq := &pb.RequestOp{Request: &pb.RequestOp_RequestTxn{
+		RequestTxn: &pb.TxnRequest{Success: []*pb.RequestOp{putreq}},
+	},
+	}
+	txnPutReqTwoSide := &pb.RequestOp{Request: &pb.RequestOp_RequestTxn{
+		RequestTxn: &pb.TxnRequest{
+			Success: []*pb.RequestOp{putreq},
+			Failure: []*pb.RequestOp{putreq}},
+	},
+	}
 
 	kvc := toGRPC(clus.RandClient()).KV
 	tests := []struct {
@@ -253,6 +289,36 @@ func TestV3TxnDuplicateKeys(t *testing.T) {
 			txnSuccess: []*pb.RequestOp{putreq, delInRangeReq},
 
 			werr: rpctypes.ErrGRPCDuplicateKey,
+		},
+		// Then(Put(a), Then(Del(a)))
+		{
+			txnSuccess: []*pb.RequestOp{putreq, txnDelReq},
+
+			werr: rpctypes.ErrGRPCDuplicateKey,
+		},
+		// Then(Del(a), Then(Put(a)))
+		{
+			txnSuccess: []*pb.RequestOp{delInRangeReq, txnPutReq},
+
+			werr: rpctypes.ErrGRPCDuplicateKey,
+		},
+		// Then((Then(Put(a)), Else(Put(a))), (Then(Put(a)), Else(Put(a)))
+		{
+			txnSuccess: []*pb.RequestOp{txnPutReqTwoSide, txnPutReqTwoSide},
+
+			werr: rpctypes.ErrGRPCDuplicateKey,
+		},
+		// Then(Del(x), (Then(Put(a)), Else(Put(a))))
+		{
+			txnSuccess: []*pb.RequestOp{delOutOfRangeReq, txnPutReqTwoSide},
+
+			werr: nil,
+		},
+		// Then(Then(Del(a)), (Then(Del(a)), Else(Del(a))))
+		{
+			txnSuccess: []*pb.RequestOp{txnDelReq, txnDelReqTwoSide},
+
+			werr: nil,
 		},
 		{
 			txnSuccess: []*pb.RequestOp{delKeyReq, delInRangeReq, delKeyReq, delInRangeReq},
@@ -321,6 +387,200 @@ func TestV3TxnRevision(t *testing.T) {
 	// updated revision
 	if tresp.Header.Revision != presp.Header.Revision+1 {
 		t.Fatalf("got rev %d, wanted rev %d", tresp.Header.Revision, presp.Header.Revision+1)
+	}
+}
+
+// Testv3TxnCmpHeaderRev tests that the txn header revision is set as expected
+// when compared to the Succeeded field in the txn response.
+func TestV3TxnCmpHeaderRev(t *testing.T) {
+	defer testutil.AfterTest(t)
+	clus := NewClusterV3(t, &ClusterConfig{Size: 1})
+	defer clus.Terminate(t)
+
+	kvc := toGRPC(clus.RandClient()).KV
+
+	for i := 0; i < 10; i++ {
+		// Concurrently put a key with a txn comparing on it.
+		revc := make(chan int64, 1)
+		go func() {
+			defer close(revc)
+			pr := &pb.PutRequest{Key: []byte("k"), Value: []byte("v")}
+			presp, err := kvc.Put(context.TODO(), pr)
+			if err != nil {
+				t.Fatal(err)
+			}
+			revc <- presp.Header.Revision
+		}()
+
+		// The read-only txn uses the optimized readindex server path.
+		txnget := &pb.RequestOp{Request: &pb.RequestOp_RequestRange{
+			RequestRange: &pb.RangeRequest{Key: []byte("k")}}}
+		txn := &pb.TxnRequest{Success: []*pb.RequestOp{txnget}}
+		// i = 0 /\ Succeeded => put followed txn
+		cmp := &pb.Compare{
+			Result:      pb.Compare_EQUAL,
+			Target:      pb.Compare_VERSION,
+			Key:         []byte("k"),
+			TargetUnion: &pb.Compare_Version{Version: int64(i)},
+		}
+		txn.Compare = append(txn.Compare, cmp)
+
+		tresp, err := kvc.Txn(context.TODO(), txn)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		prev := <-revc
+		// put followed txn; should eval to false
+		if prev > tresp.Header.Revision && !tresp.Succeeded {
+			t.Errorf("#%d: got else but put rev %d followed txn rev (%+v)", i, prev, tresp)
+		}
+		// txn follows put; should eval to true
+		if tresp.Header.Revision >= prev && tresp.Succeeded {
+			t.Errorf("#%d: got then but put rev %d preceded txn (%+v)", i, prev, tresp)
+		}
+	}
+}
+
+// TestV3TxnRangeCompare tests range comparisons in txns
+func TestV3TxnRangeCompare(t *testing.T) {
+	defer testutil.AfterTest(t)
+	clus := NewClusterV3(t, &ClusterConfig{Size: 1})
+	defer clus.Terminate(t)
+
+	// put keys, named by expected revision
+	for _, k := range []string{"/a/2", "/a/3", "/a/4", "/f/5"} {
+		if _, err := clus.Client(0).Put(context.TODO(), k, "x"); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	tests := []struct {
+		cmp pb.Compare
+
+		wSuccess bool
+	}{
+		{
+			// >= /a/; all create revs fit
+			pb.Compare{
+				Key:         []byte("/a/"),
+				RangeEnd:    []byte{0},
+				Target:      pb.Compare_CREATE,
+				Result:      pb.Compare_LESS,
+				TargetUnion: &pb.Compare_CreateRevision{6},
+			},
+			true,
+		},
+		{
+			// >= /a/; one create rev doesn't fit
+			pb.Compare{
+				Key:         []byte("/a/"),
+				RangeEnd:    []byte{0},
+				Target:      pb.Compare_CREATE,
+				Result:      pb.Compare_LESS,
+				TargetUnion: &pb.Compare_CreateRevision{5},
+			},
+			false,
+		},
+		{
+			// prefix /a/*; all create revs fit
+			pb.Compare{
+				Key:         []byte("/a/"),
+				RangeEnd:    []byte("/a0"),
+				Target:      pb.Compare_CREATE,
+				Result:      pb.Compare_LESS,
+				TargetUnion: &pb.Compare_CreateRevision{5},
+			},
+			true,
+		},
+		{
+			// prefix /a/*; one create rev doesn't fit
+			pb.Compare{
+				Key:         []byte("/a/"),
+				RangeEnd:    []byte("/a0"),
+				Target:      pb.Compare_CREATE,
+				Result:      pb.Compare_LESS,
+				TargetUnion: &pb.Compare_CreateRevision{4},
+			},
+			false,
+		},
+		{
+			// does not exist, does not succeed
+			pb.Compare{
+				Key:         []byte("/b/"),
+				RangeEnd:    []byte("/b0"),
+				Target:      pb.Compare_VALUE,
+				Result:      pb.Compare_EQUAL,
+				TargetUnion: &pb.Compare_Value{[]byte("x")},
+			},
+			false,
+		},
+	}
+
+	kvc := toGRPC(clus.Client(0)).KV
+	for i, tt := range tests {
+		txn := &pb.TxnRequest{}
+		txn.Compare = append(txn.Compare, &tt.cmp)
+		tresp, err := kvc.Txn(context.TODO(), txn)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if tt.wSuccess != tresp.Succeeded {
+			t.Errorf("#%d: expected %v, got %v", i, tt.wSuccess, tresp.Succeeded)
+		}
+	}
+}
+
+// TestV3TxnNested tests nested txns follow paths as expected.
+func TestV3TxnNestedPath(t *testing.T) {
+	defer testutil.AfterTest(t)
+	clus := NewClusterV3(t, &ClusterConfig{Size: 1})
+	defer clus.Terminate(t)
+
+	kvc := toGRPC(clus.RandClient()).KV
+
+	cmpTrue := &pb.Compare{
+		Result:      pb.Compare_EQUAL,
+		Target:      pb.Compare_VERSION,
+		Key:         []byte("k"),
+		TargetUnion: &pb.Compare_Version{Version: int64(0)},
+	}
+	cmpFalse := &pb.Compare{
+		Result:      pb.Compare_EQUAL,
+		Target:      pb.Compare_VERSION,
+		Key:         []byte("k"),
+		TargetUnion: &pb.Compare_Version{Version: int64(1)},
+	}
+
+	// generate random path to eval txns
+	topTxn := &pb.TxnRequest{}
+	txn := topTxn
+	txnPath := make([]bool, 10)
+	for i := range txnPath {
+		nextTxn := &pb.TxnRequest{}
+		op := &pb.RequestOp{Request: &pb.RequestOp_RequestTxn{RequestTxn: nextTxn}}
+		txnPath[i] = rand.Intn(2) == 0
+		if txnPath[i] {
+			txn.Compare = append(txn.Compare, cmpTrue)
+			txn.Success = append(txn.Success, op)
+		} else {
+			txn.Compare = append(txn.Compare, cmpFalse)
+			txn.Failure = append(txn.Failure, op)
+		}
+		txn = nextTxn
+	}
+
+	tresp, err := kvc.Txn(context.TODO(), topTxn)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	curTxnResp := tresp
+	for i := range txnPath {
+		if curTxnResp.Succeeded != txnPath[i] {
+			t.Fatalf("expected path %+v, got response %+v", txnPath, *tresp)
+		}
+		curTxnResp = curTxnResp.Responses[0].Response.(*pb.ResponseOp_ResponseTxn).ResponseTxn
 	}
 }
 
@@ -1374,6 +1634,164 @@ func TestTLSGRPCAcceptSecureAll(t *testing.T) {
 	}
 }
 
+// TestTLSReloadAtomicReplace ensures server reloads expired/valid certs
+// when all certs are atomically replaced by directory renaming.
+// And expects server to reject client requests, and vice versa.
+func TestTLSReloadAtomicReplace(t *testing.T) {
+	tmpDir, err := ioutil.TempDir(os.TempDir(), "fixtures-tmp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir)
+
+	certsDir, err := ioutil.TempDir(os.TempDir(), "fixtures-to-load")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(certsDir)
+
+	certsDirExp, err := ioutil.TempDir(os.TempDir(), "fixtures-expired")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(certsDirExp)
+
+	cloneFunc := func() transport.TLSInfo {
+		tlsInfo, terr := copyTLSFiles(testTLSInfo, certsDir)
+		if terr != nil {
+			t.Fatal(terr)
+		}
+		if _, err = copyTLSFiles(testTLSInfoExpired, certsDirExp); err != nil {
+			t.Fatal(err)
+		}
+		return tlsInfo
+	}
+	replaceFunc := func() {
+		if err = os.Rename(certsDir, tmpDir); err != nil {
+			t.Fatal(err)
+		}
+		if err = os.Rename(certsDirExp, certsDir); err != nil {
+			t.Fatal(err)
+		}
+		// after rename,
+		// 'certsDir' contains expired certs
+		// 'tmpDir' contains valid certs
+		// 'certsDirExp' does not exist
+	}
+	revertFunc := func() {
+		if err = os.Rename(tmpDir, certsDirExp); err != nil {
+			t.Fatal(err)
+		}
+		if err = os.Rename(certsDir, tmpDir); err != nil {
+			t.Fatal(err)
+		}
+		if err = os.Rename(certsDirExp, certsDir); err != nil {
+			t.Fatal(err)
+		}
+	}
+	testTLSReload(t, cloneFunc, replaceFunc, revertFunc)
+}
+
+// TestTLSReloadCopy ensures server reloads expired/valid certs
+// when new certs are copied over, one by one. And expects server
+// to reject client requests, and vice versa.
+func TestTLSReloadCopy(t *testing.T) {
+	certsDir, err := ioutil.TempDir(os.TempDir(), "fixtures-to-load")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(certsDir)
+
+	cloneFunc := func() transport.TLSInfo {
+		tlsInfo, terr := copyTLSFiles(testTLSInfo, certsDir)
+		if terr != nil {
+			t.Fatal(terr)
+		}
+		return tlsInfo
+	}
+	replaceFunc := func() {
+		if _, err = copyTLSFiles(testTLSInfoExpired, certsDir); err != nil {
+			t.Fatal(err)
+		}
+	}
+	revertFunc := func() {
+		if _, err = copyTLSFiles(testTLSInfo, certsDir); err != nil {
+			t.Fatal(err)
+		}
+	}
+	testTLSReload(t, cloneFunc, replaceFunc, revertFunc)
+}
+
+func testTLSReload(t *testing.T, cloneFunc func() transport.TLSInfo, replaceFunc func(), revertFunc func()) {
+	defer testutil.AfterTest(t)
+
+	// 1. separate copies for TLS assets modification
+	tlsInfo := cloneFunc()
+
+	// 2. start cluster with valid certs
+	clus := NewClusterV3(t, &ClusterConfig{Size: 1, PeerTLS: &tlsInfo, ClientTLS: &tlsInfo})
+	defer clus.Terminate(t)
+
+	// 3. concurrent client dialing while certs become expired
+	errc := make(chan error, 1)
+	go func() {
+		for {
+			cc, err := tlsInfo.ClientConfig()
+			if err != nil {
+				// errors in 'go/src/crypto/tls/tls.go'
+				// tls: private key does not match public key
+				// tls: failed to find any PEM data in key input
+				// tls: failed to find any PEM data in certificate input
+				// Or 'does not exist', 'not found', etc
+				t.Log(err)
+				continue
+			}
+			cli, cerr := clientv3.New(clientv3.Config{
+				Endpoints:   []string{clus.Members[0].GRPCAddr()},
+				DialTimeout: time.Second,
+				TLS:         cc,
+			})
+			if cerr != nil {
+				errc <- cerr
+				return
+			}
+			cli.Close()
+		}
+	}()
+
+	// 4. replace certs with expired ones
+	replaceFunc()
+
+	// 5. expect dial time-out when loading expired certs
+	select {
+	case gerr := <-errc:
+		if gerr != grpc.ErrClientConnTimeout {
+			t.Fatalf("expected %v, got %v", grpc.ErrClientConnTimeout, gerr)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("failed to receive dial timeout error")
+	}
+
+	// 6. replace expired certs back with valid ones
+	revertFunc()
+
+	// 7. new requests should trigger listener to reload valid certs
+	tls, terr := tlsInfo.ClientConfig()
+	if terr != nil {
+		t.Fatal(terr)
+	}
+	cl, cerr := clientv3.New(clientv3.Config{
+		Endpoints:   []string{clus.Members[0].GRPCAddr()},
+		DialTimeout: time.Second,
+		TLS:         tls,
+	})
+	if cerr != nil {
+		t.Fatalf("expected no error, got %v", cerr)
+	}
+	cl.Close()
+}
+
 func TestGRPCRequireLeader(t *testing.T) {
 	defer testutil.AfterTest(t)
 
@@ -1394,7 +1812,7 @@ func TestGRPCRequireLeader(t *testing.T) {
 	time.Sleep(time.Duration(3*electionTicks) * tickDuration)
 
 	md := metadata.Pairs(rpctypes.MetadataRequireLeaderKey, rpctypes.MetadataHasLeader)
-	ctx := metadata.NewContext(context.Background(), md)
+	ctx := metadata.NewOutgoingContext(context.Background(), md)
 	reqput := &pb.PutRequest{Key: []byte("foo"), Value: []byte("bar")}
 	if _, err := toGRPC(client).KV.Put(ctx, reqput); grpc.ErrorDesc(err) != rpctypes.ErrNoLeader.Error() {
 		t.Errorf("err = %v, want %v", err, rpctypes.ErrNoLeader)
@@ -1416,7 +1834,7 @@ func TestGRPCStreamRequireLeader(t *testing.T) {
 
 	wAPI := toGRPC(client).Watch
 	md := metadata.Pairs(rpctypes.MetadataRequireLeaderKey, rpctypes.MetadataHasLeader)
-	ctx := metadata.NewContext(context.Background(), md)
+	ctx := metadata.NewOutgoingContext(context.Background(), md)
 	wStream, err := wAPI.Watch(ctx)
 	if err != nil {
 		t.Fatalf("wAPI.Watch error: %v", err)
@@ -1460,6 +1878,35 @@ func TestGRPCStreamRequireLeader(t *testing.T) {
 	err = wStream.Send(wreq)
 	if err != nil {
 		t.Errorf("err = %v, want nil", err)
+	}
+}
+
+// TestV3PutLargeRequests ensures that configurable MaxRequestBytes works as intended.
+func TestV3PutLargeRequests(t *testing.T) {
+	defer testutil.AfterTest(t)
+	tests := []struct {
+		key             string
+		maxRequestBytes uint
+		valueSize       int
+		expectError     error
+	}{
+		// don't set to 0. use 0 as the default.
+		{"foo", 1, 1024, rpctypes.ErrGRPCRequestTooLarge},
+		{"foo", 10 * 1024 * 1024, 9 * 1024 * 1024, nil},
+		{"foo", 10 * 1024 * 1024, 10 * 1024 * 1024, rpctypes.ErrGRPCRequestTooLarge},
+		{"foo", 10 * 1024 * 1024, 10*1024*1024 + 5, rpctypes.ErrGRPCRequestTooLarge},
+	}
+	for i, test := range tests {
+		clus := NewClusterV3(t, &ClusterConfig{Size: 1, MaxRequestBytes: test.maxRequestBytes})
+		kvcli := toGRPC(clus.Client(0)).KV
+		reqput := &pb.PutRequest{Key: []byte(test.key), Value: make([]byte, test.valueSize)}
+		_, err := kvcli.Put(context.TODO(), reqput)
+
+		if !eqErrGRPC(err, test.expectError) {
+			t.Errorf("#%d: expected error %v, got %v", i, test.expectError, err)
+		}
+
+		clus.Terminate(t)
 	}
 }
 

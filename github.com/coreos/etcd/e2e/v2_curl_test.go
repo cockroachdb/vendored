@@ -23,15 +23,12 @@ import (
 	"github.com/coreos/etcd/pkg/testutil"
 )
 
-func TestV2CurlNoTLS(t *testing.T)        { testCurlPutGet(t, &configNoTLS) }
-func TestV2CurlAutoTLS(t *testing.T)      { testCurlPutGet(t, &configAutoTLS) }
-func TestV2CurlAllTLS(t *testing.T)       { testCurlPutGet(t, &configTLS) }
-func TestV2CurlPeerTLS(t *testing.T)      { testCurlPutGet(t, &configPeerTLS) }
-func TestV2CurlClientTLS(t *testing.T)    { testCurlPutGet(t, &configClientTLS) }
-func TestV2CurlProxyNoTLS(t *testing.T)   { testCurlPutGet(t, &configWithProxy) }
-func TestV2CurlProxyTLS(t *testing.T)     { testCurlPutGet(t, &configWithProxyTLS) }
-func TestV2CurlProxyPeerTLS(t *testing.T) { testCurlPutGet(t, &configWithProxyPeerTLS) }
-func TestV2CurlClientBoth(t *testing.T)   { testCurlPutGet(t, &configClientBoth) }
+func TestV2CurlNoTLS(t *testing.T)      { testCurlPutGet(t, &configNoTLS) }
+func TestV2CurlAutoTLS(t *testing.T)    { testCurlPutGet(t, &configAutoTLS) }
+func TestV2CurlAllTLS(t *testing.T)     { testCurlPutGet(t, &configTLS) }
+func TestV2CurlPeerTLS(t *testing.T)    { testCurlPutGet(t, &configPeerTLS) }
+func TestV2CurlClientTLS(t *testing.T)  { testCurlPutGet(t, &configClientTLS) }
+func TestV2CurlClientBoth(t *testing.T) { testCurlPutGet(t, &configClientBoth) }
 func testCurlPutGet(t *testing.T, cfg *etcdProcessClusterConfig) {
 	defer testutil.AfterTest(t)
 
@@ -127,6 +124,7 @@ type cURLReq struct {
 
 	value    string
 	expected string
+	header   string
 }
 
 // cURLPrefixArgs builds the beginning of a curl command for a given key
@@ -134,14 +132,14 @@ type cURLReq struct {
 func cURLPrefixArgs(clus *etcdProcessCluster, method string, req cURLReq) []string {
 	var (
 		cmdArgs = []string{"curl"}
-		acurl   = clus.procs[rand.Intn(clus.cfg.clusterSize)].cfg.acurl
+		acurl   = clus.procs[rand.Intn(clus.cfg.clusterSize)].Config().acurl
 	)
 	if req.isTLS {
 		if clus.cfg.clientTLS != clientTLSAndNonTLS {
 			panic("should not use cURLPrefixArgsUseTLS when serving only TLS or non-TLS")
 		}
 		cmdArgs = append(cmdArgs, "--cacert", caPath, "--cert", certPath, "--key", privateKeyPath)
-		acurl = clus.procs[rand.Intn(clus.cfg.clusterSize)].cfg.acurltls
+		acurl = toTLS(clus.procs[rand.Intn(clus.cfg.clusterSize)].Config().acurl)
 	} else if clus.cfg.clientTLS == clientTLS {
 		cmdArgs = append(cmdArgs, "--cacert", caPath, "--cert", certPath, "--key", privateKeyPath)
 	}
@@ -154,6 +152,10 @@ func cURLPrefixArgs(clus *etcdProcessCluster, method string, req cURLReq) []stri
 	}
 	if req.timeout != 0 {
 		cmdArgs = append(cmdArgs, "-m", fmt.Sprintf("%d", req.timeout))
+	}
+
+	if req.header != "" {
+		cmdArgs = append(cmdArgs, "-H", req.header)
 	}
 
 	switch method {

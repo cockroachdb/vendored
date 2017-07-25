@@ -482,7 +482,8 @@ func TestLeaseTimeToLive(t *testing.T) {
 	clus := integration.NewClusterV3(t, &integration.ClusterConfig{Size: 3})
 	defer clus.Terminate(t)
 
-	lapi := clus.RandClient()
+	c := clus.RandClient()
+	lapi := c
 
 	resp, err := lapi.Grant(context.Background(), 10)
 	if err != nil {
@@ -495,6 +496,11 @@ func TestLeaseTimeToLive(t *testing.T) {
 		if _, err = kv.Put(context.TODO(), keys[i], "bar", clientv3.WithLease(resp.ID)); err != nil {
 			t.Fatal(err)
 		}
+	}
+
+	// linearized read to ensure Puts propagated to server backing lapi
+	if _, err := c.Get(context.TODO(), "abc"); err != nil {
+		t.Fatal(err)
 	}
 
 	lresp, lerr := lapi.TimeToLive(context.Background(), resp.ID, clientv3.WithAttachedKeys())
@@ -586,16 +592,23 @@ func TestLeaseRenewLostQuorum(t *testing.T) {
 	}
 	// consume first keepalive so next message sends when cluster is down
 	<-ka
+	lastKa := time.Now()
 
 	// force keepalive stream message to timeout
 	clus.Members[1].Stop(t)
 	clus.Members[2].Stop(t)
-	// Use TTL-1 since the client closes the keepalive channel if no
-	// keepalive arrives before the lease deadline.
-	// The cluster has 1 second to recover and reply to the keepalive.
-	time.Sleep(time.Duration(r.TTL-1) * time.Second)
+	// Use TTL-2 since the client closes the keepalive channel if no
+	// keepalive arrives before the lease deadline; the client will
+	// try to resend a keepalive after TTL/3 seconds, so for a TTL of 4,
+	// sleeping for 2s should be sufficient time for issuing a retry.
+	// The cluster has two seconds to recover and reply to the keepalive.
+	time.Sleep(time.Duration(r.TTL-2) * time.Second)
 	clus.Members[1].Restart(t)
 	clus.Members[2].Restart(t)
+
+	if time.Since(lastKa) > time.Duration(r.TTL)*time.Second {
+		t.Skip("waited too long for server stop and restart")
+	}
 
 	select {
 	case _, ok := <-ka:
@@ -722,6 +735,12 @@ func TestLeaseWithRequireLeader(t *testing.T) {
 	}
 
 	clus.Members[1].Stop(t)
+	// kaReqLeader may issue multiple requests while waiting for the first
+	// response from proxy server; drain any stray keepalive responses
+	time.Sleep(100 * time.Millisecond)
+	for len(kaReqLeader) > 0 {
+		<-kaReqLeader
+	}
 
 	select {
 	case resp, ok := <-kaReqLeader:
