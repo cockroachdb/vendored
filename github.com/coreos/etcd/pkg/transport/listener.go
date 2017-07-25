@@ -52,20 +52,22 @@ func wrapTLS(addr, scheme string, tlsinfo *TLSInfo, l net.Listener) (net.Listene
 	if scheme != "https" && scheme != "unixs" {
 		return l, nil
 	}
-	return newTLSListener(l, tlsinfo)
+	return newTLSListener(l, tlsinfo, checkSAN)
 }
 
 type TLSInfo struct {
-	CertFile       string
-	KeyFile        string
-	CAFile         string
-	TrustedCAFile  string
-	ClientCertAuth bool
+	CertFile           string
+	KeyFile            string
+	CAFile             string
+	TrustedCAFile      string
+	ClientCertAuth     bool
+	CRLFile            string
+	InsecureSkipVerify bool
 
 	// ServerName ensures the cert matches the given host in case of discovery / virtual hosting
 	ServerName string
 
-	// HandshakeFailure is optinally called when a connection fails to handshake. The
+	// HandshakeFailure is optionally called when a connection fails to handshake. The
 	// connection will be closed immediately afterwards.
 	HandshakeFailure func(*tls.Conn, error)
 
@@ -77,7 +79,7 @@ type TLSInfo struct {
 }
 
 func (info TLSInfo) String() string {
-	return fmt.Sprintf("cert = %s, key = %s, ca = %s, trusted-ca = %s, client-cert-auth = %v", info.CertFile, info.KeyFile, info.CAFile, info.TrustedCAFile, info.ClientCertAuth)
+	return fmt.Sprintf("cert = %s, key = %s, ca = %s, trusted-ca = %s, client-cert-auth = %v, crl-file = %s", info.CertFile, info.KeyFile, info.CAFile, info.TrustedCAFile, info.ClientCertAuth, info.CRLFile)
 }
 
 func (info TLSInfo) Empty() bool {
@@ -172,6 +174,14 @@ func (info TLSInfo) baseConfig() (*tls.Config, error) {
 		MinVersion:   tls.VersionTLS12,
 		ServerName:   info.ServerName,
 	}
+	// this only reloads certs when there's a client request
+	// TODO: support server-side refresh (e.g. inotify, SIGHUP), caching
+	cfg.GetCertificate = func(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+		return tlsutil.NewCert(info.CertFile, info.KeyFile, info.parseFunc)
+	}
+	cfg.GetClientCertificate = func(unused *tls.CertificateRequestInfo) (*tls.Certificate, error) {
+		return tlsutil.NewCert(info.CertFile, info.KeyFile, info.parseFunc)
+	}
 	return cfg, nil
 }
 
@@ -227,6 +237,7 @@ func (info TLSInfo) ClientConfig() (*tls.Config, error) {
 	} else {
 		cfg = &tls.Config{ServerName: info.ServerName}
 	}
+	cfg.InsecureSkipVerify = info.InsecureSkipVerify
 
 	CAFiles := info.cafiles()
 	if len(CAFiles) > 0 {

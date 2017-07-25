@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package cache exports functionality for efficiently caching and mapping
+// `RangeRequest`s to corresponding `RangeResponse`s.
 package cache
 
 import (
@@ -38,7 +40,7 @@ type Cache interface {
 	Close()
 }
 
-// keyFunc returns the key of an request, which is used to look up in the cache for it's caching response.
+// keyFunc returns the key of a request, which is used to look up its caching response in the cache.
 func keyFunc(req *pb.RangeRequest) string {
 	// TODO: use marshalTo to reduce allocation
 	b, err := req.Marshal()

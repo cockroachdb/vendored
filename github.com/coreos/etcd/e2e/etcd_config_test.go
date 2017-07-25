@@ -25,7 +25,7 @@ func TestEtcdExampleConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = waitReadyExpectProc(proc, false); err != nil {
+	if err = waitReadyExpectProc(proc, etcdServerReadyLines); err != nil {
 		t.Fatal(err)
 	}
 	if err = proc.Stop(); err != nil {
