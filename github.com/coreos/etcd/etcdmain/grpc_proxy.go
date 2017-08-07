@@ -15,6 +15,7 @@
 package etcdmain
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"net"
@@ -25,7 +26,10 @@ import (
 	"time"
 
 	"github.com/coreos/etcd/clientv3"
+	"github.com/coreos/etcd/clientv3/leasing"
 	"github.com/coreos/etcd/clientv3/namespace"
+	"github.com/coreos/etcd/clientv3/ordering"
+	"github.com/coreos/etcd/etcdserver/api/etcdhttp"
 	"github.com/coreos/etcd/etcdserver/api/v3election/v3electionpb"
 	"github.com/coreos/etcd/etcdserver/api/v3lock/v3lockpb"
 	pb "github.com/coreos/etcd/etcdserver/etcdserverpb"
@@ -35,7 +39,6 @@ import (
 
 	"github.com/cockroachdb/cmux"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 )
@@ -68,8 +71,10 @@ var (
 	grpcProxyResolverTTL        int
 
 	grpcProxyNamespace string
+	grpcProxyLeasing   string
 
-	grpcProxyEnablePprof bool
+	grpcProxyEnablePprof    bool
+	grpcProxyEnableOrdering bool
 )
 
 func init() {
@@ -119,6 +124,9 @@ func newGRPCProxyStartCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&grpcProxyListenAutoTLS, "auto-tls", false, "proxy TLS using generated certificates")
 	cmd.Flags().StringVar(&grpcProxyListenCRL, "client-crl-file", "", "proxy client certificate revocation list file.")
 
+	// experimental flags
+	cmd.Flags().BoolVar(&grpcProxyEnableOrdering, "experimental-serializable-ordering", false, "Ensure serializable reads have monotonically increasing store revisions across endpoints.")
+	cmd.Flags().StringVar(&grpcProxyLeasing, "experimental-leasing-prefix", "", "leasing metadata prefix for disconnected linearized reads.")
 	return &cmd
 }
 
@@ -148,7 +156,7 @@ func startGRPCProxy(cmd *cobra.Command, args []string) {
 
 	client := mustNewClient()
 
-	srvhttp, httpl := mustHTTPListener(m, tlsinfo)
+	srvhttp, httpl := mustHTTPListener(m, tlsinfo, client)
 	errc := make(chan error)
 	go func() { errc <- newGRPCProxyServer(client).Serve(grpcl) }()
 	go func() { errc <- srvhttp.Serve(httpl) }()
@@ -157,7 +165,8 @@ func startGRPCProxy(cmd *cobra.Command, args []string) {
 		mhttpl := mustMetricsListener(tlsinfo)
 		go func() {
 			mux := http.NewServeMux()
-			mux.Handle("/metrics", prometheus.Handler())
+			etcdhttp.HandlePrometheus(mux)
+			grpcproxy.HandleHealth(mux, client)
 			plog.Fatal(http.Serve(mhttpl, mux))
 		}()
 	}
@@ -255,10 +264,28 @@ func mustListenCMux(tlsinfo *transport.TLSInfo) cmux.CMux {
 }
 
 func newGRPCProxyServer(client *clientv3.Client) *grpc.Server {
+	if grpcProxyEnableOrdering {
+		vf := ordering.NewOrderViolationSwitchEndpointClosure(*client)
+		client.KV = ordering.NewKV(client.KV, vf)
+		plog.Infof("waiting for linearized read from cluster to recover ordering")
+		for {
+			_, err := client.KV.Get(context.TODO(), "_", clientv3.WithKeysOnly())
+			if err == nil {
+				break
+			}
+			plog.Warningf("ordering recovery failed, retrying in 1s (%v)", err)
+			time.Sleep(time.Second)
+		}
+	}
+
 	if len(grpcProxyNamespace) > 0 {
 		client.KV = namespace.NewKV(client.KV, grpcProxyNamespace)
 		client.Watcher = namespace.NewWatcher(client.Watcher, grpcProxyNamespace)
 		client.Lease = namespace.NewLease(client.Lease, grpcProxyNamespace)
+	}
+
+	if len(grpcProxyLeasing) > 0 {
+		client.KV, _ = leasing.NewKV(client, grpcProxyLeasing)
 	}
 
 	kvp, _ := grpcproxy.NewKvProxy(client)
@@ -290,10 +317,11 @@ func newGRPCProxyServer(client *clientv3.Client) *grpc.Server {
 	return server
 }
 
-func mustHTTPListener(m cmux.CMux, tlsinfo *transport.TLSInfo) (*http.Server, net.Listener) {
+func mustHTTPListener(m cmux.CMux, tlsinfo *transport.TLSInfo, c *clientv3.Client) (*http.Server, net.Listener) {
 	httpmux := http.NewServeMux()
 	httpmux.HandleFunc("/", http.NotFound)
-	httpmux.Handle("/metrics", prometheus.Handler())
+	etcdhttp.HandlePrometheus(httpmux)
+	grpcproxy.HandleHealth(httpmux, c)
 	if grpcProxyEnablePprof {
 		for p, h := range debugutil.PProfHandlers() {
 			httpmux.Handle(p, h)

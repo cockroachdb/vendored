@@ -137,11 +137,20 @@ func (p *fieldsPrinter) EndpointStatus(eps []epStatus) {
 	for _, ep := range eps {
 		p.hdr(ep.Resp.Header)
 		fmt.Printf("\"Version\" : %q\n", ep.Resp.Version)
-		fmt.Println(`"DBSize" :"`, ep.Resp.DbSize)
-		fmt.Println(`"Leader" :"`, ep.Resp.Leader)
-		fmt.Println(`"RaftIndex" :"`, ep.Resp.RaftIndex)
-		fmt.Println(`"RaftTerm" :"`, ep.Resp.RaftTerm)
+		fmt.Println(`"DBSize" :`, ep.Resp.DbSize)
+		fmt.Println(`"Leader" :`, ep.Resp.Leader)
+		fmt.Println(`"RaftIndex" :`, ep.Resp.RaftIndex)
+		fmt.Println(`"RaftTerm" :`, ep.Resp.RaftTerm)
 		fmt.Printf("\"Endpoint\" : %q\n", ep.Ep)
+		fmt.Println()
+	}
+}
+
+func (p *fieldsPrinter) EndpointHashKV(hs []epHashKV) {
+	for _, h := range hs {
+		p.hdr(h.Resp.Header)
+		fmt.Printf("\"Endpoint\" : %q\n", h.Ep)
+		fmt.Println(`"Hash" :`, h.Resp.Hash)
 		fmt.Println()
 	}
 }

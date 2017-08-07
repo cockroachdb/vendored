@@ -30,6 +30,7 @@ import (
 	"github.com/coreos/etcd/pkg/testutil"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 )
 
 type watcherTest func(*testing.T, *watchctx)
@@ -514,6 +515,9 @@ func TestWatchCompactRevision(t *testing.T) {
 	if wresp.Err() != rpctypes.ErrCompacted {
 		t.Fatalf("wresp.Err() expected %v, but got %v", rpctypes.ErrCompacted, wresp.Err())
 	}
+	if !wresp.Canceled {
+		t.Fatalf("wresp.Canceled expected true, got %+v", wresp)
+	}
 
 	// ensure the channel is closed
 	if wresp, ok = <-wch; ok {
@@ -872,8 +876,10 @@ func TestWatchCancelOnServer(t *testing.T) {
 
 	cancels := make([]context.CancelFunc, numWatches)
 	for i := 0; i < numWatches; i++ {
-		// use WithTimeout to force separate streams in client
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		// force separate streams in client
+		md := metadata.Pairs("some-key", fmt.Sprintf("%d", i))
+		mctx := metadata.NewOutgoingContext(context.Background(), md)
+		ctx, cancel := context.WithCancel(mctx)
 		cancels[i] = cancel
 		w := client.Watch(ctx, fmt.Sprintf("%d", i), clientv3.WithCreatedNotify())
 		<-w
@@ -930,12 +936,12 @@ func testWatchOverlapContextCancel(t *testing.T, f func(*integration.ClusterV3))
 	clus := integration.NewClusterV3(t, &integration.ClusterConfig{Size: 1})
 	defer clus.Terminate(t)
 
-	// each unique context "%v" has a unique grpc stream
 	n := 100
 	ctxs, ctxc := make([]context.Context, 5), make([]chan struct{}, 5)
 	for i := range ctxs {
-		// make "%v" unique
-		ctxs[i] = context.WithValue(context.TODO(), "key", i)
+		// make unique stream
+		md := metadata.Pairs("some-key", fmt.Sprintf("%d", i))
+		ctxs[i] = metadata.NewOutgoingContext(context.Background(), md)
 		// limits the maximum number of outstanding watchers per stream
 		ctxc[i] = make(chan struct{}, 2)
 	}

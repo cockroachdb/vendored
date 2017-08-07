@@ -44,7 +44,7 @@ func TestV3PutOverwrite(t *testing.T) {
 
 	kvc := toGRPC(clus.RandClient()).KV
 	key := []byte("foo")
-	reqput := &pb.PutRequest{Key: key, Value: []byte("bar")}
+	reqput := &pb.PutRequest{Key: key, Value: []byte("bar"), PrevKv: true}
 
 	respput, err := kvc.Put(context.TODO(), reqput)
 	if err != nil {
@@ -60,6 +60,9 @@ func TestV3PutOverwrite(t *testing.T) {
 	if respput2.Header.Revision <= respput.Header.Revision {
 		t.Fatalf("expected newer revision on overwrite, got %v <= %v",
 			respput2.Header.Revision, respput.Header.Revision)
+	}
+	if pkv := respput2.PrevKv; pkv == nil || string(pkv.Value) != "bar" {
+		t.Fatalf("expected PrevKv=bar, got response %+v", respput2)
 	}
 
 	reqrange := &pb.RangeRequest{Key: key}
@@ -144,6 +147,55 @@ func TestV3CompactCurrentRev(t *testing.T) {
 	_, err = kvc.Range(context.Background(), &pb.RangeRequest{Key: []byte("foo"), Serializable: true})
 	if err != nil {
 		t.Fatalf("couldn't get serialized key after compaction (%v)", err)
+	}
+}
+
+// TestV3HashKV ensures that multiple calls of HashKV on same node return same hash and compact rev.
+func TestV3HashKV(t *testing.T) {
+	defer testutil.AfterTest(t)
+	clus := NewClusterV3(t, &ClusterConfig{Size: 1})
+	defer clus.Terminate(t)
+
+	kvc := toGRPC(clus.RandClient()).KV
+	mvc := toGRPC(clus.RandClient()).Maintenance
+
+	for i := 0; i < 10; i++ {
+		resp, err := kvc.Put(context.Background(), &pb.PutRequest{Key: []byte("foo"), Value: []byte(fmt.Sprintf("bar%d", i))})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		rev := resp.Header.Revision
+		hresp, err := mvc.HashKV(context.Background(), &pb.HashKVRequest{0})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if rev != hresp.Header.Revision {
+			t.Fatalf("Put rev %v != HashKV rev %v", rev, hresp.Header.Revision)
+		}
+
+		prevHash := hresp.Hash
+		prevCompactRev := hresp.CompactRevision
+		for i := 0; i < 10; i++ {
+			hresp, err := mvc.HashKV(context.Background(), &pb.HashKVRequest{0})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if rev != hresp.Header.Revision {
+				t.Fatalf("Put rev %v != HashKV rev %v", rev, hresp.Header.Revision)
+			}
+
+			if prevHash != hresp.Hash {
+				t.Fatalf("prevHash %v != Hash %v", prevHash, hresp.Hash)
+			}
+
+			if prevCompactRev != hresp.CompactRevision {
+				t.Fatalf("prevCompactRev %v != CompactRevision %v", prevHash, hresp.Hash)
+			}
+
+			prevHash = hresp.Hash
+			prevCompactRev = hresp.CompactRevision
+		}
 	}
 }
 
@@ -514,6 +566,28 @@ func TestV3TxnRangeCompare(t *testing.T) {
 				TargetUnion: &pb.Compare_Value{[]byte("x")},
 			},
 			false,
+		},
+		{
+			// all keys are leased
+			pb.Compare{
+				Key:         []byte("/a/"),
+				RangeEnd:    []byte("/a0"),
+				Target:      pb.Compare_LEASE,
+				Result:      pb.Compare_GREATER,
+				TargetUnion: &pb.Compare_Lease{0},
+			},
+			false,
+		},
+		{
+			// no keys are leased
+			pb.Compare{
+				Key:         []byte("/a/"),
+				RangeEnd:    []byte("/a0"),
+				Target:      pb.Compare_LEASE,
+				Result:      pb.Compare_EQUAL,
+				TargetUnion: &pb.Compare_Lease{0},
+			},
+			true,
 		},
 	}
 
@@ -1783,7 +1857,7 @@ func testTLSReload(t *testing.T, cloneFunc func() transport.TLSInfo, replaceFunc
 	}
 	cl, cerr := clientv3.New(clientv3.Config{
 		Endpoints:   []string{clus.Members[0].GRPCAddr()},
-		DialTimeout: time.Second,
+		DialTimeout: 5 * time.Second,
 		TLS:         tls,
 	})
 	if cerr != nil {
