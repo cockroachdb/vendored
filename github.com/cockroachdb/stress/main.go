@@ -173,14 +173,16 @@ func run() error {
 			switch err := ctx.Err(); err {
 			// A context timeout in this case is indicative of no failures
 			// being detected in the allotted duration.
-			case nil, context.DeadlineExceeded:
+			case context.DeadlineExceeded:
+				return nil
 			case context.Canceled:
-				if *flagMaxRuns > 0 && runs < *flagMaxRuns {
-					return err
+				if *flagMaxRuns > 0 && runs >= *flagMaxRuns {
+					return nil
 				}
+				return err
+			default:
+				return fmt.Errorf("unexpected context error: %v", err)
 			}
-
-			return nil
 		}
 	}
 }
