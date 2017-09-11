@@ -19,8 +19,6 @@
 
 BUILT_SOURCES = gen-dart/tutorial/lib/tutorial.dart gen-dart/shared/lib/shared.dart
 
-THRIFT = $(top_builddir)/compiler/cpp/thrift
-
 gen-dart/tutorial/lib/tutorial.dart gen-dart/shared/lib/shared.dart: $(top_srcdir)/tutorial/tutorial.thrift
 	$(THRIFT) --gen dart -r $<
 
@@ -30,6 +28,7 @@ clean-local:
 	$(RM) -r gen-*
 	find . -type d -name "packages" | xargs $(RM) -r
 	find . -type f -name ".packages" | xargs $(RM)
+	find . -type f -name "pubspec.lock" | xargs $(RM)
 
 pub-get: pub-get-gen pub-get-client pub-get-console-client pub-get-server
 

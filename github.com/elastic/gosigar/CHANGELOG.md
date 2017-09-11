@@ -12,16 +12,22 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Removed
 
+## [0.5.0]
+
+### Changed
+- Fixed Trim environment variables when comparing values in the test suite. #79
+- Make `kern_procargs` more robust under darwin when we cannot retrieve
+  all the information about a process. #78
+
+## [0.4.0]
+
+### Changed
+- Fixed Windows issue that caused a hang during `init()` if WMI wasn't ready. #74
+
 ## [0.3.0]
 
 ### Added
 - Read `MemAvailable` value for kernel 3.14+ #71
-
-### Changed
-
-### Deprecated
-
-### Removed
 
 ## [0.2.0]
 

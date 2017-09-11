@@ -15,14 +15,19 @@
 package leasing
 
 import (
+	"context"
 	"strings"
+	"sync"
 	"time"
 
 	v3 "github.com/coreos/etcd/clientv3"
 	"github.com/coreos/etcd/clientv3/concurrency"
+	"github.com/coreos/etcd/etcdserver/api/v3rpc/rpctypes"
+	pb "github.com/coreos/etcd/etcdserver/etcdserverpb"
 	"github.com/coreos/etcd/mvcc/mvccpb"
 
-	"golang.org/x/net/context"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type leasingKV struct {
@@ -30,8 +35,10 @@ type leasingKV struct {
 	kv     v3.KV
 	pfx    string
 	leases leaseCache
+
 	ctx    context.Context
 	cancel context.CancelFunc
+	wg     sync.WaitGroup
 
 	sessionOpts []concurrency.SessionOption
 	session     *concurrency.Session
@@ -46,9 +53,9 @@ func init() {
 }
 
 // NewKV wraps a KV instance so that all requests are wired through a leasing protocol.
-func NewKV(cl *v3.Client, pfx string, opts ...concurrency.SessionOption) (v3.KV, error) {
+func NewKV(cl *v3.Client, pfx string, opts ...concurrency.SessionOption) (v3.KV, func(), error) {
 	cctx, cancel := context.WithCancel(cl.Ctx())
-	lkv := leasingKV{
+	lkv := &leasingKV{
 		cl:          cl,
 		kv:          cl.KV,
 		pfx:         pfx,
@@ -58,9 +65,21 @@ func NewKV(cl *v3.Client, pfx string, opts ...concurrency.SessionOption) (v3.KV,
 		sessionOpts: opts,
 		sessionc:    make(chan struct{}),
 	}
-	go lkv.monitorSession()
-	go lkv.leases.clearOldRevokes(cctx)
-	return &lkv, lkv.waitSession(cctx)
+	lkv.wg.Add(2)
+	go func() {
+		defer lkv.wg.Done()
+		lkv.monitorSession()
+	}()
+	go func() {
+		defer lkv.wg.Done()
+		lkv.leases.clearOldRevokes(cctx)
+	}()
+	return lkv, lkv.Close, lkv.waitSession(cctx)
+}
+
+func (lkv *leasingKV) Close() {
+	lkv.cancel()
+	lkv.wg.Wait()
 }
 
 func (lkv *leasingKV) Get(ctx context.Context, key string, opts ...v3.OpOption) (*v3.GetResponse, error) {
@@ -239,16 +258,38 @@ func (lkv *leasingKV) put(ctx context.Context, op v3.Op) (pr *v3.PutResponse, er
 }
 
 func (lkv *leasingKV) acquire(ctx context.Context, key string, op v3.Op) (*v3.TxnResponse, error) {
-	if err := lkv.waitSession(ctx); err != nil {
-		return nil, err
+	for ctx.Err() == nil {
+		if err := lkv.waitSession(ctx); err != nil {
+			return nil, err
+		}
+		lcmp := v3.Cmp{Key: []byte(key), Target: pb.Compare_LEASE}
+		resp, err := lkv.kv.Txn(ctx).If(
+			v3.Compare(v3.CreateRevision(lkv.pfx+key), "=", 0),
+			v3.Compare(lcmp, "=", 0)).
+			Then(
+				op,
+				v3.OpPut(lkv.pfx+key, "", v3.WithLease(lkv.leaseID()))).
+			Else(
+				op,
+				v3.OpGet(lkv.pfx+key),
+			).Commit()
+		if err == nil {
+			if !resp.Succeeded {
+				kvs := resp.Responses[1].GetResponseRange().Kvs
+				// if txn failed since already owner, lease is acquired
+				resp.Succeeded = len(kvs) > 0 && v3.LeaseID(kvs[0].Lease) == lkv.leaseID()
+			}
+			return resp, nil
+		}
+		// retry if transient error
+		if _, ok := err.(rpctypes.EtcdError); ok {
+			return nil, err
+		}
+		if ev, _ := status.FromError(err); ev.Code() != codes.Unavailable {
+			return nil, err
+		}
 	}
-	return lkv.kv.Txn(ctx).If(
-		v3.Compare(v3.CreateRevision(lkv.pfx+key), "=", 0)).
-		Then(
-			op,
-			v3.OpPut(lkv.pfx+key, "", v3.WithLease(lkv.leaseID()))).
-		Else(op).
-		Commit()
+	return nil, ctx.Err()
 }
 
 func (lkv *leasingKV) get(ctx context.Context, op v3.Op) (*v3.GetResponse, error) {
@@ -281,7 +322,11 @@ func (lkv *leasingKV) get(ctx context.Context, op v3.Op) (*v3.GetResponse, error
 	getResp.Header = resp.Header
 	if resp.Succeeded {
 		getResp = lkv.leases.Add(key, getResp, op)
-		go lkv.monitorLease(ctx, key, resp.Header.Revision)
+		lkv.wg.Add(1)
+		go func() {
+			defer lkv.wg.Done()
+			lkv.monitorLease(ctx, key, resp.Header.Revision)
+		}()
 	}
 	return getResp, nil
 }

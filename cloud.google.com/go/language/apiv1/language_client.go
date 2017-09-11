@@ -31,18 +31,17 @@ import (
 
 // CallOptions contains the retry settings for each method of Client.
 type CallOptions struct {
-	AnalyzeSentiment []gax.CallOption
-	AnalyzeEntities  []gax.CallOption
-	AnalyzeSyntax    []gax.CallOption
-	AnnotateText     []gax.CallOption
+	AnalyzeSentiment       []gax.CallOption
+	AnalyzeEntities        []gax.CallOption
+	AnalyzeEntitySentiment []gax.CallOption
+	AnalyzeSyntax          []gax.CallOption
+	AnnotateText           []gax.CallOption
 }
 
 func defaultClientOptions() []option.ClientOption {
 	return []option.ClientOption{
 		option.WithEndpoint("language.googleapis.com:443"),
-		option.WithScopes(
-			"https://www.googleapis.com/auth/cloud-platform",
-		),
+		option.WithScopes(DefaultAuthScopes()...),
 	}
 }
 
@@ -62,10 +61,11 @@ func defaultCallOptions() *CallOptions {
 		},
 	}
 	return &CallOptions{
-		AnalyzeSentiment: retry[[2]string{"default", "idempotent"}],
-		AnalyzeEntities:  retry[[2]string{"default", "idempotent"}],
-		AnalyzeSyntax:    retry[[2]string{"default", "idempotent"}],
-		AnnotateText:     retry[[2]string{"default", "idempotent"}],
+		AnalyzeSentiment:       retry[[2]string{"default", "idempotent"}],
+		AnalyzeEntities:        retry[[2]string{"default", "idempotent"}],
+		AnalyzeEntitySentiment: retry[[2]string{"default", "idempotent"}],
+		AnalyzeSyntax:          retry[[2]string{"default", "idempotent"}],
+		AnnotateText:           retry[[2]string{"default", "idempotent"}],
 	}
 }
 
@@ -81,7 +81,7 @@ type Client struct {
 	CallOptions *CallOptions
 
 	// The metadata to be sent with each request.
-	xGoogHeader string
+	xGoogHeader []string
 }
 
 // NewClient creates a new language service client.
@@ -99,7 +99,7 @@ func NewClient(ctx context.Context, opts ...option.ClientOption) (*Client, error
 
 		client: languagepb.NewLanguageServiceClient(conn),
 	}
-	c.SetGoogleClientInfo()
+	c.setGoogleClientInfo()
 	return c, nil
 }
 
@@ -114,13 +114,13 @@ func (c *Client) Close() error {
 	return c.conn.Close()
 }
 
-// SetGoogleClientInfo sets the name and version of the application in
+// setGoogleClientInfo sets the name and version of the application in
 // the `x-goog-api-client` header passed on each request. Intended for
 // use by Google-written clients.
-func (c *Client) SetGoogleClientInfo(keyval ...string) {
+func (c *Client) setGoogleClientInfo(keyval ...string) {
 	kv := append([]string{"gl-go", version.Go()}, keyval...)
 	kv = append(kv, "gapic", version.Repo, "gax", gax.Version, "grpc", grpc.Version)
-	c.xGoogHeader = gax.XGoogHeader(kv...)
+	c.xGoogHeader = []string{gax.XGoogHeader(kv...)}
 }
 
 // AnalyzeSentiment analyzes the sentiment of the provided text.
@@ -149,6 +149,23 @@ func (c *Client) AnalyzeEntities(ctx context.Context, req *languagepb.AnalyzeEnt
 	err := gax.Invoke(ctx, func(ctx context.Context, settings gax.CallSettings) error {
 		var err error
 		resp, err = c.client.AnalyzeEntities(ctx, req, settings.GRPC...)
+		return err
+	}, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+// AnalyzeEntitySentiment finds entities, similar to [AnalyzeEntities][google.cloud.language.v1.LanguageService.AnalyzeEntities] in the text and analyzes
+// sentiment associated with each entity and its mentions.
+func (c *Client) AnalyzeEntitySentiment(ctx context.Context, req *languagepb.AnalyzeEntitySentimentRequest, opts ...gax.CallOption) (*languagepb.AnalyzeEntitySentimentResponse, error) {
+	ctx = insertXGoog(ctx, c.xGoogHeader)
+	opts = append(c.CallOptions.AnalyzeEntitySentiment[0:len(c.CallOptions.AnalyzeEntitySentiment):len(c.CallOptions.AnalyzeEntitySentiment)], opts...)
+	var resp *languagepb.AnalyzeEntitySentimentResponse
+	err := gax.Invoke(ctx, func(ctx context.Context, settings gax.CallSettings) error {
+		var err error
+		resp, err = c.client.AnalyzeEntitySentiment(ctx, req, settings.GRPC...)
 		return err
 	}, opts...)
 	if err != nil {

@@ -1,5 +1,19 @@
 package main
 
+// Copyright 2017 Microsoft Corporation
+//
+//  Licensed under the Apache License, Version 2.0 (the "License");
+//  you may not use this file except in compliance with the License.
+//  You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+//  Unless required by applicable law or agreed to in writing, software
+//  distributed under the License is distributed on an "AS IS" BASIS,
+//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//  See the License for the specific language governing permissions and
+//  limitations under the License.
+
 import (
 	"fmt"
 	"log"
@@ -7,6 +21,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/arm/examples/helpers"
 	"github.com/Azure/azure-sdk-for-go/arm/storage"
+	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/Azure/go-autorest/autorest/to"
 )
@@ -31,7 +46,7 @@ func main() {
 	}
 
 	ac := storage.NewAccountsClient(c["AZURE_SUBSCRIPTION_ID"])
-	ac.Authorizer = spt
+	ac.Authorizer = autorest.NewBearerAuthorizer(spt)
 
 	cna, err := ac.CheckNameAvailability(
 		storage.AccountCheckNameAvailabilityParameters{
@@ -53,7 +68,10 @@ func main() {
 			Tier: storage.Standard},
 		Location: to.StringPtr("westus")}
 	cancel := make(chan struct{})
-	if _, err = ac.Create(resourceGroup, name, cp, cancel); err != nil {
+
+	_, errchan := ac.Create(resourceGroup, name, cp, cancel)
+	err = <-errchan
+	if err != nil {
 		fmt.Printf("Create '%s' storage account failed: %v\n", name, err)
 		return
 	}

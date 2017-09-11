@@ -1,17 +1,27 @@
 package storage
 
+// Copyright 2017 Microsoft Corporation
+//
+//  Licensed under the Apache License, Version 2.0 (the "License");
+//  you may not use this file except in compliance with the License.
+//  You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+//  Unless required by applicable law or agreed to in writing, software
+//  distributed under the License is distributed on an "AS IS" BASIS,
+//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//  See the License for the specific language governing permissions and
+//  limitations under the License.
+
 import (
 	"bytes"
-	"crypto/rand"
-	"encoding/base64"
 	"encoding/xml"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"net/http"
-	"net/url"
-	"testing"
-	"time"
+	"strconv"
+	"strings"
 
 	chk "gopkg.in/check.v1"
 )
@@ -20,1111 +30,551 @@ type StorageBlobSuite struct{}
 
 var _ = chk.Suite(&StorageBlobSuite{})
 
-const testContainerPrefix = "zzzztest-"
-
 func getBlobClient(c *chk.C) BlobStorageClient {
 	return getBasicClient(c).GetBlobService()
 }
 
-func (s *StorageBlobSuite) Test_pathForBlob(c *chk.C) {
-	c.Assert(pathForBlob("foo", "blob"), chk.Equals, "/foo/blob")
+func (s *StorageBlobSuite) Test_buildPath(c *chk.C) {
+	cli := getBlobClient(c)
+	cnt := cli.GetContainerReference("lol")
+	b := cnt.GetBlobReference("rofl")
+	c.Assert(b.buildPath(), chk.Equals, "/lol/rofl")
 }
 
 func (s *StorageBlobSuite) Test_pathForResource(c *chk.C) {
-	c.Assert(pathForResource("foo", ""), chk.Equals, "/foo")
-	c.Assert(pathForResource("foo", "blob"), chk.Equals, "/foo/blob")
-}
-
-func (s *StorageBlobSuite) Test_blobSASStringToSign(c *chk.C) {
-	_, err := blobSASStringToSign("2012-02-12", "CS", "SE", "SP", "", "")
-	c.Assert(err, chk.NotNil) // not implemented SAS for versions earlier than 2013-08-15
-
-	out, err := blobSASStringToSign("2013-08-15", "CS", "SE", "SP", "", "")
-	c.Assert(err, chk.IsNil)
-	c.Assert(out, chk.Equals, "SP\n\nSE\nCS\n\n2013-08-15\n\n\n\n\n")
-
-	// check format for 2015-04-05 version
-	out, err = blobSASStringToSign("2015-04-05", "CS", "SE", "SP", "127.0.0.1", "https,http")
-	c.Assert(err, chk.IsNil)
-	c.Assert(out, chk.Equals, "SP\n\nSE\n/blobCS\n\n127.0.0.1\nhttps,http\n2015-04-05\n\n\n\n\n")
-}
-
-func (s *StorageBlobSuite) TestGetBlobSASURI(c *chk.C) {
-	api, err := NewClient("foo", "YmFy", DefaultBaseURL, "2013-08-15", true)
-	c.Assert(err, chk.IsNil)
-	cli := api.GetBlobService()
-	expiry := time.Time{}
-
-	expectedParts := url.URL{
-		Scheme: "https",
-		Host:   "foo.blob.core.windows.net",
-		Path:   "container/name",
-		RawQuery: url.Values{
-			"sv":  {"2013-08-15"},
-			"sig": {"/OXG7rWh08jYwtU03GzJM0DHZtidRGpC6g69rSGm3I0="},
-			"sr":  {"b"},
-			"sp":  {"r"},
-			"se":  {"0001-01-01T00:00:00Z"},
-		}.Encode()}
-
-	u, err := cli.GetBlobSASURI("container", "name", expiry, "r")
-	c.Assert(err, chk.IsNil)
-	sasParts, err := url.Parse(u)
-	c.Assert(err, chk.IsNil)
-	c.Assert(expectedParts.String(), chk.Equals, sasParts.String())
-	c.Assert(expectedParts.Query(), chk.DeepEquals, sasParts.Query())
-}
-
-//Gets a SASURI for the entire container
-func (s *StorageBlobSuite) TestGetBlobSASURIContainer(c *chk.C) {
-	api, err := NewClient("foo", "YmFy", DefaultBaseURL, "2013-08-15", true)
-	c.Assert(err, chk.IsNil)
-	cli := api.GetBlobService()
-	expiry := time.Time{}
-
-	expectedParts := url.URL{
-		Scheme: "https",
-		Host:   "foo.blob.core.windows.net",
-		Path:   "container",
-		RawQuery: url.Values{
-			"sv":  {"2013-08-15"},
-			"sig": {"KMjYyQODKp6uK9EKR3yGhO2M84e1LfoztypU32kHj4s="},
-			"sr":  {"c"},
-			"sp":  {"r"},
-			"se":  {"0001-01-01T00:00:00Z"},
-		}.Encode()}
-
-	u, err := cli.GetBlobSASURI("container", "", expiry, "r")
-	c.Assert(err, chk.IsNil)
-	sasParts, err := url.Parse(u)
-	c.Assert(err, chk.IsNil)
-	c.Assert(expectedParts.String(), chk.Equals, sasParts.String())
-	c.Assert(expectedParts.Query(), chk.DeepEquals, sasParts.Query())
-}
-
-func (s *StorageBlobSuite) TestGetBlobSASURIWithSignedIPAndProtocolValidAPIVersionPassed(c *chk.C) {
-	api, err := NewClient("foo", "YmFy", DefaultBaseURL, "2015-04-05", true)
-	c.Assert(err, chk.IsNil)
-	cli := api.GetBlobService()
-	expiry := time.Time{}
-
-	expectedParts := url.URL{
-		Scheme: "https",
-		Host:   "foo.blob.core.windows.net",
-		Path:   "/container/name",
-		RawQuery: url.Values{
-			"sv":  {"2015-04-05"},
-			"sig": {"VBOYJmt89UuBRXrxNzmsCMoC+8PXX2yklV71QcL1BfM="},
-			"sr":  {"b"},
-			"sip": {"127.0.0.1"},
-			"sp":  {"r"},
-			"se":  {"0001-01-01T00:00:00Z"},
-			"spr": {"https"},
-		}.Encode()}
-
-	u, err := cli.GetBlobSASURIWithSignedIPAndProtocol("container", "name", expiry, "r", "127.0.0.1", true)
-	c.Assert(err, chk.IsNil)
-	sasParts, err := url.Parse(u)
-	c.Assert(err, chk.IsNil)
-	c.Assert(sasParts.Query(), chk.DeepEquals, expectedParts.Query())
-}
-
-// Trying to use SignedIP and Protocol but using an older version of the API.
-// Should ignore the signedIP/protocol and just use what the older version requires.
-func (s *StorageBlobSuite) TestGetBlobSASURIWithSignedIPAndProtocolUsingOldAPIVersion(c *chk.C) {
-	api, err := NewClient("foo", "YmFy", DefaultBaseURL, "2013-08-15", true)
-	c.Assert(err, chk.IsNil)
-	cli := api.GetBlobService()
-	expiry := time.Time{}
-
-	expectedParts := url.URL{
-		Scheme: "https",
-		Host:   "foo.blob.core.windows.net",
-		Path:   "/container/name",
-		RawQuery: url.Values{
-			"sv":  {"2013-08-15"},
-			"sig": {"/OXG7rWh08jYwtU03GzJM0DHZtidRGpC6g69rSGm3I0="},
-			"sr":  {"b"},
-			"sp":  {"r"},
-			"se":  {"0001-01-01T00:00:00Z"},
-		}.Encode()}
-
-	u, err := cli.GetBlobSASURIWithSignedIPAndProtocol("container", "name", expiry, "r", "", true)
-	c.Assert(err, chk.IsNil)
-	sasParts, err := url.Parse(u)
-	c.Assert(err, chk.IsNil)
-	c.Assert(expectedParts.String(), chk.Equals, sasParts.String())
-	c.Assert(expectedParts.Query(), chk.DeepEquals, sasParts.Query())
-}
-
-func (s *StorageBlobSuite) TestBlobSASURICorrectness(c *chk.C) {
-	cli := getBlobClient(c)
-	cnt := cli.GetContainerReference(randContainer())
-	c.Assert(cnt.Create(), chk.IsNil)
-	defer cnt.Delete()
-
-	blob := randNameWithSpecialChars(5)
-	body := []byte(randString(100))
-	expiry := now.UTC().Add(time.Hour)
-	permissions := "r"
-
-	c.Assert(cli.putSingleBlockBlob(cnt.Name, blob, body), chk.IsNil)
-
-	sasURI, err := cli.GetBlobSASURI(cnt.Name, blob, expiry, permissions)
-	c.Assert(err, chk.IsNil)
-
-	resp, err := http.Get(sasURI)
-	c.Assert(err, chk.IsNil)
-
-	blobResp, err := ioutil.ReadAll(resp.Body)
-	defer resp.Body.Close()
-	c.Assert(err, chk.IsNil)
-
-	c.Assert(resp.StatusCode, chk.Equals, http.StatusOK)
-	c.Assert(len(blobResp), chk.Equals, len(body))
+	c.Assert(pathForResource("lol", ""), chk.Equals, "/lol")
+	c.Assert(pathForResource("lol", "blob"), chk.Equals, "/lol/blob")
 }
 
 func (s *StorageBlobSuite) TestBlobExists(c *chk.C) {
-	blob := randName(5)
-
 	cli := getBlobClient(c)
-	cnt := cli.GetContainerReference(randContainer())
-	c.Assert(cnt.Create(), chk.IsNil)
-	defer cnt.Delete()
+	rec := cli.client.appendRecorder(c)
+	defer rec.Stop()
 
-	c.Assert(cli.putSingleBlockBlob(cnt.Name, blob, []byte("Hello!")), chk.IsNil)
-	defer cli.DeleteBlob(cnt.Name, blob, nil)
+	cnt := cli.GetContainerReference(containerName(c))
+	c.Assert(cnt.Create(nil), chk.IsNil)
+	b := cnt.GetBlobReference(blobName(c))
+	defer cnt.Delete(nil)
 
-	ok, err := cli.BlobExists(cnt.Name, blob+".foo")
+	c.Assert(b.putSingleBlockBlob([]byte("Hello!")), chk.IsNil)
+	defer b.Delete(nil)
+
+	ok, err := b.Exists()
+	c.Assert(err, chk.IsNil)
+	c.Assert(ok, chk.Equals, true)
+	b.Name += ".lol"
+	ok, err = b.Exists()
 	c.Assert(err, chk.IsNil)
 	c.Assert(ok, chk.Equals, false)
 
-	ok, err = cli.BlobExists(cnt.Name, blob)
-	c.Assert(err, chk.IsNil)
-	c.Assert(ok, chk.Equals, true)
 }
 
 func (s *StorageBlobSuite) TestGetBlobURL(c *chk.C) {
-	api, err := NewBasicClient("foo", "YmFy")
+	cli, err := NewBasicClient(dummyStorageAccount, dummyMiniStorageKey)
 	c.Assert(err, chk.IsNil)
-	cli := api.GetBlobService()
+	blobCli := cli.GetBlobService()
 
-	c.Assert(cli.GetBlobURL("c", "nested/blob"), chk.Equals, "https://foo.blob.core.windows.net/c/nested/blob")
-	c.Assert(cli.GetBlobURL("", "blob"), chk.Equals, "https://foo.blob.core.windows.net/$root/blob")
-	c.Assert(cli.GetBlobURL("", "nested/blob"), chk.Equals, "https://foo.blob.core.windows.net/$root/nested/blob")
+	cnt := blobCli.GetContainerReference("c")
+	b := cnt.GetBlobReference("nested/blob")
+	c.Assert(b.GetURL(), chk.Equals, "https://golangrocksonazure.blob.core.windows.net/c/nested/blob")
+
+	cnt.Name = ""
+	c.Assert(b.GetURL(), chk.Equals, "https://golangrocksonazure.blob.core.windows.net/$root/nested/blob")
+
+	b.Name = "blob"
+	c.Assert(b.GetURL(), chk.Equals, "https://golangrocksonazure.blob.core.windows.net/$root/blob")
+
 }
 
 func (s *StorageBlobSuite) TestGetBlobContainerURL(c *chk.C) {
-	api, err := NewBasicClient("foo", "YmFy")
+	cli, err := NewBasicClient(dummyStorageAccount, dummyMiniStorageKey)
 	c.Assert(err, chk.IsNil)
-	cli := api.GetBlobService()
+	blobCli := cli.GetBlobService()
 
-	c.Assert(cli.GetBlobURL("c", ""), chk.Equals, "https://foo.blob.core.windows.net/c")
-	c.Assert(cli.GetBlobURL("", ""), chk.Equals, "https://foo.blob.core.windows.net/$root")
-}
+	cnt := blobCli.GetContainerReference("c")
+	b := cnt.GetBlobReference("")
+	c.Assert(b.GetURL(), chk.Equals, "https://golangrocksonazure.blob.core.windows.net/c")
 
-func (s *StorageBlobSuite) TestBlobCopy(c *chk.C) {
-	if testing.Short() {
-		c.Skip("skipping blob copy in short mode, no SLA on async operation")
-	}
-
-	cli := getBlobClient(c)
-	cnt := cli.GetContainerReference(randContainer())
-	c.Assert(cnt.Create(), chk.IsNil)
-	defer cnt.Delete()
-
-	src := randName(5)
-	dst := randName(5)
-	body := []byte(randString(1024))
-
-	c.Assert(cli.putSingleBlockBlob(cnt.Name, src, body), chk.IsNil)
-	defer cli.DeleteBlob(cnt.Name, src, nil)
-
-	c.Assert(cli.CopyBlob(cnt.Name, dst, cli.GetBlobURL(cnt.Name, src)), chk.IsNil)
-	defer cli.DeleteBlob(cnt.Name, dst, nil)
-
-	blobBody, err := cli.GetBlob(cnt.Name, dst)
-	c.Assert(err, chk.IsNil)
-
-	b, err := ioutil.ReadAll(blobBody)
-	defer blobBody.Close()
-	c.Assert(err, chk.IsNil)
-	c.Assert(b, chk.DeepEquals, body)
-}
-
-func (s *StorageBlobSuite) TestStartBlobCopy(c *chk.C) {
-	if testing.Short() {
-		c.Skip("skipping blob copy in short mode, no SLA on async operation")
-	}
-
-	cli := getBlobClient(c)
-	cnt := cli.GetContainerReference(randContainer())
-	c.Assert(cnt.Create(), chk.IsNil)
-	defer cnt.Delete()
-
-	src := randName(5)
-	dst := randName(5)
-	body := []byte(randString(1024))
-
-	c.Assert(cli.putSingleBlockBlob(cnt.Name, src, body), chk.IsNil)
-	defer cli.DeleteBlob(cnt.Name, src, nil)
-
-	// given we dont know when it will start, can we even test destination creation?
-	// will just test that an error wasn't thrown for now.
-	copyID, err := cli.StartBlobCopy(cnt.Name, dst, cli.GetBlobURL(cnt.Name, src))
-	c.Assert(copyID, chk.NotNil)
-	c.Assert(err, chk.IsNil)
-}
-
-// Tests abort of blobcopy. Given the blobcopy is usually over before we can actually trigger an abort
-// it is agreed that we perform a copy then try and perform an abort. It should result in a HTTP status of 409.
-// So basically we're testing negative scenario (as good as we can do for now)
-func (s *StorageBlobSuite) TestAbortBlobCopy(c *chk.C) {
-	if testing.Short() {
-		c.Skip("skipping blob copy in short mode, no SLA on async operation")
-	}
-
-	cli := getBlobClient(c)
-	cnt := cli.GetContainerReference(randContainer())
-	c.Assert(cnt.Create(), chk.IsNil)
-	defer cnt.Delete()
-
-	src := randName(5)
-	dst := randName(5)
-	body := []byte(randString(1024))
-
-	c.Assert(cli.putSingleBlockBlob(cnt.Name, src, body), chk.IsNil)
-	defer cli.DeleteBlob(cnt.Name, src, nil)
-
-	// given we dont know when it will start, can we even test destination creation?
-	// will just test that an error wasn't thrown for now.
-	copyID, err := cli.StartBlobCopy(cnt.Name, dst, cli.GetBlobURL(cnt.Name, src))
-	c.Assert(copyID, chk.NotNil)
-	c.Assert(err, chk.IsNil)
-
-	err = cli.WaitForBlobCopy(cnt.Name, dst, copyID)
-	c.Assert(err, chk.IsNil)
-
-	// abort abort abort, but we *know* its already completed.
-	err = cli.AbortBlobCopy(cnt.Name, dst, copyID, "", 0)
-
-	// abort should fail (over already)
-	c.Assert(err.(AzureStorageServiceError).StatusCode, chk.Equals, http.StatusConflict)
+	cnt.Name = ""
+	c.Assert(b.GetURL(), chk.Equals, "https://golangrocksonazure.blob.core.windows.net/$root")
 }
 
 func (s *StorageBlobSuite) TestDeleteBlobIfExists(c *chk.C) {
-	blob := randName(5)
-
 	cli := getBlobClient(c)
-	cnt := cli.GetContainerReference(randContainer())
-	c.Assert(cnt.Create(), chk.IsNil)
-	defer cnt.Delete()
+	rec := cli.client.appendRecorder(c)
+	defer rec.Stop()
 
-	c.Assert(cli.DeleteBlob(cnt.Name, blob, nil), chk.NotNil)
+	cnt := cli.GetContainerReference(containerName(c))
+	b := cnt.GetBlobReference(blobName(c))
+	c.Assert(cnt.Create(nil), chk.IsNil)
+	defer cnt.Delete(nil)
 
-	ok, err := cli.DeleteBlobIfExists(cnt.Name, blob, nil)
+	c.Assert(b.Delete(nil), chk.NotNil)
+
+	ok, err := b.DeleteIfExists(nil)
 	c.Assert(err, chk.IsNil)
 	c.Assert(ok, chk.Equals, false)
 }
 
 func (s *StorageBlobSuite) TestDeleteBlobWithConditions(c *chk.C) {
-	blob := randName(5)
-
 	cli := getBlobClient(c)
-	cnt := cli.GetContainerReference(randContainer())
-	c.Assert(cnt.Create(), chk.IsNil)
-	defer cnt.Delete()
+	rec := cli.client.appendRecorder(c)
+	defer rec.Stop()
 
-	c.Assert(cli.CreateBlockBlob(cnt.Name, blob), chk.IsNil)
-	oldProps, err := cli.GetBlobProperties(cnt.Name, blob)
+	cnt := cli.GetContainerReference(containerName(c))
+	b := cnt.GetBlobReference(blobName(c))
+	c.Assert(cnt.Create(nil), chk.IsNil)
+	defer cnt.Delete(nil)
+
+	c.Assert(b.CreateBlockBlob(nil), chk.IsNil)
+	err := b.GetProperties(nil)
 	c.Assert(err, chk.IsNil)
+	etag := b.Properties.Etag
 
-	// Update metadata, so Etag changes
-	c.Assert(cli.SetBlobMetadata(cnt.Name, blob, map[string]string{}, nil), chk.IsNil)
-	newProps, err := cli.GetBlobProperties(cnt.Name, blob)
-	c.Assert(err, chk.IsNil)
-
-	// "Delete if matches old Etag" should fail without deleting.
-	err = cli.DeleteBlob(cnt.Name, blob, map[string]string{
-		"If-Match": oldProps.Etag,
-	})
+	// "Delete if matches incorrect or old Etag" should fail without deleting.
+	options := DeleteBlobOptions{
+		IfMatch: "GolangRocksOnAzure",
+	}
+	err = b.Delete(&options)
 	c.Assert(err, chk.FitsTypeOf, AzureStorageServiceError{})
 	c.Assert(err.(AzureStorageServiceError).StatusCode, chk.Equals, http.StatusPreconditionFailed)
-	_, err = cli.GetBlob(cnt.Name, blob)
+	ok, err := b.Exists()
 	c.Assert(err, chk.IsNil)
+	c.Assert(ok, chk.Equals, true)
 
 	// "Delete if matches new Etag" should succeed.
-	err = cli.DeleteBlob(cnt.Name, blob, map[string]string{
-		"If-Match": newProps.Etag,
-	})
+	options.IfMatch = etag
+	ok, err = b.DeleteIfExists(&options)
 	c.Assert(err, chk.IsNil)
-	_, err = cli.GetBlob(cnt.Name, blob)
-	c.Assert(err, chk.Not(chk.IsNil))
+	c.Assert(ok, chk.Equals, true)
 }
 
 func (s *StorageBlobSuite) TestGetBlobProperties(c *chk.C) {
-	blob := randName(5)
-	contents := randString(64)
-
 	cli := getBlobClient(c)
-	cnt := cli.GetContainerReference(randContainer())
-	c.Assert(cnt.Create(), chk.IsNil)
-	defer cnt.Delete()
+	rec := cli.client.appendRecorder(c)
+	defer rec.Stop()
 
-	// Nonexisting blob
-	_, err := cli.GetBlobProperties(cnt.Name, blob)
+	cnt := cli.GetContainerReference(containerName(c))
+	c.Assert(cnt.Create(nil), chk.IsNil)
+	defer cnt.Delete(nil)
+
+	// try to get properties on a nonexisting blob
+	blob1 := cnt.GetBlobReference(blobName(c, "1"))
+	err := blob1.GetProperties(nil)
 	c.Assert(err, chk.NotNil)
 
-	// Put the blob
-	c.Assert(cli.putSingleBlockBlob(cnt.Name, blob, []byte(contents)), chk.IsNil)
+	// Put a blob
+	blob2 := cnt.GetBlobReference(blobName(c, "2"))
+	contents := content(64)
+	c.Assert(blob2.putSingleBlockBlob(contents), chk.IsNil)
 
 	// Get blob properties
-	props, err := cli.GetBlobProperties(cnt.Name, blob)
+	err = blob2.GetProperties(nil)
 	c.Assert(err, chk.IsNil)
 
-	c.Assert(props.ContentLength, chk.Equals, int64(len(contents)))
-	c.Assert(props.ContentType, chk.Equals, "application/octet-stream")
-	c.Assert(props.BlobType, chk.Equals, BlobTypeBlock)
+	c.Assert(blob2.Properties.ContentLength, chk.Equals, int64(len(contents)))
+	c.Assert(blob2.Properties.ContentType, chk.Equals, "application/octet-stream")
+	c.Assert(blob2.Properties.BlobType, chk.Equals, BlobTypeBlock)
 }
 
 // Ensure it's possible to generate a ListBlobs response with
 // metadata, e.g., for a stub server.
 func (s *StorageBlobSuite) TestMarshalBlobMetadata(c *chk.C) {
 	buf, err := xml.Marshal(Blob{
-		Name:       randName(5),
+		Name:       blobName(c),
 		Properties: BlobProperties{},
-		Metadata:   BlobMetadata{"foo": "baz < waz"},
+		Metadata: map[string]string{
+			"lol": "baz < waz",
+		},
 	})
 	c.Assert(err, chk.IsNil)
-	c.Assert(string(buf), chk.Matches, `.*<Metadata><Foo>baz &lt; waz</Foo></Metadata>.*`)
+	c.Assert(string(buf), chk.Matches, `.*<Metadata><Lol>baz &lt; waz</Lol></Metadata>.*`)
 }
 
-func (s *StorageBlobSuite) TestGetAndSetMetadata(c *chk.C) {
+func (s *StorageBlobSuite) TestGetAndSetBlobMetadata(c *chk.C) {
 	cli := getBlobClient(c)
-	cnt := cli.GetContainerReference(randContainer())
-	c.Assert(cnt.Create(), chk.IsNil)
-	defer cnt.Delete()
+	rec := cli.client.appendRecorder(c)
+	defer rec.Stop()
 
-	blob := randName(5)
-	c.Assert(cli.putSingleBlockBlob(cnt.Name, blob, []byte{}), chk.IsNil)
+	cnt := cli.GetContainerReference(containerName(c))
+	c.Assert(cnt.Create(nil), chk.IsNil)
+	defer cnt.Delete(nil)
 
-	m, err := cli.GetBlobMetadata(cnt.Name, blob)
+	// Get empty metadata
+	blob1 := cnt.GetBlobReference(blobName(c, "1"))
+	c.Assert(blob1.putSingleBlockBlob([]byte("Hello!")), chk.IsNil)
+
+	err := blob1.GetMetadata(nil)
 	c.Assert(err, chk.IsNil)
-	c.Assert(m, chk.Not(chk.Equals), nil)
-	c.Assert(len(m), chk.Equals, 0)
+	c.Assert(blob1.Metadata, chk.HasLen, 0)
 
-	mPut := map[string]string{
-		"foo":     "bar",
-		"bar_baz": "waz qux",
+	// Get and set the metadata
+	blob2 := cnt.GetBlobReference(blobName(c, "2"))
+	c.Assert(blob2.putSingleBlockBlob([]byte("Hello!")), chk.IsNil)
+	metaPut := BlobMetadata{
+		"lol":      "rofl",
+		"rofl_baz": "waz qux",
 	}
+	blob2.Metadata = metaPut
 
-	err = cli.SetBlobMetadata(cnt.Name, blob, mPut, nil)
+	err = blob2.SetMetadata(nil)
 	c.Assert(err, chk.IsNil)
 
-	m, err = cli.GetBlobMetadata(cnt.Name, blob)
+	err = blob2.GetMetadata(nil)
 	c.Assert(err, chk.IsNil)
-	c.Check(m, chk.DeepEquals, mPut)
+	c.Check(blob2.Metadata, chk.DeepEquals, metaPut)
+}
+
+func (s *StorageBlobSuite) TestMetadataCaseMunging(c *chk.C) {
+	cli := getBlobClient(c)
+	rec := cli.client.appendRecorder(c)
+	defer rec.Stop()
+
+	cnt := cli.GetContainerReference(containerName(c))
+	c.Assert(cnt.Create(nil), chk.IsNil)
+	defer cnt.Delete(nil)
+
+	b := cnt.GetBlobReference(blobName(c))
+	c.Assert(b.putSingleBlockBlob([]byte("Hello!")), chk.IsNil)
 
 	// Case munging
-
-	mPutUpper := map[string]string{
-		"Foo":     "different bar",
-		"bar_BAZ": "different waz qux",
+	metaPutUpper := BlobMetadata{
+		"Lol":      "different rofl",
+		"rofl_BAZ": "different waz qux",
 	}
-	mExpectLower := map[string]string{
-		"foo":     "different bar",
-		"bar_baz": "different waz qux",
+	metaExpectLower := BlobMetadata{
+		"lol":      "different rofl",
+		"rofl_baz": "different waz qux",
 	}
 
-	err = cli.SetBlobMetadata(cnt.Name, blob, mPutUpper, nil)
+	b.Metadata = metaPutUpper
+	err := b.SetMetadata(nil)
 	c.Assert(err, chk.IsNil)
 
-	m, err = cli.GetBlobMetadata(cnt.Name, blob)
+	err = b.GetMetadata(nil)
 	c.Assert(err, chk.IsNil)
-	c.Check(m, chk.DeepEquals, mExpectLower)
+	c.Check(b.Metadata, chk.DeepEquals, metaExpectLower)
 }
 
 func (s *StorageBlobSuite) TestSetMetadataWithExtraHeaders(c *chk.C) {
 	cli := getBlobClient(c)
-	cnt := cli.GetContainerReference(randContainer())
-	c.Assert(cnt.Create(), chk.IsNil)
-	defer cnt.Delete()
+	rec := cli.client.appendRecorder(c)
+	defer rec.Stop()
 
-	blob := randName(5)
-	c.Assert(cli.putSingleBlockBlob(cnt.Name, blob, []byte{}), chk.IsNil)
+	cnt := cli.GetContainerReference(containerName(c))
+	b := cnt.GetBlobReference(blobName(c))
+	c.Assert(cnt.Create(nil), chk.IsNil)
+	defer cnt.Delete(nil)
 
-	mPut := map[string]string{
-		"foo":     "bar",
-		"bar_baz": "waz qux",
+	c.Assert(b.putSingleBlockBlob([]byte("Hello!")), chk.IsNil)
+
+	meta := BlobMetadata{
+		"lol":      "rofl",
+		"rofl_baz": "waz qux",
 	}
+	b.Metadata = meta
 
-	extraHeaders := map[string]string{
-		"If-Match": "incorrect-etag",
+	options := SetBlobMetadataOptions{
+		IfMatch: "incorrect-etag",
 	}
 
 	// Set with incorrect If-Match in extra headers should result in error
-	err := cli.SetBlobMetadata(cnt.Name, blob, mPut, extraHeaders)
+	err := b.SetMetadata(&options)
 	c.Assert(err, chk.NotNil)
 
-	props, err := cli.GetBlobProperties(cnt.Name, blob)
-	extraHeaders = map[string]string{
-		"If-Match": props.Etag,
-	}
+	err = b.GetProperties(nil)
+	c.Assert(err, chk.IsNil)
 
 	// Set with matching If-Match in extra headers should succeed
-	err = cli.SetBlobMetadata(cnt.Name, blob, mPut, extraHeaders)
+	options.IfMatch = b.Properties.Etag
+	b.Metadata = meta
+	err = b.SetMetadata(&options)
 	c.Assert(err, chk.IsNil)
 }
 
 func (s *StorageBlobSuite) TestSetBlobProperties(c *chk.C) {
 	cli := getBlobClient(c)
-	cnt := cli.GetContainerReference(randContainer())
-	c.Assert(cnt.Create(), chk.IsNil)
-	defer cnt.Delete()
+	rec := cli.client.appendRecorder(c)
+	defer rec.Stop()
 
-	blob := randName(5)
-	c.Assert(cli.putSingleBlockBlob(cnt.Name, blob, []byte{}), chk.IsNil)
+	cnt := cli.GetContainerReference(containerName(c))
+	b := cnt.GetBlobReference(blobName(c))
+	c.Assert(cnt.Create(nil), chk.IsNil)
+	defer cnt.Delete(nil)
 
-	mPut := BlobHeaders{
+	c.Assert(b.putSingleBlockBlob([]byte("Hello!")), chk.IsNil)
+
+	input := BlobProperties{
 		CacheControl:    "private, max-age=0, no-cache",
 		ContentMD5:      "oBATU+oaDduHWbVZLuzIJw==",
 		ContentType:     "application/json",
 		ContentEncoding: "gzip",
 		ContentLanguage: "de-DE",
 	}
+	b.Properties = input
 
-	err := cli.SetBlobProperties(cnt.Name, blob, mPut)
+	err := b.SetProperties(nil)
 	c.Assert(err, chk.IsNil)
 
-	props, err := cli.GetBlobProperties(cnt.Name, blob)
+	err = b.GetProperties(nil)
 	c.Assert(err, chk.IsNil)
 
-	c.Check(mPut.CacheControl, chk.Equals, props.CacheControl)
-	c.Check(mPut.ContentType, chk.Equals, props.ContentType)
-	c.Check(mPut.ContentMD5, chk.Equals, props.ContentMD5)
-	c.Check(mPut.ContentEncoding, chk.Equals, props.ContentEncoding)
-	c.Check(mPut.ContentLanguage, chk.Equals, props.ContentLanguage)
+	c.Check(b.Properties.CacheControl, chk.Equals, input.CacheControl)
+	c.Check(b.Properties.ContentType, chk.Equals, input.ContentType)
+	c.Check(b.Properties.ContentMD5, chk.Equals, input.ContentMD5)
+	c.Check(b.Properties.ContentEncoding, chk.Equals, input.ContentEncoding)
+	c.Check(b.Properties.ContentLanguage, chk.Equals, input.ContentLanguage)
+}
+
+func (s *StorageBlobSuite) TestSetPageBlobProperties(c *chk.C) {
+	cli := getBlobClient(c)
+	rec := cli.client.appendRecorder(c)
+	defer rec.Stop()
+
+	cnt := cli.GetContainerReference(containerName(c))
+	b := cnt.GetBlobReference(blobName(c))
+	c.Assert(cnt.Create(nil), chk.IsNil)
+	defer cnt.Delete(nil)
+
+	size := int64(1024)
+	b.Properties.ContentLength = size
+	c.Assert(b.PutPageBlob(nil), chk.IsNil)
+
+	b.Properties.ContentLength = int64(512)
+	options := SetBlobPropertiesOptions{Timeout: 30}
+	err := b.SetProperties(&options)
+	c.Assert(err, chk.IsNil)
 }
 
 func (s *StorageBlobSuite) TestSnapshotBlob(c *chk.C) {
 	cli := getBlobClient(c)
-	cnt := cli.GetContainerReference(randContainer())
-	c.Assert(cnt.Create(), chk.IsNil)
-	defer cnt.Delete()
+	rec := cli.client.appendRecorder(c)
+	defer rec.Stop()
 
-	blob := randName(5)
-	c.Assert(cli.putSingleBlockBlob(cnt.Name, blob, []byte{}), chk.IsNil)
+	cnt := cli.GetContainerReference(containerName(c))
+	b := cnt.GetBlobReference(blobName(c))
+	c.Assert(cnt.Create(nil), chk.IsNil)
+	defer cnt.Delete(nil)
 
-	snapshotTime, err := cli.SnapshotBlob(cnt.Name, blob, 0, nil)
+	c.Assert(b.putSingleBlockBlob([]byte("Hello!")), chk.IsNil)
+
+	snapshotTime, err := b.CreateSnapshot(nil)
 	c.Assert(err, chk.IsNil)
 	c.Assert(snapshotTime, chk.NotNil)
 }
 
 func (s *StorageBlobSuite) TestSnapshotBlobWithTimeout(c *chk.C) {
 	cli := getBlobClient(c)
-	cnt := cli.GetContainerReference(randContainer())
-	c.Assert(cnt.Create(), chk.IsNil)
-	defer cnt.Delete()
+	rec := cli.client.appendRecorder(c)
+	defer rec.Stop()
 
-	blob := randName(5)
-	c.Assert(cli.putSingleBlockBlob(cnt.Name, blob, []byte{}), chk.IsNil)
+	cnt := cli.GetContainerReference(containerName(c))
+	b := cnt.GetBlobReference(blobName(c))
+	c.Assert(cnt.Create(nil), chk.IsNil)
+	defer cnt.Delete(nil)
 
-	snapshotTime, err := cli.SnapshotBlob(cnt.Name, blob, 30, nil)
+	c.Assert(b.putSingleBlockBlob([]byte("Hello!")), chk.IsNil)
+
+	options := SnapshotOptions{
+		Timeout: 0,
+	}
+	snapshotTime, err := b.CreateSnapshot(&options)
 	c.Assert(err, chk.IsNil)
 	c.Assert(snapshotTime, chk.NotNil)
 }
 
 func (s *StorageBlobSuite) TestSnapshotBlobWithValidLease(c *chk.C) {
 	cli := getBlobClient(c)
-	cnt := cli.GetContainerReference(randContainer())
-	c.Assert(cnt.Create(), chk.IsNil)
-	defer cnt.Delete()
+	rec := cli.client.appendRecorder(c)
+	defer rec.Stop()
 
-	blob := randName(5)
-	c.Assert(cli.putSingleBlockBlob(cnt.Name, blob, []byte{}), chk.IsNil)
+	cnt := cli.GetContainerReference(containerName(c))
+	b := cnt.GetBlobReference(blobName(c))
+	c.Assert(cnt.Create(nil), chk.IsNil)
+	defer cnt.Delete(nil)
+
+	c.Assert(b.putSingleBlockBlob([]byte("Hello!")), chk.IsNil)
 
 	// generate lease.
-	currentLeaseID, err := cli.AcquireLease(cnt.Name, blob, 30, "")
+	currentLeaseID, err := b.AcquireLease(30, "", nil)
 	c.Assert(err, chk.IsNil)
 
-	extraHeaders := map[string]string{
-		headerLeaseID: currentLeaseID,
+	options := SnapshotOptions{
+		LeaseID: currentLeaseID,
 	}
-
-	snapshotTime, err := cli.SnapshotBlob(cnt.Name, blob, 0, extraHeaders)
+	snapshotTime, err := b.CreateSnapshot(&options)
 	c.Assert(err, chk.IsNil)
 	c.Assert(snapshotTime, chk.NotNil)
 }
 
 func (s *StorageBlobSuite) TestSnapshotBlobWithInvalidLease(c *chk.C) {
 	cli := getBlobClient(c)
-	cnt := cli.GetContainerReference(randContainer())
-	c.Assert(cnt.Create(), chk.IsNil)
-	defer cnt.Delete()
+	rec := cli.client.appendRecorder(c)
+	defer rec.Stop()
 
-	blob := randName(5)
-	c.Assert(cli.putSingleBlockBlob(cnt.Name, blob, []byte{}), chk.IsNil)
+	cnt := cli.GetContainerReference(containerName(c))
+	b := cnt.GetBlobReference(blobName(c))
+	c.Assert(cnt.Create(nil), chk.IsNil)
+	defer cnt.Delete(nil)
+
+	c.Assert(b.putSingleBlockBlob([]byte("Hello!")), chk.IsNil)
 
 	// generate lease.
-	leaseID, err := cli.AcquireLease(cnt.Name, blob, 30, "")
+	leaseID, err := b.AcquireLease(30, "", nil)
 	c.Assert(err, chk.IsNil)
 	c.Assert(leaseID, chk.Not(chk.Equals), "")
 
-	extraHeaders := map[string]string{
-		headerLeaseID: "GolangRocksOnAzure",
+	options := SnapshotOptions{
+		LeaseID: "GolangRocksOnAzure",
 	}
-
-	snapshotTime, err := cli.SnapshotBlob(cnt.Name, blob, 0, extraHeaders)
+	snapshotTime, err := b.CreateSnapshot(&options)
 	c.Assert(err, chk.NotNil)
 	c.Assert(snapshotTime, chk.IsNil)
 }
 
-func (s *StorageBlobSuite) TestAcquireLeaseWithNoProposedLeaseID(c *chk.C) {
-	cli := getBlobClient(c)
-	cnt := cli.GetContainerReference(randContainer())
-	c.Assert(cnt.Create(), chk.IsNil)
-	defer cnt.Delete()
-
-	blob := randName(5)
-	c.Assert(cli.putSingleBlockBlob(cnt.Name, blob, []byte{}), chk.IsNil)
-
-	_, err := cli.AcquireLease(cnt.Name, blob, 30, "")
-	c.Assert(err, chk.IsNil)
-}
-
-func (s *StorageBlobSuite) TestAcquireLeaseWithProposedLeaseID(c *chk.C) {
-	cli := getBlobClient(c)
-	cnt := cli.GetContainerReference(randContainer())
-	c.Assert(cnt.Create(), chk.IsNil)
-	defer cnt.Delete()
-
-	blob := randName(5)
-	c.Assert(cli.putSingleBlockBlob(cnt.Name, blob, []byte{}), chk.IsNil)
-
-	proposedLeaseID := "dfe6dde8-68d5-4910-9248-c97c61768fea"
-	leaseID, err := cli.AcquireLease(cnt.Name, blob, 30, proposedLeaseID)
-	c.Assert(err, chk.IsNil)
-	c.Assert(leaseID, chk.Equals, proposedLeaseID)
-}
-
-func (s *StorageBlobSuite) TestAcquireLeaseWithBadProposedLeaseID(c *chk.C) {
-	cli := getBlobClient(c)
-	cnt := cli.GetContainerReference(randContainer())
-	c.Assert(cnt.Create(), chk.IsNil)
-	defer cnt.Delete()
-
-	blob := randName(5)
-	c.Assert(cli.putSingleBlockBlob(cnt.Name, blob, []byte{}), chk.IsNil)
-
-	proposedLeaseID := "badbadbad"
-	_, err := cli.AcquireLease(cnt.Name, blob, 30, proposedLeaseID)
-	c.Assert(err, chk.NotNil)
-}
-
-func (s *StorageBlobSuite) TestRenewLeaseSuccessful(c *chk.C) {
-	cli := getBlobClient(c)
-	cnt := cli.GetContainerReference(randContainer())
-	c.Assert(cnt.Create(), chk.IsNil)
-	defer cnt.Delete()
-
-	blob := randName(5)
-	c.Assert(cli.putSingleBlockBlob(cnt.Name, blob, []byte{}), chk.IsNil)
-
-	proposedLeaseID := "dfe6dde8-68d5-4910-9248-c97c61768fea"
-	leaseID, err := cli.AcquireLease(cnt.Name, blob, 30, proposedLeaseID)
-	c.Assert(err, chk.IsNil)
-
-	err = cli.RenewLease(cnt.Name, blob, leaseID)
-	c.Assert(err, chk.IsNil)
-}
-
-func (s *StorageBlobSuite) TestRenewLeaseAgainstNoCurrentLease(c *chk.C) {
-	cli := getBlobClient(c)
-	cnt := cli.GetContainerReference(randContainer())
-	c.Assert(cnt.Create(), chk.IsNil)
-	defer cnt.Delete()
-
-	blob := randName(5)
-	c.Assert(cli.putSingleBlockBlob(cnt.Name, blob, []byte{}), chk.IsNil)
-
-	badLeaseID := "1f812371-a41d-49e6-b123-f4b542e85144"
-	err := cli.RenewLease(cnt.Name, blob, badLeaseID)
-	c.Assert(err, chk.NotNil)
-}
-
-func (s *StorageBlobSuite) TestChangeLeaseSuccessful(c *chk.C) {
-	cli := getBlobClient(c)
-	cnt := cli.GetContainerReference(randContainer())
-	c.Assert(cnt.Create(), chk.IsNil)
-	defer cnt.Delete()
-
-	blob := randName(5)
-	c.Assert(cli.putSingleBlockBlob(cnt.Name, blob, []byte{}), chk.IsNil)
-	proposedLeaseID := "dfe6dde8-68d5-4910-9248-c97c61768fea"
-	leaseID, err := cli.AcquireLease(cnt.Name, blob, 30, proposedLeaseID)
-	c.Assert(err, chk.IsNil)
-
-	newProposedLeaseID := "dfe6dde8-68d5-4910-9248-c97c61768fbb"
-	newLeaseID, err := cli.ChangeLease(cnt.Name, blob, leaseID, newProposedLeaseID)
-	c.Assert(err, chk.IsNil)
-	c.Assert(newLeaseID, chk.Equals, newProposedLeaseID)
-}
-
-func (s *StorageBlobSuite) TestChangeLeaseNotSuccessfulbadProposedLeaseID(c *chk.C) {
-	cli := getBlobClient(c)
-	cnt := cli.GetContainerReference(randContainer())
-	c.Assert(cnt.Create(), chk.IsNil)
-	defer cnt.Delete()
-
-	blob := randName(5)
-	c.Assert(cli.putSingleBlockBlob(cnt.Name, blob, []byte{}), chk.IsNil)
-	proposedLeaseID := "dfe6dde8-68d5-4910-9248-c97c61768fea"
-	leaseID, err := cli.AcquireLease(cnt.Name, blob, 30, proposedLeaseID)
-	c.Assert(err, chk.IsNil)
-
-	newProposedLeaseID := "1f812371-a41d-49e6-b123-f4b542e"
-	_, err = cli.ChangeLease(cnt.Name, blob, leaseID, newProposedLeaseID)
-	c.Assert(err, chk.NotNil)
-}
-
-func (s *StorageBlobSuite) TestReleaseLeaseSuccessful(c *chk.C) {
-	cli := getBlobClient(c)
-	cnt := cli.GetContainerReference(randContainer())
-	c.Assert(cnt.Create(), chk.IsNil)
-	defer cnt.Delete()
-
-	blob := randName(5)
-	c.Assert(cli.putSingleBlockBlob(cnt.Name, blob, []byte{}), chk.IsNil)
-	proposedLeaseID := "dfe6dde8-68d5-4910-9248-c97c61768fea"
-	leaseID, err := cli.AcquireLease(cnt.Name, blob, 30, proposedLeaseID)
-	c.Assert(err, chk.IsNil)
-
-	err = cli.ReleaseLease(cnt.Name, blob, leaseID)
-	c.Assert(err, chk.IsNil)
-}
-
-func (s *StorageBlobSuite) TestReleaseLeaseNotSuccessfulBadLeaseID(c *chk.C) {
-	cli := getBlobClient(c)
-	cnt := cli.GetContainerReference(randContainer())
-	c.Assert(cnt.Create(), chk.IsNil)
-	defer cnt.Delete()
-
-	blob := randName(5)
-	c.Assert(cli.putSingleBlockBlob(cnt.Name, blob, []byte{}), chk.IsNil)
-	proposedLeaseID := "dfe6dde8-68d5-4910-9248-c97c61768fea"
-	_, err := cli.AcquireLease(cnt.Name, blob, 30, proposedLeaseID)
-	c.Assert(err, chk.IsNil)
-
-	err = cli.ReleaseLease(cnt.Name, blob, "badleaseid")
-	c.Assert(err, chk.NotNil)
-}
-
-func (s *StorageBlobSuite) TestBreakLeaseSuccessful(c *chk.C) {
-	cli := getBlobClient(c)
-	cnt := cli.GetContainerReference(randContainer())
-	c.Assert(cnt.Create(), chk.IsNil)
-	defer cnt.Delete()
-
-	blob := randName(5)
-	c.Assert(cli.putSingleBlockBlob(cnt.Name, blob, []byte{}), chk.IsNil)
-
-	proposedLeaseID := "dfe6dde8-68d5-4910-9248-c97c61768fea"
-	_, err := cli.AcquireLease(cnt.Name, blob, 30, proposedLeaseID)
-	c.Assert(err, chk.IsNil)
-
-	_, err = cli.BreakLease(cnt.Name, blob)
-	c.Assert(err, chk.IsNil)
-}
-
-func (s *StorageBlobSuite) TestPutEmptyBlockBlob(c *chk.C) {
-	cli := getBlobClient(c)
-	cnt := cli.GetContainerReference(randContainer())
-	c.Assert(cnt.Create(), chk.IsNil)
-	defer cnt.Delete()
-
-	blob := randName(5)
-	c.Assert(cli.putSingleBlockBlob(cnt.Name, blob, []byte{}), chk.IsNil)
-
-	props, err := cli.GetBlobProperties(cnt.Name, blob)
-	c.Assert(err, chk.IsNil)
-	c.Assert(props.ContentLength, chk.Not(chk.Equals), 0)
-}
-
 func (s *StorageBlobSuite) TestGetBlobRange(c *chk.C) {
-	blob := randName(5)
-	body := "0123456789"
-
 	cli := getBlobClient(c)
-	cnt := cli.GetContainerReference(randContainer())
-	c.Assert(cnt.Create(), chk.IsNil)
-	defer cnt.Delete()
+	rec := cli.client.appendRecorder(c)
+	defer rec.Stop()
 
-	c.Assert(cli.putSingleBlockBlob(cnt.Name, blob, []byte(body)), chk.IsNil)
-	defer cli.DeleteBlob(cnt.Name, blob, nil)
+	cnt := cli.GetContainerReference(containerName(c))
+	b := cnt.GetBlobReference(blobName(c))
+	c.Assert(cnt.Create(nil), chk.IsNil)
+	defer cnt.Delete(nil)
 
-	// Read 1-3
-	for _, r := range []struct {
-		rangeStr string
+	body := "0123456789"
+	c.Assert(b.putSingleBlockBlob([]byte(body)), chk.IsNil)
+	defer b.Delete(nil)
+
+	cases := []struct {
+		options  GetBlobRangeOptions
 		expected string
 	}{
-		{"0-", body},
-		{"1-3", body[1 : 3+1]},
-		{"3-", body[3:]},
-	} {
-		resp, err := cli.GetBlobRange(cnt.Name, blob, r.rangeStr, nil)
+		{
+			options: GetBlobRangeOptions{
+				Range: &BlobRange{
+					Start: 0,
+					End:   uint64(len(body)),
+				},
+			},
+			expected: body,
+		},
+		{
+			options: GetBlobRangeOptions{
+				Range: &BlobRange{
+					Start: 0,
+					End:   0,
+				},
+			},
+			expected: body,
+		},
+		{
+			options: GetBlobRangeOptions{
+				Range: &BlobRange{
+					Start: 1,
+					End:   3,
+				},
+			},
+			expected: body[1 : 3+1],
+		},
+		{
+			options: GetBlobRangeOptions{
+				Range: &BlobRange{
+					Start: 3,
+					End:   uint64(len(body)),
+				},
+			},
+			expected: body[3:],
+		},
+		{
+			options: GetBlobRangeOptions{
+				Range: &BlobRange{
+					Start: 3,
+					End:   0,
+				},
+			},
+			expected: body[3:],
+		},
+	}
+
+	err := b.GetProperties(nil)
+	c.Assert(err, chk.IsNil)
+
+	// Read 1-3
+	for _, r := range cases {
+		resp, err := b.GetRange(&(r.options))
 		c.Assert(err, chk.IsNil)
 		blobBody, err := ioutil.ReadAll(resp)
 		c.Assert(err, chk.IsNil)
 
 		str := string(blobBody)
 		c.Assert(str, chk.Equals, r.expected)
+
+		// Was content length left untouched?
+		c.Assert(b.Properties.ContentLength, chk.Equals, int64(len(body)))
 	}
 }
 
-func (s *StorageBlobSuite) TestCreateBlockBlobFromReader(c *chk.C) {
-	cli := getBlobClient(c)
-	cnt := cli.GetContainerReference(randContainer())
-	c.Assert(cnt.Create(), chk.IsNil)
-	defer cnt.Delete()
-
-	name := randName(5)
-	data := randBytes(8888)
-	c.Assert(cli.CreateBlockBlobFromReader(cnt.Name, name, uint64(len(data)), bytes.NewReader(data), nil), chk.IsNil)
-
-	body, err := cli.GetBlob(cnt.Name, name)
-	c.Assert(err, chk.IsNil)
-	gotData, err := ioutil.ReadAll(body)
-	body.Close()
-
-	c.Assert(err, chk.IsNil)
-	c.Assert(gotData, chk.DeepEquals, data)
-}
-
-func (s *StorageBlobSuite) TestCreateBlockBlobFromReaderWithShortData(c *chk.C) {
-	cli := getBlobClient(c)
-	cnt := cli.GetContainerReference(randContainer())
-	c.Assert(cnt.Create(), chk.IsNil)
-	defer cnt.Delete()
-
-	name := randName(5)
-	data := randBytes(8888)
-	err := cli.CreateBlockBlobFromReader(cnt.Name, name, 9999, bytes.NewReader(data), nil)
-	c.Assert(err, chk.Not(chk.IsNil))
-
-	_, err = cli.GetBlob(cnt.Name, name)
-	// Upload was incomplete: blob should not have been created.
-	c.Assert(err, chk.Not(chk.IsNil))
-}
-
-func (s *StorageBlobSuite) TestPutBlock(c *chk.C) {
-	cli := getBlobClient(c)
-	cnt := cli.GetContainerReference(randContainer())
-	c.Assert(cnt.Create(), chk.IsNil)
-	defer cnt.Delete()
-
-	blob := randName(5)
-	chunk := []byte(randString(1024))
-	blockID := base64.StdEncoding.EncodeToString([]byte("foo"))
-	c.Assert(cli.PutBlock(cnt.Name, blob, blockID, chunk), chk.IsNil)
-}
-
-func (s *StorageBlobSuite) TestGetBlockList_PutBlockList(c *chk.C) {
-	cli := getBlobClient(c)
-	cnt := cli.GetContainerReference(randContainer())
-	c.Assert(cnt.Create(), chk.IsNil)
-	defer cnt.Delete()
-
-	blob := randName(5)
-	chunk := []byte(randString(1024))
-	blockID := base64.StdEncoding.EncodeToString([]byte("foo"))
-
-	// Put one block
-	c.Assert(cli.PutBlock(cnt.Name, blob, blockID, chunk), chk.IsNil)
-	defer cli.deleteBlob(cnt.Name, blob, nil)
-
-	// Get committed blocks
-	committed, err := cli.GetBlockList(cnt.Name, blob, BlockListTypeCommitted)
-	c.Assert(err, chk.IsNil)
-
-	if len(committed.CommittedBlocks) > 0 {
-		c.Fatal("There are committed blocks")
-	}
-
-	// Get uncommitted blocks
-	uncommitted, err := cli.GetBlockList(cnt.Name, blob, BlockListTypeUncommitted)
-	c.Assert(err, chk.IsNil)
-
-	c.Assert(len(uncommitted.UncommittedBlocks), chk.Equals, 1)
-	// Commit block list
-	c.Assert(cli.PutBlockList(cnt.Name, blob, []Block{{blockID, BlockStatusUncommitted}}), chk.IsNil)
-
-	// Get all blocks
-	all, err := cli.GetBlockList(cnt.Name, blob, BlockListTypeAll)
-	c.Assert(err, chk.IsNil)
-	c.Assert(len(all.CommittedBlocks), chk.Equals, 1)
-	c.Assert(len(all.UncommittedBlocks), chk.Equals, 0)
-
-	// Verify the block
-	thatBlock := all.CommittedBlocks[0]
-	c.Assert(thatBlock.Name, chk.Equals, blockID)
-	c.Assert(thatBlock.Size, chk.Equals, int64(len(chunk)))
-}
-
-func (s *StorageBlobSuite) TestCreateBlockBlob(c *chk.C) {
-	cli := getBlobClient(c)
-	cnt := cli.GetContainerReference(randContainer())
-	c.Assert(cnt.Create(), chk.IsNil)
-	defer cnt.Delete()
-
-	blob := randName(5)
-	c.Assert(cli.CreateBlockBlob(cnt.Name, blob), chk.IsNil)
-
-	// Verify
-	blocks, err := cli.GetBlockList(cnt.Name, blob, BlockListTypeAll)
-	c.Assert(err, chk.IsNil)
-	c.Assert(len(blocks.CommittedBlocks), chk.Equals, 0)
-	c.Assert(len(blocks.UncommittedBlocks), chk.Equals, 0)
-}
-
-func (s *StorageBlobSuite) TestPutPageBlob(c *chk.C) {
-	cli := getBlobClient(c)
-	cnt := cli.GetContainerReference(randContainer())
-	c.Assert(cnt.Create(), chk.IsNil)
-	defer cnt.Delete()
-
-	blob := randName(5)
-	size := int64(10 * 1024 * 1024)
-	c.Assert(cli.PutPageBlob(cnt.Name, blob, size, nil), chk.IsNil)
-
-	// Verify
-	props, err := cli.GetBlobProperties(cnt.Name, blob)
-	c.Assert(err, chk.IsNil)
-	c.Assert(props.ContentLength, chk.Equals, size)
-	c.Assert(props.BlobType, chk.Equals, BlobTypePage)
-}
-
-func (s *StorageBlobSuite) TestPutPagesUpdate(c *chk.C) {
-	cli := getBlobClient(c)
-	cnt := cli.GetContainerReference(randContainer())
-	c.Assert(cnt.Create(), chk.IsNil)
-	defer cnt.Delete()
-
-	blob := randName(5)
-	size := int64(10 * 1024 * 1024) // larger than we'll use
-	c.Assert(cli.PutPageBlob(cnt.Name, blob, size, nil), chk.IsNil)
-
-	chunk1 := []byte(randString(1024))
-	chunk2 := []byte(randString(512))
-
-	// Append chunks
-	c.Assert(cli.PutPage(cnt.Name, blob, 0, int64(len(chunk1)-1), PageWriteTypeUpdate, chunk1, nil), chk.IsNil)
-	c.Assert(cli.PutPage(cnt.Name, blob, int64(len(chunk1)), int64(len(chunk1)+len(chunk2)-1), PageWriteTypeUpdate, chunk2, nil), chk.IsNil)
-
-	// Verify contents
-	out, err := cli.GetBlobRange(cnt.Name, blob, fmt.Sprintf("%v-%v", 0, len(chunk1)+len(chunk2)-1), nil)
-	c.Assert(err, chk.IsNil)
-	defer out.Close()
-	blobContents, err := ioutil.ReadAll(out)
-	c.Assert(err, chk.IsNil)
-	c.Assert(blobContents, chk.DeepEquals, append(chunk1, chunk2...))
-	out.Close()
-
-	// Overwrite first half of chunk1
-	chunk0 := []byte(randString(512))
-	c.Assert(cli.PutPage(cnt.Name, blob, 0, int64(len(chunk0)-1), PageWriteTypeUpdate, chunk0, nil), chk.IsNil)
-
-	// Verify contents
-	out, err = cli.GetBlobRange(cnt.Name, blob, fmt.Sprintf("%v-%v", 0, len(chunk1)+len(chunk2)-1), nil)
-	c.Assert(err, chk.IsNil)
-	defer out.Close()
-	blobContents, err = ioutil.ReadAll(out)
-	c.Assert(err, chk.IsNil)
-	c.Assert(blobContents, chk.DeepEquals, append(append(chunk0, chunk1[512:]...), chunk2...))
-}
-
-func (s *StorageBlobSuite) TestPutPagesClear(c *chk.C) {
-	cli := getBlobClient(c)
-	cnt := cli.GetContainerReference(randContainer())
-	c.Assert(cnt.Create(), chk.IsNil)
-	defer cnt.Delete()
-
-	blob := randName(5)
-	size := int64(10 * 1024 * 1024) // larger than we'll use
-	c.Assert(cli.PutPageBlob(cnt.Name, blob, size, nil), chk.IsNil)
-
-	// Put 0-2047
-	chunk := []byte(randString(2048))
-	c.Assert(cli.PutPage(cnt.Name, blob, 0, 2047, PageWriteTypeUpdate, chunk, nil), chk.IsNil)
-
-	// Clear 512-1023
-	c.Assert(cli.PutPage(cnt.Name, blob, 512, 1023, PageWriteTypeClear, nil, nil), chk.IsNil)
-
-	// Verify contents
-	out, err := cli.GetBlobRange(cnt.Name, blob, "0-2047", nil)
-	c.Assert(err, chk.IsNil)
-	contents, err := ioutil.ReadAll(out)
-	c.Assert(err, chk.IsNil)
-	defer out.Close()
-	c.Assert(contents, chk.DeepEquals, append(append(chunk[:512], make([]byte, 512)...), chunk[1024:]...))
-}
-
-func (s *StorageBlobSuite) TestGetPageRanges(c *chk.C) {
-	cli := getBlobClient(c)
-	cnt := cli.GetContainerReference(randContainer())
-	c.Assert(cnt.Create(), chk.IsNil)
-	defer cnt.Delete()
-
-	blob := randName(5)
-	size := int64(10 * 1024 * 1024) // larger than we'll use
-	c.Assert(cli.PutPageBlob(cnt.Name, blob, size, nil), chk.IsNil)
-
-	// Get page ranges on empty blob
-	out, err := cli.GetPageRanges(cnt.Name, blob)
-	c.Assert(err, chk.IsNil)
-	c.Assert(len(out.PageList), chk.Equals, 0)
-
-	// Add 0-512 page
-	c.Assert(cli.PutPage(cnt.Name, blob, 0, 511, PageWriteTypeUpdate, []byte(randString(512)), nil), chk.IsNil)
-
-	out, err = cli.GetPageRanges(cnt.Name, blob)
-	c.Assert(err, chk.IsNil)
-	c.Assert(len(out.PageList), chk.Equals, 1)
-
-	// Add 1024-2048
-	c.Assert(cli.PutPage(cnt.Name, blob, 1024, 2047, PageWriteTypeUpdate, []byte(randString(1024)), nil), chk.IsNil)
-
-	out, err = cli.GetPageRanges(cnt.Name, blob)
-	c.Assert(err, chk.IsNil)
-	c.Assert(len(out.PageList), chk.Equals, 2)
-}
-
-func (s *StorageBlobSuite) TestPutAppendBlob(c *chk.C) {
-	cli := getBlobClient(c)
-	cnt := cli.GetContainerReference(randContainer())
-	c.Assert(cnt.Create(), chk.IsNil)
-	defer cnt.Delete()
-
-	blob := randName(5)
-	c.Assert(cli.PutAppendBlob(cnt.Name, blob, nil), chk.IsNil)
-
-	// Verify
-	props, err := cli.GetBlobProperties(cnt.Name, blob)
-	c.Assert(err, chk.IsNil)
-	c.Assert(props.ContentLength, chk.Equals, int64(0))
-	c.Assert(props.BlobType, chk.Equals, BlobTypeAppend)
-}
-
-func (s *StorageBlobSuite) TestPutAppendBlobAppendBlocks(c *chk.C) {
-	cli := getBlobClient(c)
-	cnt := cli.GetContainerReference(randContainer())
-	c.Assert(cnt.Create(), chk.IsNil)
-	defer cnt.Delete()
-
-	blob := randName(5)
-	c.Assert(cli.PutAppendBlob(cnt.Name, blob, nil), chk.IsNil)
-
-	chunk1 := []byte(randString(1024))
-	chunk2 := []byte(randString(512))
-
-	// Append first block
-	c.Assert(cli.AppendBlock(cnt.Name, blob, chunk1, nil), chk.IsNil)
-
-	// Verify contents
-	out, err := cli.GetBlobRange(cnt.Name, blob, fmt.Sprintf("%v-%v", 0, len(chunk1)-1), nil)
-	c.Assert(err, chk.IsNil)
-	defer out.Close()
-	blobContents, err := ioutil.ReadAll(out)
-	c.Assert(err, chk.IsNil)
-	c.Assert(blobContents, chk.DeepEquals, chunk1)
-	out.Close()
-
-	// Append second block
-	c.Assert(cli.AppendBlock(cnt.Name, blob, chunk2, nil), chk.IsNil)
-
-	// Verify contents
-	out, err = cli.GetBlobRange(cnt.Name, blob, fmt.Sprintf("%v-%v", 0, len(chunk1)+len(chunk2)-1), nil)
-	c.Assert(err, chk.IsNil)
-	defer out.Close()
-	blobContents, err = ioutil.ReadAll(out)
-	c.Assert(err, chk.IsNil)
-	c.Assert(blobContents, chk.DeepEquals, append(chunk1, chunk2...))
-	out.Close()
-}
-
-func (b BlobStorageClient) putSingleBlockBlob(container, name string, chunk []byte) error {
+func (b *Blob) putSingleBlockBlob(chunk []byte) error {
 	if len(chunk) > MaxBlobBlockSize {
 		return fmt.Errorf("storage: provided chunk (%d bytes) cannot fit into single-block blob (max %d bytes)", len(chunk), MaxBlobBlockSize)
 	}
 
-	uri := b.client.getEndpoint(blobServiceName, pathForBlob(container, name), url.Values{})
-	headers := b.client.getStandardHeaders()
+	uri := b.Container.bsc.client.getEndpoint(blobServiceName, b.buildPath(), nil)
+	headers := b.Container.bsc.client.getStandardHeaders()
+	b.Properties.BlobType = BlobTypeBlock
 	headers["x-ms-blob-type"] = string(BlobTypeBlock)
-	headers["Content-Length"] = fmt.Sprintf("%v", len(chunk))
+	headers["Content-Length"] = strconv.Itoa(len(chunk))
 
-	resp, err := b.client.exec(http.MethodPut, uri, headers, bytes.NewReader(chunk), b.auth)
+	resp, err := b.Container.bsc.client.exec(http.MethodPut, uri, headers, bytes.NewReader(chunk), b.Container.bsc.auth)
 	if err != nil {
 		return err
 	}
 	return checkRespCode(resp.statusCode, []int{http.StatusCreated})
 }
 
-func (s *StorageBlobSuite) TestPutAppendBlobSpecialChars(c *chk.C) {
-	cli := getBlobClient(c)
-	cnt := cli.GetContainerReference(randContainer())
-	c.Assert(cnt.Create(), chk.IsNil)
-	defer cnt.Delete()
+func blobName(c *chk.C, extras ...string) string {
+	return nameGenerator(1024, "blob/", alphanum, c, extras)
 
-	blob := randNameWithSpecialChars(5)
-	c.Assert(cli.PutAppendBlob(cnt.Name, blob, nil), chk.IsNil)
-
-	// Verify metadata
-	props, err := cli.GetBlobProperties(cnt.Name, blob)
-	c.Assert(err, chk.IsNil)
-	c.Assert(props.ContentLength, chk.Equals, int64(0))
-	c.Assert(props.BlobType, chk.Equals, BlobTypeAppend)
-
-	chunk1 := []byte(randString(1024))
-	chunk2 := []byte(randString(512))
-
-	// Append first block
-	c.Assert(cli.AppendBlock(cnt.Name, blob, chunk1, nil), chk.IsNil)
-
-	// Verify contents
-	out, err := cli.GetBlobRange(cnt.Name, blob, fmt.Sprintf("%v-%v", 0, len(chunk1)-1), nil)
-	c.Assert(err, chk.IsNil)
-	defer out.Close()
-	blobContents, err := ioutil.ReadAll(out)
-	c.Assert(err, chk.IsNil)
-	c.Assert(blobContents, chk.DeepEquals, chunk1)
-	out.Close()
-
-	// Append second block
-	c.Assert(cli.AppendBlock(cnt.Name, blob, chunk2, nil), chk.IsNil)
-
-	// Verify contents
-	out, err = cli.GetBlobRange(cnt.Name, blob, fmt.Sprintf("%v-%v", 0, len(chunk1)+len(chunk2)-1), nil)
-	c.Assert(err, chk.IsNil)
-	defer out.Close()
-	blobContents, err = ioutil.ReadAll(out)
-	c.Assert(err, chk.IsNil)
-	c.Assert(blobContents, chk.DeepEquals, append(chunk1, chunk2...))
-	out.Close()
 }
 
-func randBytes(n int) []byte {
-	data := make([]byte, n)
-	if _, err := io.ReadFull(rand.Reader, data); err != nil {
-		panic(err)
+func contentWithSpecialChars(n int) string {
+	name := string(content(n)) + "/" + string(content(n)) + "-._~:?#[]@!$&'()*,;+= " + string(content(n))
+	return name
+}
+
+func nameGenerator(maxLen int, prefix, valid string, c *chk.C, extras []string) string {
+	extra := strings.Join(extras, "")
+	name := prefix + extra + removeInvalidCharacters(c.TestName(), valid)
+	if len(name) > maxLen {
+		return name[:maxLen]
 	}
-	return data
-}
-
-func randName(n int) string {
-	name := randString(n) + "/" + randString(n)
 	return name
 }
 
-func randNameWithSpecialChars(n int) string {
-	name := randString(n) + "/" + randString(n) + "-._~:?#[]@!$&'()*,;+= " + randString(n)
-	return name
+func removeInvalidCharacters(unformatted string, valid string) string {
+	unformatted = strings.ToLower(unformatted)
+	buffer := bytes.NewBufferString(strconv.Itoa((len(unformatted))))
+	runes := []rune(unformatted)
+	for _, r := range runes {
+		if strings.ContainsRune(valid, r) {
+			buffer.WriteRune(r)
+		}
+	}
+	return string(buffer.Bytes())
 }
+
+func content(n int) []byte {
+	buffer := bytes.NewBufferString("")
+	rep := (n / len(veryLongString)) + 1
+	for i := 0; i < rep; i++ {
+		buffer.WriteString(veryLongString)
+	}
+	return buffer.Bytes()[:n]
+}
+
+const (
+	alphanum       = "0123456789abcdefghijklmnopqrstuvwxyz"
+	alpha          = "abcdefghijklmnopqrstuvwxyz"
+	veryLongString = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer feugiat eleifend scelerisque. Phasellus tempor turpis eget magna pretium, et finibus massa convallis. Donec eget lacinia nibh. Ut ut cursus odio. Quisque id justo interdum, maximus ex a, dapibus leo. Nullam mattis arcu nec justo vehicula pretium. Curabitur fermentum quam ac dolor venenatis, vitae scelerisque ex posuere. Donec ut ante porttitor, ultricies ante ac, pulvinar metus. Nunc suscipit elit gravida dolor facilisis sollicitudin. Fusce ac ultrices libero. Donec erat lectus, hendrerit volutpat nisl quis, porta accumsan nibh. Pellentesque hendrerit nisi id mi porttitor maximus. Phasellus vitae venenatis velit. Quisque id felis nec lacus iaculis porttitor. Maecenas egestas tortor et nulla dapibus varius. In hac habitasse platea dictumst."
+)

@@ -15,12 +15,18 @@
 package bigquery
 
 import (
+	"errors"
+	"fmt"
+	"math/rand"
+	"os"
+	"sync"
 	"time"
 
 	"cloud.google.com/go/internal"
 	gax "github.com/googleapis/gax-go"
 	"golang.org/x/net/context"
 	bq "google.golang.org/api/bigquery/v2"
+	"google.golang.org/api/iterator"
 )
 
 // A Job represents an operation which has been submitted to BigQuery for processing.
@@ -29,26 +35,23 @@ type Job struct {
 	projectID string
 	jobID     string
 
-	isQuery bool
+	isQuery          bool
+	destinationTable *bq.TableReference // table to read query results from
 }
 
 // JobFromID creates a Job which refers to an existing BigQuery job. The job
 // need not have been created by this package. For example, the job may have
 // been created in the BigQuery console.
 func (c *Client) JobFromID(ctx context.Context, id string) (*Job, error) {
-	jobType, err := c.service.getJobType(ctx, c.projectID, id)
+	job, err := c.service.getJob(ctx, c.projectID, id)
 	if err != nil {
 		return nil, err
 	}
-
-	return &Job{
-		c:         c,
-		projectID: c.projectID,
-		jobID:     id,
-		isQuery:   jobType == queryJobType,
-	}, nil
+	job.c = c
+	return job, nil
 }
 
+// ID returns the job's ID.
 func (j *Job) ID() string {
 	return j.jobID
 }
@@ -57,7 +60,8 @@ func (j *Job) ID() string {
 type State int
 
 const (
-	Pending State = iota
+	StateUnspecified State = iota // used only as a default in JobIterator
+	Pending
 	Running
 	Done
 )
@@ -76,19 +80,41 @@ type JobStatus struct {
 	Statistics *JobStatistics
 }
 
-// setJobRef initializes job's JobReference if given a non-empty jobID.
+// createJobRef creates a JobReference.
 // projectID must be non-empty.
-func setJobRef(job *bq.Job, jobID, projectID string) {
+func createJobRef(jobID string, addJobIDSuffix bool, projectID string) *bq.JobReference {
 	if jobID == "" {
-		return
+		jobID = randomJobIDFn()
+	} else if addJobIDSuffix {
+		jobID += "-" + randomJobIDFn()
 	}
 	// We don't check whether projectID is empty; the server will return an
 	// error when it encounters the resulting JobReference.
-
-	job.JobReference = &bq.JobReference{
+	return &bq.JobReference{
 		JobId:     jobID,
 		ProjectId: projectID,
 	}
+}
+
+const alphanum = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+
+var (
+	rngMu sync.Mutex
+	rng   = rand.New(rand.NewSource(time.Now().UnixNano() ^ int64(os.Getpid())))
+)
+
+// For testing.
+var randomJobIDFn = randomJobID
+
+func randomJobID() string {
+	// As of August 2017, the BigQuery service uses 27 alphanumeric characters for suffixes.
+	var b [27]byte
+	rngMu.Lock()
+	for i := 0; i < len(b); i++ {
+		b[i] = alphanum[rng.Intn(len(alphanum))]
+	}
+	rngMu.Unlock()
+	return string(b[:])
 }
 
 // Done reports whether the job has completed.
@@ -102,20 +128,25 @@ func (s *JobStatus) Err() error {
 	return s.err
 }
 
+// Fill in the client field of Tables in the statistics.
+func (s *JobStatus) setClient(c *Client) {
+	if s.Statistics == nil {
+		return
+	}
+	if qs, ok := s.Statistics.Details.(*QueryStatistics); ok {
+		for _, t := range qs.ReferencedTables {
+			t.c = c
+		}
+	}
+}
+
 // Status returns the current status of the job. It fails if the Status could not be determined.
 func (j *Job) Status(ctx context.Context) (*JobStatus, error) {
 	js, err := j.c.service.jobStatus(ctx, j.projectID, j.jobID)
 	if err != nil {
 		return nil, err
 	}
-	// Fill in the client field of Tables in the statistics.
-	if js.Statistics != nil {
-		if qs, ok := js.Statistics.Details.(*QueryStatistics); ok {
-			for _, t := range qs.ReferencedTables {
-				t.c = j.c
-			}
-		}
-	}
+	js.setClient(j.c)
 	return js, nil
 }
 
@@ -132,6 +163,19 @@ func (j *Job) Cancel(ctx context.Context) error {
 // Wait returns nil if the status was retrieved successfully, even if
 // status.Err() != nil. So callers must check both errors. See the example.
 func (j *Job) Wait(ctx context.Context) (*JobStatus, error) {
+	if j.isQuery {
+		// We can avoid polling for query jobs.
+		if _, err := j.c.service.waitForQuery(ctx, j.projectID, j.jobID); err != nil {
+			return nil, err
+		}
+		// Note: extra RPC even if you just want to wait for the query to finish.
+		js, err := j.Status(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return js, nil
+	}
+	// Non-query jobs must poll.
 	var js *JobStatus
 	err := internal.Retry(ctx, gax.Backoff{}, func() (stop bool, err error) {
 		js, err = j.Status(ctx)
@@ -147,6 +191,35 @@ func (j *Job) Wait(ctx context.Context) (*JobStatus, error) {
 		return nil, err
 	}
 	return js, nil
+}
+
+// Read fetches the results of a query job.
+// If j is not a query job, Read returns an error.
+func (j *Job) Read(ctx context.Context) (*RowIterator, error) {
+	if !j.isQuery {
+		return nil, errors.New("bigquery: cannot read from a non-query job")
+	}
+	var projectID string
+	if j.destinationTable != nil {
+		projectID = j.destinationTable.ProjectId
+	} else {
+		projectID = j.c.projectID
+	}
+
+	schema, err := j.c.service.waitForQuery(ctx, projectID, j.jobID)
+	if err != nil {
+		return nil, err
+	}
+	// The destination table should only be nil if there was a query error.
+	if j.destinationTable == nil {
+		return nil, errors.New("bigquery: query job missing destination table")
+	}
+	return newRowIterator(ctx, j.c.service, &readTableConf{
+		projectID: j.destinationTable.ProjectId,
+		datasetID: j.destinationTable.DatasetId,
+		tableID:   j.destinationTable.TableId,
+		schema:    schema,
+	}), nil
 }
 
 // JobStatistics contains statistics about a job.
@@ -285,3 +358,73 @@ type ExplainQueryStep struct {
 func (*ExtractStatistics) implementsStatistics() {}
 func (*LoadStatistics) implementsStatistics()    {}
 func (*QueryStatistics) implementsStatistics()   {}
+
+// Jobs lists jobs within a project.
+func (c *Client) Jobs(ctx context.Context) *JobIterator {
+	it := &JobIterator{
+		ctx:       ctx,
+		c:         c,
+		ProjectID: c.projectID,
+	}
+	it.pageInfo, it.nextFunc = iterator.NewPageInfo(
+		it.fetch,
+		func() int { return len(it.items) },
+		func() interface{} { b := it.items; it.items = nil; return b })
+	return it
+}
+
+// A JobInfo consists of a Job and a JobStatus.
+type JobInfo struct {
+	Job    *Job
+	Status *JobStatus
+}
+
+// JobIterator iterates over jobs in a project.
+type JobIterator struct {
+	ProjectID string // Project ID of the jobs to list. Default is the client's project.
+	AllUsers  bool   // Whether to list jobs owned by all users in the project, or just the current caller.
+	State     State  // List only jobs in the given state. Defaults to all states.
+
+	ctx      context.Context
+	c        *Client
+	pageInfo *iterator.PageInfo
+	nextFunc func() error
+	items    []JobInfo
+}
+
+func (it *JobIterator) PageInfo() *iterator.PageInfo { return it.pageInfo }
+
+func (it *JobIterator) Next() (JobInfo, error) {
+	if err := it.nextFunc(); err != nil {
+		return JobInfo{}, err
+	}
+	item := it.items[0]
+	it.items = it.items[1:]
+	return item, nil
+}
+
+func (it *JobIterator) fetch(pageSize int, pageToken string) (string, error) {
+	var st string
+	switch it.State {
+	case StateUnspecified:
+		st = ""
+	case Pending:
+		st = "pending"
+	case Running:
+		st = "running"
+	case Done:
+		st = "done"
+	default:
+		return "", fmt.Errorf("bigquery: invalid value for JobIterator.State: %d", it.State)
+	}
+	jobInfos, nextPageToken, err := it.c.service.listJobs(it.ctx, it.ProjectID, pageSize, pageToken, it.AllUsers, st)
+	if err != nil {
+		return "", err
+	}
+	for _, ji := range jobInfos {
+		ji.Job.c = it.c
+		ji.Status.setClient(it.c)
+		it.items = append(it.items, ji)
+	}
+	return nextPageToken, nil
+}

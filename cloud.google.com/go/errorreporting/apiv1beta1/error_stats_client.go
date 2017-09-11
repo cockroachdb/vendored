@@ -31,10 +31,6 @@ import (
 	"google.golang.org/grpc/codes"
 )
 
-var (
-	errorStatsProjectPathTemplate = gax.MustCompilePathTemplate("projects/{project}")
-)
-
 // ErrorStatsCallOptions contains the retry settings for each method of ErrorStatsClient.
 type ErrorStatsCallOptions struct {
 	ListGroupStats []gax.CallOption
@@ -45,9 +41,7 @@ type ErrorStatsCallOptions struct {
 func defaultErrorStatsClientOptions() []option.ClientOption {
 	return []option.ClientOption{
 		option.WithEndpoint("clouderrorreporting.googleapis.com:443"),
-		option.WithScopes(
-			"https://www.googleapis.com/auth/cloud-platform",
-		),
+		option.WithScopes(DefaultAuthScopes()...),
 	}
 }
 
@@ -85,7 +79,7 @@ type ErrorStatsClient struct {
 	CallOptions *ErrorStatsCallOptions
 
 	// The metadata to be sent with each request.
-	xGoogHeader string
+	xGoogHeader []string
 }
 
 // NewErrorStatsClient creates a new error stats service client.
@@ -124,18 +118,15 @@ func (c *ErrorStatsClient) Close() error {
 func (c *ErrorStatsClient) SetGoogleClientInfo(keyval ...string) {
 	kv := append([]string{"gl-go", version.Go()}, keyval...)
 	kv = append(kv, "gapic", version.Repo, "gax", gax.Version, "grpc", grpc.Version)
-	c.xGoogHeader = gax.XGoogHeader(kv...)
+	c.xGoogHeader = []string{gax.XGoogHeader(kv...)}
 }
 
 // ErrorStatsProjectPath returns the path for the project resource.
 func ErrorStatsProjectPath(project string) string {
-	path, err := errorStatsProjectPathTemplate.Render(map[string]string{
-		"project": project,
-	})
-	if err != nil {
-		panic(err)
-	}
-	return path
+	return "" +
+		"projects/" +
+		project +
+		""
 }
 
 // ListGroupStats lists the specified groups.

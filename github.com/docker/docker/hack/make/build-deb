@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -e
 
 # subshell so that we can export PATH and TZ without breaking other things
@@ -73,16 +73,16 @@ set -e
 		EOF
 
 		cat >> "$DEST/$version/Dockerfile.build" <<-EOF
-			# Install runc, containerd, proxy and grimes
-			RUN ./hack/dockerfile/install-binaries.sh runc-dynamic containerd-dynamic proxy-dynamic grimes
+			# Install runc, containerd, proxy and tini
+			RUN ./hack/dockerfile/install-binaries.sh runc-dynamic containerd-dynamic proxy-dynamic tini
 		EOF
 		cat >> "$DEST/$version/Dockerfile.build" <<-EOF
 			RUN cp -aL hack/make/.build-deb debian
-			RUN { echo '$debSource (${debVersion}-0~${suite}) $suite; urgency=low'; echo; echo '  * Version: $VERSION'; echo; echo " -- $debMaintainer  $debDate"; } > debian/changelog && cat >&2 debian/changelog
+			RUN { echo '$debSource (${debVersion}-0~${version}) $suite; urgency=low'; echo; echo '  * Version: $VERSION'; echo; echo " -- $debMaintainer  $debDate"; } > debian/changelog && cat >&2 debian/changelog
 			RUN dpkg-buildpackage -uc -us -I.git
 		EOF
 		tempImage="docker-temp/build-deb:$version"
-		( set -x && docker build -t "$tempImage" -f "$DEST/$version/Dockerfile.build" . )
+		( set -x && docker build ${DOCKER_BUILD_ARGS} -t "$tempImage" -f "$DEST/$version/Dockerfile.build" . )
 		docker run --rm "$tempImage" bash -c 'cd .. && tar -c *_*' | tar -xvC "$DEST/$version"
 		docker rmi "$tempImage"
 	done

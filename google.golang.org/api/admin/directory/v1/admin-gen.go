@@ -146,6 +146,7 @@ func New(client *http.Client) (*Service, error) {
 	s.Notifications = NewNotificationsService(s)
 	s.Orgunits = NewOrgunitsService(s)
 	s.Privileges = NewPrivilegesService(s)
+	s.ResolvedAppAccessSettings = NewResolvedAppAccessSettingsService(s)
 	s.Resources = NewResourcesService(s)
 	s.RoleAssignments = NewRoleAssignmentsService(s)
 	s.Roles = NewRolesService(s)
@@ -184,6 +185,8 @@ type Service struct {
 	Orgunits *OrgunitsService
 
 	Privileges *PrivilegesService
+
+	ResolvedAppAccessSettings *ResolvedAppAccessSettingsService
 
 	Resources *ResourcesService
 
@@ -324,6 +327,15 @@ func NewPrivilegesService(s *Service) *PrivilegesService {
 }
 
 type PrivilegesService struct {
+	s *Service
+}
+
+func NewResolvedAppAccessSettingsService(s *Service) *ResolvedAppAccessSettingsService {
+	rs := &ResolvedAppAccessSettingsService{s: s}
+	return rs
+}
+
+type ResolvedAppAccessSettingsService struct {
 	s *Service
 }
 
@@ -510,6 +522,67 @@ func (s *Aliases) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
 }
 
+// AppAccessCollections: JSON template for App Access Collections
+// Resource object in Directory API.
+type AppAccessCollections struct {
+	// BlockedApiAccessBuckets: List of blocked api access buckets.
+	BlockedApiAccessBuckets []string `json:"blockedApiAccessBuckets,omitempty"`
+
+	// EnforceSettingsForAndroidDrive: Boolean to indicate whether to
+	// enforce app access settings on Android Drive or not.
+	EnforceSettingsForAndroidDrive bool `json:"enforceSettingsForAndroidDrive,omitempty"`
+
+	// ErrorMessage: Error message provided by the Admin that will be shown
+	// to the user when an app is blocked.
+	ErrorMessage string `json:"errorMessage,omitempty"`
+
+	// Etag: ETag of the resource.
+	Etag string `json:"etag,omitempty"`
+
+	// Kind: Identifies the resource as an app access collection. Value:
+	// admin#directory#appaccesscollection
+	Kind string `json:"kind,omitempty"`
+
+	// ResourceId: Unique ID of app access collection. (Readonly)
+	ResourceId int64 `json:"resourceId,omitempty,string"`
+
+	// ResourceName: Resource name given by the customer while
+	// creating/updating. Should be unique under given customer.
+	ResourceName string `json:"resourceName,omitempty"`
+
+	// TrustDomainOwnedApps: Boolean that indicates whether to trust domain
+	// owned apps.
+	TrustDomainOwnedApps bool `json:"trustDomainOwnedApps,omitempty"`
+
+	// ServerResponse contains the HTTP response code and headers from the
+	// server.
+	googleapi.ServerResponse `json:"-"`
+
+	// ForceSendFields is a list of field names (e.g.
+	// "BlockedApiAccessBuckets") to unconditionally include in API
+	// requests. By default, fields with empty values are omitted from API
+	// requests. However, any non-pointer, non-interface field appearing in
+	// ForceSendFields will be sent to the server regardless of whether the
+	// field is empty or not. This may be used to include empty fields in
+	// Patch requests.
+	ForceSendFields []string `json:"-"`
+
+	// NullFields is a list of field names (e.g. "BlockedApiAccessBuckets")
+	// to include in API requests with the JSON null value. By default,
+	// fields with empty values are omitted from API requests. However, any
+	// field with an empty value appearing in NullFields will be sent to the
+	// server as null. It is an error if a field in this list has a
+	// non-empty value. This may be used to include null fields in Patch
+	// requests.
+	NullFields []string `json:"-"`
+}
+
+func (s *AppAccessCollections) MarshalJSON() ([]byte, error) {
+	type noMethod AppAccessCollections
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
+}
+
 // Asp: The template that returns individual ASP (Access Code) data.
 type Asp struct {
 	// CodeId: The unique ID of the ASP.
@@ -607,6 +680,11 @@ func (s *Asps) MarshalJSON() ([]byte, error) {
 type CalendarResource struct {
 	// Etags: ETag of the resource.
 	Etags string `json:"etags,omitempty"`
+
+	// GeneratedResourceName: The auto-generated name of the calendar
+	// resource which includes metadata about the resource such as building
+	// name, floor, capacity, etc. For example, NYC-2-Training Room 1A (16)
+	GeneratedResourceName string `json:"generatedResourceName,omitempty"`
 
 	// Kind: The type of the resource. For calendar resources, the value is
 	// admin#directory#resources#calendars#CalendarResource.
@@ -1015,6 +1093,35 @@ type ChromeOsDevices struct {
 
 func (s *ChromeOsDevices) MarshalJSON() ([]byte, error) {
 	type noMethod ChromeOsDevices
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
+}
+
+// ChromeOsMoveDevicesToOu: JSON request template for moving ChromeOs
+// Device to given OU in Directory Devices API.
+type ChromeOsMoveDevicesToOu struct {
+	// DeviceIds: ChromeOs Devices to be moved to OU
+	DeviceIds []string `json:"deviceIds,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "DeviceIds") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+
+	// NullFields is a list of field names (e.g. "DeviceIds") to include in
+	// API requests with the JSON null value. By default, fields with empty
+	// values are omitted from API requests. However, any field with an
+	// empty value appearing in NullFields will be sent to the server as
+	// null. It is an error if a field in this list has a non-empty value.
+	// This may be used to include null fields in Patch requests.
+	NullFields []string `json:"-"`
+}
+
+func (s *ChromeOsMoveDevicesToOu) MarshalJSON() ([]byte, error) {
+	type noMethod ChromeOsMoveDevicesToOu
 	raw := noMethod(*s)
 	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
 }
@@ -2588,6 +2695,88 @@ func (s *Tokens) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
 }
 
+// TrustedAppId: JSON template for Trusted App Ids Resource object in
+// Directory API.
+type TrustedAppId struct {
+	// AndroidPackageName: Android package name.
+	AndroidPackageName string `json:"androidPackageName,omitempty"`
+
+	// CertificateHashSHA1: SHA1 signature of the app certificate.
+	CertificateHashSHA1 string `json:"certificateHashSHA1,omitempty"`
+
+	// CertificateHashSHA256: SHA256 signature of the app certificate.
+	CertificateHashSHA256 string `json:"certificateHashSHA256,omitempty"`
+
+	Etag string `json:"etag,omitempty"`
+
+	// Kind: Identifies the resource as a trusted AppId.
+	Kind string `json:"kind,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "AndroidPackageName")
+	// to unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+
+	// NullFields is a list of field names (e.g. "AndroidPackageName") to
+	// include in API requests with the JSON null value. By default, fields
+	// with empty values are omitted from API requests. However, any field
+	// with an empty value appearing in NullFields will be sent to the
+	// server as null. It is an error if a field in this list has a
+	// non-empty value. This may be used to include null fields in Patch
+	// requests.
+	NullFields []string `json:"-"`
+}
+
+func (s *TrustedAppId) MarshalJSON() ([]byte, error) {
+	type noMethod TrustedAppId
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
+}
+
+// TrustedApps: JSON template for Trusted Apps response object of a user
+// in Directory API.
+type TrustedApps struct {
+	// Etag: ETag of the resource.
+	Etag string `json:"etag,omitempty"`
+
+	// Kind: Identifies the resource as trusted apps response.
+	Kind string `json:"kind,omitempty"`
+
+	NextPageToken string `json:"nextPageToken,omitempty"`
+
+	// TrustedApps: Trusted Apps list.
+	TrustedApps []*TrustedAppId `json:"trustedApps,omitempty"`
+
+	// ServerResponse contains the HTTP response code and headers from the
+	// server.
+	googleapi.ServerResponse `json:"-"`
+
+	// ForceSendFields is a list of field names (e.g. "Etag") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+
+	// NullFields is a list of field names (e.g. "Etag") to include in API
+	// requests with the JSON null value. By default, fields with empty
+	// values are omitted from API requests. However, any field with an
+	// empty value appearing in NullFields will be sent to the server as
+	// null. It is an error if a field in this list has a non-empty value.
+	// This may be used to include null fields in Patch requests.
+	NullFields []string `json:"-"`
+}
+
+func (s *TrustedApps) MarshalJSON() ([]byte, error) {
+	type noMethod TrustedApps
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
+}
+
 // User: JSON template for User object in Directory API.
 type User struct {
 	Addresses interface{} `json:"addresses,omitempty"`
@@ -2619,6 +2808,8 @@ type User struct {
 	Etag string `json:"etag,omitempty"`
 
 	ExternalIds interface{} `json:"externalIds,omitempty"`
+
+	Gender interface{} `json:"gender,omitempty"`
 
 	// HashFunction: Hash function name for password. Supported are MD5,
 	// SHA-1 and crypt
@@ -2652,8 +2843,12 @@ type User struct {
 	// IsMailboxSetup: Is mailbox setup (Read-only)
 	IsMailboxSetup bool `json:"isMailboxSetup,omitempty"`
 
+	Keywords interface{} `json:"keywords,omitempty"`
+
 	// Kind: Kind of resource this is.
 	Kind string `json:"kind,omitempty"`
+
+	Languages interface{} `json:"languages,omitempty"`
 
 	// LastLoginTime: User's last login time. (Read-only)
 	LastLoginTime string `json:"lastLoginTime,omitempty"`
@@ -2909,6 +3104,41 @@ func (s *UserExternalId) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
 }
 
+type UserGender struct {
+	// AddressMeAs: AddressMeAs. A human-readable string containing the
+	// proper way to refer to the profile owner by humans, for example
+	// "he/him/his" or "they/them/their".
+	AddressMeAs string `json:"addressMeAs,omitempty"`
+
+	// CustomGender: Custom gender.
+	CustomGender string `json:"customGender,omitempty"`
+
+	// Type: Gender.
+	Type string `json:"type,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "AddressMeAs") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+
+	// NullFields is a list of field names (e.g. "AddressMeAs") to include
+	// in API requests with the JSON null value. By default, fields with
+	// empty values are omitted from API requests. However, any field with
+	// an empty value appearing in NullFields will be sent to the server as
+	// null. It is an error if a field in this list has a non-empty value.
+	// This may be used to include null fields in Patch requests.
+	NullFields []string `json:"-"`
+}
+
+func (s *UserGender) MarshalJSON() ([]byte, error) {
+	type noMethod UserGender
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
+}
+
 // UserIm: JSON template for instant messenger of an user.
 type UserIm struct {
 	// CustomProtocol: Custom protocol.
@@ -2960,11 +3190,85 @@ func (s *UserIm) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
 }
 
+// UserKeyword: JSON template for a keyword entry.
+type UserKeyword struct {
+	// CustomType: Custom Type.
+	CustomType string `json:"customType,omitempty"`
+
+	// Type: Each entry can have a type which indicates standard type of
+	// that entry. For example, keyword could be of type occupation or
+	// outlook. In addition to the standard type, an entry can have a custom
+	// type and can give it any name. Such types should have the CUSTOM
+	// value as type and also have a customType value.
+	Type string `json:"type,omitempty"`
+
+	// Value: Keyword.
+	Value string `json:"value,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "CustomType") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+
+	// NullFields is a list of field names (e.g. "CustomType") to include in
+	// API requests with the JSON null value. By default, fields with empty
+	// values are omitted from API requests. However, any field with an
+	// empty value appearing in NullFields will be sent to the server as
+	// null. It is an error if a field in this list has a non-empty value.
+	// This may be used to include null fields in Patch requests.
+	NullFields []string `json:"-"`
+}
+
+func (s *UserKeyword) MarshalJSON() ([]byte, error) {
+	type noMethod UserKeyword
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
+}
+
+// UserLanguage: JSON template for a language entry.
+type UserLanguage struct {
+	// CustomLanguage: Other language. User can provide own language name if
+	// there is no corresponding Google III language code. If this is set
+	// LanguageCode can't be set
+	CustomLanguage string `json:"customLanguage,omitempty"`
+
+	// LanguageCode: Language Code. Should be used for storing Google III
+	// LanguageCode string representation for language. Illegal values cause
+	// SchemaException.
+	LanguageCode string `json:"languageCode,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "CustomLanguage") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+
+	// NullFields is a list of field names (e.g. "CustomLanguage") to
+	// include in API requests with the JSON null value. By default, fields
+	// with empty values are omitted from API requests. However, any field
+	// with an empty value appearing in NullFields will be sent to the
+	// server as null. It is an error if a field in this list has a
+	// non-empty value. This may be used to include null fields in Patch
+	// requests.
+	NullFields []string `json:"-"`
+}
+
+func (s *UserLanguage) MarshalJSON() ([]byte, error) {
+	type noMethod UserLanguage
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
+}
+
 // UserLocation: JSON template for a location entry.
 type UserLocation struct {
 	// Area: Textual location. This is most useful for display purposes to
-	// concisely describe the location. E.g. "Mountain View, CA", "Near
-	// Seattle", "US-NYC-9TH 9A209A".
+	// concisely describe the location. For example, "Mountain View, CA",
+	// "Near Seattle", "US-NYC-9TH 9A209A".
 	Area string `json:"area,omitempty"`
 
 	// BuildingId: Building Identifier.
@@ -2979,9 +3283,9 @@ type UserLocation struct {
 	// FloorName: Floor name/number.
 	FloorName string `json:"floorName,omitempty"`
 
-	// FloorSection: Floor Section. More specific location within the floor.
-	// E.g. if a floor is divided into sections "A", "B", and "C", this
-	// field would identify one of those values.
+	// FloorSection: Floor section. More specific location within the floor.
+	// For example, if a floor is divided into sections "A", "B", and "C",
+	// this field would identify one of those values.
 	FloorSection string `json:"floorSection,omitempty"`
 
 	// Type: Each entry can have a type which indicates standard types of
@@ -3093,6 +3397,10 @@ type UserOrganization struct {
 
 	// Domain: The domain to which the organization belongs to.
 	Domain string `json:"domain,omitempty"`
+
+	// FullTimeEquivalent: The full-time equivalent percent within the
+	// organization (100000 = 100%).
+	FullTimeEquivalent int64 `json:"fullTimeEquivalent,omitempty"`
 
 	// Location: Location of the organization. This need not be fully
 	// qualified address.
@@ -3241,7 +3549,7 @@ type UserPosixAccount struct {
 	Gecos string `json:"gecos,omitempty"`
 
 	// Gid: The default group ID.
-	Gid int64 `json:"gid,omitempty"`
+	Gid uint64 `json:"gid,omitempty,string"`
 
 	// HomeDirectory: The path to the home directory for this account.
 	HomeDirectory string `json:"homeDirectory,omitempty"`
@@ -3257,7 +3565,7 @@ type UserPosixAccount struct {
 	SystemId string `json:"systemId,omitempty"`
 
 	// Uid: The POSIX compliant user ID.
-	Uid int64 `json:"uid,omitempty"`
+	Uid uint64 `json:"uid,omitempty,string"`
 
 	// Username: The username of the account.
 	Username string `json:"username,omitempty"`
@@ -4366,6 +4674,13 @@ func (c *ChromeosdevicesListCall) OrderBy(orderBy string) *ChromeosdevicesListCa
 	return c
 }
 
+// OrgUnitPath sets the optional parameter "orgUnitPath": Full path of
+// the organization unit or its Id
+func (c *ChromeosdevicesListCall) OrgUnitPath(orgUnitPath string) *ChromeosdevicesListCall {
+	c.urlParams_.Set("orgUnitPath", orgUnitPath)
+	return c
+}
+
 // PageToken sets the optional parameter "pageToken": Token to specify
 // next page in the list
 func (c *ChromeosdevicesListCall) PageToken(pageToken string) *ChromeosdevicesListCall {
@@ -4542,6 +4857,11 @@ func (c *ChromeosdevicesListCall) Do(opts ...googleapi.CallOption) (*ChromeOsDev
 	//       "location": "query",
 	//       "type": "string"
 	//     },
+	//     "orgUnitPath": {
+	//       "description": "Full path of the organization unit or its Id",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
 	//     "pageToken": {
 	//       "description": "Token to specify next page in the list",
 	//       "location": "query",
@@ -4610,6 +4930,120 @@ func (c *ChromeosdevicesListCall) Pages(ctx context.Context, f func(*ChromeOsDev
 		}
 		c.PageToken(x.NextPageToken)
 	}
+}
+
+// method id "directory.chromeosdevices.moveDevicesToOu":
+
+type ChromeosdevicesMoveDevicesToOuCall struct {
+	s                       *Service
+	customerId              string
+	chromeosmovedevicestoou *ChromeOsMoveDevicesToOu
+	urlParams_              gensupport.URLParams
+	ctx_                    context.Context
+	header_                 http.Header
+}
+
+// MoveDevicesToOu: Move or insert multiple Chrome OS Devices to
+// Organization Unit
+func (r *ChromeosdevicesService) MoveDevicesToOu(customerId string, orgUnitPath string, chromeosmovedevicestoou *ChromeOsMoveDevicesToOu) *ChromeosdevicesMoveDevicesToOuCall {
+	c := &ChromeosdevicesMoveDevicesToOuCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	c.customerId = customerId
+	c.urlParams_.Set("orgUnitPath", orgUnitPath)
+	c.chromeosmovedevicestoou = chromeosmovedevicestoou
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
+// for more information.
+func (c *ChromeosdevicesMoveDevicesToOuCall) Fields(s ...googleapi.Field) *ChromeosdevicesMoveDevicesToOuCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// Context sets the context to be used in this call's Do method. Any
+// pending HTTP request will be aborted if the provided context is
+// canceled.
+func (c *ChromeosdevicesMoveDevicesToOuCall) Context(ctx context.Context) *ChromeosdevicesMoveDevicesToOuCall {
+	c.ctx_ = ctx
+	return c
+}
+
+// Header returns an http.Header that can be modified by the caller to
+// add HTTP headers to the request.
+func (c *ChromeosdevicesMoveDevicesToOuCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
+func (c *ChromeosdevicesMoveDevicesToOuCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	for k, v := range c.header_ {
+		reqHeaders[k] = v
+	}
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	var body io.Reader = nil
+	body, err := googleapi.WithoutDataWrapper.JSONReader(c.chromeosmovedevicestoou)
+	if err != nil {
+		return nil, err
+	}
+	reqHeaders.Set("Content-Type", "application/json")
+	c.urlParams_.Set("alt", alt)
+	urls := googleapi.ResolveRelative(c.s.BasePath, "customer/{customerId}/devices/chromeos/moveDevicesToOu")
+	urls += "?" + c.urlParams_.Encode()
+	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
+	googleapi.Expand(req.URL, map[string]string{
+		"customerId": c.customerId,
+	})
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "directory.chromeosdevices.moveDevicesToOu" call.
+func (c *ChromeosdevicesMoveDevicesToOuCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if err != nil {
+		return err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return err
+	}
+	return nil
+	// {
+	//   "description": "Move or insert multiple Chrome OS Devices to Organization Unit",
+	//   "httpMethod": "POST",
+	//   "id": "directory.chromeosdevices.moveDevicesToOu",
+	//   "parameterOrder": [
+	//     "customerId",
+	//     "orgUnitPath"
+	//   ],
+	//   "parameters": {
+	//     "customerId": {
+	//       "description": "Immutable ID of the G Suite account",
+	//       "location": "path",
+	//       "required": true,
+	//       "type": "string"
+	//     },
+	//     "orgUnitPath": {
+	//       "description": "Full path of the target organization unit or its Id",
+	//       "location": "query",
+	//       "required": true,
+	//       "type": "string"
+	//     }
+	//   },
+	//   "path": "customer/{customerId}/devices/chromeos/moveDevicesToOu",
+	//   "request": {
+	//     "$ref": "ChromeOsMoveDevicesToOu"
+	//   },
+	//   "scopes": [
+	//     "https://www.googleapis.com/auth/admin.directory.device.chromeos"
+	//   ]
+	// }
+
 }
 
 // method id "directory.chromeosdevices.patch":
@@ -10903,6 +11337,244 @@ func (c *PrivilegesListCall) Do(opts ...googleapi.CallOption) (*Privileges, erro
 
 }
 
+// method id "directory.resolvedAppAccessSettings.GetSettings":
+
+type ResolvedAppAccessSettingsGetSettingsCall struct {
+	s            *Service
+	urlParams_   gensupport.URLParams
+	ifNoneMatch_ string
+	ctx_         context.Context
+	header_      http.Header
+}
+
+// GetSettings: Retrieves resolved app access settings of the logged in
+// user.
+func (r *ResolvedAppAccessSettingsService) GetSettings() *ResolvedAppAccessSettingsGetSettingsCall {
+	c := &ResolvedAppAccessSettingsGetSettingsCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
+// for more information.
+func (c *ResolvedAppAccessSettingsGetSettingsCall) Fields(s ...googleapi.Field) *ResolvedAppAccessSettingsGetSettingsCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// IfNoneMatch sets the optional parameter which makes the operation
+// fail if the object's ETag matches the given value. This is useful for
+// getting updates only after the object has changed since the last
+// request. Use googleapi.IsNotModified to check whether the response
+// error from Do is the result of In-None-Match.
+func (c *ResolvedAppAccessSettingsGetSettingsCall) IfNoneMatch(entityTag string) *ResolvedAppAccessSettingsGetSettingsCall {
+	c.ifNoneMatch_ = entityTag
+	return c
+}
+
+// Context sets the context to be used in this call's Do method. Any
+// pending HTTP request will be aborted if the provided context is
+// canceled.
+func (c *ResolvedAppAccessSettingsGetSettingsCall) Context(ctx context.Context) *ResolvedAppAccessSettingsGetSettingsCall {
+	c.ctx_ = ctx
+	return c
+}
+
+// Header returns an http.Header that can be modified by the caller to
+// add HTTP headers to the request.
+func (c *ResolvedAppAccessSettingsGetSettingsCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
+func (c *ResolvedAppAccessSettingsGetSettingsCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	for k, v := range c.header_ {
+		reqHeaders[k] = v
+	}
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
+	var body io.Reader = nil
+	c.urlParams_.Set("alt", alt)
+	urls := googleapi.ResolveRelative(c.s.BasePath, "resolvedappaccesssettings")
+	urls += "?" + c.urlParams_.Encode()
+	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "directory.resolvedAppAccessSettings.GetSettings" call.
+// Exactly one of *AppAccessCollections or error will be non-nil. Any
+// non-2xx status code is an error. Response headers are in either
+// *AppAccessCollections.ServerResponse.Header or (if a response was
+// returned at all) in error.(*googleapi.Error).Header. Use
+// googleapi.IsNotModified to check whether the returned error was
+// because http.StatusNotModified was returned.
+func (c *ResolvedAppAccessSettingsGetSettingsCall) Do(opts ...googleapi.CallOption) (*AppAccessCollections, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if res != nil && res.StatusCode == http.StatusNotModified {
+		if res.Body != nil {
+			res.Body.Close()
+		}
+		return nil, &googleapi.Error{
+			Code:   res.StatusCode,
+			Header: res.Header,
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return nil, err
+	}
+	ret := &AppAccessCollections{
+		ServerResponse: googleapi.ServerResponse{
+			Header:         res.Header,
+			HTTPStatusCode: res.StatusCode,
+		},
+	}
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
+		return nil, err
+	}
+	return ret, nil
+	// {
+	//   "description": "Retrieves resolved app access settings of the logged in user.",
+	//   "httpMethod": "GET",
+	//   "id": "directory.resolvedAppAccessSettings.GetSettings",
+	//   "path": "resolvedappaccesssettings",
+	//   "response": {
+	//     "$ref": "AppAccessCollections"
+	//   }
+	// }
+
+}
+
+// method id "directory.resolvedAppAccessSettings.ListTrustedApps":
+
+type ResolvedAppAccessSettingsListTrustedAppsCall struct {
+	s            *Service
+	urlParams_   gensupport.URLParams
+	ifNoneMatch_ string
+	ctx_         context.Context
+	header_      http.Header
+}
+
+// ListTrustedApps: Retrieves the list of apps trusted by the admin of
+// the logged in user.
+func (r *ResolvedAppAccessSettingsService) ListTrustedApps() *ResolvedAppAccessSettingsListTrustedAppsCall {
+	c := &ResolvedAppAccessSettingsListTrustedAppsCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
+// for more information.
+func (c *ResolvedAppAccessSettingsListTrustedAppsCall) Fields(s ...googleapi.Field) *ResolvedAppAccessSettingsListTrustedAppsCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// IfNoneMatch sets the optional parameter which makes the operation
+// fail if the object's ETag matches the given value. This is useful for
+// getting updates only after the object has changed since the last
+// request. Use googleapi.IsNotModified to check whether the response
+// error from Do is the result of In-None-Match.
+func (c *ResolvedAppAccessSettingsListTrustedAppsCall) IfNoneMatch(entityTag string) *ResolvedAppAccessSettingsListTrustedAppsCall {
+	c.ifNoneMatch_ = entityTag
+	return c
+}
+
+// Context sets the context to be used in this call's Do method. Any
+// pending HTTP request will be aborted if the provided context is
+// canceled.
+func (c *ResolvedAppAccessSettingsListTrustedAppsCall) Context(ctx context.Context) *ResolvedAppAccessSettingsListTrustedAppsCall {
+	c.ctx_ = ctx
+	return c
+}
+
+// Header returns an http.Header that can be modified by the caller to
+// add HTTP headers to the request.
+func (c *ResolvedAppAccessSettingsListTrustedAppsCall) Header() http.Header {
+	if c.header_ == nil {
+		c.header_ = make(http.Header)
+	}
+	return c.header_
+}
+
+func (c *ResolvedAppAccessSettingsListTrustedAppsCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	for k, v := range c.header_ {
+		reqHeaders[k] = v
+	}
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
+	var body io.Reader = nil
+	c.urlParams_.Set("alt", alt)
+	urls := googleapi.ResolveRelative(c.s.BasePath, "trustedapps")
+	urls += "?" + c.urlParams_.Encode()
+	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "directory.resolvedAppAccessSettings.ListTrustedApps" call.
+// Exactly one of *TrustedApps or error will be non-nil. Any non-2xx
+// status code is an error. Response headers are in either
+// *TrustedApps.ServerResponse.Header or (if a response was returned at
+// all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
+// to check whether the returned error was because
+// http.StatusNotModified was returned.
+func (c *ResolvedAppAccessSettingsListTrustedAppsCall) Do(opts ...googleapi.CallOption) (*TrustedApps, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if res != nil && res.StatusCode == http.StatusNotModified {
+		if res.Body != nil {
+			res.Body.Close()
+		}
+		return nil, &googleapi.Error{
+			Code:   res.StatusCode,
+			Header: res.Header,
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return nil, err
+	}
+	ret := &TrustedApps{
+		ServerResponse: googleapi.ServerResponse{
+			Header:         res.Header,
+			HTTPStatusCode: res.StatusCode,
+		},
+	}
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
+		return nil, err
+	}
+	return ret, nil
+	// {
+	//   "description": "Retrieves the list of apps trusted by the admin of the logged in user.",
+	//   "httpMethod": "GET",
+	//   "id": "directory.resolvedAppAccessSettings.ListTrustedApps",
+	//   "path": "trustedapps",
+	//   "response": {
+	//     "$ref": "TrustedApps"
+	//   }
+	// }
+
+}
+
 // method id "directory.resources.calendars.delete":
 
 type ResourcesCalendarsDeleteCall struct {
@@ -11487,8 +12159,11 @@ type ResourcesCalendarsPatchCall struct {
 	header_            http.Header
 }
 
-// Patch: Updates a calendar resource. This method supports patch
-// semantics.
+// Patch: Updates a calendar resource.
+//
+// This method supports patch semantics, meaning you only need to
+// include the fields you wish to update. Fields that are not present in
+// the request will be preserved. This method supports patch semantics.
 func (r *ResourcesCalendarsService) Patch(customer string, calendarResourceId string, calendarresource *CalendarResource) *ResourcesCalendarsPatchCall {
 	c := &ResourcesCalendarsPatchCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.customer = customer
@@ -11584,7 +12259,7 @@ func (c *ResourcesCalendarsPatchCall) Do(opts ...googleapi.CallOption) (*Calenda
 	}
 	return ret, nil
 	// {
-	//   "description": "Updates a calendar resource. This method supports patch semantics.",
+	//   "description": "Updates a calendar resource.\n\nThis method supports patch semantics, meaning you only need to include the fields you wish to update. Fields that are not present in the request will be preserved. This method supports patch semantics.",
 	//   "httpMethod": "PATCH",
 	//   "id": "directory.resources.calendars.patch",
 	//   "parameterOrder": [
@@ -11632,6 +12307,10 @@ type ResourcesCalendarsUpdateCall struct {
 }
 
 // Update: Updates a calendar resource.
+//
+// This method supports patch semantics, meaning you only need to
+// include the fields you wish to update. Fields that are not present in
+// the request will be preserved.
 func (r *ResourcesCalendarsService) Update(customer string, calendarResourceId string, calendarresource *CalendarResource) *ResourcesCalendarsUpdateCall {
 	c := &ResourcesCalendarsUpdateCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.customer = customer
@@ -11727,7 +12406,7 @@ func (c *ResourcesCalendarsUpdateCall) Do(opts ...googleapi.CallOption) (*Calend
 	}
 	return ret, nil
 	// {
-	//   "description": "Updates a calendar resource.",
+	//   "description": "Updates a calendar resource.\n\nThis method supports patch semantics, meaning you only need to include the fields you wish to update. Fields that are not present in the request will be preserved.",
 	//   "httpMethod": "PUT",
 	//   "id": "directory.resources.calendars.update",
 	//   "parameterOrder": [

@@ -127,7 +127,6 @@ type DownloadLineItemsRequest struct {
 	//
 	// Possible values:
 	//   "EWF"
-	//   "SDF"
 	FileSpec string `json:"fileSpec,omitempty"`
 
 	// FilterIds: Ids of the specified filter type used to filter line items
@@ -174,9 +173,8 @@ func (s *DownloadLineItemsRequest) MarshalJSON() ([]byte, error) {
 
 // DownloadLineItemsResponse: Download line items response.
 type DownloadLineItemsResponse struct {
-	// LineItems: Retrieved line items in CSV format. Refer to  Entity Write
-	// File Format or  Structured Data File Format for more information on
-	// file formats.
+	// LineItems: Retrieved line items in CSV format. For more information
+	// about file formats, see  Entity Write File Format.
 	LineItems string `json:"lineItems,omitempty"`
 
 	// ServerResponse contains the HTTP response code and headers from the
@@ -315,6 +313,7 @@ type FilterPair struct {
 	//   "FILTER_AGE"
 	//   "FILTER_BRANDSAFE_CHANNEL_ID"
 	//   "FILTER_BROWSER"
+	//   "FILTER_BUDGET_SEGMENT_DESCRIPTION"
 	//   "FILTER_CAMPAIGN_DAILY_FREQUENCY"
 	//   "FILTER_CARRIER"
 	//   "FILTER_CHANNEL_ID"
@@ -540,6 +539,7 @@ type Parameters struct {
 	//   "FILTER_AGE"
 	//   "FILTER_BRANDSAFE_CHANNEL_ID"
 	//   "FILTER_BROWSER"
+	//   "FILTER_BUDGET_SEGMENT_DESCRIPTION"
 	//   "FILTER_CAMPAIGN_DAILY_FREQUENCY"
 	//   "FILTER_CARRIER"
 	//   "FILTER_CHANNEL_ID"
@@ -848,6 +848,7 @@ type Parameters struct {
 	//   "METRIC_PROFIT_VIEWABLE_ECPM_ADVERTISER"
 	//   "METRIC_PROFIT_VIEWABLE_ECPM_PARTNER"
 	//   "METRIC_PROFIT_VIEWABLE_ECPM_USD"
+	//   "METRIC_REACH_COOKIE_FREQUENCY"
 	//   "METRIC_REACH_COOKIE_REACH"
 	//   "METRIC_REVENUE_ADVERTISER"
 	//   "METRIC_REVENUE_ECPAPC_ADVERTISER"

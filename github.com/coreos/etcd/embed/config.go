@@ -22,6 +22,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/coreos/etcd/etcdserver"
 	"github.com/coreos/etcd/pkg/cors"
@@ -38,11 +39,14 @@ const (
 	ClusterStateFlagNew      = "new"
 	ClusterStateFlagExisting = "existing"
 
-	DefaultName            = "default"
-	DefaultMaxSnapshots    = 5
-	DefaultMaxWALs         = 5
-	DefaultMaxTxnOps       = uint(128)
-	DefaultMaxRequestBytes = 1.5 * 1024 * 1024
+	DefaultName                  = "default"
+	DefaultMaxSnapshots          = 5
+	DefaultMaxWALs               = 5
+	DefaultMaxTxnOps             = uint(128)
+	DefaultMaxRequestBytes       = 1.5 * 1024 * 1024
+	DefaultGRPCKeepAliveMinTime  = 5 * time.Second
+	DefaultGRPCKeepAliveInterval = 2 * time.Hour
+	DefaultGRPCKeepAliveTimeout  = 20 * time.Second
 
 	DefaultListenPeerURLs   = "http://localhost:2380"
 	DefaultListenClientURLs = "http://localhost:2379"
@@ -80,7 +84,7 @@ type Config struct {
 	MaxWalFiles             uint   `json:"max-wals"`
 	Name                    string `json:"name"`
 	SnapCount               uint64 `json:"snapshot-count"`
-	AutoCompactionRetention int    `json:"auto-compaction-retention"`
+	AutoCompactionRetention string `json:"auto-compaction-retention"`
 	AutoCompactionMode      string `json:"auto-compaction-mode"`
 
 	// TickMs is the number of milliseconds between heartbeat ticks.
@@ -91,6 +95,23 @@ type Config struct {
 	QuotaBackendBytes int64 `json:"quota-backend-bytes"`
 	MaxTxnOps         uint  `json:"max-txn-ops"`
 	MaxRequestBytes   uint  `json:"max-request-bytes"`
+
+	// gRPC server options
+
+	// GRPCKeepAliveMinTime is the minimum interval that a client should
+	// wait before pinging server. When client pings "too fast", server
+	// sends goaway and closes the connection (errors: too_many_pings,
+	// http2.ErrCodeEnhanceYourCalm). When too slow, nothing happens.
+	// Server expects client pings only when there is any active streams
+	// (PermitWithoutStream is set false).
+	GRPCKeepAliveMinTime time.Duration `json:"grpc-keepalive-min-time"`
+	// GRPCKeepAliveInterval is the frequency of server-to-client ping
+	// to check if a connection is alive. Close a non-responsive connection
+	// after an additional duration of Timeout. 0 to disable.
+	GRPCKeepAliveInterval time.Duration `json:"grpc-keepalive-interval"`
+	// GRPCKeepAliveTimeout is the additional duration of wait
+	// before closing a non-responsive connection. 0 to disable.
+	GRPCKeepAliveTimeout time.Duration `json:"grpc-keepalive-timeout"`
 
 	// clustering
 
@@ -115,7 +136,7 @@ type Config struct {
 
 	Debug                 bool   `json:"debug"`
 	LogPkgLevels          string `json:"log-package-levels"`
-	EnablePprof           bool
+	EnablePprof           bool   `json:"enable-pprof"`
 	Metrics               string `json:"metrics"`
 	ListenMetricsUrls     []url.URL
 	ListenMetricsUrlsJSON string `json:"listen-metrics-urls"`
@@ -140,6 +161,11 @@ type Config struct {
 	// auth
 
 	AuthToken string `json:"auth-token"`
+
+	// Experimental flags
+
+	ExperimentalCorruptCheckTime time.Duration `json:"experimental-corrupt-check-time"`
+	ExperimentalEnableV2V3       string        `json:"experimental-enable-v2v3"`
 }
 
 // configYAML holds the config suitable for yaml parsing
@@ -175,25 +201,28 @@ func NewConfig() *Config {
 	lcurl, _ := url.Parse(DefaultListenClientURLs)
 	acurl, _ := url.Parse(DefaultAdvertiseClientURLs)
 	cfg := &Config{
-		CorsInfo:            &cors.CORSInfo{},
-		MaxSnapFiles:        DefaultMaxSnapshots,
-		MaxWalFiles:         DefaultMaxWALs,
-		Name:                DefaultName,
-		SnapCount:           etcdserver.DefaultSnapCount,
-		MaxTxnOps:           DefaultMaxTxnOps,
-		MaxRequestBytes:     DefaultMaxRequestBytes,
-		TickMs:              100,
-		ElectionMs:          1000,
-		LPUrls:              []url.URL{*lpurl},
-		LCUrls:              []url.URL{*lcurl},
-		APUrls:              []url.URL{*apurl},
-		ACUrls:              []url.URL{*acurl},
-		ClusterState:        ClusterStateFlagNew,
-		InitialClusterToken: "etcd-cluster",
-		StrictReconfigCheck: true,
-		Metrics:             "basic",
-		EnableV2:            true,
-		AuthToken:           "simple",
+		CorsInfo:              &cors.CORSInfo{},
+		MaxSnapFiles:          DefaultMaxSnapshots,
+		MaxWalFiles:           DefaultMaxWALs,
+		Name:                  DefaultName,
+		SnapCount:             etcdserver.DefaultSnapCount,
+		MaxTxnOps:             DefaultMaxTxnOps,
+		MaxRequestBytes:       DefaultMaxRequestBytes,
+		GRPCKeepAliveMinTime:  DefaultGRPCKeepAliveMinTime,
+		GRPCKeepAliveInterval: DefaultGRPCKeepAliveInterval,
+		GRPCKeepAliveTimeout:  DefaultGRPCKeepAliveTimeout,
+		TickMs:                100,
+		ElectionMs:            1000,
+		LPUrls:                []url.URL{*lpurl},
+		LCUrls:                []url.URL{*lcurl},
+		APUrls:                []url.URL{*apurl},
+		ACUrls:                []url.URL{*acurl},
+		ClusterState:          ClusterStateFlagNew,
+		InitialClusterToken:   "etcd-cluster",
+		StrictReconfigCheck:   true,
+		Metrics:               "basic",
+		EnableV2:              true,
+		AuthToken:             "simple",
 	}
 	cfg.InitialCluster = cfg.InitialClusterFromName(cfg.Name)
 	return cfg
@@ -299,6 +328,22 @@ func (cfg *Config) Validate() error {
 	if err := checkBindURLs(cfg.ListenMetricsUrls); err != nil {
 		return err
 	}
+	if err := checkHostURLs(cfg.APUrls); err != nil {
+		// TODO: return err in v3.4
+		addrs := make([]string, len(cfg.APUrls))
+		for i := range cfg.APUrls {
+			addrs[i] = cfg.APUrls[i].String()
+		}
+		plog.Warningf("advertise-peer-urls %q is deprecated (%v)", strings.Join(addrs, ","), err)
+	}
+	if err := checkHostURLs(cfg.ACUrls); err != nil {
+		// TODO: return err in v3.4
+		addrs := make([]string, len(cfg.ACUrls))
+		for i := range cfg.ACUrls {
+			addrs[i] = cfg.ACUrls[i].String()
+		}
+		plog.Warningf("advertise-client-urls %q is deprecated (%v)", strings.Join(addrs, ","), err)
+	}
 
 	// Check if conflicting flags are passed.
 	nSet := 0
@@ -352,7 +397,9 @@ func (cfg *Config) PeerURLsMapAndToken(which string) (urlsmap types.URLsMap, tok
 		}
 		clusterStr := strings.Join(clusterStrs, ",")
 		if strings.Contains(clusterStr, "https://") && cfg.PeerTLSInfo.CAFile == "" {
-			cfg.PeerTLSInfo.ServerName = cfg.DNSCluster
+			// SRV targets have subdomains under the given DNSCluster, so wildcard matching
+			// is needed.
+			cfg.PeerTLSInfo.ServerName = "*." + cfg.DNSCluster
 		}
 		urlsmap, err = types.NewURLsMap(clusterStr)
 		// only etcd member must belong to the discovered cluster.
@@ -480,6 +527,19 @@ func checkBindURLs(urls []url.URL) error {
 		}
 		if net.ParseIP(host) == nil {
 			return fmt.Errorf("expected IP in URL for binding (%s)", url.String())
+		}
+	}
+	return nil
+}
+
+func checkHostURLs(urls []url.URL) error {
+	for _, url := range urls {
+		host, _, err := net.SplitHostPort(url.Host)
+		if err != nil {
+			return err
+		}
+		if host == "" {
+			return fmt.Errorf("unexpected empty host (%s)", url.String())
 		}
 	}
 	return nil

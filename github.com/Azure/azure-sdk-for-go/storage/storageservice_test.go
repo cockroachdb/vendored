@@ -1,5 +1,19 @@
 package storage
 
+// Copyright 2017 Microsoft Corporation
+//
+//  Licensed under the Apache License, Version 2.0 (the "License");
+//  you may not use this file except in compliance with the License.
+//  You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+//  Unless required by applicable law or agreed to in writing, software
+//  distributed under the License is distributed on an "AS IS" BASIS,
+//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//  See the License for the specific language governing permissions and
+//  limitations under the License.
+
 import chk "gopkg.in/check.v1"
 
 type StorageSuite struct{}
@@ -10,6 +24,9 @@ var _ = chk.Suite(&StorageSuite{})
 
 func (s *StorageSuite) TestGetServiceProperties(c *chk.C) {
 	cli := getTableClient(c)
+	rec := cli.client.appendRecorder(c)
+	defer rec.Stop()
+
 	sp, err := cli.GetServiceProperties()
 	c.Assert(err, chk.IsNil)
 	c.Assert(sp, chk.NotNil)
@@ -17,6 +34,7 @@ func (s *StorageSuite) TestGetServiceProperties(c *chk.C) {
 
 func (s *StorageSuite) TestSetServiceProperties(c *chk.C) {
 	cli := getTableClient(c)
+	rec := cli.client.appendRecorder(c)
 
 	t := true
 	num := 7
@@ -61,6 +79,8 @@ func (s *StorageSuite) TestSetServiceProperties(c *chk.C) {
 	c.Assert(spOutput, chk.NotNil)
 	c.Assert(*spOutput, chk.DeepEquals, spInput)
 
+	rec.Stop()
+
 	// Back to defaults
 	defaultRP := RetentionPolicy{
 		Enabled: false,
@@ -75,11 +95,5 @@ func (s *StorageSuite) TestSetServiceProperties(c *chk.C) {
 	spInput.Logging.RetentionPolicy = &defaultRP
 	spInput.Cors = &Cors{nil}
 
-	err = cli.SetServiceProperties(spInput)
-	c.Assert(err, chk.IsNil)
-
-	spOutput, err = cli.GetServiceProperties()
-	c.Assert(err, chk.IsNil)
-	c.Assert(spOutput, chk.NotNil)
-	c.Assert(*spOutput, chk.DeepEquals, spInput)
+	cli.SetServiceProperties(spInput)
 }

@@ -41,10 +41,7 @@ type Debugger2CallOptions struct {
 func defaultDebugger2ClientOptions() []option.ClientOption {
 	return []option.ClientOption{
 		option.WithEndpoint("clouddebugger.googleapis.com:443"),
-		option.WithScopes(
-			"https://www.googleapis.com/auth/cloud-platform",
-			"https://www.googleapis.com/auth/cloud_debugger",
-		),
+		option.WithScopes(DefaultAuthScopes()...),
 	}
 }
 
@@ -54,17 +51,6 @@ func defaultDebugger2CallOptions() *Debugger2CallOptions {
 			gax.WithRetry(func() gax.Retryer {
 				return gax.OnCodes([]codes.Code{
 					codes.DeadlineExceeded,
-					codes.Unavailable,
-				}, gax.Backoff{
-					Initial:    100 * time.Millisecond,
-					Max:        60000 * time.Millisecond,
-					Multiplier: 1.3,
-				})
-			}),
-		},
-		{"default", "non_idempotent"}: {
-			gax.WithRetry(func() gax.Retryer {
-				return gax.OnCodes([]codes.Code{
 					codes.Unavailable,
 				}, gax.Backoff{
 					Initial:    100 * time.Millisecond,
@@ -95,7 +81,7 @@ type Debugger2Client struct {
 	CallOptions *Debugger2CallOptions
 
 	// The metadata to be sent with each request.
-	xGoogHeader string
+	xGoogHeader []string
 }
 
 // NewDebugger2Client creates a new debugger2 client.
@@ -105,9 +91,9 @@ type Debugger2Client struct {
 // and without modifying its state.  An application may include one or
 // more replicated processes performing the same work.
 //
-// The application is represented using the Debuggee concept. The Debugger
-// service provides a way to query for available Debuggees, but does not
-// provide a way to create one.  A debuggee is created using the Controller
+// A debugged application is represented using the Debuggee concept. The
+// Debugger service provides a way to query for available debuggees, but does
+// not provide a way to create one.  A debuggee is created using the Controller
 // service, usually by running a debugger agent with the application.
 //
 // The Debugger service enables the client to set one or more Breakpoints on a
@@ -144,7 +130,7 @@ func (c *Debugger2Client) Close() error {
 func (c *Debugger2Client) SetGoogleClientInfo(keyval ...string) {
 	kv := append([]string{"gl-go", version.Go()}, keyval...)
 	kv = append(kv, "gapic", version.Repo, "gax", gax.Version, "grpc", grpc.Version)
-	c.xGoogHeader = gax.XGoogHeader(kv...)
+	c.xGoogHeader = []string{gax.XGoogHeader(kv...)}
 }
 
 // SetBreakpoint sets the breakpoint to the debuggee.
@@ -207,7 +193,7 @@ func (c *Debugger2Client) ListBreakpoints(ctx context.Context, req *clouddebugge
 	return resp, nil
 }
 
-// ListDebuggees lists all the debuggees that the user can set breakpoints to.
+// ListDebuggees lists all the debuggees that the user has access to.
 func (c *Debugger2Client) ListDebuggees(ctx context.Context, req *clouddebuggerpb.ListDebuggeesRequest, opts ...gax.CallOption) (*clouddebuggerpb.ListDebuggeesResponse, error) {
 	ctx = insertXGoog(ctx, c.xGoogHeader)
 	opts = append(c.CallOptions.ListDebuggees[0:len(c.CallOptions.ListDebuggees):len(c.CallOptions.ListDebuggees)], opts...)

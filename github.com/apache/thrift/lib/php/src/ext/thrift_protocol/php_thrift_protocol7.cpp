@@ -594,8 +594,9 @@ void binary_deserialize(int8_t thrift_typeID, PHPInputTransport& transport, zval
           zend_hash_index_update(Z_ARR_P(return_value), Z_LVAL(key), &value);
         } else {
           if (Z_TYPE(key) != IS_STRING) convert_to_string(&key);
-          zend_hash_update(Z_ARR_P(return_value), Z_STR(key), &value);
+          zend_symtable_update(Z_ARR_P(return_value), Z_STR(key), &value);
         }
+        zval_dtor(&key);
       }
       return; // return_value already populated
     }
@@ -634,8 +635,9 @@ void binary_deserialize(int8_t thrift_typeID, PHPInputTransport& transport, zval
           zend_hash_index_update(Z_ARR_P(return_value), Z_LVAL(key), &value);
         } else {
           if (Z_TYPE(key) != IS_STRING) convert_to_string(&key);
-          zend_hash_update(Z_ARR_P(return_value), Z_STR(key), &value);
+          zend_symtable_update(Z_ARR_P(return_value), Z_STR(key), &value);
         }
+        zval_dtor(&key);
       }
       return;
     }
@@ -665,7 +667,7 @@ void binary_serialize_hashtable_key(int8_t keytype, PHPOutputTransport& transpor
   } else {
     char buf[64];
     if (res == HASH_KEY_IS_STRING) {
-      ZVAL_STR(&z, key);
+      ZVAL_STR_COPY(&z, key);
     } else {
       snprintf(buf, 64, "%ld", index);
       ZVAL_STRING(&z, buf);
@@ -822,7 +824,7 @@ void protocol_writeMessageBegin(zval* transport, zend_string* method_name, int32
   zval ret;
   zval writeMessagefn;
 
-  ZVAL_STR(&args[0], method_name);
+  ZVAL_STR_COPY(&args[0], method_name);
   ZVAL_LONG(&args[1], msgtype);
   ZVAL_LONG(&args[2], seqID);
   ZVAL_NULL(&ret);
@@ -847,6 +849,44 @@ bool ttypes_are_compatible(int8_t t1, int8_t t2) {
   return ((t1 == t2) || (ttype_is_int(t1) && ttype_is_int(t2)));
 }
 
+//is used to validate objects before serialization and after deserialization. For now, only required fields are validated.
+static
+void validate_thrift_object(zval* object) {
+    zend_class_entry* object_class_entry = Z_OBJCE_P(object);
+    zval* is_validate = zend_read_static_property(object_class_entry, "isValidate", sizeof("isValidate")-1, false);
+    zval* spec = zend_read_static_property(object_class_entry, "_TSPEC", sizeof("_TSPEC")-1, false);
+    HashPosition key_ptr;
+    zval* val_ptr;
+
+    if (Z_TYPE_INFO_P(is_validate) == IS_TRUE) {
+        for (zend_hash_internal_pointer_reset_ex(Z_ARRVAL_P(spec), &key_ptr);
+           (val_ptr = zend_hash_get_current_data_ex(Z_ARRVAL_P(spec), &key_ptr)) != nullptr;
+           zend_hash_move_forward_ex(Z_ARRVAL_P(spec), &key_ptr)) {
+
+            zend_ulong fieldno;
+            if (zend_hash_get_current_key_ex(Z_ARRVAL_P(spec), nullptr, &fieldno, &key_ptr) != HASH_KEY_IS_LONG) {
+              throw_tprotocolexception("Bad keytype in TSPEC (expected 'long')", INVALID_DATA);
+              return;
+            }
+            HashTable* fieldspec = Z_ARRVAL_P(val_ptr);
+
+            // field name
+            zval* zvarname = zend_hash_str_find(fieldspec, "var", sizeof("var")-1);
+            char* varname = Z_STRVAL_P(zvarname);
+
+            zval* is_required = zend_hash_str_find(fieldspec, "isRequired", sizeof("isRequired")-1);
+            zval rv;
+            zval* prop = zend_read_property(object_class_entry, object, varname, strlen(varname), false, &rv);
+
+            if (Z_TYPE_INFO_P(is_required) == IS_TRUE && Z_TYPE_P(prop) == IS_NULL) {
+                char errbuf[128];
+                snprintf(errbuf, 128, "Required field %s.%s is unset!", ZSTR_VAL(object_class_entry->name), varname);
+                throw_tprotocolexception(errbuf, INVALID_DATA);
+            }
+        }
+    }
+}
+
 static
 void binary_deserialize_spec(zval* zthis, PHPInputTransport& transport, HashTable* spec) {
   // SET and LIST have 'elem' => array('type', [optional] 'class')
@@ -855,6 +895,7 @@ void binary_deserialize_spec(zval* zthis, PHPInputTransport& transport, HashTabl
   while (true) {
     int8_t ttype = transport.readI8();
     if (ttype == T_STOP) {
+      validate_thrift_object(zthis);
       return;
     }
 
@@ -890,6 +931,9 @@ void binary_deserialize_spec(zval* zthis, PHPInputTransport& transport, HashTabl
 
 static
 void binary_serialize_spec(zval* zthis, PHPOutputTransport& transport, HashTable* spec) {
+
+  validate_thrift_object(zthis);
+
   HashPosition key_ptr;
   zval* val_ptr;
 
@@ -951,7 +995,10 @@ PHP_FUNCTION(thrift_protocol_write_binary) {
     transport.flush();
 
   } catch (const PHPExceptionWrapper& ex) {
-    zend_throw_exception_object(ex);
+    // ex will be destructed, so copy to a zval that zend_throw_exception_object can take ownership of
+    zval myex;
+    ZVAL_COPY(&myex, ex);
+    zend_throw_exception_object(&myex);
     RETURN_NULL();
   } catch (const std::exception& ex) {
     throw_zend_exception_from_std_exception(ex);
@@ -1009,7 +1056,11 @@ PHP_FUNCTION(thrift_protocol_read_binary) {
     zval* spec = zend_read_static_property(Z_OBJCE_P(return_value), "_TSPEC", sizeof("_TSPEC")-1, false);
     binary_deserialize_spec(return_value, transport, Z_ARRVAL_P(spec));
   } catch (const PHPExceptionWrapper& ex) {
-    zend_throw_exception_object(ex);
+    // ex will be destructed, so copy to a zval that zend_throw_exception_object can ownership of
+    zval myex;
+    ZVAL_COPY(&myex, ex);
+    zval_dtor(return_value);
+    zend_throw_exception_object(&myex);
     RETURN_NULL();
   } catch (const std::exception& ex) {
     throw_zend_exception_from_std_exception(ex);

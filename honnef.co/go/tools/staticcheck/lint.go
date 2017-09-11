@@ -4,19 +4,19 @@ package staticcheck // import "honnef.co/go/tools/staticcheck"
 import (
 	"fmt"
 	"go/ast"
-	"go/build"
 	"go/constant"
 	"go/token"
 	"go/types"
 	htmltemplate "html/template"
 	"net/http"
+	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	texttemplate "text/template"
 
 	"honnef.co/go/tools/functions"
-	"honnef.co/go/tools/gcsizes"
 	"honnef.co/go/tools/internal/sharedcheck"
 	"honnef.co/go/tools/lint"
 	"honnef.co/go/tools/ssa"
@@ -110,14 +110,12 @@ var (
 		},
 	}
 
-	checkSyncPoolSizeRules = map[string]CallCheck{
+	checkSyncPoolValueRules = map[string]CallCheck{
 		"(*sync.Pool).Put": func(call *Call) {
-			// TODO(dh): allow users to pass in a custom build environment
-			sizes := gcsizes.ForArch(build.Default.GOARCH)
 			arg := call.Args[0]
 			typ := arg.Value.Value.Type()
-			if !types.IsInterface(typ) && sizes.Sizeof(typ) > sizes.WordSize {
-				arg.Invalid("argument should be one word large or less to avoid allocations")
+			if !lint.IsPointerLike(typ) {
+				arg.Invalid("argument should be pointer-like to avoid allocations")
 			}
 		},
 	}
@@ -232,7 +230,7 @@ func (c *Checker) Funcs() map[string]lint.Func {
 		"SA1019": c.CheckDeprecated,
 		"SA1020": c.callChecker(checkListenAddressRules),
 		"SA1021": c.callChecker(checkBytesEqualIPRules),
-		"SA1022": c.CheckFlagUsage,
+		"SA1022": nil,
 		"SA1023": c.CheckWriterBufferModified,
 		"SA1024": c.callChecker(checkUniqueCutsetRules),
 
@@ -249,7 +247,7 @@ func (c *Checker) Funcs() map[string]lint.Func {
 		"SA4002": c.CheckDiffSizeComparison,
 		"SA4003": c.CheckUnsignedComparison,
 		"SA4004": c.CheckIneffectiveLoop,
-		"SA4005": c.CheckIneffecitiveFieldAssignments,
+		"SA4005": c.CheckIneffectiveFieldAssignments,
 		"SA4006": c.CheckUnreadVariableValues,
 		// "SA4007": c.CheckPredeterminedBooleanExprs,
 		"SA4007": nil,
@@ -263,6 +261,8 @@ func (c *Checker) Funcs() map[string]lint.Func {
 		"SA4015": c.callChecker(checkMathIntRules),
 		"SA4016": c.CheckSillyBitwiseOps,
 		"SA4017": c.CheckPureFunctions,
+		"SA4018": c.CheckSelfAssignment,
+		"SA4019": c.CheckDuplicateBuildConstraints,
 
 		"SA5000": c.CheckNilMaps,
 		"SA5001": c.CheckEarlyDefer,
@@ -275,8 +275,9 @@ func (c *Checker) Funcs() map[string]lint.Func {
 
 		"SA6000": c.callChecker(checkRegexpMatchLoopRules),
 		"SA6001": c.CheckMapBytesKey,
-		"SA6002": c.callChecker(checkSyncPoolSizeRules),
+		"SA6002": c.callChecker(checkSyncPoolValueRules),
 		"SA6003": c.CheckRangeStringRunes,
+		"SA6004": nil,
 
 		"SA9000": nil,
 		"SA9001": c.CheckDubiousDeferInChannelRangeLoop,
@@ -1137,11 +1138,18 @@ func (c *Checker) CheckEmptyCriticalSection(j *lint.Job) {
 	}
 }
 
+// cgo produces code like fn(&*_Cvar_kSomeCallbacks) which we don't
+// want to flag.
+var cgoIdent = regexp.MustCompile(`^_C(func|var)_.+$`)
+
 func (c *Checker) CheckIneffectiveCopy(j *lint.Job) {
 	fn := func(node ast.Node) bool {
 		if unary, ok := node.(*ast.UnaryExpr); ok {
-			if _, ok := unary.X.(*ast.StarExpr); ok && unary.Op == token.AND {
-				j.Errorf(unary, "&*x will be simplified to x. It will not copy x.")
+			if star, ok := unary.X.(*ast.StarExpr); ok && unary.Op == token.AND {
+				ident, ok := star.X.(*ast.Ident)
+				if !ok || !cgoIdent.MatchString(ident.Name) {
+					j.Errorf(unary, "&*x will be simplified to x. It will not copy x.")
+				}
 			}
 		}
 
@@ -1254,7 +1262,7 @@ func (c *Checker) CheckBenchmarkN(j *lint.Job) {
 	}
 }
 
-func (c *Checker) CheckIneffecitiveFieldAssignments(j *lint.Job) {
+func (c *Checker) CheckIneffectiveFieldAssignments(j *lint.Job) {
 	for _, ssafn := range j.Program.InitialFunctions {
 		// fset := j.Program.SSA.Fset
 		// if fset.File(f.File.Pos()) != fset.File(ssafn.Pos()) {
@@ -2558,46 +2566,6 @@ func (c *Checker) checkCalls(j *lint.Job, rules map[string]CallCheck) {
 	}
 }
 
-func (c *Checker) CheckFlagUsage(j *lint.Job) {
-	for _, ssafn := range j.Program.InitialFunctions {
-		for _, block := range ssafn.Blocks {
-			for _, ins := range block.Instrs {
-				store, ok := ins.(*ssa.Store)
-				if !ok {
-					continue
-				}
-				switch addr := store.Addr.(type) {
-				case *ssa.FieldAddr:
-					typ := addr.X.Type()
-					st := deref(typ).Underlying().(*types.Struct)
-					if types.TypeString(typ, nil) != "*flag.FlagSet" {
-						continue
-					}
-					if st.Field(addr.Field).Name() != "Usage" {
-						continue
-					}
-				case *ssa.Global:
-					if addr.Pkg.Pkg.Path() != "flag" || addr.Name() != "Usage" {
-						continue
-					}
-				default:
-					continue
-				}
-				fn := unwrapFunction(store.Val)
-				if fn == nil {
-					continue
-				}
-				for _, oblock := range fn.Blocks {
-					if hasCallTo(oblock, "os.Exit") {
-						j.Errorf(store, "the function assigned to Usage shouldn't call os.Exit, but it does")
-						break
-					}
-				}
-			}
-		}
-	}
-}
-
 func unwrapFunction(val ssa.Value) *ssa.Function {
 	switch val := val.(type) {
 	case *ssa.Function:
@@ -2790,4 +2758,63 @@ func (c *Checker) CheckMapBytesKey(j *lint.Job) {
 
 func (c *Checker) CheckRangeStringRunes(j *lint.Job) {
 	sharedcheck.CheckRangeStringRunes(c.nodeFns, j)
+}
+
+func (c *Checker) CheckSelfAssignment(j *lint.Job) {
+	fn := func(node ast.Node) bool {
+		assign, ok := node.(*ast.AssignStmt)
+		if !ok {
+			return true
+		}
+		if assign.Tok != token.ASSIGN || len(assign.Lhs) != len(assign.Rhs) {
+			return true
+		}
+		for i, stmt := range assign.Lhs {
+			rlh := j.Render(stmt)
+			rrh := j.Render(assign.Rhs[i])
+			if rlh == rrh {
+				j.Errorf(assign, "self-assignment of %s to %s", rrh, rlh)
+			}
+		}
+		return true
+	}
+	for _, f := range c.filterGenerated(j.Program.Files) {
+		ast.Inspect(f, fn)
+	}
+}
+
+func buildTagsIdentical(s1, s2 []string) bool {
+	if len(s1) != len(s2) {
+		return false
+	}
+	s1s := make([]string, len(s1))
+	copy(s1s, s1)
+	sort.Strings(s1s)
+	s2s := make([]string, len(s2))
+	copy(s2s, s2)
+	sort.Strings(s2s)
+	for i, s := range s1s {
+		if s != s2s[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func (c *Checker) CheckDuplicateBuildConstraints(job *lint.Job) {
+	for _, f := range c.filterGenerated(job.Program.Files) {
+		constraints := buildTags(f)
+		for i, constraint1 := range constraints {
+			for j, constraint2 := range constraints {
+				if i >= j {
+					continue
+				}
+				if buildTagsIdentical(constraint1, constraint2) {
+					job.Errorf(f, "identical build constraints %q and %q",
+						strings.Join(constraint1, " "),
+						strings.Join(constraint2, " "))
+				}
+			}
+		}
+	}
 }

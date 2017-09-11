@@ -3734,7 +3734,7 @@ void t_c_glib_generator::generate_serialize_field(ofstream& out,
         out << "double (protocol, " << name;
         break;
       case t_base_type::TYPE_STRING:
-        if (((t_base_type*)type)->is_binary()) {
+        if (type->is_binary()) {
           out << "binary (protocol, " << name << " ? ((GByteArray *) " << name << ")->data : NULL, "
               << name << " ? ((GByteArray *) " << name << ")->len : 0";
         } else {
@@ -4010,7 +4010,7 @@ void t_c_glib_generator::generate_deserialize_field(ofstream& out,
       throw "compiler error: cannot serialize void field in a struct: " + name;
       break;
     case t_base_type::TYPE_STRING:
-      if (((t_base_type*)type)->is_binary()) {
+      if (type->is_binary()) {
         out << "binary (protocol, &data, &len";
       } else {
         out << "string (protocol, &" << name;
@@ -4042,7 +4042,7 @@ void t_c_glib_generator::generate_deserialize_field(ofstream& out,
         << endl;
 
     // load the byte array with the data
-    if (tbase == t_base_type::TYPE_STRING && ((t_base_type*)type)->is_binary()) {
+    if (tbase == t_base_type::TYPE_STRING && type->is_binary()) {
       indent(out) << name << " = g_byte_array_new();" << endl;
       indent(out) << "g_byte_array_append (" << name << ", (guint8 *) data, (guint) len);" << endl;
       indent(out) << "g_free (data);" << endl;
@@ -4061,9 +4061,9 @@ void t_c_glib_generator::generate_deserialize_field(ofstream& out,
   // if the type is not required and this is a thrift struct (no prefix),
   // set the isset variable.  if the type is required, then set the
   // local variable indicating the value was set, so that we can do    // validation later.
-  if (tfield->get_req() != t_field::T_REQUIRED && prefix != "") {
+  if (prefix != "" && tfield->get_req() != t_field::T_REQUIRED) {
     indent(out) << prefix << "__isset_" << tfield->get_name() << suffix << " = TRUE;" << endl;
-  } else if (tfield->get_req() == t_field::T_REQUIRED && prefix != "") {
+  } else if (prefix != "" && tfield->get_req() == t_field::T_REQUIRED) {
     indent(out) << "isset_" << tfield->get_name() << " = TRUE;" << endl;
   }
 }

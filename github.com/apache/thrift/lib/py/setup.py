@@ -87,7 +87,7 @@ def run_setup(with_binary):
     twisted_deps = ['twisted']
 
     setup(name='thrift',
-          version='0.10.0',
+          version='1.0.0-dev',
           description='Python bindings for the Apache Thrift RPC system',
           author='Thrift Developers',
           author_email='dev@thrift.apache.org',
@@ -117,6 +117,7 @@ def run_setup(with_binary):
               'Topic :: Software Development :: Libraries',
               'Topic :: System :: Networking'
           ],
+          zip_safe=False,
           **extensions
           )
 

@@ -23,10 +23,12 @@ import (
 
 import (
 	"flag"
+	"fmt"
 	"io"
 	"log"
 	"net"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
@@ -36,6 +38,8 @@ import (
 	status "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	gstatus "google.golang.org/grpc/status"
 )
 
 var _ = io.EOF
@@ -57,7 +61,11 @@ type mockSpeechServer struct {
 	resps []proto.Message
 }
 
-func (s *mockSpeechServer) Recognize(_ context.Context, req *speechpb.RecognizeRequest) (*speechpb.RecognizeResponse, error) {
+func (s *mockSpeechServer) Recognize(ctx context.Context, req *speechpb.RecognizeRequest) (*speechpb.RecognizeResponse, error) {
+	md, _ := metadata.FromIncomingContext(ctx)
+	if xg := md["x-goog-api-client"]; len(xg) == 0 || !strings.Contains(xg[0], "gl-go/") {
+		return nil, fmt.Errorf("x-goog-api-client = %v, expected gl-go key", xg)
+	}
 	s.reqs = append(s.reqs, req)
 	if s.err != nil {
 		return nil, s.err
@@ -65,7 +73,11 @@ func (s *mockSpeechServer) Recognize(_ context.Context, req *speechpb.RecognizeR
 	return s.resps[0].(*speechpb.RecognizeResponse), nil
 }
 
-func (s *mockSpeechServer) LongRunningRecognize(_ context.Context, req *speechpb.LongRunningRecognizeRequest) (*longrunningpb.Operation, error) {
+func (s *mockSpeechServer) LongRunningRecognize(ctx context.Context, req *speechpb.LongRunningRecognizeRequest) (*longrunningpb.Operation, error) {
+	md, _ := metadata.FromIncomingContext(ctx)
+	if xg := md["x-goog-api-client"]; len(xg) == 0 || !strings.Contains(xg[0], "gl-go/") {
+		return nil, fmt.Errorf("x-goog-api-client = %v, expected gl-go key", xg)
+	}
 	s.reqs = append(s.reqs, req)
 	if s.err != nil {
 		return nil, s.err
@@ -74,6 +86,10 @@ func (s *mockSpeechServer) LongRunningRecognize(_ context.Context, req *speechpb
 }
 
 func (s *mockSpeechServer) StreamingRecognize(stream speechpb.Speech_StreamingRecognizeServer) error {
+	md, _ := metadata.FromIncomingContext(stream.Context())
+	if xg := md["x-goog-api-client"]; len(xg) == 0 || !strings.Contains(xg[0], "gl-go/") {
+		return fmt.Errorf("x-goog-api-client = %v, expected gl-go key", xg)
+	}
 	for {
 		if req, err := stream.Recv(); err == io.EOF {
 			break
@@ -172,7 +188,7 @@ func TestSpeechRecognize(t *testing.T) {
 
 func TestSpeechRecognizeError(t *testing.T) {
 	errCode := codes.PermissionDenied
-	mockSpeech.err = grpc.Errorf(errCode, "test error")
+	mockSpeech.err = gstatus.Error(errCode, "test error")
 
 	var encoding speechpb.RecognitionConfig_AudioEncoding = speechpb.RecognitionConfig_FLAC
 	var sampleRateHertz int32 = 44100
@@ -200,7 +216,9 @@ func TestSpeechRecognizeError(t *testing.T) {
 
 	resp, err := c.Recognize(context.Background(), request)
 
-	if c := grpc.Code(err); c != errCode {
+	if st, ok := gstatus.FromError(err); !ok {
+		t.Errorf("got error %v, expected grpc error", err)
+	} else if c := st.Code(); c != errCode {
 		t.Errorf("got error code %q, want %q", c, errCode)
 	}
 	_ = resp
@@ -308,7 +326,9 @@ func TestSpeechLongRunningRecognizeError(t *testing.T) {
 	}
 	resp, err := respLRO.Wait(context.Background())
 
-	if c := grpc.Code(err); c != errCode {
+	if st, ok := gstatus.FromError(err); !ok {
+		t.Errorf("got error %v, expected grpc error", err)
+	} else if c := st.Code(); c != errCode {
 		t.Errorf("got error code %q, want %q", c, errCode)
 	}
 	_ = resp
@@ -355,7 +375,7 @@ func TestSpeechStreamingRecognize(t *testing.T) {
 
 func TestSpeechStreamingRecognizeError(t *testing.T) {
 	errCode := codes.PermissionDenied
-	mockSpeech.err = grpc.Errorf(errCode, "test error")
+	mockSpeech.err = gstatus.Error(errCode, "test error")
 
 	var request *speechpb.StreamingRecognizeRequest = &speechpb.StreamingRecognizeRequest{}
 
@@ -376,7 +396,9 @@ func TestSpeechStreamingRecognizeError(t *testing.T) {
 	}
 	resp, err := stream.Recv()
 
-	if c := grpc.Code(err); c != errCode {
+	if st, ok := gstatus.FromError(err); !ok {
+		t.Errorf("got error %v, expected grpc error", err)
+	} else if c := st.Code(); c != errCode {
 		t.Errorf("got error code %q, want %q", c, errCode)
 	}
 	_ = resp

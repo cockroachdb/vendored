@@ -16,6 +16,7 @@ package etcdserver
 
 import (
 	"bytes"
+	"context"
 	"sort"
 	"time"
 
@@ -24,8 +25,8 @@ import (
 	"github.com/coreos/etcd/mvcc"
 	"github.com/coreos/etcd/mvcc/mvccpb"
 	"github.com/coreos/etcd/pkg/types"
+
 	"github.com/gogo/protobuf/proto"
-	"golang.org/x/net/context"
 )
 
 const (
@@ -423,7 +424,7 @@ func applyCompares(rv mvcc.ReadView, cmps []*pb.Compare) bool {
 // applyCompare applies the compare request.
 // If the comparison succeeds, it returns true. Otherwise, returns false.
 func applyCompare(rv mvcc.ReadView, c *pb.Compare) bool {
-	// TOOD: possible optimizations
+	// TODO: possible optimizations
 	// * chunk reads for large ranges to conserve memory
 	// * rewrite rules for common patterns:
 	//	ex. "[a, b) createrev > 0" => "limit 1 /\ kvs > 0"
@@ -577,9 +578,11 @@ func (a *applierV3backend) Alarm(ar *pb.AlarmRequest) (*pb.AlarmResponse, error)
 			break
 		}
 
+		plog.Warningf("alarm %v raised by peer %s", m.Alarm, types.ID(m.MemberID))
 		switch m.Alarm {
+		case pb.AlarmType_CORRUPT:
+			a.s.applyV3 = newApplierV3Corrupt(a)
 		case pb.AlarmType_NOSPACE:
-			plog.Warningf("alarm raised %+v", m)
 			a.s.applyV3 = newApplierV3Capped(a)
 		default:
 			plog.Errorf("unimplemented alarm activation (%+v)", m)
@@ -596,7 +599,8 @@ func (a *applierV3backend) Alarm(ar *pb.AlarmRequest) (*pb.AlarmResponse, error)
 		}
 
 		switch m.Alarm {
-		case pb.AlarmType_NOSPACE:
+		case pb.AlarmType_NOSPACE, pb.AlarmType_CORRUPT:
+			// TODO: check kv hash before deactivating CORRUPT?
 			plog.Infof("alarm disarmed %+v", ar)
 			a.s.applyV3 = a.s.newApplierV3()
 		default:

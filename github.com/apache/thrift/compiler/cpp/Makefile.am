@@ -87,6 +87,7 @@ thrift_SOURCES += src/thrift/generate/t_c_glib_generator.cc \
                   src/thrift/generate/t_dart_generator.cc \
                   src/thrift/generate/t_haxe_generator.cc \
                   src/thrift/generate/t_csharp_generator.cc \
+                  src/thrift/generate/t_netcore_generator.cc \
                   src/thrift/generate/t_py_generator.cc \
                   src/thrift/generate/t_rb_generator.cc \
                   src/thrift/generate/t_perl_generator.cc \
@@ -106,7 +107,8 @@ thrift_SOURCES += src/thrift/generate/t_c_glib_generator.cc \
                   src/thrift/generate/t_go_generator.cc \
                   src/thrift/generate/t_gv_generator.cc \
                   src/thrift/generate/t_d_generator.cc \
-                  src/thrift/generate/t_lua_generator.cc
+                  src/thrift/generate/t_lua_generator.cc \
+                  src/thrift/generate/t_rs_generator.cc
 
 thrift_CPPFLAGS = -I$(srcdir)/src
 thrift_CXXFLAGS = -Wall -Wextra -pedantic

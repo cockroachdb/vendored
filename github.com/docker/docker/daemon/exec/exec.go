@@ -4,10 +4,10 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/docker/docker/container/stream"
 	"github.com/docker/docker/libcontainerd"
 	"github.com/docker/docker/pkg/stringid"
-	"github.com/docker/docker/runconfig"
+	"github.com/sirupsen/logrus"
 )
 
 // Config holds the configurations for execs. The Daemon keeps
@@ -15,30 +15,30 @@ import (
 // examined both during and after completion.
 type Config struct {
 	sync.Mutex
-	*runconfig.StreamConfig
-	ID          string
-	Running     bool
-	ExitCode    *int
-	OpenStdin   bool
-	OpenStderr  bool
-	OpenStdout  bool
-	CanRemove   bool
-	ContainerID string
-	DetachKeys  []byte
-	Entrypoint  string
-	Args        []string
-	Tty         bool
-	Privileged  bool
-	User        string
-	Env         []string
-	Pid         int
+	StreamConfig *stream.Config
+	ID           string
+	Running      bool
+	ExitCode     *int
+	OpenStdin    bool
+	OpenStderr   bool
+	OpenStdout   bool
+	CanRemove    bool
+	ContainerID  string
+	DetachKeys   []byte
+	Entrypoint   string
+	Args         []string
+	Tty          bool
+	Privileged   bool
+	User         string
+	Env          []string
+	Pid          int
 }
 
 // NewConfig initializes the a new exec configuration
 func NewConfig() *Config {
 	return &Config{
 		ID:           stringid.GenerateNonCryptoID(),
-		StreamConfig: runconfig.NewStreamConfig(),
+		StreamConfig: stream.NewConfig(),
 	}
 }
 
@@ -46,7 +46,7 @@ func NewConfig() *Config {
 func (c *Config) InitializeStdio(iop libcontainerd.IOPipe) error {
 	c.StreamConfig.CopyToPipe(iop)
 
-	if c.Stdin() == nil && !c.Tty && runtime.GOOS == "windows" {
+	if c.StreamConfig.Stdin() == nil && !c.Tty && runtime.GOOS == "windows" {
 		if iop.Stdin != nil {
 			if err := iop.Stdin.Close(); err != nil {
 				logrus.Errorf("error closing exec stdin: %+v", err)
@@ -57,6 +57,16 @@ func (c *Config) InitializeStdio(iop libcontainerd.IOPipe) error {
 	return nil
 }
 
+// CloseStreams closes the stdio streams for the exec
+func (c *Config) CloseStreams() error {
+	return c.StreamConfig.CloseStreams()
+}
+
+// SetExitCode sets the exec config's exit code
+func (c *Config) SetExitCode(code int) {
+	c.ExitCode = &code
+}
+
 // Store keeps track of the exec configurations.
 type Store struct {
 	commands map[string]*Config
@@ -65,7 +75,7 @@ type Store struct {
 
 // NewStore initializes a new exec store.
 func NewStore() *Store {
-	return &Store{commands: make(map[string]*Config, 0)}
+	return &Store{commands: make(map[string]*Config)}
 }
 
 // Commands returns the exec configurations in the store.

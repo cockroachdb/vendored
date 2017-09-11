@@ -193,6 +193,7 @@ type Binding struct {
 	// group.
 	//    For example, `admins@example.com`.
 	//
+	//
 	// * `domain:{domain}`: A Google Apps domain name that represents all
 	// the
 	//    users of that domain. For example, `google.com` or
@@ -413,7 +414,7 @@ type ModifyPushConfigRequest struct {
 	// An empty `pushConfig` indicates that the Pub/Sub system should
 	// stop pushing messages from the given subscription and allow
 	// messages to be pulled and acknowledged - effectively pausing
-	// the subscription if `Pull` is not called.
+	// the subscription if `Pull` or `StreamingPull` is not called.
 	PushConfig *PushConfig `json:"pushConfig,omitempty"`
 
 	// ForceSendFields is a list of field names (e.g. "PushConfig") to
@@ -477,8 +478,6 @@ func (s *ModifyPushConfigRequest) MarshalJSON() ([]byte, error) {
 // [IAM developer's guide](https://cloud.google.com/iam).
 type Policy struct {
 	// Bindings: Associates a list of `members` to a `role`.
-	// Multiple `bindings` must not be specified for the same
-	// `role`.
 	// `bindings` with no members will result in an error.
 	Bindings []*Binding `json:"bindings,omitempty"`
 
@@ -875,7 +874,9 @@ type Subscription struct {
 	// call
 	// `ModifyAckDeadline` with the corresponding `ack_id` if
 	// using
-	// pull.
+	// non-streaming pull or send the `ack_id` in
+	// a
+	// `StreamingModifyAckDeadlineRequest` if using streaming pull.
 	// The minimum custom deadline you can specify is 10 seconds.
 	// The maximum custom deadline you can specify is 600 seconds (10
 	// minutes).

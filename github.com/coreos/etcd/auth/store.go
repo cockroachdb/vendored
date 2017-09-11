@@ -16,6 +16,7 @@ package auth
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"sort"
@@ -26,9 +27,9 @@ import (
 	"github.com/coreos/etcd/auth/authpb"
 	pb "github.com/coreos/etcd/etcdserver/etcdserverpb"
 	"github.com/coreos/etcd/mvcc/backend"
+
 	"github.com/coreos/pkg/capnslog"
 	"golang.org/x/crypto/bcrypt"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
@@ -1098,7 +1099,7 @@ func (as *authStore) WithRoot(ctx context.Context) context.Context {
 		"token": token,
 	}
 	tokenMD := metadata.New(mdMap)
-	return metadata.NewContext(ctx, tokenMD)
+	return metadata.NewOutgoingContext(ctx, tokenMD)
 }
 
 func (as *authStore) HasRole(user, role string) bool {

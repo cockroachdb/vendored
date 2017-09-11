@@ -29,10 +29,6 @@ import (
 	"google.golang.org/grpc/codes"
 )
 
-var (
-	errorGroupGroupPathTemplate = gax.MustCompilePathTemplate("projects/{project}/groups/{group}")
-)
-
 // ErrorGroupCallOptions contains the retry settings for each method of ErrorGroupClient.
 type ErrorGroupCallOptions struct {
 	GetGroup    []gax.CallOption
@@ -42,9 +38,7 @@ type ErrorGroupCallOptions struct {
 func defaultErrorGroupClientOptions() []option.ClientOption {
 	return []option.ClientOption{
 		option.WithEndpoint("clouderrorreporting.googleapis.com:443"),
-		option.WithScopes(
-			"https://www.googleapis.com/auth/cloud-platform",
-		),
+		option.WithScopes(DefaultAuthScopes()...),
 	}
 }
 
@@ -81,7 +75,7 @@ type ErrorGroupClient struct {
 	CallOptions *ErrorGroupCallOptions
 
 	// The metadata to be sent with each request.
-	xGoogHeader string
+	xGoogHeader []string
 }
 
 // NewErrorGroupClient creates a new error group service client.
@@ -119,19 +113,17 @@ func (c *ErrorGroupClient) Close() error {
 func (c *ErrorGroupClient) SetGoogleClientInfo(keyval ...string) {
 	kv := append([]string{"gl-go", version.Go()}, keyval...)
 	kv = append(kv, "gapic", version.Repo, "gax", gax.Version, "grpc", grpc.Version)
-	c.xGoogHeader = gax.XGoogHeader(kv...)
+	c.xGoogHeader = []string{gax.XGoogHeader(kv...)}
 }
 
 // ErrorGroupGroupPath returns the path for the group resource.
 func ErrorGroupGroupPath(project, group string) string {
-	path, err := errorGroupGroupPathTemplate.Render(map[string]string{
-		"project": project,
-		"group":   group,
-	})
-	if err != nil {
-		panic(err)
-	}
-	return path
+	return "" +
+		"projects/" +
+		project +
+		"/groups/" +
+		group +
+		""
 }
 
 // GetGroup get the specified group.

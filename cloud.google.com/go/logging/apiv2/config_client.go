@@ -31,11 +31,6 @@ import (
 	"google.golang.org/grpc/codes"
 )
 
-var (
-	configProjectPathTemplate = gax.MustCompilePathTemplate("projects/{project}")
-	configSinkPathTemplate    = gax.MustCompilePathTemplate("projects/{project}/sinks/{sink}")
-)
-
 // ConfigCallOptions contains the retry settings for each method of ConfigClient.
 type ConfigCallOptions struct {
 	ListSinks  []gax.CallOption
@@ -48,13 +43,7 @@ type ConfigCallOptions struct {
 func defaultConfigClientOptions() []option.ClientOption {
 	return []option.ClientOption{
 		option.WithEndpoint("logging.googleapis.com:443"),
-		option.WithScopes(
-			"https://www.googleapis.com/auth/cloud-platform",
-			"https://www.googleapis.com/auth/cloud-platform.read-only",
-			"https://www.googleapis.com/auth/logging.admin",
-			"https://www.googleapis.com/auth/logging.read",
-			"https://www.googleapis.com/auth/logging.write",
-		),
+		option.WithScopes(DefaultAuthScopes()...),
 	}
 }
 
@@ -64,17 +53,7 @@ func defaultConfigCallOptions() *ConfigCallOptions {
 			gax.WithRetry(func() gax.Retryer {
 				return gax.OnCodes([]codes.Code{
 					codes.DeadlineExceeded,
-					codes.Unavailable,
-				}, gax.Backoff{
-					Initial:    100 * time.Millisecond,
-					Max:        1000 * time.Millisecond,
-					Multiplier: 1.2,
-				})
-			}),
-		},
-		{"default", "non_idempotent"}: {
-			gax.WithRetry(func() gax.Retryer {
-				return gax.OnCodes([]codes.Code{
+					codes.Internal,
 					codes.Unavailable,
 				}, gax.Backoff{
 					Initial:    100 * time.Millisecond,
@@ -105,7 +84,7 @@ type ConfigClient struct {
 	CallOptions *ConfigCallOptions
 
 	// The metadata to be sent with each request.
-	xGoogHeader string
+	xGoogHeader []string
 }
 
 // NewConfigClient creates a new config service v2 client.
@@ -144,30 +123,25 @@ func (c *ConfigClient) Close() error {
 func (c *ConfigClient) SetGoogleClientInfo(keyval ...string) {
 	kv := append([]string{"gl-go", version.Go()}, keyval...)
 	kv = append(kv, "gapic", version.Repo, "gax", gax.Version, "grpc", grpc.Version)
-	c.xGoogHeader = gax.XGoogHeader(kv...)
+	c.xGoogHeader = []string{gax.XGoogHeader(kv...)}
 }
 
 // ConfigProjectPath returns the path for the project resource.
 func ConfigProjectPath(project string) string {
-	path, err := configProjectPathTemplate.Render(map[string]string{
-		"project": project,
-	})
-	if err != nil {
-		panic(err)
-	}
-	return path
+	return "" +
+		"projects/" +
+		project +
+		""
 }
 
 // ConfigSinkPath returns the path for the sink resource.
 func ConfigSinkPath(project, sink string) string {
-	path, err := configSinkPathTemplate.Render(map[string]string{
-		"project": project,
-		"sink":    sink,
-	})
-	if err != nil {
-		panic(err)
-	}
-	return path
+	return "" +
+		"projects/" +
+		project +
+		"/sinks/" +
+		sink +
+		""
 }
 
 // ListSinks lists sinks.
@@ -224,7 +198,7 @@ func (c *ConfigClient) GetSink(ctx context.Context, req *loggingpb.GetSinkReques
 // CreateSink creates a sink that exports specified log entries to a destination.  The
 // export of newly-ingested log entries begins immediately, unless the current
 // time is outside the sink's start and end times or the sink's
-// `writer_identity` is not permitted to write to the destination.  A sink can
+// writer_identity is not permitted to write to the destination.  A sink can
 // export log entries only from the resource owning the sink.
 func (c *ConfigClient) CreateSink(ctx context.Context, req *loggingpb.CreateSinkRequest, opts ...gax.CallOption) (*loggingpb.LogSink, error) {
 	ctx = insertXGoog(ctx, c.xGoogHeader)
@@ -243,12 +217,12 @@ func (c *ConfigClient) CreateSink(ctx context.Context, req *loggingpb.CreateSink
 
 // UpdateSink updates a sink. If the named sink doesn't exist, then this method is
 // identical to
-// [sinks.create](/logging/docs/api/reference/rest/v2/projects.sinks/create).
+// sinks.create (at /logging/docs/api/reference/rest/v2/projects.sinks/create).
 // If the named sink does exist, then this method replaces the following
-// fields in the existing sink with values from the new sink: `destination`,
-// `filter`, `output_version_format`, `start_time`, and `end_time`.
-// The updated filter might also have a new `writer_identity`; see the
-// `unique_writer_identity` field.
+// fields in the existing sink with values from the new sink: destination,
+// filter, output_version_format, start_time, and end_time.
+// The updated filter might also have a new writer_identity; see the
+// unique_writer_identity field.
 func (c *ConfigClient) UpdateSink(ctx context.Context, req *loggingpb.UpdateSinkRequest, opts ...gax.CallOption) (*loggingpb.LogSink, error) {
 	ctx = insertXGoog(ctx, c.xGoogHeader)
 	opts = append(c.CallOptions.UpdateSink[0:len(c.CallOptions.UpdateSink):len(c.CallOptions.UpdateSink)], opts...)
@@ -264,7 +238,7 @@ func (c *ConfigClient) UpdateSink(ctx context.Context, req *loggingpb.UpdateSink
 	return resp, nil
 }
 
-// DeleteSink deletes a sink. If the sink has a unique `writer_identity`, then that
+// DeleteSink deletes a sink. If the sink has a unique writer_identity, then that
 // service account is also deleted.
 func (c *ConfigClient) DeleteSink(ctx context.Context, req *loggingpb.DeleteSinkRequest, opts ...gax.CallOption) error {
 	ctx = insertXGoog(ctx, c.xGoogHeader)

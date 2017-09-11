@@ -22,7 +22,8 @@ unit TestClient;
 {$I ../src/Thrift.Defines.inc}
 
 {.$DEFINE StressTest}   // activate to stress-test the server with frequent connects/disconnects
-{.$DEFINE PerfTest}     // activate to activate the performance test
+{.$DEFINE PerfTest}     // activate the performance test
+{$DEFINE Exceptions}    // activate the exceptions test (or disable while debugging)
 
 interface
 
@@ -39,6 +40,7 @@ uses
   Thrift.Transport,
   Thrift.Stream,
   Thrift.Test,
+  Thrift.Utils,
   Thrift.Collections,
   Thrift.Console;
 
@@ -87,6 +89,9 @@ type
     function  PrepareBinaryData( aRandomDist : Boolean = FALSE) : TBytes;
     {$IFDEF StressTest}
     procedure StressTest(const client : TThriftTest.Iface);
+    {$ENDIF}
+    {$IFDEF Win64}
+	procedure UseInterlockedExchangeAdd64;
     {$ENDIF}
   protected
     procedure Execute; override;
@@ -254,7 +259,7 @@ begin
         if      s = 'buffered' then Include( layered, trns_Buffered)
         else if s = 'framed'   then Include( layered, trns_Framed)
         else if s = 'http'     then endpoint := trns_Http
-        else if s = 'evhttp'   then endpoint := trns_AnonPipes
+        else if s = 'evhttp'   then endpoint := trns_EvHttp
         else InvalidArgs;
       end
       else if s = '--protocol' then begin
@@ -449,7 +454,7 @@ var
   looney : IInsanity;
   first_map : IThriftDictionary<TNumberz, IInsanity>;
   second_map : IThriftDictionary<TNumberz, IInsanity>;
-
+  pair : TPair<TNumberz, TUserId>;
 begin
   client := TThriftTest.TClient.Create( FProtocol);
   FTransport.Open;
@@ -458,6 +463,7 @@ begin
   StressTest( client);
   {$ENDIF StressTest}
 
+  {$IFDEF Exceptions}
   // in-depth exception test
   // (1) do we get an exception at all?
   // (2) do we get the right exception?
@@ -506,6 +512,7 @@ begin
     on e:TTransportException do Expect( FALSE, 'Unexpected : "'+e.ToString+'"');
     on e:Exception do Expect( FALSE, 'Unexpected exception "'+e.ClassName+'"');
   end;
+  {$ENDIF Exceptions}
 
 
   // simple things
@@ -520,6 +527,9 @@ begin
 
   s := client.testString('Test');
   Expect( s = 'Test', 'testString(''Test'') = "'+s+'"');
+
+  s := client.testString('');  // empty string
+  Expect( s = '', 'testString('''') = "'+s+'"');
 
   s := client.testString(HUGE_TEST_STRING);
   Expect( length(s) = length(HUGE_TEST_STRING),
@@ -536,7 +546,21 @@ begin
   i64 := client.testI64(-34359738368);
   Expect( i64 = -34359738368, 'testI64(-34359738368) = ' + IntToStr( i64));
 
+  // random binary
   binOut := PrepareBinaryData( TRUE);
+  Console.WriteLine('testBinary('+BytesToHex(binOut)+')');
+  try
+    binIn := client.testBinary(binOut);
+    Expect( Length(binOut) = Length(binIn), 'testBinary(): length '+IntToStr(Length(binOut))+' = '+IntToStr(Length(binIn)));
+    i32 := Min( Length(binOut), Length(binIn));
+    Expect( CompareMem( binOut, binIn, i32), 'testBinary('+BytesToHex(binOut)+') = '+BytesToHex(binIn));
+  except
+    on e:TApplicationException do Console.WriteLine('testBinary(): '+e.Message);
+    on e:Exception do Expect( FALSE, 'testBinary(): Unexpected exception "'+e.ClassName+'": '+e.Message);
+  end;
+
+  // empty binary
+  SetLength( binOut, 0);
   Console.WriteLine('testBinary('+BytesToHex(binOut)+')');
   try
     binIn := client.testBinary(binOut);
@@ -772,9 +796,9 @@ begin
   insane.UserMap.AddOrSetValue( TNumberz.FIVE, 5000);
   truck := TXtructImpl.Create;
   truck.String_thing := 'Truck';
-  truck.Byte_thing := 8;
-  truck.I32_thing := 8;
-  truck.I64_thing := 8;
+  truck.Byte_thing := -8;  // byte is signed
+  truck.I32_thing := 32;
+  truck.I64_thing := 64;
   insane.Xtructs := TThriftListImpl<IXtruct>.Create;
   insane.Xtructs.Add( truck );
   whoa := client.testInsanity( insane );
@@ -823,6 +847,18 @@ begin
   end;
   Console.WriteLine('}');
 
+  (**
+   * So you think you've got this all worked, out eh?
+   *
+   * Creates a the returned map with these values and prints it out:
+   *   { 1 => { 2 => argument,
+   *            3 => argument,
+   *          },
+   *     2 => { 6 => <empty Insanity struct>, },
+   *   }
+   * @return map<UserId, map<Numberz,Insanity>> - a map with the above values
+   *)
+
   // verify result data
   Expect( whoa.Count = 2, 'whoa.Count = '+IntToStr(whoa.Count));
   //
@@ -843,31 +879,20 @@ begin
     Expect( crazy.__isset_UserMap, 'crazy.__isset_UserMap = '+BoolToString(crazy.__isset_UserMap));
     Expect( crazy.__isset_Xtructs, 'crazy.__isset_Xtructs = '+BoolToString(crazy.__isset_Xtructs));
 
-    Expect( crazy.UserMap.Count = 2, 'crazy.UserMap.Count = '+IntToStr(crazy.UserMap.Count));
-    Expect( crazy.UserMap[TNumberz.FIVE] = 5, 'crazy.UserMap[TNumberz.FIVE] = '+IntToStr(crazy.UserMap[TNumberz.FIVE]));
-    Expect( crazy.UserMap[TNumberz.EIGHT] = 8, 'crazy.UserMap[TNumberz.EIGHT] = '+IntToStr(crazy.UserMap[TNumberz.EIGHT]));
+    Expect( crazy.UserMap.Count = insane.UserMap.Count, 'crazy.UserMap.Count = '+IntToStr(crazy.UserMap.Count));
+    for pair in insane.UserMap do begin
+      Expect( crazy.UserMap[pair.Key] = pair.Value, 'crazy.UserMap['+IntToStr(Ord(pair.key))+'] = '+IntToStr(crazy.UserMap[pair.Key]));
+    end;
 
-    Expect( crazy.Xtructs.Count = 2, 'crazy.Xtructs.Count = '+IntToStr(crazy.Xtructs.Count));
-    goodbye := crazy.Xtructs[0];  // lists are ordered, so we are allowed to assume this order
-      hello   := crazy.Xtructs[1];
-
-    Expect( goodbye.String_thing = 'Goodbye4', 'goodbye.String_thing = "'+goodbye.String_thing+'"');
-    Expect( goodbye.Byte_thing = 4, 'goodbye.Byte_thing = '+IntToStr(goodbye.Byte_thing));
-    Expect( goodbye.I32_thing = 4, 'goodbye.I32_thing = '+IntToStr(goodbye.I32_thing));
-    Expect( goodbye.I64_thing = 4, 'goodbye.I64_thing = '+IntToStr(goodbye.I64_thing));
-    Expect( goodbye.__isset_String_thing, 'goodbye.__isset_String_thing = '+BoolToString(goodbye.__isset_String_thing));
-    Expect( goodbye.__isset_Byte_thing, 'goodbye.__isset_Byte_thing = '+BoolToString(goodbye.__isset_Byte_thing));
-    Expect( goodbye.__isset_I32_thing, 'goodbye.__isset_I32_thing = '+BoolToString(goodbye.__isset_I32_thing));
-    Expect( goodbye.__isset_I64_thing, 'goodbye.__isset_I64_thing = '+BoolToString(goodbye.__isset_I64_thing));
-
-    Expect( hello.String_thing = 'Hello2', 'hello.String_thing = "'+hello.String_thing+'"');
-    Expect( hello.Byte_thing = 2, 'hello.Byte_thing = '+IntToStr(hello.Byte_thing));
-    Expect( hello.I32_thing = 2, 'hello.I32_thing = '+IntToStr(hello.I32_thing));
-    Expect( hello.I64_thing = 2, 'hello.I64_thing = '+IntToStr(hello.I64_thing));
-    Expect( hello.__isset_String_thing, 'hello.__isset_String_thing = '+BoolToString(hello.__isset_String_thing));
-    Expect( hello.__isset_Byte_thing, 'hello.__isset_Byte_thing = '+BoolToString(hello.__isset_Byte_thing));
-    Expect( hello.__isset_I32_thing, 'hello.__isset_I32_thing = '+BoolToString(hello.__isset_I32_thing));
-    Expect( hello.__isset_I64_thing, 'hello.__isset_I64_thing = '+BoolToString(hello.__isset_I64_thing));
+    Expect( crazy.Xtructs.Count = insane.Xtructs.Count, 'crazy.Xtructs.Count = '+IntToStr(crazy.Xtructs.Count));
+    for arg0 := 0 to insane.Xtructs.Count-1 do begin
+      hello   := insane.Xtructs[arg0];
+      goodbye := crazy.Xtructs[arg0];
+      Expect( goodbye.String_thing = hello.String_thing, 'goodbye.String_thing = '+goodbye.String_thing);
+      Expect( goodbye.Byte_thing = hello.Byte_thing, 'goodbye.Byte_thing = '+IntToStr(goodbye.Byte_thing));
+      Expect( goodbye.I32_thing = hello.I32_thing, 'goodbye.I32_thing = '+IntToStr(goodbye.I32_thing));
+      Expect( goodbye.I64_thing = hello.I64_thing, 'goodbye.I64_thing = '+IntToStr(goodbye.I64_thing));
+    end;
   end;
 
 
@@ -1013,6 +1038,18 @@ begin
 end;
 
 
+{$IFDEF Win64}
+procedure TClientThread.UseInterlockedExchangeAdd64;
+var a,b : Int64;
+begin
+  a := 1;
+  b := 2;
+  Thrift.Utils.InterlockedExchangeAdd64( a,b);
+  Expect( a = 3, 'InterlockedExchangeAdd64');
+end;
+{$ENDIF}
+
+
 procedure TClientThread.JSONProtocolReadWriteTest;
 // Tests only then read/write procedures of the JSON protocol
 // All tests succeed, if we can read what we wrote before
@@ -1020,8 +1057,8 @@ procedure TClientThread.JSONProtocolReadWriteTest;
 // other clients or servers expect as the real JSON. This is beyond the scope of this test.
 var prot   : IProtocol;
     stm    : TStringStream;
-    list   : IList;
-    binary, binRead : TBytes;
+    list   : TThriftList;
+    binary, binRead, emptyBinary : TBytes;
     i,iErr : Integer;
 const
   TEST_SHORT   = ShortInt( $FE);
@@ -1044,6 +1081,7 @@ begin
 
     // prepare binary data
     binary := PrepareBinaryData( FALSE);
+    SetLength( emptyBinary, 0); // empty binary data block
 
     // output setup
     prot := TJSONProtocolImpl.Create(
@@ -1051,7 +1089,8 @@ begin
                 nil, TThriftStreamAdapterDelphi.Create( stm, FALSE)));
 
     // write
-    prot.WriteListBegin( TListImpl.Create( TType.String_, 9));
+    Init( list, TType.String_, 9);
+    prot.WriteListBegin( list);
     prot.WriteBool( TRUE);
     prot.WriteBool( FALSE);
     prot.WriteByte( TEST_SHORT);
@@ -1061,6 +1100,8 @@ begin
     prot.WriteDouble( TEST_DOUBLE);
     prot.WriteString( TEST_STRING);
     prot.WriteBinary( binary);
+    prot.WriteString( '');  // empty string
+    prot.WriteBinary( emptyBinary); // empty binary data block
     prot.WriteListEnd;
 
     // input setup
@@ -1083,6 +1124,8 @@ begin
     Expect( abs(prot.ReadDouble-TEST_DOUBLE) < abs(DELTA_DOUBLE), 'WriteDouble/ReadDouble');
     Expect( prot.ReadString = TEST_STRING, 'WriteString/ReadString');
     binRead := prot.ReadBinary;
+    Expect( Length(prot.ReadString) = 0, 'WriteString/ReadString (empty string)');
+    Expect( Length(prot.ReadBinary) = 0, 'empty WriteBinary/ReadBinary (empty data block)');
     prot.ReadListEnd;
 
     // test binary data
@@ -1248,7 +1291,11 @@ var
 begin
   // perform all tests
   try
+    {$IFDEF Win64}  
+    UseInterlockedExchangeAdd64;
+	{$ENDIF}
     JSONProtocolReadWriteTest;
+	
     for i := 0 to FNumIteration - 1 do
     begin
       ClientTest;

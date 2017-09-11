@@ -16,6 +16,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"honnef.co/go/tools/version"
+
 	"golang.org/x/tools/go/ast/astutil"
 	"golang.org/x/tools/go/buildutil"
 	"golang.org/x/tools/go/loader"
@@ -27,6 +29,7 @@ var (
 	fJSON      bool
 	fMinify    bool
 	fModified  bool
+	fVersion   bool
 )
 
 func init() {
@@ -35,6 +38,7 @@ func init() {
 	flag.BoolVar(&fJSON, "json", false, "print new struct initializer as JSON")
 	flag.BoolVar(&fMinify, "m", false, "omit fields that are set to their zero value")
 	flag.BoolVar(&fModified, "modified", false, "read an archive of modified files from standard input")
+	flag.BoolVar(&fVersion, "version", false, "Print version and exit")
 }
 
 func usage() {
@@ -46,6 +50,12 @@ func main() {
 	log.SetFlags(0)
 	flag.Usage = usage
 	flag.Parse()
+
+	if fVersion {
+		version.Print()
+		os.Exit(0)
+	}
+
 	if flag.NArg() != 1 {
 		flag.Usage()
 		os.Exit(2)
@@ -128,7 +138,7 @@ func main() {
 		printComplit(complit, lit, lprog.Fset, lprog.Fset)
 		return
 	}
-	_, ok := pkg.TypeOf(complit.Type).Underlying().(*types.Struct)
+	_, ok := pkg.TypeOf(complit).Underlying().(*types.Struct)
 	if !ok {
 		log.Fatal("not a struct initialiser")
 		return
@@ -154,7 +164,7 @@ func keyify(
 		calcPos = func(i int) token.Pos { return token.Pos(2 + i) }
 	}
 
-	st, _ := pkg.TypeOf(complit.Type).Underlying().(*types.Struct)
+	st, _ := pkg.TypeOf(complit).Underlying().(*types.Struct)
 	newComplit := &ast.CompositeLit{
 		Type:   complit.Type,
 		Lbrace: 1,
@@ -376,6 +386,12 @@ func copyExpr(expr ast.Expr, line token.Pos) ast.Expr {
 		return &cp
 	case *ast.FuncLit:
 		return expr
+	case *ast.ChanType:
+		cp := *expr
+		cp.Arrow = 0
+		cp.Begin = 0
+		cp.Value = copyExpr(cp.Value, line)
+		return &cp
 	case nil:
 		return nil
 	default:

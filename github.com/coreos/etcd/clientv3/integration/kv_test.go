@@ -16,6 +16,7 @@ package integration
 
 import (
 	"bytes"
+	"context"
 	"math/rand"
 	"os"
 	"reflect"
@@ -28,7 +29,7 @@ import (
 	"github.com/coreos/etcd/integration"
 	"github.com/coreos/etcd/mvcc/mvccpb"
 	"github.com/coreos/etcd/pkg/testutil"
-	"golang.org/x/net/context"
+
 	"google.golang.org/grpc"
 )
 
@@ -441,8 +442,8 @@ func TestKVGetErrConnClosed(t *testing.T) {
 	go func() {
 		defer close(donec)
 		_, err := cli.Get(context.TODO(), "foo")
-		if err != nil && err != grpc.ErrClientConnClosing {
-			t.Fatalf("expected %v, got %v", grpc.ErrClientConnClosing, err)
+		if err != nil && err != context.Canceled && err != grpc.ErrClientConnClosing {
+			t.Fatalf("expected %v or %v, got %v", context.Canceled, grpc.ErrClientConnClosing, err)
 		}
 	}()
 
@@ -472,8 +473,8 @@ func TestKVNewAfterClose(t *testing.T) {
 
 	donec := make(chan struct{})
 	go func() {
-		if _, err := cli.Get(context.TODO(), "foo"); err != grpc.ErrClientConnClosing {
-			t.Fatalf("expected %v, got %v", grpc.ErrClientConnClosing, err)
+		if _, err := cli.Get(context.TODO(), "foo"); err != context.Canceled {
+			t.Fatalf("expected %v, got %v", context.Canceled, err)
 		}
 		close(donec)
 	}()
@@ -790,7 +791,7 @@ func TestKVGetStoppedServerAndClose(t *testing.T) {
 	// this Get fails and triggers an asynchronous connection retry
 	_, err := cli.Get(ctx, "abc")
 	cancel()
-	if !strings.Contains(err.Error(), "context deadline") {
+	if err != nil && err != context.DeadlineExceeded {
 		t.Fatal(err)
 	}
 }
@@ -812,20 +813,20 @@ func TestKVPutStoppedServerAndClose(t *testing.T) {
 	// grpc finds out the original connection is down due to the member shutdown.
 	_, err := cli.Get(ctx, "abc")
 	cancel()
-	if !strings.Contains(err.Error(), "context deadline") {
+	if err != nil && err != context.DeadlineExceeded {
 		t.Fatal(err)
 	}
 
 	// this Put fails and triggers an asynchronous connection retry
 	_, err = cli.Put(ctx, "abc", "123")
 	cancel()
-	if !strings.Contains(err.Error(), "context deadline") {
+	if err != nil && err != context.DeadlineExceeded {
 		t.Fatal(err)
 	}
 }
 
-// TestKVGetOneEndpointDown ensures a client can connect and get if one endpoint is down
-func TestKVPutOneEndpointDown(t *testing.T) {
+// TestKVGetOneEndpointDown ensures a client can connect and get if one endpoint is down.
+func TestKVGetOneEndpointDown(t *testing.T) {
 	defer testutil.AfterTest(t)
 	clus := integration.NewClusterV3(t, &integration.ClusterConfig{Size: 3})
 	defer clus.Terminate(t)
@@ -931,4 +932,30 @@ func TestKVPutAtMostOnce(t *testing.T) {
 	if resp.Kvs[0].Version > 11 {
 		t.Fatalf("expected version <= 10, got %+v", resp.Kvs[0])
 	}
+}
+
+func TestKVSwitchUnavailable(t *testing.T) {
+	defer testutil.AfterTest(t)
+	clus := integration.NewClusterV3(t, &integration.ClusterConfig{Size: 3})
+	defer clus.Terminate(t)
+
+	clus.Members[0].InjectPartition(t, clus.Members[1:])
+	// try to connect with dead node in the endpoint list
+	cfg := clientv3.Config{
+		Endpoints: []string{
+			clus.Members[0].GRPCAddr(),
+			clus.Members[1].GRPCAddr(),
+		},
+		DialTimeout: 1 * time.Second}
+	cli, err := clientv3.New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cli.Close()
+	timeout := 3 * clus.Members[0].ServerConfig.ReqTimeout()
+	ctx, cancel := context.WithTimeout(context.TODO(), timeout)
+	if _, err := cli.Get(ctx, "abc"); err != nil {
+		t.Fatal(err)
+	}
+	cancel()
 }

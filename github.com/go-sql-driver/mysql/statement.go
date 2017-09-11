@@ -23,7 +23,7 @@ type mysqlStmt struct {
 }
 
 func (stmt *mysqlStmt) Close() error {
-	if stmt.mc == nil || stmt.mc.netConn == nil {
+	if stmt.mc == nil || stmt.mc.closed.IsSet() {
 		// driver.Stmt.Close can be called more than once, thus this function
 		// has to be idempotent.
 		// See also Issue #450 and golang/go#16019.
@@ -45,14 +45,14 @@ func (stmt *mysqlStmt) ColumnConverter(idx int) driver.ValueConverter {
 }
 
 func (stmt *mysqlStmt) Exec(args []driver.Value) (driver.Result, error) {
-	if stmt.mc.netConn == nil {
+	if stmt.mc.closed.IsSet() {
 		errLog.Print(ErrInvalidConn)
 		return nil, driver.ErrBadConn
 	}
 	// Send command
 	err := stmt.writeExecutePacket(args)
 	if err != nil {
-		return nil, err
+		return nil, stmt.mc.markBadConn(err)
 	}
 
 	mc := stmt.mc
@@ -89,14 +89,18 @@ func (stmt *mysqlStmt) Exec(args []driver.Value) (driver.Result, error) {
 }
 
 func (stmt *mysqlStmt) Query(args []driver.Value) (driver.Rows, error) {
-	if stmt.mc.netConn == nil {
+	return stmt.query(args)
+}
+
+func (stmt *mysqlStmt) query(args []driver.Value) (*binaryRows, error) {
+	if stmt.mc.closed.IsSet() {
 		errLog.Print(ErrInvalidConn)
 		return nil, driver.ErrBadConn
 	}
 	// Send command
 	err := stmt.writeExecutePacket(args)
 	if err != nil {
-		return nil, err
+		return nil, stmt.mc.markBadConn(err)
 	}
 
 	mc := stmt.mc

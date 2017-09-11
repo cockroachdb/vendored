@@ -52,6 +52,7 @@ THRIFTCODE = \
             src/Transport/TBufferedTransport.cs \
             src/Transport/TTransport.cs \
             src/Transport/TSocket.cs \
+            src/Transport/TSocketVersionizer.cs \
             src/Transport/TTransportException.cs \
             src/Transport/TStreamTransport.cs \
             src/Transport/TFramedTransport.cs \
@@ -83,13 +84,17 @@ if NET_2_0
 export CSC_DEFINES = -d:NET_2_0
 endif
 
-all-local: Thrift.dll
+all-local: Thrift.dll Thrift.45.dll
 
 Thrift.dll: $(THRIFTCODE)
 	$(CSC) $(CSC_DEFINES) -out:$@ -target:library -reference:System.Web $(THRIFTCODE)
 
+Thrift.45.dll: $(THRIFTCODE)
+	$(CSC) $(CSC_DEFINES) -out:$@ -target:library -reference:System.Web $(THRIFTCODE)
+
 clean-local:
-	$(RM) Thrift.dll
+	$(RM) Thrift.dll  \
+	$(RM) Thrift.45.dll
 
 EXTRA_DIST = \
              $(THRIFTCODE) \

@@ -17,8 +17,6 @@
 package errorreporting
 
 import (
-	"time"
-
 	"cloud.google.com/go/internal/version"
 	gax "github.com/googleapis/gax-go"
 	"golang.org/x/net/context"
@@ -26,11 +24,6 @@ import (
 	"google.golang.org/api/transport"
 	clouderrorreportingpb "google.golang.org/genproto/googleapis/devtools/clouderrorreporting/v1beta1"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-)
-
-var (
-	reportErrorsProjectPathTemplate = gax.MustCompilePathTemplate("projects/{project}")
 )
 
 // ReportErrorsCallOptions contains the retry settings for each method of ReportErrorsClient.
@@ -41,26 +34,12 @@ type ReportErrorsCallOptions struct {
 func defaultReportErrorsClientOptions() []option.ClientOption {
 	return []option.ClientOption{
 		option.WithEndpoint("clouderrorreporting.googleapis.com:443"),
-		option.WithScopes(
-			"https://www.googleapis.com/auth/cloud-platform",
-		),
+		option.WithScopes(DefaultAuthScopes()...),
 	}
 }
 
 func defaultReportErrorsCallOptions() *ReportErrorsCallOptions {
-	retry := map[[2]string][]gax.CallOption{
-		{"default", "non_idempotent"}: {
-			gax.WithRetry(func() gax.Retryer {
-				return gax.OnCodes([]codes.Code{
-					codes.Unavailable,
-				}, gax.Backoff{
-					Initial:    100 * time.Millisecond,
-					Max:        60000 * time.Millisecond,
-					Multiplier: 1.3,
-				})
-			}),
-		},
-	}
+	retry := map[[2]string][]gax.CallOption{}
 	return &ReportErrorsCallOptions{
 		ReportErrorEvent: retry[[2]string{"default", "non_idempotent"}],
 	}
@@ -78,7 +57,7 @@ type ReportErrorsClient struct {
 	CallOptions *ReportErrorsCallOptions
 
 	// The metadata to be sent with each request.
-	xGoogHeader string
+	xGoogHeader []string
 }
 
 // NewReportErrorsClient creates a new report errors service client.
@@ -116,18 +95,15 @@ func (c *ReportErrorsClient) Close() error {
 func (c *ReportErrorsClient) SetGoogleClientInfo(keyval ...string) {
 	kv := append([]string{"gl-go", version.Go()}, keyval...)
 	kv = append(kv, "gapic", version.Repo, "gax", gax.Version, "grpc", grpc.Version)
-	c.xGoogHeader = gax.XGoogHeader(kv...)
+	c.xGoogHeader = []string{gax.XGoogHeader(kv...)}
 }
 
 // ReportErrorsProjectPath returns the path for the project resource.
 func ReportErrorsProjectPath(project string) string {
-	path, err := reportErrorsProjectPathTemplate.Render(map[string]string{
-		"project": project,
-	})
-	if err != nil {
-		panic(err)
-	}
-	return path
+	return "" +
+		"projects/" +
+		project +
+		""
 }
 
 // ReportErrorEvent report an individual error event.
@@ -136,8 +112,7 @@ func ReportErrorsProjectPath(project string) string {
 // <strong>or</strong> an
 // <a href="https://support.google.com/cloud/answer/6158862">API key</a>
 // for authentication. To use an API key, append it to the URL as the value of
-// a `key` parameter. For example:
-// <pre>POST https://clouderrorreporting.googleapis.com/v1beta1/projects/example-project/events:report?key=123ABC456</pre>
+// a key parameter. For example:<pre>POST https://clouderrorreporting.googleapis.com/v1beta1/projects/example-project/events:report?key=123ABC456</pre>
 func (c *ReportErrorsClient) ReportErrorEvent(ctx context.Context, req *clouderrorreportingpb.ReportErrorEventRequest, opts ...gax.CallOption) (*clouderrorreportingpb.ReportErrorEventResponse, error) {
 	ctx = insertXGoog(ctx, c.xGoogHeader)
 	opts = append(c.CallOptions.ReportErrorEvent[0:len(c.CallOptions.ReportErrorEvent):len(c.CallOptions.ReportErrorEvent)], opts...)

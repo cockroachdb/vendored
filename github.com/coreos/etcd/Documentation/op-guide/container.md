@@ -90,8 +90,8 @@ docker run \
   --name etcd ${REGISTRY}:latest \
   /usr/local/bin/etcd \
   --data-dir=/etcd-data --name node1 \
-  --initial-advertise-peer-urls http://${NODE1}:2380 --listen-peer-urls http://${NODE1}:2380 \
-  --advertise-client-urls http://${NODE1}:2379 --listen-client-urls http://${NODE1}:2379 \
+  --initial-advertise-peer-urls http://${NODE1}:2380 --listen-peer-urls http://0.0.0.0:2380 \
+  --advertise-client-urls http://${NODE1}:2379 --listen-client-urls http://0.0.0.0:2379 \
   --initial-cluster node1=http://${NODE1}:2380
 ```
 
@@ -131,8 +131,8 @@ docker run \
   --name etcd ${REGISTRY}:${ETCD_VERSION} \
   /usr/local/bin/etcd \
   --data-dir=/etcd-data --name ${THIS_NAME} \
-  --initial-advertise-peer-urls http://${THIS_IP}:2380 --listen-peer-urls http://${THIS_IP}:2380 \
-  --advertise-client-urls http://${THIS_IP}:2379 --listen-client-urls http://${THIS_IP}:2379 \
+  --initial-advertise-peer-urls http://${THIS_IP}:2380 --listen-peer-urls http://0.0.0.0:2380 \
+  --advertise-client-urls http://${THIS_IP}:2379 --listen-client-urls http://0.0.0.0:2379 \
   --initial-cluster ${CLUSTER} \
   --initial-cluster-state ${CLUSTER_STATE} --initial-cluster-token ${TOKEN}
 
@@ -146,8 +146,8 @@ docker run \
   --name etcd ${REGISTRY}:${ETCD_VERSION} \
   /usr/local/bin/etcd \
   --data-dir=/etcd-data --name ${THIS_NAME} \
-  --initial-advertise-peer-urls http://${THIS_IP}:2380 --listen-peer-urls http://${THIS_IP}:2380 \
-  --advertise-client-urls http://${THIS_IP}:2379 --listen-client-urls http://${THIS_IP}:2379 \
+  --initial-advertise-peer-urls http://${THIS_IP}:2380 --listen-peer-urls http://0.0.0.0:2380 \
+  --advertise-client-urls http://${THIS_IP}:2379 --listen-client-urls http://0.0.0.0:2379 \
   --initial-cluster ${CLUSTER} \
   --initial-cluster-state ${CLUSTER_STATE} --initial-cluster-token ${TOKEN}
 
@@ -161,8 +161,8 @@ docker run \
   --name etcd ${REGISTRY}:${ETCD_VERSION} \
   /usr/local/bin/etcd \
   --data-dir=/etcd-data --name ${THIS_NAME} \
-  --initial-advertise-peer-urls http://${THIS_IP}:2380 --listen-peer-urls http://${THIS_IP}:2380 \
-  --advertise-client-urls http://${THIS_IP}:2379 --listen-client-urls http://${THIS_IP}:2379 \
+  --initial-advertise-peer-urls http://${THIS_IP}:2380 --listen-peer-urls http://0.0.0.0:2380 \
+  --advertise-client-urls http://${THIS_IP}:2379 --listen-client-urls http://0.0.0.0:2379 \
   --initial-cluster ${CLUSTER} \
   --initial-cluster-state ${CLUSTER_STATE} --initial-cluster-token ${TOKEN}
 ```
@@ -184,11 +184,10 @@ The etcd release container does not include default root certificates. To use HT
 ```
 REGISTRY=quay.io/coreos/etcd
 # available from v3.2.5
-REGISTRY=gcr.io/etcd-development/etcd
-```
+REGISTRY=docker://gcr.io/etcd-development/etcd
 
-```
 rkt run \
+  --insecure-options=image \
   --volume etcd-ssl-certs-bundle,kind=host,source=/etc/ssl/certs/ca-certificates.crt \
   --mount volume=etcd-ssl-certs-bundle,target=/etc/ssl/certs/ca-certificates.crt \
   ${REGISTRY}:latest -- --name my-name \
@@ -198,6 +197,10 @@ rkt run \
 ```
 
 ```
+REGISTRY=quay.io/coreos/etcd
+# available from v3.2.5
+REGISTRY=gcr.io/etcd-development/etcd
+
 docker run \
   -p 2379:2379 \
   -p 2380:2380 \

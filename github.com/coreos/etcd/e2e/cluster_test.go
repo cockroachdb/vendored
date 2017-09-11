@@ -197,7 +197,7 @@ func (cfg *etcdProcessClusterConfig) etcdServerProcessConfigs() []*etcdServerPro
 			var derr error
 			dataDirPath, derr = ioutil.TempDir("", name+".etcd")
 			if derr != nil {
-				panic("could not get tempdir for datadir")
+				panic(fmt.Sprintf("could not get tempdir for datadir: %s", derr))
 			}
 		}
 		initialCluster[i] = fmt.Sprintf("%s=%s", name, purl.String())
@@ -212,6 +212,7 @@ func (cfg *etcdProcessClusterConfig) etcdServerProcessConfigs() []*etcdServerPro
 			"--data-dir", dataDirPath,
 			"--snapshot-count", fmt.Sprintf("%d", cfg.snapCount),
 		}
+		args = addV2Args(args)
 		if cfg.forceNewCluster {
 			args = append(args, "--force-new-cluster")
 		}

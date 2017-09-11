@@ -15,6 +15,7 @@
 package mvcc
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
 	"hash/crc32"
@@ -28,7 +29,6 @@ import (
 	"github.com/coreos/etcd/mvcc/mvccpb"
 	"github.com/coreos/etcd/pkg/schedule"
 	"github.com/coreos/pkg/capnslog"
-	"golang.org/x/net/context"
 )
 
 var (
@@ -328,6 +328,7 @@ func (s *store) restore() error {
 	}
 
 	// index keys concurrently as they're loaded in from tx
+	keysGauge.Set(0)
 	rkvc, revc := restoreIntoIndex(s.kvindex)
 	for {
 		keys, vals := tx.UnsafeRange(keyBucketName, min, max, int64(restoreChunkKeys))

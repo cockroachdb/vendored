@@ -57,7 +57,7 @@ set( thriftcpp_SOURCES
    src/thrift/server/TThreadedServer.cpp
 )
 
-# This files don't work on Windows CE as there is no pipe support
+# These files don't work on Windows CE as there is no pipe support
 # TODO: These files won't work with UNICODE support on windows. If fixed this can be re-added.
 if (NOT WINCE)
     list(APPEND thriftcpp_SOURCES
@@ -138,6 +138,8 @@ endif()
 # Thrift non blocking server
 set( thriftcppnb_SOURCES
     src/thrift/server/TNonblockingServer.cpp
+    src/thrift/transport/TNonblockingServerSocket.cpp
+    src/thrift/transport/TNonblockingSSLServerSocket.cpp
     src/thrift/async/TAsyncProtocolProcessor.cpp
     src/thrift/async/TEvhttpServer.cpp
     src/thrift/async/TEvhttpClientChannel.cpp

@@ -268,6 +268,36 @@ func (s *AuditLogConfig) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
 }
 
+// AuthorizationLoggingOptions: Authorization-related information used
+// by Cloud Audit Logging.
+type AuthorizationLoggingOptions struct {
+	// PermissionType: The type of the permission that was checked.
+	PermissionType string `json:"permissionType,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "PermissionType") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+
+	// NullFields is a list of field names (e.g. "PermissionType") to
+	// include in API requests with the JSON null value. By default, fields
+	// with empty values are omitted from API requests. However, any field
+	// with an empty value appearing in NullFields will be sent to the
+	// server as null. It is an error if a field in this list has a
+	// non-empty value. This may be used to include null fields in Patch
+	// requests.
+	NullFields []string `json:"-"`
+}
+
+func (s *AuthorizationLoggingOptions) MarshalJSON() ([]byte, error) {
+	type noMethod AuthorizationLoggingOptions
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
+}
+
 // BaseType: BaseType that describes a service-backed Type.
 type BaseType struct {
 	// CollectionOverrides: Allows resource handling overrides for specific
@@ -339,6 +369,12 @@ func (s *BasicAuth) MarshalJSON() ([]byte, error) {
 
 // Binding: Associates `members` with a `role`.
 type Binding struct {
+	// Condition: The condition that is associated with this binding. NOTE:
+	// an unsatisfied condition will not allow user access via current
+	// binding. Different bindings, including their conditions, are examined
+	// independently. This field is GOOGLE_INTERNAL.
+	Condition *Expr `json:"condition,omitempty"`
+
 	// Members: Specifies the identities requesting access for a Cloud
 	// Platform resource. `members` can have the following values:
 	//
@@ -362,6 +398,8 @@ type Binding struct {
 	// * `group:{emailid}`: An email address that represents a Google group.
 	// For example, `admins@example.com`.
 	//
+	//
+	//
 	// * `domain:{domain}`: A Google Apps domain name that represents all
 	// the users of that domain. For example, `google.com` or `example.com`.
 	Members []string `json:"members,omitempty"`
@@ -370,7 +408,7 @@ type Binding struct {
 	// `roles/viewer`, `roles/editor`, or `roles/owner`.
 	Role string `json:"role,omitempty"`
 
-	// ForceSendFields is a list of field names (e.g. "Members") to
+	// ForceSendFields is a list of field names (e.g. "Condition") to
 	// unconditionally include in API requests. By default, fields with
 	// empty values are omitted from API requests. However, any non-pointer,
 	// non-interface field appearing in ForceSendFields will be sent to the
@@ -378,7 +416,7 @@ type Binding struct {
 	// used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
-	// NullFields is a list of field names (e.g. "Members") to include in
+	// NullFields is a list of field names (e.g. "Condition") to include in
 	// API requests with the JSON null value. By default, fields with empty
 	// values are omitted from API requests. However, any field with an
 	// empty value appearing in NullFields will be sent to the server as
@@ -432,11 +470,11 @@ type CompositeType struct {
 	// provided by the client when the resource is created.
 	Description string `json:"description,omitempty"`
 
-	// Id: [Output Only] Unique identifier for the resource; defined by the
+	// Id: Output only. Unique identifier for the resource; defined by the
 	// server.
 	Id uint64 `json:"id,omitempty,string"`
 
-	// InsertTime: [Output Only] Timestamp when the composite type was
+	// InsertTime: Output only. Timestamp when the composite type was
 	// created, in RFC3339 text format.
 	InsertTime string `json:"insertTime,omitempty"`
 
@@ -451,11 +489,11 @@ type CompositeType struct {
 	// Name: Name of the composite type.
 	Name string `json:"name,omitempty"`
 
-	// Operation: [Output Only] The Operation that most recently ran, or is
+	// Operation: Output only. The Operation that most recently ran, or is
 	// currently running, on this composite type.
 	Operation *Operation `json:"operation,omitempty"`
 
-	// SelfLink: [Output Only] Self link for the type provider.
+	// SelfLink: Output only. Self link for the type provider.
 	SelfLink string `json:"selfLink,omitempty"`
 
 	Status string `json:"status,omitempty"`
@@ -521,7 +559,7 @@ func (s *CompositeTypeLabelEntry) MarshalJSON() ([]byte, error) {
 // CompositeTypesListResponse: A response that returns all Composite
 // Types supported by Deployment Manager
 type CompositeTypesListResponse struct {
-	// CompositeTypes: [Output Only] A list of resource composite types
+	// CompositeTypes: Output only. A list of resource composite types
 	// supported by Deployment Manager.
 	CompositeTypes []*CompositeType `json:"compositeTypes,omitempty"`
 
@@ -628,10 +666,18 @@ func (s *ConfigFile) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
 }
 
-// Credential: Credential used by ConfigurableResourceTypes.
+// Credential: The credential used by Deployment Manager and
+// TypeProvider. Only one of the options is permitted.
 type Credential struct {
-	// BasicAuth: Basic Auth Credentials for this Type.
+	// BasicAuth: Basic Auth Credential, only used by TypeProvider.
 	BasicAuth *BasicAuth `json:"basicAuth,omitempty"`
+
+	// ServiceAccount: Service Account Credential, only used by Deployment.
+	ServiceAccount *ServiceAccount `json:"serviceAccount,omitempty"`
+
+	// UseProjectDefault: Specify to use the project default credential,
+	// only supported by Deployment.
+	UseProjectDefault bool `json:"useProjectDefault,omitempty"`
 
 	// ForceSendFields is a list of field names (e.g. "BasicAuth") to
 	// unconditionally include in API requests. By default, fields with
@@ -672,11 +718,11 @@ type Deployment struct {
 	// fingerprint value, perform a get() request to a deployment.
 	Fingerprint string `json:"fingerprint,omitempty"`
 
-	// Id: [Output Only] Unique identifier for the resource; defined by the
+	// Id: Output only. Unique identifier for the resource; defined by the
 	// server.
 	Id uint64 `json:"id,omitempty,string"`
 
-	// InsertTime: [Output Only] Timestamp when the deployment was created,
+	// InsertTime: Output only. Timestamp when the deployment was created,
 	// in RFC3339 text format .
 	InsertTime string `json:"insertTime,omitempty"`
 
@@ -688,7 +734,7 @@ type Deployment struct {
 	// ([a-z]([-a-z0-9]*[a-z0-9])?)?
 	Labels []*DeploymentLabelEntry `json:"labels,omitempty"`
 
-	// Manifest: [Output Only] URL of the manifest representing the last
+	// Manifest: Output only. URL of the manifest representing the last
 	// manifest that was successfully deployed.
 	Manifest string `json:"manifest,omitempty"`
 
@@ -701,18 +747,18 @@ type Deployment struct {
 	// last character, which cannot be a dash.
 	Name string `json:"name,omitempty"`
 
-	// Operation: [Output Only] The Operation that most recently ran, or is
+	// Operation: Output only. The Operation that most recently ran, or is
 	// currently running, on this deployment.
 	Operation *Operation `json:"operation,omitempty"`
 
-	// SelfLink: [Output Only] Self link for the deployment.
+	// SelfLink: Output only. Self link for the deployment.
 	SelfLink string `json:"selfLink,omitempty"`
 
 	// Target: [Input Only] The parameters that define your deployment,
 	// including the deployment configuration and relevant templates.
 	Target *TargetConfiguration `json:"target,omitempty"`
 
-	// Update: [Output Only] If Deployment Manager is currently updating or
+	// Update: Output only. If Deployment Manager is currently updating or
 	// previewing an update to this deployment, the updated configuration
 	// appears here.
 	Update *DeploymentUpdate `json:"update,omitempty"`
@@ -773,11 +819,11 @@ func (s *DeploymentLabelEntry) MarshalJSON() ([]byte, error) {
 }
 
 type DeploymentUpdate struct {
-	// Description: [Output Only] An optional user-provided description of
+	// Description: Output only. An optional user-provided description of
 	// the deployment after the current update has been applied.
 	Description string `json:"description,omitempty"`
 
-	// Labels: [Output Only] Map of labels; provided by the client when the
+	// Labels: Output only. Map of labels; provided by the client when the
 	// resource is created or updated. Specifically: Label keys must be
 	// between 1 and 63 characters long and must conform to the following
 	// regular expression: [a-z]([-a-z0-9]*[a-z0-9])? Label values must be
@@ -785,7 +831,7 @@ type DeploymentUpdate struct {
 	// expression ([a-z]([-a-z0-9]*[a-z0-9])?)?
 	Labels []*DeploymentUpdateLabelEntry `json:"labels,omitempty"`
 
-	// Manifest: [Output Only] URL of the manifest representing the update
+	// Manifest: Output only. URL of the manifest representing the update
 	// configuration of this deployment.
 	Manifest string `json:"manifest,omitempty"`
 
@@ -881,12 +927,11 @@ func (s *DeploymentsCancelPreviewRequest) MarshalJSON() ([]byte, error) {
 // deployments and a page token used to build the next request if the
 // request has been truncated.
 type DeploymentsListResponse struct {
-	// Deployments: [Output Only] The deployments contained in this
-	// response.
+	// Deployments: Output only. The deployments contained in this response.
 	Deployments []*Deployment `json:"deployments,omitempty"`
 
-	// NextPageToken: [Output Only] A token used to continue a truncated
-	// list request.
+	// NextPageToken: Output only. A token used to continue a truncated list
+	// request.
 	NextPageToken string `json:"nextPageToken,omitempty"`
 
 	// ServerResponse contains the HTTP response code and headers from the
@@ -949,6 +994,56 @@ type DeploymentsStopRequest struct {
 
 func (s *DeploymentsStopRequest) MarshalJSON() ([]byte, error) {
 	type noMethod DeploymentsStopRequest
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
+}
+
+// Expr: Represents an expression text. Example:
+//
+// title: "User account presence" description: "Determines whether the
+// request has a user account" expression: "size(request.user) > 0"
+type Expr struct {
+	// Description: An optional description of the expression. This is a
+	// longer text which describes the expression, e.g. when hovered over it
+	// in a UI.
+	Description string `json:"description,omitempty"`
+
+	// Expression: Textual representation of an expression in Common
+	// Expression Language syntax.
+	//
+	// The application context of the containing message determines which
+	// well-known feature set of CEL is supported.
+	Expression string `json:"expression,omitempty"`
+
+	// Location: An optional string indicating the location of the
+	// expression for error reporting, e.g. a file name and a position in
+	// the file.
+	Location string `json:"location,omitempty"`
+
+	// Title: An optional title for the expression, i.e. a short string
+	// describing its purpose. This can be used e.g. in UIs which allow to
+	// enter the expression.
+	Title string `json:"title,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "Description") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+
+	// NullFields is a list of field names (e.g. "Description") to include
+	// in API requests with the JSON null value. By default, fields with
+	// empty values are omitted from API requests. However, any field with
+	// an empty value appearing in NullFields will be sent to the server as
+	// null. It is an error if a field in this list has a non-empty value.
+	// This may be used to include null fields in Patch requests.
+	NullFields []string `json:"-"`
+}
+
+func (s *Expr) MarshalJSON() ([]byte, error) {
+	type noMethod Expr
 	raw := noMethod(*s)
 	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
 }
@@ -1024,10 +1119,16 @@ func (s *InputMapping) MarshalJSON() ([]byte, error) {
 
 // LogConfig: Specifies what kind of log the caller must write
 type LogConfig struct {
+	// CloudAudit: Cloud audit options.
+	CloudAudit *LogConfigCloudAuditOptions `json:"cloudAudit,omitempty"`
+
 	// Counter: Counter options.
 	Counter *LogConfigCounterOptions `json:"counter,omitempty"`
 
-	// ForceSendFields is a list of field names (e.g. "Counter") to
+	// DataAccess: Data access options.
+	DataAccess *LogConfigDataAccessOptions `json:"dataAccess,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "CloudAudit") to
 	// unconditionally include in API requests. By default, fields with
 	// empty values are omitted from API requests. However, any non-pointer,
 	// non-interface field appearing in ForceSendFields will be sent to the
@@ -1035,7 +1136,7 @@ type LogConfig struct {
 	// used to include empty fields in Patch requests.
 	ForceSendFields []string `json:"-"`
 
-	// NullFields is a list of field names (e.g. "Counter") to include in
+	// NullFields is a list of field names (e.g. "CloudAudit") to include in
 	// API requests with the JSON null value. By default, fields with empty
 	// values are omitted from API requests. However, any field with an
 	// empty value appearing in NullFields will be sent to the server as
@@ -1050,7 +1151,63 @@ func (s *LogConfig) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
 }
 
-// LogConfigCounterOptions: Options for counters
+// LogConfigCloudAuditOptions: Write a Cloud Audit log
+type LogConfigCloudAuditOptions struct {
+	// AuthorizationLoggingOptions: Information used by the Cloud Audit
+	// Logging pipeline.
+	AuthorizationLoggingOptions *AuthorizationLoggingOptions `json:"authorizationLoggingOptions,omitempty"`
+
+	// LogName: The log_name to populate in the Cloud Audit Record.
+	LogName string `json:"logName,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g.
+	// "AuthorizationLoggingOptions") to unconditionally include in API
+	// requests. By default, fields with empty values are omitted from API
+	// requests. However, any non-pointer, non-interface field appearing in
+	// ForceSendFields will be sent to the server regardless of whether the
+	// field is empty or not. This may be used to include empty fields in
+	// Patch requests.
+	ForceSendFields []string `json:"-"`
+
+	// NullFields is a list of field names (e.g.
+	// "AuthorizationLoggingOptions") to include in API requests with the
+	// JSON null value. By default, fields with empty values are omitted
+	// from API requests. However, any field with an empty value appearing
+	// in NullFields will be sent to the server as null. It is an error if a
+	// field in this list has a non-empty value. This may be used to include
+	// null fields in Patch requests.
+	NullFields []string `json:"-"`
+}
+
+func (s *LogConfigCloudAuditOptions) MarshalJSON() ([]byte, error) {
+	type noMethod LogConfigCloudAuditOptions
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
+}
+
+// LogConfigCounterOptions: Increment a streamz counter with the
+// specified metric and field names.
+//
+// Metric names should start with a '/', generally be lowercase-only,
+// and end in "_count". Field names should not contain an initial slash.
+// The actual exported metric names will have "/iam/policy"
+// prepended.
+//
+// Field names correspond to IAM request parameters and field values are
+// their respective values.
+//
+// At present the only supported field names are - "iam_principal",
+// corresponding to IAMContext.principal; - "" (empty string), resulting
+// in one aggretated counter with no field.
+//
+// Examples: counter { metric: "/debug_access_count" field:
+// "iam_principal" } ==> increment counter
+// /iam/policy/backend_debug_access_count {iam_principal=[value of
+// IAMContext.principal]}
+//
+// At this time we do not support: * multiple field names (though this
+// may be supported in the future) * decrementing the counter *
+// incrementing it by anything other than 1
 type LogConfigCounterOptions struct {
 	// Field: The field value to attribute.
 	Field string `json:"field,omitempty"`
@@ -1081,32 +1238,64 @@ func (s *LogConfigCounterOptions) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
 }
 
+// LogConfigDataAccessOptions: Write a Data Access (Gin) log
+type LogConfigDataAccessOptions struct {
+	// LogMode: Whether Gin logging should happen in a fail-closed manner at
+	// the caller. This is relevant only in the LocalIAM implementation, for
+	// now.
+	LogMode string `json:"logMode,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "LogMode") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+
+	// NullFields is a list of field names (e.g. "LogMode") to include in
+	// API requests with the JSON null value. By default, fields with empty
+	// values are omitted from API requests. However, any field with an
+	// empty value appearing in NullFields will be sent to the server as
+	// null. It is an error if a field in this list has a non-empty value.
+	// This may be used to include null fields in Patch requests.
+	NullFields []string `json:"-"`
+}
+
+func (s *LogConfigDataAccessOptions) MarshalJSON() ([]byte, error) {
+	type noMethod LogConfigDataAccessOptions
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
+}
+
 type Manifest struct {
-	// Config: [Output Only] The YAML configuration for this manifest.
+	// Config: Output only. The YAML configuration for this manifest.
 	Config *ConfigFile `json:"config,omitempty"`
 
-	// ExpandedConfig: [Output Only] The fully-expanded configuration file,
+	// ExpandedConfig: Output only. The fully-expanded configuration file,
 	// including any templates and references.
 	ExpandedConfig string `json:"expandedConfig,omitempty"`
 
-	// Id: [Output Only] Unique identifier for the resource; defined by the
+	// Id: Output only. Unique identifier for the resource; defined by the
 	// server.
 	Id uint64 `json:"id,omitempty,string"`
 
-	// Imports: [Output Only] The imported files for this manifest.
+	// Imports: Output only. The imported files for this manifest.
 	Imports []*ImportFile `json:"imports,omitempty"`
 
-	// InsertTime: [Output Only] Timestamp when the manifest was created, in
+	// InsertTime: Output only. Timestamp when the manifest was created, in
 	// RFC3339 text format.
 	InsertTime string `json:"insertTime,omitempty"`
 
-	// Layout: [Output Only] The YAML layout for this manifest.
+	// Layout: Output only. The YAML layout for this manifest.
 	Layout string `json:"layout,omitempty"`
 
-	// Name: [Output Only] The name of the manifest.
+	// Name: Output only.
+	//
+	// The name of the manifest.
 	Name string `json:"name,omitempty"`
 
-	// SelfLink: [Output Only] Self link for the manifest.
+	// SelfLink: Output only. Self link for the manifest.
 	SelfLink string `json:"selfLink,omitempty"`
 
 	// ServerResponse contains the HTTP response code and headers from the
@@ -1140,11 +1329,11 @@ func (s *Manifest) MarshalJSON() ([]byte, error) {
 // manifests and a page token used to build the next request if the
 // request has been truncated.
 type ManifestsListResponse struct {
-	// Manifests: [Output Only] Manifests contained in this list response.
+	// Manifests: Output only. Manifests contained in this list response.
 	Manifests []*Manifest `json:"manifests,omitempty"`
 
-	// NextPageToken: [Output Only] A token used to continue a truncated
-	// list request.
+	// NextPageToken: Output only. A token used to continue a truncated list
+	// request.
 	NextPageToken string `json:"nextPageToken,omitempty"`
 
 	// ServerResponse contains the HTTP response code and headers from the
@@ -1441,11 +1630,11 @@ func (s *OperationWarningsData) MarshalJSON() ([]byte, error) {
 // operations and a page token used to build the next request if the
 // request has been truncated.
 type OperationsListResponse struct {
-	// NextPageToken: [Output Only] A token used to continue a truncated
-	// list request.
+	// NextPageToken: Output only. A token used to continue a truncated list
+	// request.
 	NextPageToken string `json:"nextPageToken,omitempty"`
 
-	// Operations: [Output Only] Operations contained in this list response.
+	// Operations: Output only. Operations contained in this list response.
 	Operations []*Operation `json:"operations,omitempty"`
 
 	// ServerResponse contains the HTTP response code and headers from the
@@ -1545,8 +1734,7 @@ type Policy struct {
 	// policy.
 	AuditConfigs []*AuditConfig `json:"auditConfigs,omitempty"`
 
-	// Bindings: Associates a list of `members` to a `role`. Multiple
-	// `bindings` must not be specified for the same `role`. `bindings` with
+	// Bindings: Associates a list of `members` to a `role`. `bindings` with
 	// no members will result in an error.
 	Bindings []*Binding `json:"bindings,omitempty"`
 
@@ -1609,48 +1797,48 @@ type Resource struct {
 	// AccessControl: The Access Control Policy set on this resource.
 	AccessControl *ResourceAccessControl `json:"accessControl,omitempty"`
 
-	// FinalProperties: [Output Only] The evaluated properties of the
+	// FinalProperties: Output only. The evaluated properties of the
 	// resource with references expanded. Returned as serialized YAML.
 	FinalProperties string `json:"finalProperties,omitempty"`
 
-	// Id: [Output Only] Unique identifier for the resource; defined by the
+	// Id: Output only. Unique identifier for the resource; defined by the
 	// server.
 	Id uint64 `json:"id,omitempty,string"`
 
-	// InsertTime: [Output Only] Timestamp when the resource was created or
+	// InsertTime: Output only. Timestamp when the resource was created or
 	// acquired, in RFC3339 text format .
 	InsertTime string `json:"insertTime,omitempty"`
 
-	// Manifest: [Output Only] URL of the manifest representing the current
+	// Manifest: Output only. URL of the manifest representing the current
 	// configuration of this resource.
 	Manifest string `json:"manifest,omitempty"`
 
-	// Name: [Output Only] The name of the resource as it appears in the
-	// YAML config.
+	// Name: Output only. The name of the resource as it appears in the YAML
+	// config.
 	Name string `json:"name,omitempty"`
 
-	// Properties: [Output Only] The current properties of the resource
+	// Properties: Output only. The current properties of the resource
 	// before any references have been filled in. Returned as serialized
 	// YAML.
 	Properties string `json:"properties,omitempty"`
 
-	// Type: [Output Only] The type of the resource, for example
+	// Type: Output only. The type of the resource, for example
 	// compute.v1.instance, or cloudfunctions.v1beta1.function.
 	Type string `json:"type,omitempty"`
 
-	// Update: [Output Only] If Deployment Manager is currently updating or
+	// Update: Output only. If Deployment Manager is currently updating or
 	// previewing an update to this resource, the updated configuration
 	// appears here.
 	Update *ResourceUpdate `json:"update,omitempty"`
 
-	// UpdateTime: [Output Only] Timestamp when the resource was updated, in
+	// UpdateTime: Output only. Timestamp when the resource was updated, in
 	// RFC3339 text format .
 	UpdateTime string `json:"updateTime,omitempty"`
 
-	// Url: [Output Only] The URL of the actual resource.
+	// Url: Output only. The URL of the actual resource.
 	Url string `json:"url,omitempty"`
 
-	// Warnings: [Output Only] If warning messages are generated during
+	// Warnings: Output only. If warning messages are generated during
 	// processing of this resource, this field will be populated.
 	Warnings []*ResourceWarnings `json:"warnings,omitempty"`
 
@@ -1789,31 +1977,31 @@ type ResourceUpdate struct {
 	// after updating the resource itself.
 	AccessControl *ResourceAccessControl `json:"accessControl,omitempty"`
 
-	// Error: [Output Only] If errors are generated during update of the
+	// Error: Output only. If errors are generated during update of the
 	// resource, this field will be populated.
 	Error *ResourceUpdateError `json:"error,omitempty"`
 
-	// FinalProperties: [Output Only] The expanded properties of the
-	// resource with reference values expanded. Returned as serialized YAML.
+	// FinalProperties: Output only. The expanded properties of the resource
+	// with reference values expanded. Returned as serialized YAML.
 	FinalProperties string `json:"finalProperties,omitempty"`
 
-	// Intent: [Output Only] The intent of the resource: PREVIEW, UPDATE, or
+	// Intent: Output only. The intent of the resource: PREVIEW, UPDATE, or
 	// CANCEL.
 	Intent string `json:"intent,omitempty"`
 
-	// Manifest: [Output Only] URL of the manifest representing the update
+	// Manifest: Output only. URL of the manifest representing the update
 	// configuration of this resource.
 	Manifest string `json:"manifest,omitempty"`
 
-	// Properties: [Output Only] The set of updated properties for this
+	// Properties: Output only. The set of updated properties for this
 	// resource, before references are expanded. Returned as serialized
 	// YAML.
 	Properties string `json:"properties,omitempty"`
 
-	// State: [Output Only] The state of the resource.
+	// State: Output only. The state of the resource.
 	State string `json:"state,omitempty"`
 
-	// Warnings: [Output Only] If warning messages are generated during
+	// Warnings: Output only. If warning messages are generated during
 	// processing of this resource, this field will be populated.
 	Warnings []*ResourceUpdateWarnings `json:"warnings,omitempty"`
 
@@ -1840,7 +2028,7 @@ func (s *ResourceUpdate) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
 }
 
-// ResourceUpdateError: [Output Only] If errors are generated during
+// ResourceUpdateError: Output only. If errors are generated during
 // update of the resource, this field will be populated.
 type ResourceUpdateError struct {
 	// Errors: [Output Only] The array of errors encountered while
@@ -2021,7 +2209,8 @@ type Rule struct {
 	// Action: Required
 	Action string `json:"action,omitempty"`
 
-	// Conditions: Additional restrictions that must be met
+	// Conditions: Additional restrictions that must be met. All conditions
+	// must pass for the rule to match.
 	Conditions []*Condition `json:"conditions,omitempty"`
 
 	// Description: Human-readable description of the rule.
@@ -2064,6 +2253,35 @@ type Rule struct {
 
 func (s *Rule) MarshalJSON() ([]byte, error) {
 	type noMethod Rule
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
+}
+
+// ServiceAccount: Service Account used as a credential.
+type ServiceAccount struct {
+	// Email: The IAM service account email address like
+	// test@myproject.iam.gserviceaccount.com
+	Email string `json:"email,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "Email") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+
+	// NullFields is a list of field names (e.g. "Email") to include in API
+	// requests with the JSON null value. By default, fields with empty
+	// values are omitted from API requests. However, any field with an
+	// empty value appearing in NullFields will be sent to the server as
+	// null. It is an error if a field in this list has a non-empty value.
+	// This may be used to include null fields in Patch requests.
+	NullFields []string `json:"-"`
+}
+
+func (s *ServiceAccount) MarshalJSON() ([]byte, error) {
+	type noMethod ServiceAccount
 	raw := noMethod(*s)
 	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
 }
@@ -2209,11 +2427,11 @@ type Type struct {
 	// provided by the client when the resource is created.
 	Description string `json:"description,omitempty"`
 
-	// Id: [Output Only] Unique identifier for the resource; defined by the
+	// Id: Output only. Unique identifier for the resource; defined by the
 	// server.
 	Id uint64 `json:"id,omitempty,string"`
 
-	// InsertTime: [Output Only] Timestamp when the type was created, in
+	// InsertTime: Output only. Timestamp when the type was created, in
 	// RFC3339 text format.
 	InsertTime string `json:"insertTime,omitempty"`
 
@@ -2228,11 +2446,11 @@ type Type struct {
 	// Name: Name of the type.
 	Name string `json:"name,omitempty"`
 
-	// Operation: [Output Only] The Operation that most recently ran, or is
+	// Operation: Output only. The Operation that most recently ran, or is
 	// currently running, on this type.
 	Operation *Operation `json:"operation,omitempty"`
 
-	// SelfLink: [Output Only] Self link for the type.
+	// SelfLink: Output only. Self link for the type.
 	SelfLink string `json:"selfLink,omitempty"`
 
 	// ForceSendFields is a list of field names (e.g. "Base") to
@@ -2268,7 +2486,7 @@ type TypeInfo struct {
 	// For swagger 1.2 this field will be empty.
 	DocumentationLink string `json:"documentationLink,omitempty"`
 
-	// Kind: [Output Only] Type of the output. Always
+	// Kind: Output only. Type of the output. Always
 	// deploymentManager#TypeInfo for TypeInfo.
 	Kind string `json:"kind,omitempty"`
 
@@ -2279,7 +2497,7 @@ type TypeInfo struct {
 	// documentation link For template types, we return only a schema
 	Schema *TypeInfoSchemaInfo `json:"schema,omitempty"`
 
-	// SelfLink: [Output Only] Server-defined URL for the resource.
+	// SelfLink: Output only. Server-defined URL for the resource.
 	SelfLink string `json:"selfLink,omitempty"`
 
 	// Title: The title on the API descriptor URL provided.
@@ -2390,11 +2608,11 @@ type TypeProvider struct {
 	// DescriptorUrl: Descriptor Url for the this type provider.
 	DescriptorUrl string `json:"descriptorUrl,omitempty"`
 
-	// Id: [Output Only] Unique identifier for the resource; defined by the
+	// Id: Output only. Unique identifier for the resource; defined by the
 	// server.
 	Id uint64 `json:"id,omitempty,string"`
 
-	// InsertTime: [Output Only] Timestamp when the type provider was
+	// InsertTime: Output only. Timestamp when the type provider was
 	// created, in RFC3339 text format.
 	InsertTime string `json:"insertTime,omitempty"`
 
@@ -2409,7 +2627,7 @@ type TypeProvider struct {
 	// Name: Name of the type provider.
 	Name string `json:"name,omitempty"`
 
-	// Operation: [Output Only] The Operation that most recently ran, or is
+	// Operation: Output only. The Operation that most recently ran, or is
 	// currently running, on this type provider.
 	Operation *Operation `json:"operation,omitempty"`
 
@@ -2417,7 +2635,7 @@ type TypeProvider struct {
 	// service.
 	Options *Options `json:"options,omitempty"`
 
-	// SelfLink: [Output Only] Self link for the type provider.
+	// SelfLink: Output only. Self link for the type provider.
 	SelfLink string `json:"selfLink,omitempty"`
 
 	// ServerResponse contains the HTTP response code and headers from the
@@ -2482,7 +2700,7 @@ type TypeProvidersListResponse struct {
 	// NextPageToken: A token used to continue a truncated list request.
 	NextPageToken string `json:"nextPageToken,omitempty"`
 
-	// TypeProviders: [Output Only] A list of resource type providers
+	// TypeProviders: Output only. A list of resource type providers
 	// supported by Deployment Manager.
 	TypeProviders []*TypeProvider `json:"typeProviders,omitempty"`
 
@@ -2517,7 +2735,7 @@ type TypeProvidersListTypesResponse struct {
 	// NextPageToken: A token used to continue a truncated list request.
 	NextPageToken string `json:"nextPageToken,omitempty"`
 
-	// Types: [Output Only] A list of resource type info.
+	// Types: Output only. A list of resource type info.
 	Types []*TypeInfo `json:"types,omitempty"`
 
 	// ServerResponse contains the HTTP response code and headers from the
@@ -2553,7 +2771,7 @@ type TypesListResponse struct {
 	// NextPageToken: A token used to continue a truncated list request.
 	NextPageToken string `json:"nextPageToken,omitempty"`
 
-	// Types: [Output Only] A list of resource types supported by Deployment
+	// Types: Output only. A list of resource types supported by Deployment
 	// Manager.
 	Types []*Type `json:"types,omitempty"`
 
@@ -3060,10 +3278,9 @@ func (r *CompositeTypesService) List(project string) *CompositeTypesListCall {
 	return c
 }
 
-// Filter sets the optional parameter "filter": Sets a filter expression
-// for filtering listed resources, in the form filter={expression}. Your
-// {expression} must be in the format: field_name comparison_string
-// literal_string.
+// Filter sets the optional parameter "filter": Sets a filter
+// {expression} for filtering listed resources. Your {expression} must
+// be in the format: field_name comparison_string literal_string.
 //
 // The field_name is the name of the field you want to compare. Only
 // atomic field types are supported (string, number, boolean). The
@@ -3075,7 +3292,7 @@ func (r *CompositeTypesService) List(project string) *CompositeTypesListCall {
 // match the entire field.
 //
 // For example, to filter for instances that do not have a name of
-// example-instance, you would use filter=name ne example-instance.
+// example-instance, you would use name ne example-instance.
 //
 // You can filter on nested fields. For example, you could filter on
 // instances that have set the scheduling.automaticRestart field to
@@ -3230,7 +3447,7 @@ func (c *CompositeTypesListCall) Do(opts ...googleapi.CallOption) (*CompositeTyp
 	//   ],
 	//   "parameters": {
 	//     "filter": {
-	//       "description": "Sets a filter expression for filtering listed resources, in the form filter={expression}. Your {expression} must be in the format: field_name comparison_string literal_string.\n\nThe field_name is the name of the field you want to compare. Only atomic field types are supported (string, number, boolean). The comparison_string must be either eq (equals) or ne (not equals). The literal_string is the string value to filter to. The literal value must be valid for the type of field you are filtering by (string, number, boolean). For string fields, the literal value is interpreted as a regular expression using RE2 syntax. The literal value must match the entire field.\n\nFor example, to filter for instances that do not have a name of example-instance, you would use filter=name ne example-instance.\n\nYou can filter on nested fields. For example, you could filter on instances that have set the scheduling.automaticRestart field to true. Use filtering on nested fields to take advantage of labels to organize and search for results based on label values.\n\nTo filter on multiple expressions, provide each separate expression within parentheses. For example, (scheduling.automaticRestart eq true) (zone eq us-central1-f). Multiple expressions are treated as AND expressions, meaning that resources must match all expressions to pass the filters.",
+	//       "description": "Sets a filter {expression} for filtering listed resources. Your {expression} must be in the format: field_name comparison_string literal_string.\n\nThe field_name is the name of the field you want to compare. Only atomic field types are supported (string, number, boolean). The comparison_string must be either eq (equals) or ne (not equals). The literal_string is the string value to filter to. The literal value must be valid for the type of field you are filtering by (string, number, boolean). For string fields, the literal value is interpreted as a regular expression using RE2 syntax. The literal value must match the entire field.\n\nFor example, to filter for instances that do not have a name of example-instance, you would use name ne example-instance.\n\nYou can filter on nested fields. For example, you could filter on instances that have set the scheduling.automaticRestart field to true. Use filtering on nested fields to take advantage of labels to organize and search for results based on label values.\n\nTo filter on multiple expressions, provide each separate expression within parentheses. For example, (scheduling.automaticRestart eq true) (zone eq us-central1-f). Multiple expressions are treated as AND expressions, meaning that resources must match all expressions to pass the filters.",
 	//       "location": "query",
 	//       "type": "string"
 	//     },
@@ -4183,7 +4400,7 @@ func (c *DeploymentsGetIamPolicyCall) Do(opts ...googleapi.CallOption) (*Policy,
 	//     "resource": {
 	//       "description": "Name of the resource for this request.",
 	//       "location": "path",
-	//       "pattern": "[a-z](?:[-a-z0-9_]{0,61}[a-z0-9])?",
+	//       "pattern": "[a-z0-9](?:[-a-z0-9_]{0,61}[a-z0-9])?",
 	//       "required": true,
 	//       "type": "string"
 	//     }
@@ -4373,10 +4590,9 @@ func (r *DeploymentsService) List(project string) *DeploymentsListCall {
 	return c
 }
 
-// Filter sets the optional parameter "filter": Sets a filter expression
-// for filtering listed resources, in the form filter={expression}. Your
-// {expression} must be in the format: field_name comparison_string
-// literal_string.
+// Filter sets the optional parameter "filter": Sets a filter
+// {expression} for filtering listed resources. Your {expression} must
+// be in the format: field_name comparison_string literal_string.
 //
 // The field_name is the name of the field you want to compare. Only
 // atomic field types are supported (string, number, boolean). The
@@ -4388,7 +4604,7 @@ func (r *DeploymentsService) List(project string) *DeploymentsListCall {
 // match the entire field.
 //
 // For example, to filter for instances that do not have a name of
-// example-instance, you would use filter=name ne example-instance.
+// example-instance, you would use name ne example-instance.
 //
 // You can filter on nested fields. For example, you could filter on
 // instances that have set the scheduling.automaticRestart field to
@@ -4543,7 +4759,7 @@ func (c *DeploymentsListCall) Do(opts ...googleapi.CallOption) (*DeploymentsList
 	//   ],
 	//   "parameters": {
 	//     "filter": {
-	//       "description": "Sets a filter expression for filtering listed resources, in the form filter={expression}. Your {expression} must be in the format: field_name comparison_string literal_string.\n\nThe field_name is the name of the field you want to compare. Only atomic field types are supported (string, number, boolean). The comparison_string must be either eq (equals) or ne (not equals). The literal_string is the string value to filter to. The literal value must be valid for the type of field you are filtering by (string, number, boolean). For string fields, the literal value is interpreted as a regular expression using RE2 syntax. The literal value must match the entire field.\n\nFor example, to filter for instances that do not have a name of example-instance, you would use filter=name ne example-instance.\n\nYou can filter on nested fields. For example, you could filter on instances that have set the scheduling.automaticRestart field to true. Use filtering on nested fields to take advantage of labels to organize and search for results based on label values.\n\nTo filter on multiple expressions, provide each separate expression within parentheses. For example, (scheduling.automaticRestart eq true) (zone eq us-central1-f). Multiple expressions are treated as AND expressions, meaning that resources must match all expressions to pass the filters.",
+	//       "description": "Sets a filter {expression} for filtering listed resources. Your {expression} must be in the format: field_name comparison_string literal_string.\n\nThe field_name is the name of the field you want to compare. Only atomic field types are supported (string, number, boolean). The comparison_string must be either eq (equals) or ne (not equals). The literal_string is the string value to filter to. The literal value must be valid for the type of field you are filtering by (string, number, boolean). For string fields, the literal value is interpreted as a regular expression using RE2 syntax. The literal value must match the entire field.\n\nFor example, to filter for instances that do not have a name of example-instance, you would use name ne example-instance.\n\nYou can filter on nested fields. For example, you could filter on instances that have set the scheduling.automaticRestart field to true. Use filtering on nested fields to take advantage of labels to organize and search for results based on label values.\n\nTo filter on multiple expressions, provide each separate expression within parentheses. For example, (scheduling.automaticRestart eq true) (zone eq us-central1-f). Multiple expressions are treated as AND expressions, meaning that resources must match all expressions to pass the filters.",
 	//       "location": "query",
 	//       "type": "string"
 	//     },
@@ -4954,7 +5170,7 @@ func (c *DeploymentsSetIamPolicyCall) Do(opts ...googleapi.CallOption) (*Policy,
 	//     "resource": {
 	//       "description": "Name of the resource for this request.",
 	//       "location": "path",
-	//       "pattern": "[a-z](?:[-a-z0-9_]{0,61}[a-z0-9])?",
+	//       "pattern": "[a-z0-9](?:[-a-z0-9_]{0,61}[a-z0-9])?",
 	//       "required": true,
 	//       "type": "string"
 	//     }
@@ -5249,7 +5465,7 @@ func (c *DeploymentsTestIamPermissionsCall) Do(opts ...googleapi.CallOption) (*T
 	//     "resource": {
 	//       "description": "Name of the resource for this request.",
 	//       "location": "path",
-	//       "pattern": "[a-z](?:[-a-z0-9_]{0,61}[a-z0-9])?",
+	//       "pattern": "(?:[-a-z0-9_]{0,62}[a-z0-9])?",
 	//       "required": true,
 	//       "type": "string"
 	//     }
@@ -5671,10 +5887,9 @@ func (r *ManifestsService) List(project string, deployment string) *ManifestsLis
 	return c
 }
 
-// Filter sets the optional parameter "filter": Sets a filter expression
-// for filtering listed resources, in the form filter={expression}. Your
-// {expression} must be in the format: field_name comparison_string
-// literal_string.
+// Filter sets the optional parameter "filter": Sets a filter
+// {expression} for filtering listed resources. Your {expression} must
+// be in the format: field_name comparison_string literal_string.
 //
 // The field_name is the name of the field you want to compare. Only
 // atomic field types are supported (string, number, boolean). The
@@ -5686,7 +5901,7 @@ func (r *ManifestsService) List(project string, deployment string) *ManifestsLis
 // match the entire field.
 //
 // For example, to filter for instances that do not have a name of
-// example-instance, you would use filter=name ne example-instance.
+// example-instance, you would use name ne example-instance.
 //
 // You can filter on nested fields. For example, you could filter on
 // instances that have set the scheduling.automaticRestart field to
@@ -5850,7 +6065,7 @@ func (c *ManifestsListCall) Do(opts ...googleapi.CallOption) (*ManifestsListResp
 	//       "type": "string"
 	//     },
 	//     "filter": {
-	//       "description": "Sets a filter expression for filtering listed resources, in the form filter={expression}. Your {expression} must be in the format: field_name comparison_string literal_string.\n\nThe field_name is the name of the field you want to compare. Only atomic field types are supported (string, number, boolean). The comparison_string must be either eq (equals) or ne (not equals). The literal_string is the string value to filter to. The literal value must be valid for the type of field you are filtering by (string, number, boolean). For string fields, the literal value is interpreted as a regular expression using RE2 syntax. The literal value must match the entire field.\n\nFor example, to filter for instances that do not have a name of example-instance, you would use filter=name ne example-instance.\n\nYou can filter on nested fields. For example, you could filter on instances that have set the scheduling.automaticRestart field to true. Use filtering on nested fields to take advantage of labels to organize and search for results based on label values.\n\nTo filter on multiple expressions, provide each separate expression within parentheses. For example, (scheduling.automaticRestart eq true) (zone eq us-central1-f). Multiple expressions are treated as AND expressions, meaning that resources must match all expressions to pass the filters.",
+	//       "description": "Sets a filter {expression} for filtering listed resources. Your {expression} must be in the format: field_name comparison_string literal_string.\n\nThe field_name is the name of the field you want to compare. Only atomic field types are supported (string, number, boolean). The comparison_string must be either eq (equals) or ne (not equals). The literal_string is the string value to filter to. The literal value must be valid for the type of field you are filtering by (string, number, boolean). For string fields, the literal value is interpreted as a regular expression using RE2 syntax. The literal value must match the entire field.\n\nFor example, to filter for instances that do not have a name of example-instance, you would use name ne example-instance.\n\nYou can filter on nested fields. For example, you could filter on instances that have set the scheduling.automaticRestart field to true. Use filtering on nested fields to take advantage of labels to organize and search for results based on label values.\n\nTo filter on multiple expressions, provide each separate expression within parentheses. For example, (scheduling.automaticRestart eq true) (zone eq us-central1-f). Multiple expressions are treated as AND expressions, meaning that resources must match all expressions to pass the filters.",
 	//       "location": "query",
 	//       "type": "string"
 	//     },
@@ -6084,10 +6299,9 @@ func (r *OperationsService) List(project string) *OperationsListCall {
 	return c
 }
 
-// Filter sets the optional parameter "filter": Sets a filter expression
-// for filtering listed resources, in the form filter={expression}. Your
-// {expression} must be in the format: field_name comparison_string
-// literal_string.
+// Filter sets the optional parameter "filter": Sets a filter
+// {expression} for filtering listed resources. Your {expression} must
+// be in the format: field_name comparison_string literal_string.
 //
 // The field_name is the name of the field you want to compare. Only
 // atomic field types are supported (string, number, boolean). The
@@ -6099,7 +6313,7 @@ func (r *OperationsService) List(project string) *OperationsListCall {
 // match the entire field.
 //
 // For example, to filter for instances that do not have a name of
-// example-instance, you would use filter=name ne example-instance.
+// example-instance, you would use name ne example-instance.
 //
 // You can filter on nested fields. For example, you could filter on
 // instances that have set the scheduling.automaticRestart field to
@@ -6254,7 +6468,7 @@ func (c *OperationsListCall) Do(opts ...googleapi.CallOption) (*OperationsListRe
 	//   ],
 	//   "parameters": {
 	//     "filter": {
-	//       "description": "Sets a filter expression for filtering listed resources, in the form filter={expression}. Your {expression} must be in the format: field_name comparison_string literal_string.\n\nThe field_name is the name of the field you want to compare. Only atomic field types are supported (string, number, boolean). The comparison_string must be either eq (equals) or ne (not equals). The literal_string is the string value to filter to. The literal value must be valid for the type of field you are filtering by (string, number, boolean). For string fields, the literal value is interpreted as a regular expression using RE2 syntax. The literal value must match the entire field.\n\nFor example, to filter for instances that do not have a name of example-instance, you would use filter=name ne example-instance.\n\nYou can filter on nested fields. For example, you could filter on instances that have set the scheduling.automaticRestart field to true. Use filtering on nested fields to take advantage of labels to organize and search for results based on label values.\n\nTo filter on multiple expressions, provide each separate expression within parentheses. For example, (scheduling.automaticRestart eq true) (zone eq us-central1-f). Multiple expressions are treated as AND expressions, meaning that resources must match all expressions to pass the filters.",
+	//       "description": "Sets a filter {expression} for filtering listed resources. Your {expression} must be in the format: field_name comparison_string literal_string.\n\nThe field_name is the name of the field you want to compare. Only atomic field types are supported (string, number, boolean). The comparison_string must be either eq (equals) or ne (not equals). The literal_string is the string value to filter to. The literal value must be valid for the type of field you are filtering by (string, number, boolean). For string fields, the literal value is interpreted as a regular expression using RE2 syntax. The literal value must match the entire field.\n\nFor example, to filter for instances that do not have a name of example-instance, you would use name ne example-instance.\n\nYou can filter on nested fields. For example, you could filter on instances that have set the scheduling.automaticRestart field to true. Use filtering on nested fields to take advantage of labels to organize and search for results based on label values.\n\nTo filter on multiple expressions, provide each separate expression within parentheses. For example, (scheduling.automaticRestart eq true) (zone eq us-central1-f). Multiple expressions are treated as AND expressions, meaning that resources must match all expressions to pass the filters.",
 	//       "location": "query",
 	//       "type": "string"
 	//     },
@@ -6501,10 +6715,9 @@ func (r *ResourcesService) List(project string, deployment string) *ResourcesLis
 	return c
 }
 
-// Filter sets the optional parameter "filter": Sets a filter expression
-// for filtering listed resources, in the form filter={expression}. Your
-// {expression} must be in the format: field_name comparison_string
-// literal_string.
+// Filter sets the optional parameter "filter": Sets a filter
+// {expression} for filtering listed resources. Your {expression} must
+// be in the format: field_name comparison_string literal_string.
 //
 // The field_name is the name of the field you want to compare. Only
 // atomic field types are supported (string, number, boolean). The
@@ -6516,7 +6729,7 @@ func (r *ResourcesService) List(project string, deployment string) *ResourcesLis
 // match the entire field.
 //
 // For example, to filter for instances that do not have a name of
-// example-instance, you would use filter=name ne example-instance.
+// example-instance, you would use name ne example-instance.
 //
 // You can filter on nested fields. For example, you could filter on
 // instances that have set the scheduling.automaticRestart field to
@@ -6680,7 +6893,7 @@ func (c *ResourcesListCall) Do(opts ...googleapi.CallOption) (*ResourcesListResp
 	//       "type": "string"
 	//     },
 	//     "filter": {
-	//       "description": "Sets a filter expression for filtering listed resources, in the form filter={expression}. Your {expression} must be in the format: field_name comparison_string literal_string.\n\nThe field_name is the name of the field you want to compare. Only atomic field types are supported (string, number, boolean). The comparison_string must be either eq (equals) or ne (not equals). The literal_string is the string value to filter to. The literal value must be valid for the type of field you are filtering by (string, number, boolean). For string fields, the literal value is interpreted as a regular expression using RE2 syntax. The literal value must match the entire field.\n\nFor example, to filter for instances that do not have a name of example-instance, you would use filter=name ne example-instance.\n\nYou can filter on nested fields. For example, you could filter on instances that have set the scheduling.automaticRestart field to true. Use filtering on nested fields to take advantage of labels to organize and search for results based on label values.\n\nTo filter on multiple expressions, provide each separate expression within parentheses. For example, (scheduling.automaticRestart eq true) (zone eq us-central1-f). Multiple expressions are treated as AND expressions, meaning that resources must match all expressions to pass the filters.",
+	//       "description": "Sets a filter {expression} for filtering listed resources. Your {expression} must be in the format: field_name comparison_string literal_string.\n\nThe field_name is the name of the field you want to compare. Only atomic field types are supported (string, number, boolean). The comparison_string must be either eq (equals) or ne (not equals). The literal_string is the string value to filter to. The literal value must be valid for the type of field you are filtering by (string, number, boolean). For string fields, the literal value is interpreted as a regular expression using RE2 syntax. The literal value must match the entire field.\n\nFor example, to filter for instances that do not have a name of example-instance, you would use name ne example-instance.\n\nYou can filter on nested fields. For example, you could filter on instances that have set the scheduling.automaticRestart field to true. Use filtering on nested fields to take advantage of labels to organize and search for results based on label values.\n\nTo filter on multiple expressions, provide each separate expression within parentheses. For example, (scheduling.automaticRestart eq true) (zone eq us-central1-f). Multiple expressions are treated as AND expressions, meaning that resources must match all expressions to pass the filters.",
 	//       "location": "query",
 	//       "type": "string"
 	//     },
@@ -7348,10 +7561,9 @@ func (r *TypeProvidersService) List(project string) *TypeProvidersListCall {
 	return c
 }
 
-// Filter sets the optional parameter "filter": Sets a filter expression
-// for filtering listed resources, in the form filter={expression}. Your
-// {expression} must be in the format: field_name comparison_string
-// literal_string.
+// Filter sets the optional parameter "filter": Sets a filter
+// {expression} for filtering listed resources. Your {expression} must
+// be in the format: field_name comparison_string literal_string.
 //
 // The field_name is the name of the field you want to compare. Only
 // atomic field types are supported (string, number, boolean). The
@@ -7363,7 +7575,7 @@ func (r *TypeProvidersService) List(project string) *TypeProvidersListCall {
 // match the entire field.
 //
 // For example, to filter for instances that do not have a name of
-// example-instance, you would use filter=name ne example-instance.
+// example-instance, you would use name ne example-instance.
 //
 // You can filter on nested fields. For example, you could filter on
 // instances that have set the scheduling.automaticRestart field to
@@ -7518,7 +7730,7 @@ func (c *TypeProvidersListCall) Do(opts ...googleapi.CallOption) (*TypeProviders
 	//   ],
 	//   "parameters": {
 	//     "filter": {
-	//       "description": "Sets a filter expression for filtering listed resources, in the form filter={expression}. Your {expression} must be in the format: field_name comparison_string literal_string.\n\nThe field_name is the name of the field you want to compare. Only atomic field types are supported (string, number, boolean). The comparison_string must be either eq (equals) or ne (not equals). The literal_string is the string value to filter to. The literal value must be valid for the type of field you are filtering by (string, number, boolean). For string fields, the literal value is interpreted as a regular expression using RE2 syntax. The literal value must match the entire field.\n\nFor example, to filter for instances that do not have a name of example-instance, you would use filter=name ne example-instance.\n\nYou can filter on nested fields. For example, you could filter on instances that have set the scheduling.automaticRestart field to true. Use filtering on nested fields to take advantage of labels to organize and search for results based on label values.\n\nTo filter on multiple expressions, provide each separate expression within parentheses. For example, (scheduling.automaticRestart eq true) (zone eq us-central1-f). Multiple expressions are treated as AND expressions, meaning that resources must match all expressions to pass the filters.",
+	//       "description": "Sets a filter {expression} for filtering listed resources. Your {expression} must be in the format: field_name comparison_string literal_string.\n\nThe field_name is the name of the field you want to compare. Only atomic field types are supported (string, number, boolean). The comparison_string must be either eq (equals) or ne (not equals). The literal_string is the string value to filter to. The literal value must be valid for the type of field you are filtering by (string, number, boolean). For string fields, the literal value is interpreted as a regular expression using RE2 syntax. The literal value must match the entire field.\n\nFor example, to filter for instances that do not have a name of example-instance, you would use name ne example-instance.\n\nYou can filter on nested fields. For example, you could filter on instances that have set the scheduling.automaticRestart field to true. Use filtering on nested fields to take advantage of labels to organize and search for results based on label values.\n\nTo filter on multiple expressions, provide each separate expression within parentheses. For example, (scheduling.automaticRestart eq true) (zone eq us-central1-f). Multiple expressions are treated as AND expressions, meaning that resources must match all expressions to pass the filters.",
 	//       "location": "query",
 	//       "type": "string"
 	//     },
@@ -7603,10 +7815,9 @@ func (r *TypeProvidersService) ListTypes(project string, typeProvider string) *T
 	return c
 }
 
-// Filter sets the optional parameter "filter": Sets a filter expression
-// for filtering listed resources, in the form filter={expression}. Your
-// {expression} must be in the format: field_name comparison_string
-// literal_string.
+// Filter sets the optional parameter "filter": Sets a filter
+// {expression} for filtering listed resources. Your {expression} must
+// be in the format: field_name comparison_string literal_string.
 //
 // The field_name is the name of the field you want to compare. Only
 // atomic field types are supported (string, number, boolean). The
@@ -7618,7 +7829,7 @@ func (r *TypeProvidersService) ListTypes(project string, typeProvider string) *T
 // match the entire field.
 //
 // For example, to filter for instances that do not have a name of
-// example-instance, you would use filter=name ne example-instance.
+// example-instance, you would use name ne example-instance.
 //
 // You can filter on nested fields. For example, you could filter on
 // instances that have set the scheduling.automaticRestart field to
@@ -7775,7 +7986,7 @@ func (c *TypeProvidersListTypesCall) Do(opts ...googleapi.CallOption) (*TypeProv
 	//   ],
 	//   "parameters": {
 	//     "filter": {
-	//       "description": "Sets a filter expression for filtering listed resources, in the form filter={expression}. Your {expression} must be in the format: field_name comparison_string literal_string.\n\nThe field_name is the name of the field you want to compare. Only atomic field types are supported (string, number, boolean). The comparison_string must be either eq (equals) or ne (not equals). The literal_string is the string value to filter to. The literal value must be valid for the type of field you are filtering by (string, number, boolean). For string fields, the literal value is interpreted as a regular expression using RE2 syntax. The literal value must match the entire field.\n\nFor example, to filter for instances that do not have a name of example-instance, you would use filter=name ne example-instance.\n\nYou can filter on nested fields. For example, you could filter on instances that have set the scheduling.automaticRestart field to true. Use filtering on nested fields to take advantage of labels to organize and search for results based on label values.\n\nTo filter on multiple expressions, provide each separate expression within parentheses. For example, (scheduling.automaticRestart eq true) (zone eq us-central1-f). Multiple expressions are treated as AND expressions, meaning that resources must match all expressions to pass the filters.",
+	//       "description": "Sets a filter {expression} for filtering listed resources. Your {expression} must be in the format: field_name comparison_string literal_string.\n\nThe field_name is the name of the field you want to compare. Only atomic field types are supported (string, number, boolean). The comparison_string must be either eq (equals) or ne (not equals). The literal_string is the string value to filter to. The literal value must be valid for the type of field you are filtering by (string, number, boolean). For string fields, the literal value is interpreted as a regular expression using RE2 syntax. The literal value must match the entire field.\n\nFor example, to filter for instances that do not have a name of example-instance, you would use name ne example-instance.\n\nYou can filter on nested fields. For example, you could filter on instances that have set the scheduling.automaticRestart field to true. Use filtering on nested fields to take advantage of labels to organize and search for results based on label values.\n\nTo filter on multiple expressions, provide each separate expression within parentheses. For example, (scheduling.automaticRestart eq true) (zone eq us-central1-f). Multiple expressions are treated as AND expressions, meaning that resources must match all expressions to pass the filters.",
 	//       "location": "query",
 	//       "type": "string"
 	//     },
@@ -8157,10 +8368,9 @@ func (r *TypesService) List(project string) *TypesListCall {
 	return c
 }
 
-// Filter sets the optional parameter "filter": Sets a filter expression
-// for filtering listed resources, in the form filter={expression}. Your
-// {expression} must be in the format: field_name comparison_string
-// literal_string.
+// Filter sets the optional parameter "filter": Sets a filter
+// {expression} for filtering listed resources. Your {expression} must
+// be in the format: field_name comparison_string literal_string.
 //
 // The field_name is the name of the field you want to compare. Only
 // atomic field types are supported (string, number, boolean). The
@@ -8172,7 +8382,7 @@ func (r *TypesService) List(project string) *TypesListCall {
 // match the entire field.
 //
 // For example, to filter for instances that do not have a name of
-// example-instance, you would use filter=name ne example-instance.
+// example-instance, you would use name ne example-instance.
 //
 // You can filter on nested fields. For example, you could filter on
 // instances that have set the scheduling.automaticRestart field to
@@ -8327,7 +8537,7 @@ func (c *TypesListCall) Do(opts ...googleapi.CallOption) (*TypesListResponse, er
 	//   ],
 	//   "parameters": {
 	//     "filter": {
-	//       "description": "Sets a filter expression for filtering listed resources, in the form filter={expression}. Your {expression} must be in the format: field_name comparison_string literal_string.\n\nThe field_name is the name of the field you want to compare. Only atomic field types are supported (string, number, boolean). The comparison_string must be either eq (equals) or ne (not equals). The literal_string is the string value to filter to. The literal value must be valid for the type of field you are filtering by (string, number, boolean). For string fields, the literal value is interpreted as a regular expression using RE2 syntax. The literal value must match the entire field.\n\nFor example, to filter for instances that do not have a name of example-instance, you would use filter=name ne example-instance.\n\nYou can filter on nested fields. For example, you could filter on instances that have set the scheduling.automaticRestart field to true. Use filtering on nested fields to take advantage of labels to organize and search for results based on label values.\n\nTo filter on multiple expressions, provide each separate expression within parentheses. For example, (scheduling.automaticRestart eq true) (zone eq us-central1-f). Multiple expressions are treated as AND expressions, meaning that resources must match all expressions to pass the filters.",
+	//       "description": "Sets a filter {expression} for filtering listed resources. Your {expression} must be in the format: field_name comparison_string literal_string.\n\nThe field_name is the name of the field you want to compare. Only atomic field types are supported (string, number, boolean). The comparison_string must be either eq (equals) or ne (not equals). The literal_string is the string value to filter to. The literal value must be valid for the type of field you are filtering by (string, number, boolean). For string fields, the literal value is interpreted as a regular expression using RE2 syntax. The literal value must match the entire field.\n\nFor example, to filter for instances that do not have a name of example-instance, you would use name ne example-instance.\n\nYou can filter on nested fields. For example, you could filter on instances that have set the scheduling.automaticRestart field to true. Use filtering on nested fields to take advantage of labels to organize and search for results based on label values.\n\nTo filter on multiple expressions, provide each separate expression within parentheses. For example, (scheduling.automaticRestart eq true) (zone eq us-central1-f). Multiple expressions are treated as AND expressions, meaning that resources must match all expressions to pass the filters.",
 	//       "location": "query",
 	//       "type": "string"
 	//     },

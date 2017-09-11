@@ -15,11 +15,14 @@
 package clientv3
 
 import (
+	"context"
+
 	"github.com/coreos/etcd/etcdserver/api/v3rpc/rpctypes"
 	pb "github.com/coreos/etcd/etcdserver/etcdserverpb"
-	"golang.org/x/net/context"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type rpcFunc func(ctx context.Context) error
@@ -33,22 +36,47 @@ func isReadStopError(err error) bool {
 		return true
 	}
 	// only retry if unavailable
-	return grpc.Code(err) != codes.Unavailable
+	ev, _ := status.FromError(err)
+	return ev.Code() != codes.Unavailable
 }
 
 func isWriteStopError(err error) bool {
-	return grpc.Code(err) != codes.Unavailable ||
-		grpc.ErrorDesc(err) != "there is no address available"
+	ev, _ := status.FromError(err)
+	if ev.Code() != codes.Unavailable {
+		return true
+	}
+	return rpctypes.ErrorDesc(err) != "there is no address available"
 }
 
 func (c *Client) newRetryWrapper(isStop retryStopErrFunc) retryRpcFunc {
 	return func(rpcCtx context.Context, f rpcFunc) error {
 		for {
-			if err := f(rpcCtx); err == nil || isStop(err) {
+			select {
+			case <-c.balancer.ConnectNotify():
+			case <-rpcCtx.Done():
+				return rpcCtx.Err()
+			case <-c.ctx.Done():
+				return c.ctx.Err()
+			}
+			pinned := c.balancer.pinned()
+			err := f(rpcCtx)
+			if err == nil {
+				return nil
+			}
+			if logger.V(4) {
+				logger.Infof("clientv3/retry: error %v on pinned endpoint %s", err, pinned)
+			}
+			// mark this before endpoint switch is triggered
+			c.balancer.endpointError(pinned, err)
+			notify := c.balancer.ConnectNotify()
+			if s, ok := status.FromError(err); ok && s.Code() == codes.Unavailable {
+				c.balancer.next()
+			}
+			if isStop(err) {
 				return err
 			}
 			select {
-			case <-c.balancer.ConnectNotify():
+			case <-notify:
 			case <-rpcCtx.Done():
 				return rpcCtx.Err()
 			case <-c.ctx.Done():
@@ -61,11 +89,14 @@ func (c *Client) newRetryWrapper(isStop retryStopErrFunc) retryRpcFunc {
 func (c *Client) newAuthRetryWrapper() retryRpcFunc {
 	return func(rpcCtx context.Context, f rpcFunc) error {
 		for {
+			pinned := c.balancer.pinned()
 			err := f(rpcCtx)
 			if err == nil {
 				return nil
 			}
-
+			if logger.V(4) {
+				logger.Infof("clientv3/auth-retry: error %v on pinned endpoint %s", err, pinned)
+			}
 			// always stop retry on etcd errors other than invalid auth token
 			if rpctypes.Error(err) == rpctypes.ErrInvalidAuthToken {
 				gterr := c.getToken(rpcCtx)
@@ -74,7 +105,6 @@ func (c *Client) newAuthRetryWrapper() retryRpcFunc {
 				}
 				continue
 			}
-
 			return err
 		}
 	}

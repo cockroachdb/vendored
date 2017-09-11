@@ -405,7 +405,7 @@ void t_html_generator::print_doc(t_doc* tdoc) {
     if (unsafe_) {
       f_out_ << tdoc->get_doc() << "<br/>";
     } else {
-      f_out_ << escape_html(tdoc->get_doc()) << "<br/>";
+      f_out_ << "<pre>" << escape_html(tdoc->get_doc()) << "</pre><br/>";
     }
   }
 }
@@ -691,14 +691,14 @@ int t_html_generator::print_type(t_type* ttype) {
       f_out_ << "&gt;";
     }
   } else if (ttype->is_base_type()) {
-    f_out_ << (((t_base_type*)ttype)->is_binary() ? "binary" : ttype->get_name());
+    f_out_ << (ttype->is_binary() ? "binary" : ttype->get_name());
     len = ttype->get_name().size();
   } else {
     string prog_name = ttype->get_program()->get_name();
     string type_name = ttype->get_name();
     f_out_ << "<a href=\"" << make_file_link(prog_name + ".html") << "#";
     if (ttype->is_typedef()) {
-      f_out_ << "Typedef_";
+      f_out_ << "Struct_";
     } else if (ttype->is_struct() || ttype->is_xception()) {
       f_out_ << "Struct_";
     } else if (ttype->is_enum()) {

@@ -402,7 +402,7 @@ func TestClientReportTTransportErrors(t *testing.T) {
 	thing := errortest.NewTestStruct()
 	thing.M = make(map[string]string)
 	thing.L = make([]string, 0)
-	thing.S = make(map[string]struct{})
+	thing.S = make([]string, 0)
 	thing.I = 3
 
 	err := thrift.NewTTransportException(thrift.TIMED_OUT, "test")
@@ -412,7 +412,7 @@ func TestClientReportTTransportErrors(t *testing.T) {
 			return
 		}
 		client := errortest.NewErrorTestClientProtocol(transport, protocol, protocol)
-		_, retErr := client.TestStruct(thing)
+		_, retErr := client.TestStruct(defaultCtx, thing)
 		mockCtrl.Finish()
 		err2, ok := retErr.(thrift.TTransportException)
 		if !ok {
@@ -434,7 +434,7 @@ func TestClientReportTProtocolErrors(t *testing.T) {
 	thing := errortest.NewTestStruct()
 	thing.M = make(map[string]string)
 	thing.L = make([]string, 0)
-	thing.S = make(map[string]struct{})
+	thing.S = make([]string, 0)
 	thing.I = 3
 
 	err := thrift.NewTProtocolExceptionWithType(thrift.INVALID_DATA, errors.New("test"))
@@ -444,7 +444,7 @@ func TestClientReportTProtocolErrors(t *testing.T) {
 			return
 		}
 		client := errortest.NewErrorTestClientProtocol(transport, protocol, protocol)
-		_, retErr := client.TestStruct(thing)
+		_, retErr := client.TestStruct(defaultCtx, thing)
 		mockCtrl.Finish()
 		err2, ok := retErr.(thrift.TProtocolException)
 		if !ok {
@@ -565,7 +565,7 @@ func TestClientCallException(t *testing.T) {
 		willComplete := !prepareClientCallException(protocol, i, err)
 
 		client := errortest.NewErrorTestClientProtocol(transport, protocol, protocol)
-		_, retErr := client.TestString("test")
+		_, retErr := client.TestString(defaultCtx, "test")
 		mockCtrl.Finish()
 
 		if !willComplete {
@@ -608,7 +608,7 @@ func TestClientSeqIdMismatch(t *testing.T) {
 	)
 
 	client := errortest.NewErrorTestClientProtocol(transport, protocol, protocol)
-	_, err := client.TestString("test")
+	_, err := client.TestString(defaultCtx, "test")
 	mockCtrl.Finish()
 	appErr, ok := err.(thrift.TApplicationException)
 	if !ok {
@@ -638,7 +638,7 @@ func TestClientWrongMethodName(t *testing.T) {
 	)
 
 	client := errortest.NewErrorTestClientProtocol(transport, protocol, protocol)
-	_, err := client.TestString("test")
+	_, err := client.TestString(defaultCtx, "test")
 	mockCtrl.Finish()
 	appErr, ok := err.(thrift.TApplicationException)
 	if !ok {
@@ -668,7 +668,7 @@ func TestClientWrongMessageType(t *testing.T) {
 	)
 
 	client := errortest.NewErrorTestClientProtocol(transport, protocol, protocol)
-	_, err := client.TestString("test")
+	_, err := client.TestString(defaultCtx, "test")
 	mockCtrl.Finish()
 	appErr, ok := err.(thrift.TApplicationException)
 	if !ok {

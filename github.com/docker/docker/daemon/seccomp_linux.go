@@ -5,16 +5,16 @@ package daemon
 import (
 	"fmt"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/container"
 	"github.com/docker/docker/profiles/seccomp"
 	"github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/sirupsen/logrus"
 )
 
 var supportsSeccomp = true
 
 func setSeccomp(daemon *Daemon, rs *specs.Spec, c *container.Container) error {
-	var profile *specs.Seccomp
+	var profile *specs.LinuxSeccomp
 	var err error
 
 	if c.HostConfig.Privileged {
@@ -37,9 +37,16 @@ func setSeccomp(daemon *Daemon, rs *specs.Spec, c *container.Container) error {
 			return err
 		}
 	} else {
-		profile, err = seccomp.GetDefaultProfile(rs)
-		if err != nil {
-			return err
+		if daemon.seccompProfile != nil {
+			profile, err = seccomp.LoadProfile(string(daemon.seccompProfile), rs)
+			if err != nil {
+				return err
+			}
+		} else {
+			profile, err = seccomp.GetDefaultProfile(rs)
+			if err != nil {
+				return err
+			}
 		}
 	}
 

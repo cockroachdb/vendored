@@ -10,14 +10,20 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"syscall"
+	"strconv"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/daemon/graphdriver"
+	"github.com/docker/docker/daemon/graphdriver/overlayutils"
 	"github.com/docker/docker/pkg/archive"
+	"github.com/docker/docker/pkg/containerfs"
+	"github.com/docker/docker/pkg/fsutils"
 	"github.com/docker/docker/pkg/idtools"
+	"github.com/docker/docker/pkg/locker"
 	"github.com/docker/docker/pkg/mount"
-	"github.com/opencontainers/runc/libcontainer/label"
+	"github.com/docker/docker/pkg/system"
+	"github.com/opencontainers/selinux/go-selinux/label"
+	"github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 )
 
 // This is a small wrapper over the NaiveDiffWriter that lets us have a custom
@@ -89,10 +95,12 @@ func (d *naiveDiffDriverWithApply) ApplyDiff(id, parent string, diff io.Reader) 
 
 // Driver contains information about the home directory and the list of active mounts that are created using this driver.
 type Driver struct {
-	home    string
-	uidMaps []idtools.IDMap
-	gidMaps []idtools.IDMap
-	ctr     *graphdriver.RefCounter
+	home          string
+	uidMaps       []idtools.IDMap
+	gidMaps       []idtools.IDMap
+	ctr           *graphdriver.RefCounter
+	supportsDType bool
+	locker        *locker.Locker
 }
 
 func init() {
@@ -135,11 +143,22 @@ func Init(home string, options []string, uidMaps, gidMaps []idtools.IDMap) (grap
 		return nil, err
 	}
 
+	supportsDType, err := fsutils.SupportsDType(home)
+	if err != nil {
+		return nil, err
+	}
+	if !supportsDType {
+		// not a fatal error until v17.12 (#27443)
+		logrus.Warn(overlayutils.ErrDTypeNotSupported("overlay", backingFs))
+	}
+
 	d := &Driver{
-		home:    home,
-		uidMaps: uidMaps,
-		gidMaps: gidMaps,
-		ctr:     graphdriver.NewRefCounter(graphdriver.NewFsChecker(graphdriver.FsMagicOverlay)),
+		home:          home,
+		uidMaps:       uidMaps,
+		gidMaps:       gidMaps,
+		ctr:           graphdriver.NewRefCounter(graphdriver.NewFsChecker(graphdriver.FsMagicOverlay)),
+		supportsDType: supportsDType,
+		locker:        locker.New(),
 	}
 
 	return NaiveDiffDriverWithApply(d, uidMaps, gidMaps), nil
@@ -175,6 +194,7 @@ func (d *Driver) String() string {
 func (d *Driver) Status() [][2]string {
 	return [][2]string{
 		{"Backing Filesystem", backingFs},
+		{"Supports d_type", strconv.FormatBool(d.supportsDType)},
 	}
 }
 
@@ -216,15 +236,15 @@ func (d *Driver) Cleanup() error {
 
 // CreateReadWrite creates a layer that is writable for use as a container
 // file system.
-func (d *Driver) CreateReadWrite(id, parent, mountLabel string, storageOpt map[string]string) error {
-	return d.Create(id, parent, mountLabel, storageOpt)
+func (d *Driver) CreateReadWrite(id, parent string, opts *graphdriver.CreateOpts) error {
+	return d.Create(id, parent, opts)
 }
 
 // Create is used to create the upper, lower, and merge directories required for overlay fs for a given id.
 // The parent filesystem is used to configure these directories for the overlay.
-func (d *Driver) Create(id, parent, mountLabel string, storageOpt map[string]string) (retErr error) {
+func (d *Driver) Create(id, parent string, opts *graphdriver.CreateOpts) (retErr error) {
 
-	if len(storageOpt) != 0 {
+	if opts != nil && len(opts.StorageOpt) != 0 {
 		return fmt.Errorf("--storage-opt is not supported for overlay")
 	}
 
@@ -250,10 +270,7 @@ func (d *Driver) Create(id, parent, mountLabel string, storageOpt map[string]str
 
 	// Toplevel images are just a "root" dir
 	if parent == "" {
-		if err := idtools.MkdirAs(path.Join(dir, "root"), 0755, rootUID, rootGID); err != nil {
-			return err
-		}
-		return nil
+		return idtools.MkdirAndChown(path.Join(dir, "root"), 0755, idtools.IDPair{rootUID, rootGID})
 	}
 
 	parentDir := d.dir(parent)
@@ -319,37 +336,38 @@ func (d *Driver) dir(id string) string {
 
 // Remove cleans the directories that are created for this id.
 func (d *Driver) Remove(id string) error {
-	if err := os.RemoveAll(d.dir(id)); err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	return nil
+	d.locker.Lock(id)
+	defer d.locker.Unlock(id)
+	return system.EnsureRemoveAll(d.dir(id))
 }
 
 // Get creates and mounts the required file system for the given id and returns the mount path.
-func (d *Driver) Get(id string, mountLabel string) (s string, err error) {
+func (d *Driver) Get(id, mountLabel string) (_ containerfs.ContainerFS, err error) {
+	d.locker.Lock(id)
+	defer d.locker.Unlock(id)
 	dir := d.dir(id)
 	if _, err := os.Stat(dir); err != nil {
-		return "", err
+		return nil, err
 	}
 	// If id has a root, just return it
 	rootDir := path.Join(dir, "root")
 	if _, err := os.Stat(rootDir); err == nil {
-		return rootDir, nil
+		return containerfs.NewLocalContainerFS(rootDir), nil
 	}
 	mergedDir := path.Join(dir, "merged")
 	if count := d.ctr.Increment(mergedDir); count > 1 {
-		return mergedDir, nil
+		return containerfs.NewLocalContainerFS(mergedDir), nil
 	}
 	defer func() {
 		if err != nil {
 			if c := d.ctr.Decrement(mergedDir); c <= 0 {
-				syscall.Unmount(mergedDir, 0)
+				unix.Unmount(mergedDir, 0)
 			}
 		}
 	}()
 	lowerID, err := ioutil.ReadFile(path.Join(dir, "lower-id"))
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	var (
 		lowerDir = path.Join(d.dir(string(lowerID)), "root")
@@ -357,28 +375,34 @@ func (d *Driver) Get(id string, mountLabel string) (s string, err error) {
 		workDir  = path.Join(dir, "work")
 		opts     = fmt.Sprintf("lowerdir=%s,upperdir=%s,workdir=%s", lowerDir, upperDir, workDir)
 	)
-	if err := syscall.Mount("overlay", mergedDir, "overlay", 0, label.FormatMountLabel(opts, mountLabel)); err != nil {
-		return "", fmt.Errorf("error creating overlay mount to %s: %v", mergedDir, err)
+	if err := unix.Mount("overlay", mergedDir, "overlay", 0, label.FormatMountLabel(opts, mountLabel)); err != nil {
+		return nil, fmt.Errorf("error creating overlay mount to %s: %v", mergedDir, err)
 	}
 	// chown "workdir/work" to the remapped root UID/GID. Overlay fs inside a
 	// user namespace requires this to move a directory from lower to upper.
 	rootUID, rootGID, err := idtools.GetRootUIDGID(d.uidMaps, d.gidMaps)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	if err := os.Chown(path.Join(workDir, "work"), rootUID, rootGID); err != nil {
-		return "", err
+		return nil, err
 	}
-	return mergedDir, nil
+	return containerfs.NewLocalContainerFS(mergedDir), nil
 }
 
 // Put unmounts the mount path created for the give id.
 func (d *Driver) Put(id string) error {
+	d.locker.Lock(id)
+	defer d.locker.Unlock(id)
+	// If id has a root, just return
+	if _, err := os.Stat(path.Join(d.dir(id), "root")); err == nil {
+		return nil
+	}
 	mountpoint := path.Join(d.dir(id), "merged")
 	if count := d.ctr.Decrement(mountpoint); count > 0 {
 		return nil
 	}
-	if err := syscall.Unmount(mountpoint, 0); err != nil {
+	if err := unix.Unmount(mountpoint, unix.MNT_DETACH); err != nil {
 		logrus.Debugf("Failed to unmount %s overlay: %v", id, err)
 	}
 	return nil

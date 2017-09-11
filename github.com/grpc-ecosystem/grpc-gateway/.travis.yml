@@ -1,9 +1,10 @@
 language: go
 sudo: false
 go:
-- 1.8.x
 - 1.7.x
-- tip
+- 1.8.x
+- 1.9.x
+- master
 go_import_path: github.com/grpc-ecosystem/grpc-gateway
 cache:
   directories:
@@ -28,7 +29,7 @@ script:
 - if (go version | grep -q 1.8) && [ -z "${GATEWAY_PLUGIN_FLAGS}" ]; then test -z "$(git status --porcelain)" || (git status; git diff; exit 1); fi
 - env GLOG_logtostderr=1 go test -race -v github.com/grpc-ecosystem/grpc-gateway/...
 - make lint
-- sh -c 'cd examples/browser && gulp'
+- sh -c 'cd examples/browser && node ./node_modules/gulp/bin/gulp'
 env:
   global:
   - "PATH=$PATH:$HOME/local/bin"

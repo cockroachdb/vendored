@@ -3,15 +3,17 @@ package daemon
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/Microsoft/hcsshim"
-	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/api/types"
-	pblkiodev "github.com/docker/docker/api/types/blkiodev"
 	containertypes "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/container"
+	"github.com/docker/docker/daemon/config"
 	"github.com/docker/docker/image"
+	"github.com/docker/docker/pkg/containerfs"
+	"github.com/docker/docker/pkg/fileutils"
 	"github.com/docker/docker/pkg/idtools"
 	"github.com/docker/docker/pkg/parsers"
 	"github.com/docker/docker/pkg/platform"
@@ -20,48 +22,44 @@ import (
 	"github.com/docker/docker/runconfig"
 	"github.com/docker/libnetwork"
 	nwconfig "github.com/docker/libnetwork/config"
+	"github.com/docker/libnetwork/datastore"
 	winlibnetwork "github.com/docker/libnetwork/drivers/windows"
 	"github.com/docker/libnetwork/netlabel"
 	"github.com/docker/libnetwork/options"
 	blkiodev "github.com/opencontainers/runc/libcontainer/configs"
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
+	"golang.org/x/sys/windows"
+	"golang.org/x/sys/windows/svc/mgr"
 )
 
 const (
-	defaultNetworkSpace = "172.16.0.0/12"
-	platformSupported   = true
-	windowsMinCPUShares = 1
-	windowsMaxCPUShares = 10000
+	defaultNetworkSpace  = "172.16.0.0/12"
+	platformSupported    = true
+	windowsMinCPUShares  = 1
+	windowsMaxCPUShares  = 10000
+	windowsMinCPUPercent = 1
+	windowsMaxCPUPercent = 100
 )
+
+// Windows has no concept of an execution state directory. So use config.Root here.
+func getPluginExecRoot(root string) string {
+	return filepath.Join(root, "plugins")
+}
 
 func getBlkioWeightDevices(config *containertypes.HostConfig) ([]blkiodev.WeightDevice, error) {
 	return nil, nil
+}
+
+func (daemon *Daemon) parseSecurityOpt(container *container.Container, hostConfig *containertypes.HostConfig) error {
+	return parseSecurityOpt(container, hostConfig)
 }
 
 func parseSecurityOpt(container *container.Container, config *containertypes.HostConfig) error {
 	return nil
 }
 
-func getBlkioReadIOpsDevices(config *containertypes.HostConfig) ([]blkiodev.ThrottleDevice, error) {
-	return nil, nil
-}
-
-func getBlkioWriteIOpsDevices(config *containertypes.HostConfig) ([]blkiodev.ThrottleDevice, error) {
-	return nil, nil
-}
-
-func getBlkioReadBpsDevices(config *containertypes.HostConfig) ([]blkiodev.ThrottleDevice, error) {
-	return nil, nil
-}
-
-func getBlkioWriteBpsDevices(config *containertypes.HostConfig) ([]blkiodev.ThrottleDevice, error) {
-	return nil, nil
-}
-
-func setupInitLayer(initLayer string, rootUID, rootGID int) error {
-	return nil
-}
-
-func (daemon *Daemon) getLayerInit() func(string) error {
+func (daemon *Daemon) getLayerInit() func(containerfs.ContainerFS) error {
 	return nil
 }
 
@@ -80,60 +78,119 @@ func (daemon *Daemon) adaptContainerSettings(hostConfig *containertypes.HostConf
 		return nil
 	}
 
-	if hostConfig.CPUShares < 0 {
-		logrus.Warnf("Changing requested CPUShares of %d to minimum allowed of %d", hostConfig.CPUShares, windowsMinCPUShares)
-		hostConfig.CPUShares = windowsMinCPUShares
-	} else if hostConfig.CPUShares > windowsMaxCPUShares {
-		logrus.Warnf("Changing requested CPUShares of %d to maximum allowed of %d", hostConfig.CPUShares, windowsMaxCPUShares)
-		hostConfig.CPUShares = windowsMaxCPUShares
-	}
-
 	return nil
 }
 
-func verifyContainerResources(resources *containertypes.Resources, sysInfo *sysinfo.SysInfo) ([]string, error) {
+func verifyContainerResources(resources *containertypes.Resources, isHyperv bool) ([]string, error) {
 	warnings := []string{}
-
-	// cpu subsystem checks and adjustments
-	if resources.CPUPercent < 0 || resources.CPUPercent > 100 {
-		return warnings, fmt.Errorf("Range of CPU percent is from 1 to 100")
+	fixMemorySwappiness(resources)
+	if !isHyperv {
+		// The processor resource controls are mutually exclusive on
+		// Windows Server Containers, the order of precedence is
+		// CPUCount first, then CPUShares, and CPUPercent last.
+		if resources.CPUCount > 0 {
+			if resources.CPUShares > 0 {
+				warnings = append(warnings, "Conflicting options: CPU count takes priority over CPU shares on Windows Server Containers. CPU shares discarded")
+				logrus.Warn("Conflicting options: CPU count takes priority over CPU shares on Windows Server Containers. CPU shares discarded")
+				resources.CPUShares = 0
+			}
+			if resources.CPUPercent > 0 {
+				warnings = append(warnings, "Conflicting options: CPU count takes priority over CPU percent on Windows Server Containers. CPU percent discarded")
+				logrus.Warn("Conflicting options: CPU count takes priority over CPU percent on Windows Server Containers. CPU percent discarded")
+				resources.CPUPercent = 0
+			}
+		} else if resources.CPUShares > 0 {
+			if resources.CPUPercent > 0 {
+				warnings = append(warnings, "Conflicting options: CPU shares takes priority over CPU percent on Windows Server Containers. CPU percent discarded")
+				logrus.Warn("Conflicting options: CPU shares takes priority over CPU percent on Windows Server Containers. CPU percent discarded")
+				resources.CPUPercent = 0
+			}
+		}
 	}
 
-	if resources.CPUPercent > 0 && resources.CPUShares > 0 {
-		return warnings, fmt.Errorf("Conflicting options: CPU Shares and CPU Percent cannot both be set")
+	if resources.CPUShares < 0 || resources.CPUShares > windowsMaxCPUShares {
+		return warnings, fmt.Errorf("range of CPUShares is from %d to %d", windowsMinCPUShares, windowsMaxCPUShares)
+	}
+	if resources.CPUPercent < 0 || resources.CPUPercent > windowsMaxCPUPercent {
+		return warnings, fmt.Errorf("range of CPUPercent is from %d to %d", windowsMinCPUPercent, windowsMaxCPUPercent)
+	}
+	if resources.CPUCount < 0 {
+		return warnings, fmt.Errorf("invalid CPUCount: CPUCount cannot be negative")
 	}
 
-	// TODO Windows: Add more validation of resource settings not supported on Windows
+	if resources.NanoCPUs > 0 && resources.CPUPercent > 0 {
+		return warnings, fmt.Errorf("conflicting options: Nano CPUs and CPU Percent cannot both be set")
+	}
+	if resources.NanoCPUs > 0 && resources.CPUShares > 0 {
+		return warnings, fmt.Errorf("conflicting options: Nano CPUs and CPU Shares cannot both be set")
+	}
+	// The precision we could get is 0.01, because on Windows we have to convert to CPUPercent.
+	// We don't set the lower limit here and it is up to the underlying platform (e.g., Windows) to return an error.
+	if resources.NanoCPUs < 0 || resources.NanoCPUs > int64(sysinfo.NumCPU())*1e9 {
+		return warnings, fmt.Errorf("range of CPUs is from 0.01 to %d.00, as there are only %d CPUs available", sysinfo.NumCPU(), sysinfo.NumCPU())
+	}
 
-	if resources.BlkioWeight > 0 {
-		warnings = append(warnings, "Windows does not support Block I/O weight. Block I/O weight discarded.")
-		logrus.Warn("Windows does not support Block I/O weight. Block I/O weight discarded.")
-		resources.BlkioWeight = 0
+	osv := system.GetOSVersion()
+	if resources.NanoCPUs > 0 && isHyperv && osv.Build < 16175 {
+		leftoverNanoCPUs := resources.NanoCPUs % 1e9
+		if leftoverNanoCPUs != 0 && resources.NanoCPUs > 1e9 {
+			resources.NanoCPUs = ((resources.NanoCPUs + 1e9/2) / 1e9) * 1e9
+			warningString := fmt.Sprintf("Your current OS version does not support Hyper-V containers with NanoCPUs greater than 1000000000 but not divisible by 1000000000. NanoCPUs rounded to %d", resources.NanoCPUs)
+			warnings = append(warnings, warningString)
+			logrus.Warn(warningString)
+		}
 	}
-	if len(resources.BlkioWeightDevice) > 0 {
-		warnings = append(warnings, "Windows does not support Block I/O weight-device. Weight-device discarded.")
-		logrus.Warn("Windows does not support Block I/O weight-device. Weight-device discarded.")
-		resources.BlkioWeightDevice = []*pblkiodev.WeightDevice{}
-	}
+
 	if len(resources.BlkioDeviceReadBps) > 0 {
-		warnings = append(warnings, "Windows does not support Block read limit in bytes per second. Device read bps discarded.")
-		logrus.Warn("Windows does not support Block I/O read limit in bytes per second. Device read bps discarded.")
-		resources.BlkioDeviceReadBps = []*pblkiodev.ThrottleDevice{}
-	}
-	if len(resources.BlkioDeviceWriteBps) > 0 {
-		warnings = append(warnings, "Windows does not support Block write limit in bytes per second. Device write bps discarded.")
-		logrus.Warn("Windows does not support Block I/O write limit in bytes per second. Device write bps discarded.")
-		resources.BlkioDeviceWriteBps = []*pblkiodev.ThrottleDevice{}
+		return warnings, fmt.Errorf("invalid option: Windows does not support BlkioDeviceReadBps")
 	}
 	if len(resources.BlkioDeviceReadIOps) > 0 {
-		warnings = append(warnings, "Windows does not support Block read limit in IO per second. Device read iops discarded.")
-		logrus.Warn("Windows does not support Block I/O read limit in IO per second. Device read iops discarded.")
-		resources.BlkioDeviceReadIOps = []*pblkiodev.ThrottleDevice{}
+		return warnings, fmt.Errorf("invalid option: Windows does not support BlkioDeviceReadIOps")
+	}
+	if len(resources.BlkioDeviceWriteBps) > 0 {
+		return warnings, fmt.Errorf("invalid option: Windows does not support BlkioDeviceWriteBps")
 	}
 	if len(resources.BlkioDeviceWriteIOps) > 0 {
-		warnings = append(warnings, "Windows does not support Block write limit in IO per second. Device write iops discarded.")
-		logrus.Warn("Windows does not support Block I/O write limit in IO per second. Device write iops discarded.")
-		resources.BlkioDeviceWriteIOps = []*pblkiodev.ThrottleDevice{}
+		return warnings, fmt.Errorf("invalid option: Windows does not support BlkioDeviceWriteIOps")
+	}
+	if resources.BlkioWeight > 0 {
+		return warnings, fmt.Errorf("invalid option: Windows does not support BlkioWeight")
+	}
+	if len(resources.BlkioWeightDevice) > 0 {
+		return warnings, fmt.Errorf("invalid option: Windows does not support BlkioWeightDevice")
+	}
+	if resources.CgroupParent != "" {
+		return warnings, fmt.Errorf("invalid option: Windows does not support CgroupParent")
+	}
+	if resources.CPUPeriod != 0 {
+		return warnings, fmt.Errorf("invalid option: Windows does not support CPUPeriod")
+	}
+	if resources.CpusetCpus != "" {
+		return warnings, fmt.Errorf("invalid option: Windows does not support CpusetCpus")
+	}
+	if resources.CpusetMems != "" {
+		return warnings, fmt.Errorf("invalid option: Windows does not support CpusetMems")
+	}
+	if resources.KernelMemory != 0 {
+		return warnings, fmt.Errorf("invalid option: Windows does not support KernelMemory")
+	}
+	if resources.MemoryReservation != 0 {
+		return warnings, fmt.Errorf("invalid option: Windows does not support MemoryReservation")
+	}
+	if resources.MemorySwap != 0 {
+		return warnings, fmt.Errorf("invalid option: Windows does not support MemorySwap")
+	}
+	if resources.MemorySwappiness != nil {
+		return warnings, fmt.Errorf("invalid option: Windows does not support MemorySwappiness")
+	}
+	if resources.OomKillDisable != nil && *resources.OomKillDisable {
+		return warnings, fmt.Errorf("invalid option: Windows does not support OomKillDisable")
+	}
+	if resources.PidsLimit != 0 {
+		return warnings, fmt.Errorf("invalid option: Windows does not support PidsLimit")
+	}
+	if len(resources.Ulimits) != 0 {
+		return warnings, fmt.Errorf("invalid option: Windows does not support Ulimits")
 	}
 	return warnings, nil
 }
@@ -143,22 +200,26 @@ func verifyContainerResources(resources *containertypes.Resources, sysInfo *sysi
 func verifyPlatformContainerSettings(daemon *Daemon, hostConfig *containertypes.HostConfig, config *containertypes.Config, update bool) ([]string, error) {
 	warnings := []string{}
 
-	w, err := verifyContainerResources(&hostConfig.Resources, nil)
-	warnings = append(warnings, w...)
-	if err != nil {
-		return warnings, err
+	hyperv := daemon.runAsHyperVContainer(hostConfig)
+	if !hyperv && system.IsWindowsClient() && !system.IsIoTCore() {
+		// @engine maintainers. This block should not be removed. It partially enforces licensing
+		// restrictions on Windows. Ping @jhowardmsft if there are concerns or PRs to change this.
+		return warnings, fmt.Errorf("Windows client operating systems only support Hyper-V containers")
 	}
 
-	return warnings, nil
+	w, err := verifyContainerResources(&hostConfig.Resources, hyperv)
+	warnings = append(warnings, w...)
+	return warnings, err
 }
 
-// platformReload update configuration with platform specific options
-func (daemon *Daemon) platformReload(config *Config) map[string]string {
-	return map[string]string{}
+// reloadPlatform updates configuration with platform specific options
+// and updates the passed attributes
+func (daemon *Daemon) reloadPlatform(config *config.Config, attributes map[string]string) error {
+	return nil
 }
 
 // verifyDaemonSettings performs validation of daemon config struct
-func verifyDaemonSettings(config *Config) error {
+func verifyDaemonSettings(config *config.Config) error {
 	return nil
 }
 
@@ -173,20 +234,49 @@ func checkSystem() error {
 	if osv.Build < 14393 {
 		return fmt.Errorf("The docker daemon requires build 14393 or later of Windows Server 2016 or Windows 10")
 	}
+
+	vmcompute := windows.NewLazySystemDLL("vmcompute.dll")
+	if vmcompute.Load() != nil {
+		return fmt.Errorf("failed to load vmcompute.dll, ensure that the Containers feature is installed")
+	}
+
+	// Ensure that the required Host Network Service and vmcompute services
+	// are running. Docker will fail in unexpected ways if this is not present.
+	var requiredServices = []string{"hns", "vmcompute"}
+	if err := ensureServicesInstalled(requiredServices); err != nil {
+		return errors.Wrap(err, "a required service is not installed, ensure the Containers feature is installed")
+	}
+
+	return nil
+}
+
+func ensureServicesInstalled(services []string) error {
+	m, err := mgr.Connect()
+	if err != nil {
+		return err
+	}
+	defer m.Disconnect()
+	for _, service := range services {
+		s, err := m.OpenService(service)
+		if err != nil {
+			return errors.Wrapf(err, "failed to open service %s", service)
+		}
+		s.Close()
+	}
 	return nil
 }
 
 // configureKernelSecuritySupport configures and validate security support for the kernel
-func configureKernelSecuritySupport(config *Config, driverName string) error {
+func configureKernelSecuritySupport(config *config.Config, driverNames []string) error {
 	return nil
 }
 
 // configureMaxThreads sets the Go runtime max threads threshold
-func configureMaxThreads(config *Config) error {
+func configureMaxThreads(config *config.Config) error {
 	return nil
 }
 
-func (daemon *Daemon) initNetworkController(config *Config, activeSandboxes map[string]interface{}) (libnetwork.NetworkController, error) {
+func (daemon *Daemon) initNetworkController(config *config.Config, activeSandboxes map[string]interface{}) (libnetwork.NetworkController, error) {
 	netOptions, err := daemon.networkOptions(config, nil, nil)
 	if err != nil {
 		return nil, err
@@ -215,9 +305,12 @@ func (daemon *Daemon) initNetworkController(config *Config, activeSandboxes map[
 		}
 
 		if !found {
-			err = v.Delete()
-			if err != nil {
-				return nil, err
+			// global networks should not be deleted by local HNS
+			if v.Info().Scope() != datastore.GlobalScope {
+				err = v.Delete()
+				if err != nil {
+					logrus.Errorf("Error occurred when removing network %v", err)
+				}
 			}
 		}
 	}
@@ -242,6 +335,9 @@ func (daemon *Daemon) initNetworkController(config *Config, activeSandboxes map[
 	// discover and add HNS networks to windows
 	// network that exist are removed and added again
 	for _, v := range hnsresponse {
+		if strings.ToLower(v.Type) == "private" {
+			continue // workaround for HNS reporting unsupported networks
+		}
 		var n libnetwork.Network
 		s := func(current libnetwork.Network) bool {
 			options := current.Info().DriverOptions()
@@ -254,6 +350,10 @@ func (daemon *Daemon) initNetworkController(config *Config, activeSandboxes map[
 
 		controller.WalkNetworks(s)
 		if n != nil {
+			// global networks should not be deleted by local HNS
+			if n.Info().Scope() == datastore.GlobalScope {
+				continue
+			}
 			v.Name = n.Name()
 			// This will not cause network delete from HNS as the network
 			// is not yet populated in the libnetwork windows driver
@@ -276,8 +376,10 @@ func (daemon *Daemon) initNetworkController(config *Config, activeSandboxes map[
 		name := v.Name
 
 		// If there is no nat network create one from the first NAT network
-		// encountered
-		if !defaultNetworkExists && runconfig.DefaultDaemonNetworkMode() == containertypes.NetworkMode(strings.ToLower(v.Type)) {
+		// encountered if it doesn't already exist
+		if !defaultNetworkExists &&
+			runconfig.DefaultDaemonNetworkMode() == containertypes.NetworkMode(strings.ToLower(v.Type)) &&
+			n == nil {
 			name = runconfig.DefaultDaemonNetworkMode().NetworkName()
 			defaultNetworkExists = true
 		}
@@ -305,7 +407,7 @@ func (daemon *Daemon) initNetworkController(config *Config, activeSandboxes map[
 	return controller, nil
 }
 
-func initBridgeDriver(controller libnetwork.NetworkController, config *Config) error {
+func initBridgeDriver(controller libnetwork.NetworkController, config *config.Config) error {
 	if _, err := controller.NetworkByName(runconfig.DefaultDaemonNetworkMode().NetworkName()); err == nil {
 		return nil
 	}
@@ -317,8 +419,8 @@ func initBridgeDriver(controller libnetwork.NetworkController, config *Config) e
 	var ipamOption libnetwork.NetworkOption
 	var subnetPrefix string
 
-	if config.bridgeConfig.FixedCIDR != "" {
-		subnetPrefix = config.bridgeConfig.FixedCIDR
+	if config.BridgeConfig.FixedCIDR != "" {
+		subnetPrefix = config.BridgeConfig.FixedCIDR
 	} else {
 		// TP5 doesn't support properly detecting subnet
 		osv := system.GetOSVersion()
@@ -363,36 +465,43 @@ func (daemon *Daemon) cleanupMounts() error {
 	return nil
 }
 
-func setupRemappedRoot(config *Config) ([]idtools.IDMap, []idtools.IDMap, error) {
-	return nil, nil, nil
+func setupRemappedRoot(config *config.Config) (*idtools.IDMappings, error) {
+	return &idtools.IDMappings{}, nil
 }
 
-func setupDaemonRoot(config *Config, rootDir string, rootUID, rootGID int) error {
+func setupDaemonRoot(config *config.Config, rootDir string, rootIDs idtools.IDPair) error {
 	config.Root = rootDir
 	// Create the root directory if it doesn't exists
-	if err := system.MkdirAll(config.Root, 0700); err != nil && !os.IsExist(err) {
+	if err := system.MkdirAllWithACL(config.Root, 0, system.SddlAdministratorsLocalSystem); err != nil && !os.IsExist(err) {
 		return err
 	}
 	return nil
 }
 
 // runasHyperVContainer returns true if we are going to run as a Hyper-V container
-func (daemon *Daemon) runAsHyperVContainer(container *container.Container) bool {
-	if container.HostConfig.Isolation.IsDefault() {
+func (daemon *Daemon) runAsHyperVContainer(hostConfig *containertypes.HostConfig) bool {
+	if hostConfig.Isolation.IsDefault() {
 		// Container is set to use the default, so take the default from the daemon configuration
 		return daemon.defaultIsolation.IsHyperV()
 	}
 
 	// Container is requesting an isolation mode. Honour it.
-	return container.HostConfig.Isolation.IsHyperV()
+	return hostConfig.Isolation.IsHyperV()
 
 }
 
 // conditionalMountOnStart is a platform specific helper function during the
 // container start to call mount.
 func (daemon *Daemon) conditionalMountOnStart(container *container.Container) error {
-	// We do not mount if a Hyper-V container
-	if !daemon.runAsHyperVContainer(container) {
+	// Bail out now for Linux containers. We cannot mount the containers filesystem on the
+	// host as it is a non-Windows filesystem.
+	if system.LCOWSupported() && container.OS != "windows" {
+		return nil
+	}
+
+	// We do not mount if a Hyper-V container as it needs to be mounted inside the
+	// utility VM, not the host.
+	if !daemon.runAsHyperVContainer(container.HostConfig) {
 		return daemon.Mount(container)
 	}
 	return nil
@@ -401,25 +510,33 @@ func (daemon *Daemon) conditionalMountOnStart(container *container.Container) er
 // conditionalUnmountOnCleanup is a platform specific helper function called
 // during the cleanup of a container to unmount.
 func (daemon *Daemon) conditionalUnmountOnCleanup(container *container.Container) error {
+	// Bail out now for Linux containers
+	if system.LCOWSupported() && container.OS != "windows" {
+		return nil
+	}
+
 	// We do not unmount if a Hyper-V container
-	if !daemon.runAsHyperVContainer(container) {
+	if !daemon.runAsHyperVContainer(container.HostConfig) {
 		return daemon.Unmount(container)
 	}
 	return nil
 }
 
-func driverOptions(config *Config) []nwconfig.Option {
+func driverOptions(config *config.Config) []nwconfig.Option {
 	return []nwconfig.Option{}
 }
 
 func (daemon *Daemon) stats(c *container.Container) (*types.StatsJSON, error) {
 	if !c.IsRunning() {
-		return nil, errNotRunning{c.ID}
+		return nil, errNotRunning(c.ID)
 	}
 
 	// Obtain the stats from HCS via libcontainerd
 	stats, err := daemon.containerd.Stats(c.ID)
 	if err != nil {
+		if strings.Contains(err.Error(), "container not found") {
+			return nil, containerNotFound(c.ID)
+		}
 		return nil, err
 	}
 
@@ -475,8 +592,9 @@ func (daemon *Daemon) stats(c *container.Container) (*types.StatsJSON, error) {
 // daemon to run in. This is only applicable on Windows
 func (daemon *Daemon) setDefaultIsolation() error {
 	daemon.defaultIsolation = containertypes.Isolation("process")
-	// On client SKUs, default to Hyper-V
-	if system.IsWindowsClient() {
+	// On client SKUs, default to Hyper-V. Note that IoT reports as a client SKU
+	// but it should not be treated as such.
+	if system.IsWindowsClient() && !system.IsIoTCore() {
 		daemon.defaultIsolation = containertypes.Isolation("hyperv")
 	}
 	for _, option := range daemon.configStore.ExecOptions {
@@ -495,7 +613,7 @@ func (daemon *Daemon) setDefaultIsolation() error {
 				daemon.defaultIsolation = containertypes.Isolation("hyperv")
 			}
 			if containertypes.Isolation(val).IsProcess() {
-				if system.IsWindowsClient() {
+				if system.IsWindowsClient() && !system.IsIoTCore() {
 					// @engine maintainers. This block should not be removed. It partially enforces licensing
 					// restrictions on Windows. Ping @jhowardmsft if there are concerns or PRs to change this.
 					return fmt.Errorf("Windows client operating systems only support Hyper-V containers")
@@ -522,7 +640,7 @@ func rootFSToAPIType(rootfs *image.RootFS) types.RootFS {
 	}
 }
 
-func setupDaemonProcess(config *Config) error {
+func setupDaemonProcess(config *config.Config) error {
 	return nil
 }
 
@@ -531,4 +649,18 @@ func setupDaemonProcess(config *Config) error {
 // volumes were not supported on windows pre-1.7
 func (daemon *Daemon) verifyVolumesInfo(container *container.Container) error {
 	return nil
+}
+
+func (daemon *Daemon) setupSeccompProfile() error {
+	return nil
+}
+
+func getRealPath(path string) (string, error) {
+	if system.IsIoTCore() {
+		// Due to https://github.com/golang/go/issues/20506, path expansion
+		// does not work correctly on the default IoT Core configuration.
+		// TODO @darrenstahlmsft remove this once golang/go/20506 is fixed
+		return path, nil
+	}
+	return fileutils.ReadSymlinkedDirectory(path)
 }

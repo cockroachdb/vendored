@@ -2,7 +2,29 @@
 
 Correct commonly misspelled English words... quickly.
 
-### install with `go get -u github.com/client9/misspell/cmd/misspell`
+### Install
+
+
+If you just want a binary and to start using `misspell`:
+
+```
+curl -L -o ./install-misspell.sh https://git.io/misspell
+sh ./install-misspell.sh
+```
+
+will install as `./bin/misspell`.  You can adjust the download location using the `-b` flag.   File a ticket if you want another platform supported.
+
+
+If you use [Go](https://golang.org/), the best way to run `misspell` is by using [gometalinter](#gometalinter).  Otherwise, install `misspell` the old-fashioned way:
+
+```
+go get -u github.com/client9/misspell/cmd/misspell
+```
+
+and misspell will be in your `GOPATH`
+
+### Usage
+
 
 ```bash
 $ misspell all.html your.txt important.md files.go
@@ -11,8 +33,30 @@ your.txt:42:10 found "langauge" a misspelling of "language"
 # ^ file, line, column
 ```
 
-You'll need [golang 1.5 or newer](https://golang.org/) installed to compile
-it.  But after that it's a standalone binary.
+```
+$ misspell -help
+Usage of misspell:
+  -debug
+    	Debug matching, very slow
+  -error
+    	Exit with 2 if misspelling found
+  -f string
+    	'csv', 'sqlite3' or custom Golang template for output
+  -i string
+    	ignore the following corrections, comma separated
+  -j int
+    	Number of workers, 0 = number of CPUs
+  -legal
+    	Show legal information and exit
+  -locale string
+    	Correct spellings using locale perferances for US or UK.  Default is to use a neutral variety of English.  Setting locale to US will correct the British spelling of 'colour' to 'color'
+  -o string
+    	output file or [stderr|stdout|] (default "stdout")
+  -q	Do not emit misspelling output
+  -source string
+    	Source mode: auto=guess, go=golang source, text=plain or markdown-like text (default "auto")
+  -w	Overwrite file with corrections (default is just to display)
+```
 
 ## FAQ
 
@@ -89,6 +133,12 @@ or
 find . -type f | xargs misspell
 ```
 
+You can select a type of file as well.  The following examples selects all `.txt` files that are *not* in the `vendor` directory:
+
+```bash
+find . -type f -name '*.txt' | grep -v vendor/ | xargs misspell -error
+```
+
 <a name="stdin"></a>
 ### Can I use pipes or `stdin` for input?
 
@@ -161,7 +211,7 @@ of `misspell`
 You may wish to run this on your plaintext (.txt) and/or markdown files too.
 
 
-<a name="csv"</a>
+<a name="csv"></a>
 ### How Can I Get CSV Output?
 
 Using `-f csv`, the output is standard comma-seprated values with headers in the first row.
@@ -173,7 +223,7 @@ file,line,column,typo,corrected
 "README.md",47,25,langauge,language
 ```
 
-<a name="sqlite"</a>
+<a name="sqlite"></a>
 ### How can I export to SQLite3? 
 
 Using `-f sqlite`, the output is a [sqlite3](https://www.sqlite.org/index.html) dump-file.
@@ -207,6 +257,16 @@ With some tricks you can directly pipe output to sqlite3 by using `-init /dev/st
 misspell -f sqlite * | sqlite3 -init /dev/stdin -column -cmd '.width 60 15' ':memory' \
     'select substr(file,35),typo,count(*) as count from misspell group by file, typo order by count desc;'
 ```
+
+<a name="ignore"></a>
+### How can I ignore rules?
+
+Using the `-i "comma,separated,rules"` flag you can specify corrections to ignore.
+
+For example, if you were to run `misspell -w -error -source=text` against document that contains the string `Guy Finkelshteyn Braswell`, misspell would change the text to `Guy Finkelstheyn Bras well`.  You can then
+determine the rules to ignore by reverting the change and running the with the `-debug` flag.  You can then see
+that the corrections were `htey -> they` and `aswell -> as well`. To ignore these two rules, you add `-i "htey,aswell"` to
+your command. With debug mode on, you can see it print the corrections, but it will no longer make them.
 
 <a name="output"></a>
 ### How can I change the output format?
@@ -311,7 +371,10 @@ can check your code using [golint](https://github.com/golang/lint)
 <a name="license"></a>
 ### What license is this?
 
-[MIT](https://github.com/client9/misspell/blob/master/LICENSE)
+The main code is [MIT](https://github.com/client9/misspell/blob/master/LICENSE).
+
+Misspell also makes uses of the Golang standard library and contains a modified version of Golang's [strings.Replacer](https://golang.org/pkg/strings/#Replacer)
+which are covered under a [BSD License](https://github.com/golang/go/blob/master/LICENSE).  Type `misspell -legal` for more details or see [legal.go](https://github.com/client9/misspell/blob/master/legal.go)
 
 <a name="words"></a>
 ### Where do the word lists come from?

@@ -41,11 +41,7 @@ type CallOptions struct {
 func defaultClientOptions() []option.ClientOption {
 	return []option.ClientOption{
 		option.WithEndpoint("cloudtrace.googleapis.com:443"),
-		option.WithScopes(
-			"https://www.googleapis.com/auth/cloud-platform",
-			"https://www.googleapis.com/auth/trace.append",
-			"https://www.googleapis.com/auth/trace.readonly",
-		),
+		option.WithScopes(DefaultAuthScopes()...),
 	}
 }
 
@@ -83,7 +79,7 @@ type Client struct {
 	CallOptions *CallOptions
 
 	// The metadata to be sent with each request.
-	xGoogHeader string
+	xGoogHeader []string
 }
 
 // NewClient creates a new trace service client.
@@ -125,7 +121,7 @@ func (c *Client) Close() error {
 func (c *Client) SetGoogleClientInfo(keyval ...string) {
 	kv := append([]string{"gl-go", version.Go()}, keyval...)
 	kv = append(kv, "gapic", version.Repo, "gax", gax.Version, "grpc", grpc.Version)
-	c.xGoogHeader = gax.XGoogHeader(kv...)
+	c.xGoogHeader = []string{gax.XGoogHeader(kv...)}
 }
 
 // PatchTraces sends new traces to Stackdriver Trace or updates existing traces. If the ID

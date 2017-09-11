@@ -22,7 +22,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"reflect"
 	"testing"
 	"time"
 
@@ -184,16 +183,8 @@ func TestFromLogEntry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Test sub-values separately because %+v and %#v do not follow pointers.
-	// TODO(jba): use a differ or pretty-printer.
-	if !reflect.DeepEqual(got.HTTPRequest.Request, want.HTTPRequest.Request) {
-		t.Fatalf("HTTPRequest.Request:\ngot  %+v\nwant %+v", got.HTTPRequest.Request, want.HTTPRequest.Request)
-	}
-	if !reflect.DeepEqual(got.HTTPRequest, want.HTTPRequest) {
-		t.Fatalf("HTTPRequest:\ngot  %+v\nwant %+v", got.HTTPRequest, want.HTTPRequest)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("FullEntry:\ngot  %+v\nwant %+v", got, want)
+	if diff := testutil.Diff(got, want, testutil.IgnoreUnexported(http.Request{})); diff != "" {
+		t.Errorf("FullEntry:\n%s", diff)
 	}
 
 	// Proto payload.
@@ -216,7 +207,7 @@ func TestFromLogEntry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(got.Payload, alog) {
+	if !ltesting.PayloadEqual(got.Payload, alog) {
 		t.Errorf("got %+v, want %+v", got.Payload, alog)
 	}
 
@@ -234,7 +225,7 @@ func TestFromLogEntry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(got.Payload, jstruct) {
+	if !ltesting.PayloadEqual(got.Payload, jstruct) {
 		t.Errorf("got %+v, want %+v", got.Payload, jstruct)
 	}
 }

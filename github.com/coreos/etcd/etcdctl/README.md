@@ -115,6 +115,8 @@ RPC: Range
 
 #### Examples
 
+First, populate etcd with some keys:
+
 ```bash
 ./etcdctl put foo bar
 # OK
@@ -124,9 +126,33 @@ RPC: Range
 # OK
 ./etcdctl put foo3 bar3
 # OK
+```
+
+Get the key named `foo`:
+
+```bash
 ./etcdctl get foo
 # foo
 # bar
+```
+
+Get all keys:
+
+```bash
+./etcdctl get --from-key ''
+# foo
+# bar
+# foo1
+# bar1
+# foo2
+# foo2
+# foo3
+# bar3
+```
+
+Get all keys with names greater than or equal to `foo1`:
+
+```bash
 ./etcdctl get --from-key foo1
 # foo1
 # bar1
@@ -134,6 +160,11 @@ RPC: Range
 # bar2
 # foo3
 # bar3
+```
+
+Get keys with names greater than or equal to `foo1` and less than `foo3`:
+
+```bash
 ./etcdctl get foo1 foo3
 # foo1
 # bar1
@@ -439,6 +470,26 @@ Prints lease information.
 # {"cluster_id":17186838941855831277,"member_id":4845372305070271874,"revision":3,"raft_term":2,"id":3279279168933706764,"ttl":459,"granted-ttl":500,"keys":["Zm9vMQ==","Zm9vMg=="]}
 ```
 
+### LEASE LIST
+
+LEASE LIST lists all active leases.
+
+RPC: LeaseLeases
+
+#### Output
+
+Prints a message with a list of active leases.
+
+#### Example
+
+```bash
+./etcdctl lease grant 10
+# lease 32695410dcc0ca06 granted with TTL(10s)
+
+./etcdctl lease list
+32695410dcc0ca06
+```
+
 ### LEASE KEEP-ALIVE \<leaseID\>
 
 LEASE KEEP-ALIVE periodically refreshes a lease so it does not expire.
@@ -734,11 +785,16 @@ If NOSPACE alarm is present:
 # alarm:NOSPACE
 ```
 
-### DEFRAG
+### DEFRAG [options]
 
-DEFRAG defragments the backend database file for a set of given endpoints. When an etcd member reclaims storage space
-from deleted and compacted keys, the space is kept in a free list and the database file remains the same size. By defragmenting
-the database, the etcd member releases this free space back to the file system.
+DEFRAG defragments the backend database file for a set of given endpoints while etcd is running, or directly defragments an
+etcd data directory while etcd is not running. When an etcd member reclaims storage space from deleted and compacted keys, the
+space is kept in a free list and the database file remains the same size. By defragmenting the database, the etcd member
+releases this free space back to the file system.
+
+#### Options
+
+- data-dir -- Optional. If present, defragments a data directory not in use by etcd.
 
 #### Output
 
@@ -750,6 +806,15 @@ For each endpoints, prints a message indicating whether the endpoint was success
 ./etcdctl --endpoints=localhost:2379,badendpoint:2379 defrag
 # Finished defragmenting etcd member[localhost:2379]
 # Failed to defragment etcd member[badendpoint:2379] (grpc: timed out trying to connect)
+```
+
+To defragment a data directory directly, use the `--data-dir` flag:
+
+``` bash
+# Defragment while etcd is not running
+./etcdctl defrag --data-dir default.etcd
+# success (exit status 0)
+# Error: cannot open database at default.etcd/member/snap/db
 ```
 
 #### Remarks
@@ -875,9 +940,13 @@ echo ${transferee_id}
 
 ## Concurrency commands
 
-### LOCK \<lockname\> [command arg1 arg2 ...]
+### LOCK [options] \<lockname\> [command arg1 arg2 ...]
 
 LOCK acquires a distributed named mutex with a given name. Once the lock is acquired, it will be held until etcdctl is terminated.
+
+#### Options
+
+- ttl - time out in seconds of lock session.
 
 #### Output
 

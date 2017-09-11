@@ -17,17 +17,16 @@
 # under the License.
 #
 
-
-include(CheckSymbolExists)
+include(CheckFunctionExists)
 include(CheckIncludeFile)
 include(CheckIncludeFiles)
-include(CheckFunctionExists)
+include(CheckSymbolExists)
 
-# If AI_ADDRCONFIG is not defined we define it as 0
-check_symbol_exists(AI_ADDRCONFIG "sys/types.h;sys/socket.h;netdb.h" HAVE_AI_ADDRCONFIG)
-if(NOT HAVE_AI_ADDRCONFIG)
-set(AI_ADDRCONFIG 1)
-endif(NOT HAVE_AI_ADDRCONFIG)
+if (Inttypes_FOUND)
+  # This allows the inttypes.h and stdint.h checks to succeed on platforms that
+  # do not natively provide there.
+  set (CMAKE_REQUIRED_INCLUDES ${INTTYPES_INCLUDE_DIRS})
+endif ()
 
 check_include_file(arpa/inet.h HAVE_ARPA_INET_H)
 check_include_file(fcntl.h HAVE_FCNTL_H)
@@ -47,6 +46,7 @@ check_include_file(sys/un.h HAVE_SYS_UN_H)
 check_include_file(sys/poll.h HAVE_SYS_POLL_H)
 check_include_file(sys/select.h HAVE_SYS_SELECT_H)
 check_include_file(sched.h HAVE_SCHED_H)
+check_include_file(string.h HAVE_STRING_H)
 check_include_file(strings.h HAVE_STRINGS_H)
 
 check_function_exists(gethostbyname HAVE_GETHOSTBYNAME)
@@ -72,5 +72,5 @@ set(VERSION ${thrift_VERSION})
 
 # generate a config.h file
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/build/cmake/config.h.in" "${CMAKE_CURRENT_BINARY_DIR}/thrift/config.h")
-# HACK: Some files include thrift/config.h and some config.h so we include both. This should be cleaned up.
-include_directories("${CMAKE_CURRENT_BINARY_DIR}/thrift" "${CMAKE_CURRENT_BINARY_DIR}")
+
+include_directories("${CMAKE_CURRENT_BINARY_DIR}")

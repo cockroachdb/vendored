@@ -37,9 +37,7 @@ type ImageAnnotatorCallOptions struct {
 func defaultImageAnnotatorClientOptions() []option.ClientOption {
 	return []option.ClientOption{
 		option.WithEndpoint("vision.googleapis.com:443"),
-		option.WithScopes(
-			"https://www.googleapis.com/auth/cloud-platform",
-		),
+		option.WithScopes(DefaultAuthScopes()...),
 	}
 }
 
@@ -75,7 +73,7 @@ type ImageAnnotatorClient struct {
 	CallOptions *ImageAnnotatorCallOptions
 
 	// The metadata to be sent with each request.
-	xGoogHeader string
+	xGoogHeader []string
 }
 
 // NewImageAnnotatorClient creates a new image annotator client.
@@ -94,7 +92,7 @@ func NewImageAnnotatorClient(ctx context.Context, opts ...option.ClientOption) (
 
 		imageAnnotatorClient: visionpb.NewImageAnnotatorClient(conn),
 	}
-	c.SetGoogleClientInfo()
+	c.setGoogleClientInfo()
 	return c, nil
 }
 
@@ -109,13 +107,13 @@ func (c *ImageAnnotatorClient) Close() error {
 	return c.conn.Close()
 }
 
-// SetGoogleClientInfo sets the name and version of the application in
+// setGoogleClientInfo sets the name and version of the application in
 // the `x-goog-api-client` header passed on each request. Intended for
 // use by Google-written clients.
-func (c *ImageAnnotatorClient) SetGoogleClientInfo(keyval ...string) {
+func (c *ImageAnnotatorClient) setGoogleClientInfo(keyval ...string) {
 	kv := append([]string{"gl-go", version.Go()}, keyval...)
 	kv = append(kv, "gapic", version.Repo, "gax", gax.Version, "grpc", grpc.Version)
-	c.xGoogHeader = gax.XGoogHeader(kv...)
+	c.xGoogHeader = []string{gax.XGoogHeader(kv...)}
 }
 
 // BatchAnnotateImages run image detection and annotation for a batch of images.

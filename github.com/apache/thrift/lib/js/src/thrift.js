@@ -34,7 +34,7 @@
  * all features must be scoped within the Thrift namespace.
  * @namespace
  * @example
- *     var transport = new Thrift.Transport("http://localhost:8585");
+ *     var transport = new Thrift.Transport('http://localhost:8585');
  *     var protocol  = new Thrift.Protocol(transport);
  *     var client = new MyThriftSvcClient(protocol);
  *     var result = client.MyMethod();
@@ -46,7 +46,7 @@ var Thrift = {
      * @const {string} Version
      * @memberof Thrift
      */
-    Version: '0.10.0',
+    Version: '1.0.0-dev',
 
     /**
      * Thrift IDL type string to Id mapping.
@@ -70,23 +70,23 @@ var Thrift = {
      * @property {number}  UTF16  - Array of bytes representing a string of UTF16 encoded characters.
      */
     Type: {
-        'STOP' : 0,
-        'VOID' : 1,
-        'BOOL' : 2,
-        'BYTE' : 3,
-        'I08' : 3,
-        'DOUBLE' : 4,
-        'I16' : 6,
-        'I32' : 8,
-        'I64' : 10,
-        'STRING' : 11,
-        'UTF7' : 11,
-        'STRUCT' : 12,
-        'MAP' : 13,
-        'SET' : 14,
-        'LIST' : 15,
-        'UTF8' : 16,
-        'UTF16' : 17
+        STOP: 0,
+        VOID: 1,
+        BOOL: 2,
+        BYTE: 3,
+        I08: 3,
+        DOUBLE: 4,
+        I16: 6,
+        I32: 8,
+        I64: 10,
+        STRING: 11,
+        UTF7: 11,
+        STRUCT: 12,
+        MAP: 13,
+        SET: 14,
+        LIST: 15,
+        UTF8: 16,
+        UTF16: 17
     },
 
     /**
@@ -98,10 +98,10 @@ var Thrift = {
      * @property {number}  ONEWAY    - Oneway RPC call from client to server with no response.
      */
     MessageType: {
-        'CALL' : 1,
-        'REPLY' : 2,
-        'EXCEPTION' : 3,
-        'ONEWAY' : 4
+        CALL: 1,
+        REPLY: 2,
+        EXCEPTION: 3,
+        ONEWAY: 4
     },
 
     /**
@@ -130,7 +130,7 @@ var Thrift = {
       function F() {}
       F.prototype = superConstructor.prototype;
       constructor.prototype = new F();
-      constructor.prototype.name = name || "";
+      constructor.prototype.name = name || '';
     }
 };
 
@@ -171,17 +171,17 @@ Thrift.TException.prototype.getMessage = function() {
  * @property {number}  UNSUPPORTED_CLIENT_TYPE - Unused.
  */
 Thrift.TApplicationExceptionType = {
-    'UNKNOWN' : 0,
-    'UNKNOWN_METHOD' : 1,
-    'INVALID_MESSAGE_TYPE' : 2,
-    'WRONG_METHOD_NAME' : 3,
-    'BAD_SEQUENCE_ID' : 4,
-    'MISSING_RESULT' : 5,
-    'INTERNAL_ERROR' : 6,
-    'PROTOCOL_ERROR' : 7,
-    'INVALID_TRANSFORM' : 8,
-    'INVALID_PROTOCOL' : 9,
-    'UNSUPPORTED_CLIENT_TYPE' : 10
+    UNKNOWN: 0,
+    UNKNOWN_METHOD: 1,
+    INVALID_MESSAGE_TYPE: 2,
+    WRONG_METHOD_NAME: 3,
+    BAD_SEQUENCE_ID: 4,
+    MISSING_RESULT: 5,
+    INTERNAL_ERROR: 6,
+    PROTOCOL_ERROR: 7,
+    INVALID_TRANSFORM: 8,
+    INVALID_PROTOCOL: 9,
+    UNSUPPORTED_CLIENT_TYPE: 10
 };
 
 /**
@@ -194,7 +194,7 @@ Thrift.TApplicationExceptionType = {
 */
 Thrift.TApplicationException = function(message, code) {
     this.message = message;
-    this.code = typeof code === "number" ? code : 0;
+    this.code = typeof code === 'number' ? code : 0;
 };
 Thrift.inherits(Thrift.TApplicationException, Thrift.TException, 'TApplicationException');
 
@@ -575,11 +575,20 @@ Thrift.TWebSocketTransport.prototype = {
             clientCallback();
           };
         }()));
+        if(callback) {
+          this.callbacks.push((function() {
+            var clientCallback = callback;
+            return function(msg) {
+              self.setRecvBuffer(msg);
+              clientCallback();
+            };
+          }()));
+        }
       } else {
         //Queue the send to go out __onOpen
         this.send_pending.push({
           buf: this.send_buf,
-          cb:  callback
+          cb: callback
         });
       }
     },
@@ -614,7 +623,7 @@ Thrift.TWebSocketTransport.prototype = {
     },
 
     __onError: function(evt) {
-      console.log("Thrift WebSocket Error: " + evt.toString());
+      console.log('Thrift WebSocket Error: ' + evt.toString());
       this.socket.close();
     },
 
@@ -1440,23 +1449,23 @@ Thrift.Protocol.prototype = {
  * Initializes a MutilplexProtocol Implementation as a Wrapper for Thrift.Protocol
  * @constructor
  */
-Thrift.MultiplexProtocol = function (srvName, trans, strictRead, strictWrite) {
+Thrift.MultiplexProtocol = function(srvName, trans, strictRead, strictWrite) {
     Thrift.Protocol.call(this, trans, strictRead, strictWrite);
     this.serviceName = srvName;
 };
 Thrift.inherits(Thrift.MultiplexProtocol, Thrift.Protocol, 'multiplexProtocol');
 
 /** Override writeMessageBegin method of prototype*/
-Thrift.MultiplexProtocol.prototype.writeMessageBegin = function (name, type, seqid) {
+Thrift.MultiplexProtocol.prototype.writeMessageBegin = function(name, type, seqid) {
 
     if (type === Thrift.MessageType.CALL || type === Thrift.MessageType.ONEWAY) {
-        Thrift.Protocol.prototype.writeMessageBegin.call(this, this.serviceName + ":" + name, type, seqid);
+        Thrift.Protocol.prototype.writeMessageBegin.call(this, this.serviceName + ':' + name, type, seqid);
     } else {
         Thrift.Protocol.prototype.writeMessageBegin.call(this, name, type, seqid);
     }
 };
 
-Thrift.Multiplexer = function () {
+Thrift.Multiplexer = function() {
     this.seqid = 0;
 };
 
@@ -1471,12 +1480,12 @@ Thrift.Multiplexer = function () {
  *    var protocol = new Thrift.Protocol(transport);
  *    var client = mp.createClient('AuthService', AuthServiceClient, transport);
 */
-Thrift.Multiplexer.prototype.createClient = function (serviceName, SCl, transport) {
+Thrift.Multiplexer.prototype.createClient = function(serviceName, SCl, transport) {
     if (SCl.Client) {
         SCl = SCl.Client;
     }
     var self = this;
-    SCl.prototype.new_seqid = function () {
+    SCl.prototype.new_seqid = function() {
         self.seqid += 1;
         return self.seqid;
     };
@@ -1519,7 +1528,7 @@ copyList = function(lst, types) {
   return result;
 };
 
-copyMap = function(obj, types){
+copyMap = function(obj, types) {
 
   if (!obj) {return obj; }
 
@@ -1534,8 +1543,8 @@ copyMap = function(obj, types){
   var Type = type;
 
   var result = {}, val;
-  for(var prop in obj) {
-    if(obj.hasOwnProperty(prop)) {
+  for (var prop in obj) {
+    if (obj.hasOwnProperty(prop)) {
       val = obj[prop];
       if (type === null) {
         result[prop] = val;
