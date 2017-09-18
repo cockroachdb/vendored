@@ -20,6 +20,7 @@ import (
 	"unicode"
 
 	"github.com/lib/pq/oid"
+	"reflect"
 )
 
 // Common error types
@@ -1418,6 +1419,24 @@ func (rs *rows) HasNextResultSet() bool {
 
 func (rs *rows) NextResultSet() error {
 	return nil
+}
+
+func (rs*rows) ColumnTypeScanType(index int) reflect.Type {
+	switch rs.colTyps[index] {
+	case oid.T_int2, oid.T_int4, oid.T_int8:
+		return reflect.TypeOf(int64(0))
+	case oid.T_bytea, oid.T_uuid:
+		return reflect.SliceOf(reflect.TypeOf(byte(0)))
+	case oid.T_char, oid.T_varchar, oid.T_text:
+		return reflect.TypeOf("")
+	case oid.T_timestamp, oid.T_date, oid.T_timestamptz:
+		return reflect.TypeOf(time.Time{})
+	case oid.T_bool:
+		return reflect.TypeOf(true)
+	case oid.T_float4, oid.T_float8:
+		return reflect.TypeOf(float64(0))
+	}
+	return reflect.SliceOf(reflect.TypeOf(byte(0)))
 }
 
 // QuoteIdentifier quotes an "identifier" (e.g. a table or a column name) to be
