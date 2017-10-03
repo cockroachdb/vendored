@@ -6,6 +6,7 @@ package gps
 
 import (
 	"reflect"
+	"sort"
 	"testing"
 )
 
@@ -20,7 +21,9 @@ func TestLockedProjectSorting(t *testing.T) {
 	lps2 := make([]LockedProject, len(lps))
 	copy(lps2, lps)
 
-	SortLockedProjects(lps2)
+	sort.SliceStable(lps2, func(i, j int) bool {
+		return lps2[i].Ident().Less(lps2[j].Ident())
+	})
 
 	// only the two should have switched positions
 	lps[0], lps[2] = lps[2], lps[0]
@@ -36,7 +39,7 @@ func TestLockedProjectsEq(t *testing.T) {
 		NewLockedProject(mkPI("github.com/sdboyer/gps"), NewVersion("v0.10.0"), []string{"gps", "flugle"}),
 		NewLockedProject(mkPI("foo"), NewVersion("nada"), []string{"foo"}),
 		NewLockedProject(mkPI("github.com/sdboyer/gps"), NewVersion("v0.10.0"), []string{"flugle", "gps"}),
-		NewLockedProject(mkPI("github.com/sdboyer/gps"), NewVersion("v0.10.0").Is("278a227dfc3d595a33a77ff3f841fd8ca1bc8cd0"), []string{"gps"}),
+		NewLockedProject(mkPI("github.com/sdboyer/gps"), NewVersion("v0.10.0").Pair("278a227dfc3d595a33a77ff3f841fd8ca1bc8cd0"), []string{"gps"}),
 		NewLockedProject(mkPI("github.com/sdboyer/gps"), NewVersion("v0.11.0"), []string{"gps"}),
 		NewLockedProject(mkPI("github.com/sdboyer/gps"), Revision("278a227dfc3d595a33a77ff3f841fd8ca1bc8cd0"), []string{"gps"}),
 	}
@@ -81,9 +84,9 @@ func TestLockedProjectsEq(t *testing.T) {
 }
 
 func TestLocksAreEq(t *testing.T) {
-	gpl := NewLockedProject(mkPI("github.com/sdboyer/gps"), NewVersion("v0.10.0").Is("278a227dfc3d595a33a77ff3f841fd8ca1bc8cd0"), []string{"gps"})
+	gpl := NewLockedProject(mkPI("github.com/sdboyer/gps"), NewVersion("v0.10.0").Pair("278a227dfc3d595a33a77ff3f841fd8ca1bc8cd0"), []string{"gps"})
 	svpl := NewLockedProject(mkPI("github.com/Masterminds/semver"), NewVersion("v2.0.0"), []string{"semver"})
-	bbbt := NewLockedProject(mkPI("github.com/beeblebrox/browntown"), NewBranch("master").Is("63fc17eb7966a6f4cc0b742bf42731c52c4ac740"), []string{"browntown", "smoochies"})
+	bbbt := NewLockedProject(mkPI("github.com/beeblebrox/browntown"), NewBranch("master").Pair("63fc17eb7966a6f4cc0b742bf42731c52c4ac740"), []string{"browntown", "smoochies"})
 
 	l1 := solution{
 		hd: []byte("foo"),
@@ -127,4 +130,55 @@ func TestLocksAreEq(t *testing.T) {
 	if LocksAreEq(l1, l2, false) {
 		t.Error("should fail when individual lp were not eq")
 	}
+}
+
+func TestLockedProjectsString(t *testing.T) {
+	tt := []struct {
+		name string
+		lp   LockedProject
+		want string
+	}{
+		{
+			name: "full info",
+			lp:   NewLockedProject(mkPI("github.com/sdboyer/gps"), NewVersion("v0.10.0"), []string{"gps"}),
+			want: "github.com/sdboyer/gps@v0.10.0 with packages: [gps]",
+		},
+		{
+			name: "empty package list",
+			lp:   NewLockedProject(mkPI("github.com/sdboyer/gps"), NewVersion("v0.10.0"), []string{}),
+			want: "github.com/sdboyer/gps@v0.10.0 with packages: []",
+		},
+		{
+			name: "nil package",
+			lp:   NewLockedProject(mkPI("github.com/sdboyer/gps"), NewVersion("v0.10.0"), nil),
+			want: "github.com/sdboyer/gps@v0.10.0 with packages: []",
+		},
+		{
+			name: "with source",
+			lp: NewLockedProject(
+				ProjectIdentifier{ProjectRoot: "github.com/sdboyer/gps", Source: "github.com/another/repo"},
+				NewVersion("v0.10.0"), []string{"."}),
+			want: "github.com/sdboyer/gps (from github.com/another/repo)@v0.10.0 with packages: [.]",
+		},
+		{
+			name: "version pair",
+			lp:   NewLockedProject(mkPI("github.com/sdboyer/gps"), NewVersion("v0.10.0").Pair("278a227dfc3d595a33a77ff3f841fd8ca1bc8cd0"), []string{"gps"}),
+			want: "github.com/sdboyer/gps@v0.10.0 with packages: [gps]",
+		},
+		{
+			name: "revision only",
+			lp:   NewLockedProject(mkPI("github.com/sdboyer/gps"), Revision("278a227dfc3d595a33a77ff3f841fd8ca1bc8cd0"), []string{"gps"}),
+			want: "github.com/sdboyer/gps@278a227dfc3d595a33a77ff3f841fd8ca1bc8cd0 with packages: [gps]",
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			s := tc.lp.String()
+			if tc.want != s {
+				t.Fatalf("want %s, got %s", tc.want, s)
+			}
+		})
+	}
+
 }

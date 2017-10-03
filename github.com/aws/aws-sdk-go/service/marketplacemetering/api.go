@@ -15,18 +15,19 @@ const opBatchMeterUsage = "BatchMeterUsage"
 
 // BatchMeterUsageRequest generates a "aws/request.Request" representing the
 // client's request for the BatchMeterUsage operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See BatchMeterUsage for usage and error information.
 //
-// See BatchMeterUsage for more information on using the BatchMeterUsage
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the BatchMeterUsage method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the BatchMeterUsageRequest method.
 //    req, resp := client.BatchMeterUsageRequest(params)
@@ -121,18 +122,19 @@ const opMeterUsage = "MeterUsage"
 
 // MeterUsageRequest generates a "aws/request.Request" representing the
 // client's request for the MeterUsage operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See MeterUsage for usage and error information.
 //
-// See MeterUsage for more information on using the MeterUsage
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the MeterUsage method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the MeterUsageRequest method.
 //    req, resp := client.MeterUsageRequest(params)
@@ -228,18 +230,19 @@ const opResolveCustomer = "ResolveCustomer"
 
 // ResolveCustomerRequest generates a "aws/request.Request" representing the
 // client's request for the ResolveCustomer operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See ResolveCustomer for usage and error information.
 //
-// See ResolveCustomer for more information on using the ResolveCustomer
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the ResolveCustomer method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the ResolveCustomerRequest method.
 //    req, resp := client.ResolveCustomerRequest(params)

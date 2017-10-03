@@ -11,8 +11,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"sort"
-	"strings"
 
 	"github.com/golang/dep/internal/fs"
 	"github.com/golang/dep/internal/gps"
@@ -24,71 +22,26 @@ import (
 // if no dependencies are found in the project
 // during `dep init`
 var exampleTOML = []byte(`
-## Gopkg.toml example (these lines may be deleted)
-
-## "metadata" defines metadata about the project that could be used by other independent
-## systems. The metadata defined here will be ignored by dep.
-# [metadata]
-# key1 = "value that convey data to other systems"
-# system1-data = "value that is used by a system"
-# system2-data = "value that is used by another system"
-
-## "required" lists a set of packages (not projects) that must be included in
-## Gopkg.lock. This list is merged with the set of packages imported by the current
-## project. Use it when your project needs a package it doesn't explicitly import -
-## including "main" packages.
+# Gopkg.toml example
+#
+# Refer to https://github.com/golang/dep/blob/master/docs/Gopkg.toml.md
+# for detailed Gopkg.toml documentation.
+#
 # required = ["github.com/user/thing/cmd/thing"]
-
-## "ignored" lists a set of packages (not projects) that are ignored when
-## dep statically analyzes source code. Ignored packages can be in this project,
-## or in a dependency.
-# ignored = ["github.com/user/project/badpkg"]
-
-## Constraints are rules for how directly imported projects
-## may be incorporated into the depgraph. They are respected by
-## dep whether coming from the Gopkg.toml of the current project or a dependency.
+# ignored = ["github.com/user/project/pkgX", "bitbucket.org/user/project/pkgA/pkgY"]
+#
 # [[constraint]]
-## Required: the root import path of the project being constrained.
-# name = "github.com/user/project"
+#   name = "github.com/user/project"
+#   version = "1.0.0"
 #
-## Recommended: the version constraint to enforce for the project.
-## Only one of "branch", "version" or "revision" can be specified.
-# version = "1.0.0"
-# branch = "master"
-# revision = "abc123"
+# [[constraint]]
+#   name = "github.com/user/project2"
+#   branch = "dev"
+#   source = "github.com/myfork/project2"
 #
-## Optional: an alternate location (URL or import path) for the project's source.
-# source = "https://github.com/myfork/package.git"
-#
-## "metadata" defines metadata about the dependency or override that could be used
-## by other independent systems. The metadata defined here will be ignored by dep.
-# [metadata]
-# key1 = "value that convey data to other systems"
-# system1-data = "value that is used by a system"
-# system2-data = "value that is used by another system"
-
-## Overrides have the same structure as [[constraint]], but supersede all
-## [[constraint]] declarations from all projects. Only [[override]] from
-## the current project's are applied.
-##
-## Overrides are a sledgehammer. Use them only as a last resort.
 # [[override]]
-## Required: the root import path of the project being constrained.
-# name = "github.com/user/project"
-#
-## Optional: specifying a version constraint override will cause all other
-## constraints on this project to be ignored; only the overridden constraint
-## need be satisfied.
-## Again, only one of "branch", "version" or "revision" can be specified.
-# version = "1.0.0"
-# branch = "master"
-# revision = "abc123"
-#
-## Optional: specifying an alternate source location as an override will
-## enforce that the alternate location is used for that project, regardless of
-## what source location any dependent projects specify.
-# source = "https://github.com/myfork/package.git"
-
+#  name = "github.com/x/y"
+#  version = "2.4.0"
 
 `)
 
@@ -108,9 +61,11 @@ type SafeWriter struct {
 	lock        *Lock
 	lockDiff    *gps.LockDiff
 	writeVendor bool
+	writeLock   bool
 }
 
-// NewSafeWriter sets up a SafeWriter to write a set of config yaml, lock and vendor tree.
+// NewSafeWriter sets up a SafeWriter to write a set of manifest, lock, and
+// vendor tree.
 //
 // - If manifest is provided, it will be written to the standard manifest file
 // name beneath root.
@@ -129,20 +84,25 @@ func NewSafeWriter(manifest *Manifest, oldLock, newLock *Lock, vendor VendorBeha
 		Manifest: manifest,
 		lock:     newLock,
 	}
+
 	if oldLock != nil {
 		if newLock == nil {
 			return nil, errors.New("must provide newLock when oldLock is specified")
 		}
+
 		sw.lockDiff = gps.DiffLocks(oldLock, newLock)
+		if sw.lockDiff != nil {
+			sw.writeLock = true
+		}
+	} else if newLock != nil {
+		sw.writeLock = true
 	}
 
 	switch vendor {
 	case VendorAlways:
 		sw.writeVendor = true
 	case VendorOnChanged:
-		if sw.lockDiff != nil || (newLock != nil && oldLock == nil) {
-			sw.writeVendor = true
-		}
+		sw.writeVendor = sw.lockDiff != nil || (newLock != nil && oldLock == nil)
 	}
 
 	if sw.writeVendor && newLock == nil {
@@ -280,7 +240,7 @@ func (sw SafeWriter) validate(root string, sm gps.SourceManager) error {
 		return errors.New("root path must be non-empty")
 	}
 	if is, err := fs.IsDir(root); !is {
-		if err != nil {
+		if err != nil && !os.IsNotExist(err) {
 			return err
 		}
 		return errors.Errorf("root path %q does not exist", root)
@@ -301,13 +261,13 @@ func (sw SafeWriter) validate(root string, sm gps.SourceManager) error {
 // operations succeeded. It also does its best to roll back if any moves fail.
 // This mostly guarantees that dep cannot exit with a partial write that would
 // leave an undefined state on disk.
-func (sw *SafeWriter) Write(root string, sm gps.SourceManager, examples bool) error {
+func (sw *SafeWriter) Write(root string, sm gps.SourceManager, examples bool, logger *log.Logger) error {
 	err := sw.validate(root, sm)
 	if err != nil {
 		return err
 	}
 
-	if !sw.HasManifest() && !sw.HasLock() && !sw.writeVendor {
+	if !sw.HasManifest() && !sw.writeLock && !sw.writeVendor {
 		// nothing to do
 		return nil
 	}
@@ -341,7 +301,7 @@ func (sw *SafeWriter) Write(root string, sm gps.SourceManager, examples bool) er
 		}
 	}
 
-	if sw.HasLock() {
+	if sw.writeLock {
 		l, err := sw.lock.MarshalTOML()
 		if err != nil {
 			return errors.Wrap(err, "failed to marshal lock to TOML")
@@ -353,7 +313,7 @@ func (sw *SafeWriter) Write(root string, sm gps.SourceManager, examples bool) er
 	}
 
 	if sw.writeVendor {
-		err = gps.WriteDepTree(filepath.Join(td, "vendor"), sw.lock, sm, true)
+		err = gps.WriteDepTree(filepath.Join(td, "vendor"), sw.lock, sm, true, logger)
 		if err != nil {
 			return errors.Wrap(err, "error while writing out vendor tree")
 		}
@@ -394,7 +354,7 @@ func (sw *SafeWriter) Write(root string, sm gps.SourceManager, examples bool) er
 		}
 	}
 
-	if sw.HasLock() {
+	if sw.writeLock {
 		if _, err := os.Stat(lpath); err == nil {
 			// Move out the old one.
 			tmploc := filepath.Join(td, LockName+".orig")
@@ -458,24 +418,30 @@ fail:
 }
 
 // PrintPreparedActions logs the actions a call to Write would perform.
-func (sw *SafeWriter) PrintPreparedActions(output *log.Logger) error {
+func (sw *SafeWriter) PrintPreparedActions(output *log.Logger, verbose bool) error {
 	if sw.HasManifest() {
-		output.Printf("Would have written the following %s:\n", ManifestName)
-		m, err := sw.Manifest.MarshalTOML()
-		if err != nil {
-			return errors.Wrap(err, "ensure DryRun cannot serialize manifest")
+		if verbose {
+			m, err := sw.Manifest.MarshalTOML()
+			if err != nil {
+				return errors.Wrap(err, "ensure DryRun cannot serialize manifest")
+			}
+			output.Printf("Would have written the following %s:\n%s\n", ManifestName, string(m))
+		} else {
+			output.Printf("Would have written %s.\n", ManifestName)
 		}
-		output.Println(string(m))
 	}
 
-	if sw.HasLock() {
+	if sw.writeLock {
 		if sw.lockDiff == nil {
-			output.Printf("Would have written the following %s:\n", LockName)
-			l, err := sw.lock.MarshalTOML()
-			if err != nil {
-				return errors.Wrap(err, "ensure DryRun cannot serialize lock")
+			if verbose {
+				l, err := sw.lock.MarshalTOML()
+				if err != nil {
+					return errors.Wrap(err, "ensure DryRun cannot serialize lock")
+				}
+				output.Printf("Would have written the following %s:\n%s\n", LockName, string(l))
+			} else {
+				output.Printf("Would have written %s.\n", LockName)
 			}
-			output.Println(string(l))
 		} else {
 			output.Printf("Would have written the following changes to %s:\n", LockName)
 			diff, err := formatLockDiff(*sw.lockDiff)
@@ -487,134 +453,17 @@ func (sw *SafeWriter) PrintPreparedActions(output *log.Logger) error {
 	}
 
 	if sw.writeVendor {
-		output.Println("Would have written the following projects to the vendor directory:")
-		for _, project := range sw.lock.Projects() {
-			prj := project.Ident()
-			rev, _, _ := gps.VersionComponentStrings(project.Version())
-			if prj.Source == "" {
-				output.Printf("%s@%s\n", prj.ProjectRoot, rev)
-			} else {
-				output.Printf("%s -> %s@%s\n", prj.ProjectRoot, prj.Source, rev)
-			}
-		}
-	}
-
-	return nil
-}
-
-// PruneProject removes unused packages from a project.
-func PruneProject(p *Project, sm gps.SourceManager, logger *log.Logger) error {
-	td, err := ioutil.TempDir(os.TempDir(), "dep")
-	if err != nil {
-		return errors.Wrap(err, "error while creating temp dir for writing manifest/lock/vendor")
-	}
-	defer os.RemoveAll(td)
-
-	if err := gps.WriteDepTree(td, p.Lock, sm, true); err != nil {
-		return err
-	}
-
-	var toKeep []string
-	for _, project := range p.Lock.Projects() {
-		projectRoot := string(project.Ident().ProjectRoot)
-		for _, pkg := range project.Packages() {
-			toKeep = append(toKeep, filepath.Join(projectRoot, pkg))
-		}
-	}
-
-	toDelete, err := calculatePrune(td, toKeep, logger)
-	if err != nil {
-		return err
-	}
-
-	if logger != nil {
-		if len(toDelete) > 0 {
-			logger.Println("Calculated the following directories to prune:")
-			for _, d := range toDelete {
-				logger.Printf("  %s\n", d)
+		if verbose {
+			output.Printf("Would have written the following %d projects to the vendor directory:\n", len(sw.lock.Projects()))
+			lps := sw.lock.Projects()
+			for i, p := range lps {
+				output.Printf("(%d/%d) %s@%s\n", i+1, len(lps), p.Ident(), p.Version())
 			}
 		} else {
-			logger.Println("No directories found to prune")
+			output.Printf("Would have written %d projects to the vendor directory.\n", len(sw.lock.Projects()))
 		}
 	}
 
-	if err := deleteDirs(toDelete); err != nil {
-		return err
-	}
-
-	vpath := filepath.Join(p.AbsRoot, "vendor")
-	vendorbak := vpath + ".orig"
-	var failerr error
-	if _, err := os.Stat(vpath); err == nil {
-		// Move out the old vendor dir. just do it into an adjacent dir, to
-		// try to mitigate the possibility of a pointless cross-filesystem
-		// move with a temp directory.
-		if _, err := os.Stat(vendorbak); err == nil {
-			// If the adjacent dir already exists, bite the bullet and move
-			// to a proper tempdir.
-			vendorbak = filepath.Join(td, "vendor.orig")
-		}
-		failerr = fs.RenameWithFallback(vpath, vendorbak)
-		if failerr != nil {
-			goto fail
-		}
-	}
-
-	// Move in the new one.
-	failerr = fs.RenameWithFallback(td, vpath)
-	if failerr != nil {
-		goto fail
-	}
-
-	os.RemoveAll(vendorbak)
-
-	return nil
-
-fail:
-	fs.RenameWithFallback(vendorbak, vpath)
-	return failerr
-}
-
-func calculatePrune(vendorDir string, keep []string, logger *log.Logger) ([]string, error) {
-	if logger != nil {
-		logger.Println("Calculating prune. Checking the following packages:")
-	}
-	sort.Strings(keep)
-	toDelete := []string{}
-	err := filepath.Walk(vendorDir, func(path string, info os.FileInfo, err error) error {
-		if _, err := os.Lstat(path); err != nil {
-			return nil
-		}
-		if !info.IsDir() {
-			return nil
-		}
-		if path == vendorDir {
-			return nil
-		}
-
-		name := strings.TrimPrefix(path, vendorDir+"/")
-		if logger != nil {
-			logger.Printf("  %s", name)
-		}
-		i := sort.Search(len(keep), func(i int) bool {
-			return name <= keep[i]
-		})
-		if i >= len(keep) || !strings.HasPrefix(keep[i], name) {
-			toDelete = append(toDelete, path)
-		}
-		return nil
-	})
-	return toDelete, err
-}
-
-func deleteDirs(toDelete []string) error {
-	// sort by length so we delete sub dirs first
-	sort.Sort(byLen(toDelete))
-	for _, path := range toDelete {
-		if err := os.RemoveAll(path); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
@@ -624,9 +473,3 @@ func hasDotGit(path string) bool {
 	_, err := os.Stat(gitfilepath)
 	return err == nil
 }
-
-type byLen []string
-
-func (a byLen) Len() int           { return len(a) }
-func (a byLen) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a byLen) Less(i, j int) bool { return len(a[i]) > len(a[j]) }

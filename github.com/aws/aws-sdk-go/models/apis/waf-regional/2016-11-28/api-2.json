@@ -62,22 +62,6 @@
         {"shape":"WAFLimitsExceededException"}
       ]
     },
-    "CreateRateBasedRule":{
-      "name":"CreateRateBasedRule",
-      "http":{
-        "method":"POST",
-        "requestUri":"/"
-      },
-      "input":{"shape":"CreateRateBasedRuleRequest"},
-      "output":{"shape":"CreateRateBasedRuleResponse"},
-      "errors":[
-        {"shape":"WAFStaleDataException"},
-        {"shape":"WAFInternalErrorException"},
-        {"shape":"WAFDisallowedNameException"},
-        {"shape":"WAFInvalidParameterException"},
-        {"shape":"WAFLimitsExceededException"}
-      ]
-    },
     "CreateRule":{
       "name":"CreateRule",
       "http":{
@@ -187,23 +171,6 @@
       },
       "input":{"shape":"DeleteIPSetRequest"},
       "output":{"shape":"DeleteIPSetResponse"},
-      "errors":[
-        {"shape":"WAFStaleDataException"},
-        {"shape":"WAFInternalErrorException"},
-        {"shape":"WAFInvalidAccountException"},
-        {"shape":"WAFNonexistentItemException"},
-        {"shape":"WAFReferencedItemException"},
-        {"shape":"WAFNonEmptyEntityException"}
-      ]
-    },
-    "DeleteRateBasedRule":{
-      "name":"DeleteRateBasedRule",
-      "http":{
-        "method":"POST",
-        "requestUri":"/"
-      },
-      "input":{"shape":"DeleteRateBasedRuleRequest"},
-      "output":{"shape":"DeleteRateBasedRuleResponse"},
       "errors":[
         {"shape":"WAFStaleDataException"},
         {"shape":"WAFInternalErrorException"},
@@ -366,35 +333,6 @@
         {"shape":"WAFNonexistentItemException"}
       ]
     },
-    "GetRateBasedRule":{
-      "name":"GetRateBasedRule",
-      "http":{
-        "method":"POST",
-        "requestUri":"/"
-      },
-      "input":{"shape":"GetRateBasedRuleRequest"},
-      "output":{"shape":"GetRateBasedRuleResponse"},
-      "errors":[
-        {"shape":"WAFInternalErrorException"},
-        {"shape":"WAFInvalidAccountException"},
-        {"shape":"WAFNonexistentItemException"}
-      ]
-    },
-    "GetRateBasedRuleManagedKeys":{
-      "name":"GetRateBasedRuleManagedKeys",
-      "http":{
-        "method":"POST",
-        "requestUri":"/"
-      },
-      "input":{"shape":"GetRateBasedRuleManagedKeysRequest"},
-      "output":{"shape":"GetRateBasedRuleManagedKeysResponse"},
-      "errors":[
-        {"shape":"WAFInternalErrorException"},
-        {"shape":"WAFInvalidAccountException"},
-        {"shape":"WAFNonexistentItemException"},
-        {"shape":"WAFInvalidParameterException"}
-      ]
-    },
     "GetRule":{
       "name":"GetRule",
       "http":{
@@ -520,19 +458,6 @@
         {"shape":"WAFInvalidAccountException"}
       ]
     },
-    "ListRateBasedRules":{
-      "name":"ListRateBasedRules",
-      "http":{
-        "method":"POST",
-        "requestUri":"/"
-      },
-      "input":{"shape":"ListRateBasedRulesRequest"},
-      "output":{"shape":"ListRateBasedRulesResponse"},
-      "errors":[
-        {"shape":"WAFInternalErrorException"},
-        {"shape":"WAFInvalidAccountException"}
-      ]
-    },
     "ListResourcesForWebACL":{
       "name":"ListResourcesForWebACL",
       "http":{
@@ -639,26 +564,6 @@
       },
       "input":{"shape":"UpdateIPSetRequest"},
       "output":{"shape":"UpdateIPSetResponse"},
-      "errors":[
-        {"shape":"WAFStaleDataException"},
-        {"shape":"WAFInternalErrorException"},
-        {"shape":"WAFInvalidAccountException"},
-        {"shape":"WAFInvalidOperationException"},
-        {"shape":"WAFInvalidParameterException"},
-        {"shape":"WAFNonexistentContainerException"},
-        {"shape":"WAFNonexistentItemException"},
-        {"shape":"WAFReferencedItemException"},
-        {"shape":"WAFLimitsExceededException"}
-      ]
-    },
-    "UpdateRateBasedRule":{
-      "name":"UpdateRateBasedRule",
-      "http":{
-        "method":"POST",
-        "requestUri":"/"
-      },
-      "input":{"shape":"UpdateRateBasedRuleRequest"},
-      "output":{"shape":"UpdateRateBasedRuleResponse"},
       "errors":[
         {"shape":"WAFStaleDataException"},
         {"shape":"WAFInternalErrorException"},
@@ -782,8 +687,7 @@
       "members":{
         "Priority":{"shape":"RulePriority"},
         "RuleId":{"shape":"ResourceId"},
-        "Action":{"shape":"WafAction"},
-        "Type":{"shape":"WafRuleType"}
+        "Action":{"shape":"WafAction"}
       }
     },
     "ActivatedRules":{
@@ -935,30 +839,6 @@
         "ChangeToken":{"shape":"ChangeToken"}
       }
     },
-    "CreateRateBasedRuleRequest":{
-      "type":"structure",
-      "required":[
-        "Name",
-        "MetricName",
-        "RateKey",
-        "RateLimit",
-        "ChangeToken"
-      ],
-      "members":{
-        "Name":{"shape":"ResourceName"},
-        "MetricName":{"shape":"MetricName"},
-        "RateKey":{"shape":"RateKey"},
-        "RateLimit":{"shape":"RateLimit"},
-        "ChangeToken":{"shape":"ChangeToken"}
-      }
-    },
-    "CreateRateBasedRuleResponse":{
-      "type":"structure",
-      "members":{
-        "Rule":{"shape":"RateBasedRule"},
-        "ChangeToken":{"shape":"ChangeToken"}
-      }
-    },
     "CreateRuleRequest":{
       "type":"structure",
       "required":[
@@ -1084,23 +964,6 @@
       }
     },
     "DeleteIPSetResponse":{
-      "type":"structure",
-      "members":{
-        "ChangeToken":{"shape":"ChangeToken"}
-      }
-    },
-    "DeleteRateBasedRuleRequest":{
-      "type":"structure",
-      "required":[
-        "RuleId",
-        "ChangeToken"
-      ],
-      "members":{
-        "RuleId":{"shape":"ResourceId"},
-        "ChangeToken":{"shape":"ChangeToken"}
-      }
-    },
-    "DeleteRateBasedRuleResponse":{
       "type":"structure",
       "members":{
         "ChangeToken":{"shape":"ChangeToken"}
@@ -1259,34 +1122,6 @@
       "type":"structure",
       "members":{
         "IPSet":{"shape":"IPSet"}
-      }
-    },
-    "GetRateBasedRuleManagedKeysRequest":{
-      "type":"structure",
-      "required":["RuleId"],
-      "members":{
-        "RuleId":{"shape":"ResourceId"},
-        "NextMarker":{"shape":"NextMarker"}
-      }
-    },
-    "GetRateBasedRuleManagedKeysResponse":{
-      "type":"structure",
-      "members":{
-        "ManagedKeys":{"shape":"ManagedKeys"},
-        "NextMarker":{"shape":"NextMarker"}
-      }
-    },
-    "GetRateBasedRuleRequest":{
-      "type":"structure",
-      "required":["RuleId"],
-      "members":{
-        "RuleId":{"shape":"ResourceId"}
-      }
-    },
-    "GetRateBasedRuleResponse":{
-      "type":"structure",
-      "members":{
-        "Rule":{"shape":"RateBasedRule"}
       }
     },
     "GetRuleRequest":{
@@ -1515,20 +1350,6 @@
         "IPSets":{"shape":"IPSetSummaries"}
       }
     },
-    "ListRateBasedRulesRequest":{
-      "type":"structure",
-      "members":{
-        "NextMarker":{"shape":"NextMarker"},
-        "Limit":{"shape":"PaginationLimit"}
-      }
-    },
-    "ListRateBasedRulesResponse":{
-      "type":"structure",
-      "members":{
-        "NextMarker":{"shape":"NextMarker"},
-        "Rules":{"shape":"RuleSummaries"}
-      }
-    },
     "ListResourcesForWebACLRequest":{
       "type":"structure",
       "required":["WebACLId"],
@@ -1612,11 +1433,6 @@
         "XssMatchSets":{"shape":"XssMatchSetSummaries"}
       }
     },
-    "ManagedKey":{"type":"string"},
-    "ManagedKeys":{
-      "type":"list",
-      "member":{"shape":"ManagedKey"}
-    },
     "MatchFieldData":{"type":"string"},
     "MatchFieldType":{
       "type":"string",
@@ -1650,10 +1466,7 @@
         "SQL_INJECTION_MATCH_FIELD_TYPE",
         "BYTE_MATCH_TEXT_TRANSFORMATION",
         "BYTE_MATCH_POSITIONAL_CONSTRAINT",
-        "SIZE_CONSTRAINT_COMPARISON_OPERATOR",
-        "RATE_KEY",
-        "RULE_TYPE",
-        "NEXT_MARKER"
+        "SIZE_CONSTRAINT_COMPARISON_OPERATOR"
       ]
     },
     "ParameterExceptionParameter":{
@@ -1704,31 +1517,6 @@
     "Predicates":{
       "type":"list",
       "member":{"shape":"Predicate"}
-    },
-    "RateBasedRule":{
-      "type":"structure",
-      "required":[
-        "RuleId",
-        "MatchPredicates",
-        "RateKey",
-        "RateLimit"
-      ],
-      "members":{
-        "RuleId":{"shape":"ResourceId"},
-        "Name":{"shape":"ResourceName"},
-        "MetricName":{"shape":"MetricName"},
-        "MatchPredicates":{"shape":"Predicates"},
-        "RateKey":{"shape":"RateKey"},
-        "RateLimit":{"shape":"RateLimit"}
-      }
-    },
-    "RateKey":{
-      "type":"string",
-      "enum":["IP"]
-    },
-    "RateLimit":{
-      "type":"long",
-      "min":2000
     },
     "ResourceArn":{
       "type":"string",
@@ -1999,27 +1787,6 @@
         "ChangeToken":{"shape":"ChangeToken"}
       }
     },
-    "UpdateRateBasedRuleRequest":{
-      "type":"structure",
-      "required":[
-        "RuleId",
-        "ChangeToken",
-        "Updates",
-        "RateLimit"
-      ],
-      "members":{
-        "RuleId":{"shape":"ResourceId"},
-        "ChangeToken":{"shape":"ChangeToken"},
-        "Updates":{"shape":"RuleUpdates"},
-        "RateLimit":{"shape":"RateLimit"}
-      }
-    },
-    "UpdateRateBasedRuleResponse":{
-      "type":"structure",
-      "members":{
-        "ChangeToken":{"shape":"ChangeToken"}
-      }
-    },
     "UpdateRuleRequest":{
       "type":"structure",
       "required":[
@@ -2214,13 +1981,6 @@
         "BLOCK",
         "ALLOW",
         "COUNT"
-      ]
-    },
-    "WafRuleType":{
-      "type":"string",
-      "enum":[
-        "REGULAR",
-        "RATE_BASED"
       ]
     },
     "WebACL":{

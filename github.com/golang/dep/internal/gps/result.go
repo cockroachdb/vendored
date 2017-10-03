@@ -5,9 +5,15 @@
 package gps
 
 import (
+	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
+	"sync"
+
+	"github.com/pkg/errors"
+	"golang.org/x/sync/errgroup"
 )
 
 // A Solution is returned by a solver run. It is mostly just a Lock, with some
@@ -35,15 +41,14 @@ type solution struct {
 	// The hash digest of the input opts
 	hd []byte
 
-	// The analyzer name
-	analyzerName string
-
-	// The analyzer version
-	analyzerVersion int
+	// The analyzer info
+	analyzerInfo ProjectAnalyzerInfo
 
 	// The solver used in producing this solution
 	solv Solver
 }
+
+const concurrentWriters = 16
 
 // WriteDepTree takes a basedir and a Lock, and exports all the projects
 // listed in the lock to the appropriate target location within the basedir.
@@ -54,32 +59,81 @@ type solution struct {
 // It requires a SourceManager to do the work, and takes a flag indicating
 // whether or not to strip vendor directories contained in the exported
 // dependencies.
-func WriteDepTree(basedir string, l Lock, sm SourceManager, sv bool) error {
+func WriteDepTree(basedir string, l Lock, sm SourceManager, sv bool, logger *log.Logger) error {
 	if l == nil {
 		return fmt.Errorf("must provide non-nil Lock to WriteDepTree")
 	}
 
-	err := os.MkdirAll(basedir, 0777)
-	if err != nil {
+	if err := os.MkdirAll(basedir, 0777); err != nil {
 		return err
 	}
 
-	// TODO(sdboyer) parallelize
-	for _, p := range l.Projects() {
-		to := filepath.FromSlash(filepath.Join(basedir, string(p.Ident().ProjectRoot)))
-
-		err = sm.ExportProject(p.Ident(), p.Version(), to)
-		if err != nil {
-			removeAll(basedir)
-			return fmt.Errorf("error while exporting %s: %s", p.Ident().ProjectRoot, err)
-		}
-		if sv {
-			filepath.Walk(to, stripVendor)
-		}
-		// TODO(sdboyer) dump version metadata file
+	g, ctx := errgroup.WithContext(context.TODO())
+	lps := l.Projects()
+	sem := make(chan struct{}, concurrentWriters)
+	var cnt struct {
+		sync.Mutex
+		i int
 	}
 
-	return nil
+	for i := range lps {
+		p := lps[i] // per-iteration copy
+
+		g.Go(func() error {
+			err := func() error {
+				select {
+				case sem <- struct{}{}:
+					defer func() { <-sem }()
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+
+				ident := p.Ident()
+				projectRoot := string(ident.ProjectRoot)
+				to := filepath.FromSlash(filepath.Join(basedir, projectRoot))
+
+				if err := sm.ExportProject(ctx, ident, p.Version(), to); err != nil {
+					return errors.Wrapf(err, "failed to export %s", projectRoot)
+				}
+
+				if sv {
+					if err := ctx.Err(); err != nil {
+						return err
+					}
+
+					if err := filepath.Walk(to, stripVendor); err != nil {
+						return errors.Wrapf(err, "failed to strip vendor from %s", projectRoot)
+					}
+				}
+
+				return nil
+			}()
+
+			switch err {
+			case context.Canceled, context.DeadlineExceeded:
+				// Don't log "secondary" errors.
+			default:
+				msg := "Wrote"
+				if err != nil {
+					msg = "Failed to write"
+				}
+
+				// Log and increment atomically to prevent re-ordering.
+				cnt.Lock()
+				cnt.i++
+				logger.Printf("(%d/%d) %s %s@%s\n", cnt.i, len(lps), msg, p.Ident(), p.Version())
+				cnt.Unlock()
+			}
+
+			return err
+		})
+	}
+
+	err := g.Wait()
+	if err != nil {
+		os.RemoveAll(basedir)
+	}
+	return errors.Wrap(err, "failed to write dep tree")
 }
 
 func (r solution) Projects() []LockedProject {
@@ -95,11 +149,11 @@ func (r solution) InputHash() []byte {
 }
 
 func (r solution) AnalyzerName() string {
-	return r.analyzerName
+	return r.analyzerInfo.Name
 }
 
 func (r solution) AnalyzerVersion() int {
-	return r.analyzerVersion
+	return r.analyzerInfo.Version
 }
 
 func (r solution) SolverName() string {

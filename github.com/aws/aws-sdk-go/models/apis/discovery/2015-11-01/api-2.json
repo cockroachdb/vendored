@@ -594,7 +594,6 @@
       "type":"structure",
       "members":{
         "exportIds":{"shape":"ExportIds"},
-        "filters":{"shape":"ExportFilters"},
         "maxResults":{"shape":"Integer"},
         "nextToken":{"shape":"NextToken"}
       }
@@ -654,23 +653,6 @@
       "type":"list",
       "member":{"shape":"ExportDataFormat"}
     },
-    "ExportFilter":{
-      "type":"structure",
-      "required":[
-        "name",
-        "values",
-        "condition"
-      ],
-      "members":{
-        "name":{"shape":"FilterName"},
-        "values":{"shape":"FilterValues"},
-        "condition":{"shape":"Condition"}
-      }
-    },
-    "ExportFilters":{
-      "type":"list",
-      "member":{"shape":"ExportFilter"}
-    },
     "ExportIds":{
       "type":"list",
       "member":{"shape":"ConfigurationsExportId"}
@@ -688,10 +670,7 @@
         "exportStatus":{"shape":"ExportStatus"},
         "statusMessage":{"shape":"ExportStatusMessage"},
         "configurationsDownloadUrl":{"shape":"ConfigurationsDownloadUrl"},
-        "exportRequestTime":{"shape":"ExportRequestTime"},
-        "isTruncated":{"shape":"Boolean"},
-        "requestedStartTime":{"shape":"TimeStamp"},
-        "requestedEndTime":{"shape":"TimeStamp"}
+        "exportRequestTime":{"shape":"ExportRequestTime"}
       }
     },
     "ExportRequestTime":{"type":"timestamp"},
@@ -875,10 +854,7 @@
     "StartExportTaskRequest":{
       "type":"structure",
       "members":{
-        "exportDataFormat":{"shape":"ExportDataFormats"},
-        "filters":{"shape":"ExportFilters"},
-        "startTime":{"shape":"TimeStamp"},
-        "endTime":{"shape":"TimeStamp"}
+        "exportDataFormat":{"shape":"ExportDataFormats"}
       }
     },
     "StartExportTaskResponse":{

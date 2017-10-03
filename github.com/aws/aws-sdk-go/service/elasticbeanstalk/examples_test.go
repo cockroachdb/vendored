@@ -3,1078 +3,1154 @@
 package elasticbeanstalk_test
 
 import (
+	"bytes"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/elasticbeanstalk"
 )
 
 var _ time.Duration
-var _ strings.Reader
-var _ aws.Config
+var _ bytes.Buffer
 
-func parseTime(layout, value string) *time.Time {
-	t, err := time.Parse(layout, value)
-	if err != nil {
-		panic(err)
+func ExampleElasticBeanstalk_AbortEnvironmentUpdate() {
+	sess := session.Must(session.NewSession())
+
+	svc := elasticbeanstalk.New(sess)
+
+	params := &elasticbeanstalk.AbortEnvironmentUpdateInput{
+		EnvironmentId:   aws.String("EnvironmentId"),
+		EnvironmentName: aws.String("EnvironmentName"),
 	}
-	return &t
-}
+	resp, err := svc.AbortEnvironmentUpdate(params)
 
-// To abort a deployment
-//
-// The following code aborts a running application version deployment for an environment
-// named my-env:
-func ExampleElasticBeanstalk_AbortEnvironmentUpdate_shared00() {
-	svc := elasticbeanstalk.New(session.New())
-	input := &elasticbeanstalk.AbortEnvironmentUpdateInput{
-		EnvironmentName: aws.String("my-env"),
-	}
-
-	result, err := svc.AbortEnvironmentUpdate(input)
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case elasticbeanstalk.ErrCodeInsufficientPrivilegesException:
-				fmt.Println(elasticbeanstalk.ErrCodeInsufficientPrivilegesException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
 		return
 	}
 
-	fmt.Println(result)
+	// Pretty-print the response data.
+	fmt.Println(resp)
 }
 
-// To check the availability of a CNAME
-//
-// The following operation checks the availability of the subdomain my-cname:
-func ExampleElasticBeanstalk_CheckDNSAvailability_shared00() {
-	svc := elasticbeanstalk.New(session.New())
-	input := &elasticbeanstalk.CheckDNSAvailabilityInput{
-		CNAMEPrefix: aws.String("my-cname"),
-	}
+func ExampleElasticBeanstalk_ApplyEnvironmentManagedAction() {
+	sess := session.Must(session.NewSession())
 
-	result, err := svc.CheckDNSAvailability(input)
+	svc := elasticbeanstalk.New(sess)
+
+	params := &elasticbeanstalk.ApplyEnvironmentManagedActionInput{
+		ActionId:        aws.String("String"), // Required
+		EnvironmentId:   aws.String("String"),
+		EnvironmentName: aws.String("String"),
+	}
+	resp, err := svc.ApplyEnvironmentManagedAction(params)
+
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
 		return
 	}
 
-	fmt.Println(result)
+	// Pretty-print the response data.
+	fmt.Println(resp)
 }
 
-// To create a new application
-//
-// The following operation creates a new application named my-app:
-func ExampleElasticBeanstalk_CreateApplication_shared00() {
-	svc := elasticbeanstalk.New(session.New())
-	input := &elasticbeanstalk.CreateApplicationInput{
-		ApplicationName: aws.String("my-app"),
-		Description:     aws.String("my application"),
-	}
+func ExampleElasticBeanstalk_CheckDNSAvailability() {
+	sess := session.Must(session.NewSession())
 
-	result, err := svc.CreateApplication(input)
+	svc := elasticbeanstalk.New(sess)
+
+	params := &elasticbeanstalk.CheckDNSAvailabilityInput{
+		CNAMEPrefix: aws.String("DNSCnamePrefix"), // Required
+	}
+	resp, err := svc.CheckDNSAvailability(params)
+
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case elasticbeanstalk.ErrCodeTooManyApplicationsException:
-				fmt.Println(elasticbeanstalk.ErrCodeTooManyApplicationsException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
 		return
 	}
 
-	fmt.Println(result)
+	// Pretty-print the response data.
+	fmt.Println(resp)
 }
 
-// To create a new application
-//
-// The following operation creates a new version (v1) of an application named my-app:
-func ExampleElasticBeanstalk_CreateApplicationVersion_shared00() {
-	svc := elasticbeanstalk.New(session.New())
-	input := &elasticbeanstalk.CreateApplicationVersionInput{
-		ApplicationName:       aws.String("my-app"),
-		AutoCreateApplication: aws.Bool(true),
-		Description:           aws.String("my-app-v1"),
-		Process:               aws.Bool(true),
-		SourceBundle: &elasticbeanstalk.S3Location{
-			S3Bucket: aws.String("my-bucket"),
-			S3Key:    aws.String("sample.war"),
-		},
-		VersionLabel: aws.String("v1"),
-	}
+func ExampleElasticBeanstalk_ComposeEnvironments() {
+	sess := session.Must(session.NewSession())
 
-	result, err := svc.CreateApplicationVersion(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case elasticbeanstalk.ErrCodeTooManyApplicationsException:
-				fmt.Println(elasticbeanstalk.ErrCodeTooManyApplicationsException, aerr.Error())
-			case elasticbeanstalk.ErrCodeTooManyApplicationVersionsException:
-				fmt.Println(elasticbeanstalk.ErrCodeTooManyApplicationVersionsException, aerr.Error())
-			case elasticbeanstalk.ErrCodeInsufficientPrivilegesException:
-				fmt.Println(elasticbeanstalk.ErrCodeInsufficientPrivilegesException, aerr.Error())
-			case elasticbeanstalk.ErrCodeS3LocationNotInServiceRegionException:
-				fmt.Println(elasticbeanstalk.ErrCodeS3LocationNotInServiceRegionException, aerr.Error())
-			case elasticbeanstalk.ErrCodeCodeBuildNotInServiceRegionException:
-				fmt.Println(elasticbeanstalk.ErrCodeCodeBuildNotInServiceRegionException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-		return
-	}
+	svc := elasticbeanstalk.New(sess)
 
-	fmt.Println(result)
-}
-
-// To create a configuration template
-//
-// The following operation creates a configuration template named my-app-v1 from the
-// settings applied to an environment with the id e-rpqsewtp2j:
-func ExampleElasticBeanstalk_CreateConfigurationTemplate_shared00() {
-	svc := elasticbeanstalk.New(session.New())
-	input := &elasticbeanstalk.CreateConfigurationTemplateInput{
-		ApplicationName: aws.String("my-app"),
-		EnvironmentId:   aws.String("e-rpqsewtp2j"),
-		TemplateName:    aws.String("my-app-v1"),
-	}
-
-	result, err := svc.CreateConfigurationTemplate(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case elasticbeanstalk.ErrCodeInsufficientPrivilegesException:
-				fmt.Println(elasticbeanstalk.ErrCodeInsufficientPrivilegesException, aerr.Error())
-			case elasticbeanstalk.ErrCodeTooManyBucketsException:
-				fmt.Println(elasticbeanstalk.ErrCodeTooManyBucketsException, aerr.Error())
-			case elasticbeanstalk.ErrCodeTooManyConfigurationTemplatesException:
-				fmt.Println(elasticbeanstalk.ErrCodeTooManyConfigurationTemplatesException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-		return
-	}
-
-	fmt.Println(result)
-}
-
-// To create a new environment for an application
-//
-// The following operation creates a new environment for version v1 of a java application
-// named my-app:
-func ExampleElasticBeanstalk_CreateEnvironment_shared00() {
-	svc := elasticbeanstalk.New(session.New())
-	input := &elasticbeanstalk.CreateEnvironmentInput{
-		ApplicationName:   aws.String("my-app"),
-		CNAMEPrefix:       aws.String("my-app"),
-		EnvironmentName:   aws.String("my-env"),
-		SolutionStackName: aws.String("64bit Amazon Linux 2015.03 v2.0.0 running Tomcat 8 Java 8"),
-		VersionLabel:      aws.String("v1"),
-	}
-
-	result, err := svc.CreateEnvironment(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case elasticbeanstalk.ErrCodeTooManyEnvironmentsException:
-				fmt.Println(elasticbeanstalk.ErrCodeTooManyEnvironmentsException, aerr.Error())
-			case elasticbeanstalk.ErrCodeInsufficientPrivilegesException:
-				fmt.Println(elasticbeanstalk.ErrCodeInsufficientPrivilegesException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-		return
-	}
-
-	fmt.Println(result)
-}
-
-// To create a new environment for an application
-//
-// The following operation creates a new environment for version v1 of a java application
-// named my-app:
-func ExampleElasticBeanstalk_CreateStorageLocation_shared00() {
-	svc := elasticbeanstalk.New(session.New())
-	input := &elasticbeanstalk.CreateStorageLocationInput{}
-
-	result, err := svc.CreateStorageLocation(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case elasticbeanstalk.ErrCodeTooManyBucketsException:
-				fmt.Println(elasticbeanstalk.ErrCodeTooManyBucketsException, aerr.Error())
-			case elasticbeanstalk.ErrCodeS3SubscriptionRequiredException:
-				fmt.Println(elasticbeanstalk.ErrCodeS3SubscriptionRequiredException, aerr.Error())
-			case elasticbeanstalk.ErrCodeInsufficientPrivilegesException:
-				fmt.Println(elasticbeanstalk.ErrCodeInsufficientPrivilegesException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-		return
-	}
-
-	fmt.Println(result)
-}
-
-// To delete an application
-//
-// The following operation deletes an application named my-app:
-func ExampleElasticBeanstalk_DeleteApplication_shared00() {
-	svc := elasticbeanstalk.New(session.New())
-	input := &elasticbeanstalk.DeleteApplicationInput{
-		ApplicationName: aws.String("my-app"),
-	}
-
-	result, err := svc.DeleteApplication(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case elasticbeanstalk.ErrCodeOperationInProgressException:
-				fmt.Println(elasticbeanstalk.ErrCodeOperationInProgressException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-		return
-	}
-
-	fmt.Println(result)
-}
-
-// To delete an application version
-//
-// The following operation deletes an application version named 22a0-stage-150819_182129
-// for an application named my-app:
-func ExampleElasticBeanstalk_DeleteApplicationVersion_shared00() {
-	svc := elasticbeanstalk.New(session.New())
-	input := &elasticbeanstalk.DeleteApplicationVersionInput{
-		ApplicationName:    aws.String("my-app"),
-		DeleteSourceBundle: aws.Bool(true),
-		VersionLabel:       aws.String("22a0-stage-150819_182129"),
-	}
-
-	result, err := svc.DeleteApplicationVersion(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case elasticbeanstalk.ErrCodeSourceBundleDeletionException:
-				fmt.Println(elasticbeanstalk.ErrCodeSourceBundleDeletionException, aerr.Error())
-			case elasticbeanstalk.ErrCodeInsufficientPrivilegesException:
-				fmt.Println(elasticbeanstalk.ErrCodeInsufficientPrivilegesException, aerr.Error())
-			case elasticbeanstalk.ErrCodeOperationInProgressException:
-				fmt.Println(elasticbeanstalk.ErrCodeOperationInProgressException, aerr.Error())
-			case elasticbeanstalk.ErrCodeS3LocationNotInServiceRegionException:
-				fmt.Println(elasticbeanstalk.ErrCodeS3LocationNotInServiceRegionException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-		return
-	}
-
-	fmt.Println(result)
-}
-
-// To delete a configuration template
-//
-// The following operation deletes a configuration template named my-template for an
-// application named my-app:
-func ExampleElasticBeanstalk_DeleteConfigurationTemplate_shared00() {
-	svc := elasticbeanstalk.New(session.New())
-	input := &elasticbeanstalk.DeleteConfigurationTemplateInput{
-		ApplicationName: aws.String("my-app"),
-		TemplateName:    aws.String("my-template"),
-	}
-
-	result, err := svc.DeleteConfigurationTemplate(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case elasticbeanstalk.ErrCodeOperationInProgressException:
-				fmt.Println(elasticbeanstalk.ErrCodeOperationInProgressException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-		return
-	}
-
-	fmt.Println(result)
-}
-
-// To delete a draft configuration
-//
-// The following operation deletes a draft configuration for an environment named my-env:
-func ExampleElasticBeanstalk_DeleteEnvironmentConfiguration_shared00() {
-	svc := elasticbeanstalk.New(session.New())
-	input := &elasticbeanstalk.DeleteEnvironmentConfigurationInput{
-		ApplicationName: aws.String("my-app"),
-		EnvironmentName: aws.String("my-env"),
-	}
-
-	result, err := svc.DeleteEnvironmentConfiguration(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-		return
-	}
-
-	fmt.Println(result)
-}
-
-// To view information about an application version
-//
-// The following operation retrieves information about an application version labeled
-// v2:
-func ExampleElasticBeanstalk_DescribeApplicationVersions_shared00() {
-	svc := elasticbeanstalk.New(session.New())
-	input := &elasticbeanstalk.DescribeApplicationVersionsInput{
-		ApplicationName: aws.String("my-app"),
+	params := &elasticbeanstalk.ComposeEnvironmentsInput{
+		ApplicationName: aws.String("ApplicationName"),
+		GroupName:       aws.String("GroupName"),
 		VersionLabels: []*string{
-			aws.String("v2"),
+			aws.String("VersionLabel"), // Required
+			// More values...
 		},
 	}
+	resp, err := svc.ComposeEnvironments(params)
 
-	result, err := svc.DescribeApplicationVersions(input)
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
 		return
 	}
 
-	fmt.Println(result)
+	// Pretty-print the response data.
+	fmt.Println(resp)
 }
 
-// To view a list of applications
-//
-// The following operation retrieves information about applications in the current region:
-func ExampleElasticBeanstalk_DescribeApplications_shared00() {
-	svc := elasticbeanstalk.New(session.New())
-	input := &elasticbeanstalk.DescribeApplicationsInput{}
+func ExampleElasticBeanstalk_CreateApplication() {
+	sess := session.Must(session.NewSession())
 
-	result, err := svc.DescribeApplications(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-		return
-	}
+	svc := elasticbeanstalk.New(sess)
 
-	fmt.Println(result)
-}
-
-// To view configuration options for an environment
-//
-// The following operation retrieves descriptions of all available configuration options
-// for an environment named my-env:
-func ExampleElasticBeanstalk_DescribeConfigurationOptions_shared00() {
-	svc := elasticbeanstalk.New(session.New())
-	input := &elasticbeanstalk.DescribeConfigurationOptionsInput{
-		ApplicationName: aws.String("my-app"),
-		EnvironmentName: aws.String("my-env"),
-	}
-
-	result, err := svc.DescribeConfigurationOptions(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case elasticbeanstalk.ErrCodeTooManyBucketsException:
-				fmt.Println(elasticbeanstalk.ErrCodeTooManyBucketsException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-		return
-	}
-
-	fmt.Println(result)
-}
-
-// To view configurations settings for an environment
-//
-// The following operation retrieves configuration settings for an environment named
-// my-env:
-func ExampleElasticBeanstalk_DescribeConfigurationSettings_shared00() {
-	svc := elasticbeanstalk.New(session.New())
-	input := &elasticbeanstalk.DescribeConfigurationSettingsInput{
-		ApplicationName: aws.String("my-app"),
-		EnvironmentName: aws.String("my-env"),
-	}
-
-	result, err := svc.DescribeConfigurationSettings(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case elasticbeanstalk.ErrCodeTooManyBucketsException:
-				fmt.Println(elasticbeanstalk.ErrCodeTooManyBucketsException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-		return
-	}
-
-	fmt.Println(result)
-}
-
-// To view environment health
-//
-// The following operation retrieves overall health information for an environment named
-// my-env:
-func ExampleElasticBeanstalk_DescribeEnvironmentHealth_shared00() {
-	svc := elasticbeanstalk.New(session.New())
-	input := &elasticbeanstalk.DescribeEnvironmentHealthInput{
-		AttributeNames: []*string{
-			aws.String("All"),
-		},
-		EnvironmentName: aws.String("my-env"),
-	}
-
-	result, err := svc.DescribeEnvironmentHealth(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case elasticbeanstalk.ErrCodeInvalidRequestException:
-				fmt.Println(elasticbeanstalk.ErrCodeInvalidRequestException, aerr.Error())
-			case elasticbeanstalk.ErrCodeServiceException:
-				fmt.Println(elasticbeanstalk.ErrCodeServiceException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-		return
-	}
-
-	fmt.Println(result)
-}
-
-// To view information about the AWS resources in your environment
-//
-// The following operation retrieves information about resources in an environment named
-// my-env:
-func ExampleElasticBeanstalk_DescribeEnvironmentResources_shared00() {
-	svc := elasticbeanstalk.New(session.New())
-	input := &elasticbeanstalk.DescribeEnvironmentResourcesInput{
-		EnvironmentName: aws.String("my-env"),
-	}
-
-	result, err := svc.DescribeEnvironmentResources(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case elasticbeanstalk.ErrCodeInsufficientPrivilegesException:
-				fmt.Println(elasticbeanstalk.ErrCodeInsufficientPrivilegesException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-		return
-	}
-
-	fmt.Println(result)
-}
-
-// To view information about an environment
-//
-// The following operation retrieves information about an environment named my-env:
-func ExampleElasticBeanstalk_DescribeEnvironments_shared00() {
-	svc := elasticbeanstalk.New(session.New())
-	input := &elasticbeanstalk.DescribeEnvironmentsInput{
-		EnvironmentNames: []*string{
-			aws.String("my-env"),
+	params := &elasticbeanstalk.CreateApplicationInput{
+		ApplicationName: aws.String("ApplicationName"), // Required
+		Description:     aws.String("Description"),
+		ResourceLifecycleConfig: &elasticbeanstalk.ApplicationResourceLifecycleConfig{
+			ServiceRole: aws.String("String"),
+			VersionLifecycleConfig: &elasticbeanstalk.ApplicationVersionLifecycleConfig{
+				MaxAgeRule: &elasticbeanstalk.MaxAgeRule{
+					Enabled:            aws.Bool(true), // Required
+					DeleteSourceFromS3: aws.Bool(true),
+					MaxAgeInDays:       aws.Int64(1),
+				},
+				MaxCountRule: &elasticbeanstalk.MaxCountRule{
+					Enabled:            aws.Bool(true), // Required
+					DeleteSourceFromS3: aws.Bool(true),
+					MaxCount:           aws.Int64(1),
+				},
+			},
 		},
 	}
+	resp, err := svc.CreateApplication(params)
 
-	result, err := svc.DescribeEnvironments(input)
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
 		return
 	}
 
-	fmt.Println(result)
+	// Pretty-print the response data.
+	fmt.Println(resp)
 }
 
-// To view events for an environment
-//
-// The following operation retrieves events for an environment named my-env:
-func ExampleElasticBeanstalk_DescribeEvents_shared00() {
-	svc := elasticbeanstalk.New(session.New())
-	input := &elasticbeanstalk.DescribeEventsInput{
-		EnvironmentName: aws.String("my-env"),
-	}
+func ExampleElasticBeanstalk_CreateApplicationVersion() {
+	sess := session.Must(session.NewSession())
 
-	result, err := svc.DescribeEvents(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-		return
-	}
+	svc := elasticbeanstalk.New(sess)
 
-	fmt.Println(result)
-}
-
-// To view environment health
-//
-// The following operation retrieves health information for instances in an environment
-// named my-env:
-func ExampleElasticBeanstalk_DescribeInstancesHealth_shared00() {
-	svc := elasticbeanstalk.New(session.New())
-	input := &elasticbeanstalk.DescribeInstancesHealthInput{
-		AttributeNames: []*string{
-			aws.String("All"),
+	params := &elasticbeanstalk.CreateApplicationVersionInput{
+		ApplicationName:       aws.String("ApplicationName"), // Required
+		VersionLabel:          aws.String("VersionLabel"),    // Required
+		AutoCreateApplication: aws.Bool(true),
+		BuildConfiguration: &elasticbeanstalk.BuildConfiguration{
+			CodeBuildServiceRole: aws.String("NonEmptyString"), // Required
+			Image:                aws.String("NonEmptyString"), // Required
+			ArtifactName:         aws.String("String"),
+			ComputeType:          aws.String("ComputeType"),
+			TimeoutInMinutes:     aws.Int64(1),
 		},
-		EnvironmentName: aws.String("my-env"),
+		Description: aws.String("Description"),
+		Process:     aws.Bool(true),
+		SourceBuildInformation: &elasticbeanstalk.SourceBuildInformation{
+			SourceLocation:   aws.String("SourceLocation"),   // Required
+			SourceRepository: aws.String("SourceRepository"), // Required
+			SourceType:       aws.String("SourceType"),       // Required
+		},
+		SourceBundle: &elasticbeanstalk.S3Location{
+			S3Bucket: aws.String("S3Bucket"),
+			S3Key:    aws.String("S3Key"),
+		},
 	}
+	resp, err := svc.CreateApplicationVersion(params)
 
-	result, err := svc.DescribeInstancesHealth(input)
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case elasticbeanstalk.ErrCodeInvalidRequestException:
-				fmt.Println(elasticbeanstalk.ErrCodeInvalidRequestException, aerr.Error())
-			case elasticbeanstalk.ErrCodeServiceException:
-				fmt.Println(elasticbeanstalk.ErrCodeServiceException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
 		return
 	}
 
-	fmt.Println(result)
+	// Pretty-print the response data.
+	fmt.Println(resp)
 }
 
-// To view solution stacks
-//
-// The following operation lists solution stacks for all currently available platform
-// configurations and any that you have used in the past:
-func ExampleElasticBeanstalk_ListAvailableSolutionStacks_shared00() {
-	svc := elasticbeanstalk.New(session.New())
-	input := &elasticbeanstalk.ListAvailableSolutionStacksInput{}
+func ExampleElasticBeanstalk_CreateConfigurationTemplate() {
+	sess := session.Must(session.NewSession())
 
-	result, err := svc.ListAvailableSolutionStacks(input)
+	svc := elasticbeanstalk.New(sess)
+
+	params := &elasticbeanstalk.CreateConfigurationTemplateInput{
+		ApplicationName: aws.String("ApplicationName"),           // Required
+		TemplateName:    aws.String("ConfigurationTemplateName"), // Required
+		Description:     aws.String("Description"),
+		EnvironmentId:   aws.String("EnvironmentId"),
+		OptionSettings: []*elasticbeanstalk.ConfigurationOptionSetting{
+			{ // Required
+				Namespace:    aws.String("OptionNamespace"),
+				OptionName:   aws.String("ConfigurationOptionName"),
+				ResourceName: aws.String("ResourceName"),
+				Value:        aws.String("ConfigurationOptionValue"),
+			},
+			// More values...
+		},
+		PlatformArn:       aws.String("PlatformArn"),
+		SolutionStackName: aws.String("SolutionStackName"),
+		SourceConfiguration: &elasticbeanstalk.SourceConfiguration{
+			ApplicationName: aws.String("ApplicationName"),
+			TemplateName:    aws.String("ConfigurationTemplateName"),
+		},
+	}
+	resp, err := svc.CreateConfigurationTemplate(params)
+
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
 		return
 	}
 
-	fmt.Println(result)
+	// Pretty-print the response data.
+	fmt.Println(resp)
 }
 
-// To rebuild an environment
-//
-// The following operation terminates and recreates the resources in an environment
-// named my-env:
-func ExampleElasticBeanstalk_RebuildEnvironment_shared00() {
-	svc := elasticbeanstalk.New(session.New())
-	input := &elasticbeanstalk.RebuildEnvironmentInput{
-		EnvironmentName: aws.String("my-env"),
-	}
+func ExampleElasticBeanstalk_CreateEnvironment() {
+	sess := session.Must(session.NewSession())
 
-	result, err := svc.RebuildEnvironment(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case elasticbeanstalk.ErrCodeInsufficientPrivilegesException:
-				fmt.Println(elasticbeanstalk.ErrCodeInsufficientPrivilegesException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-		return
-	}
+	svc := elasticbeanstalk.New(sess)
 
-	fmt.Println(result)
-}
-
-// To request tailed logs
-//
-// The following operation requests logs from an environment named my-env:
-func ExampleElasticBeanstalk_RequestEnvironmentInfo_shared00() {
-	svc := elasticbeanstalk.New(session.New())
-	input := &elasticbeanstalk.RequestEnvironmentInfoInput{
-		EnvironmentName: aws.String("my-env"),
-		InfoType:        aws.String("tail"),
-	}
-
-	result, err := svc.RequestEnvironmentInfo(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-		return
-	}
-
-	fmt.Println(result)
-}
-
-// To restart application servers
-//
-// The following operation restarts application servers on all instances in an environment
-// named my-env:
-func ExampleElasticBeanstalk_RestartAppServer_shared00() {
-	svc := elasticbeanstalk.New(session.New())
-	input := &elasticbeanstalk.RestartAppServerInput{
-		EnvironmentName: aws.String("my-env"),
-	}
-
-	result, err := svc.RestartAppServer(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-		return
-	}
-
-	fmt.Println(result)
-}
-
-// To retrieve tailed logs
-//
-// The following operation retrieves a link to logs from an environment named my-env:
-func ExampleElasticBeanstalk_RetrieveEnvironmentInfo_shared00() {
-	svc := elasticbeanstalk.New(session.New())
-	input := &elasticbeanstalk.RetrieveEnvironmentInfoInput{
-		EnvironmentName: aws.String("my-env"),
-		InfoType:        aws.String("tail"),
-	}
-
-	result, err := svc.RetrieveEnvironmentInfo(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-		return
-	}
-
-	fmt.Println(result)
-}
-
-// To swap environment CNAMES
-//
-// The following operation swaps the assigned subdomains of two environments:
-func ExampleElasticBeanstalk_SwapEnvironmentCNAMEs_shared00() {
-	svc := elasticbeanstalk.New(session.New())
-	input := &elasticbeanstalk.SwapEnvironmentCNAMEsInput{
-		DestinationEnvironmentName: aws.String("my-env-green"),
-		SourceEnvironmentName:      aws.String("my-env-blue"),
-	}
-
-	result, err := svc.SwapEnvironmentCNAMEs(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-		return
-	}
-
-	fmt.Println(result)
-}
-
-// To terminate an environment
-//
-// The following operation terminates an Elastic Beanstalk environment named my-env:
-func ExampleElasticBeanstalk_TerminateEnvironment_shared00() {
-	svc := elasticbeanstalk.New(session.New())
-	input := &elasticbeanstalk.TerminateEnvironmentInput{
-		EnvironmentName: aws.String("my-env"),
-	}
-
-	result, err := svc.TerminateEnvironment(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case elasticbeanstalk.ErrCodeInsufficientPrivilegesException:
-				fmt.Println(elasticbeanstalk.ErrCodeInsufficientPrivilegesException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-		return
-	}
-
-	fmt.Println(result)
-}
-
-// To change an application's description
-//
-// The following operation updates the description of an application named my-app:
-func ExampleElasticBeanstalk_UpdateApplication_shared00() {
-	svc := elasticbeanstalk.New(session.New())
-	input := &elasticbeanstalk.UpdateApplicationInput{
-		ApplicationName: aws.String("my-app"),
-		Description:     aws.String("my Elastic Beanstalk application"),
-	}
-
-	result, err := svc.UpdateApplication(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-		return
-	}
-
-	fmt.Println(result)
-}
-
-// To change an application version's description
-//
-// The following operation updates the description of an application version named 22a0-stage-150819_185942:
-func ExampleElasticBeanstalk_UpdateApplicationVersion_shared00() {
-	svc := elasticbeanstalk.New(session.New())
-	input := &elasticbeanstalk.UpdateApplicationVersionInput{
-		ApplicationName: aws.String("my-app"),
-		Description:     aws.String("new description"),
-		VersionLabel:    aws.String("22a0-stage-150819_185942"),
-	}
-
-	result, err := svc.UpdateApplicationVersion(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-		return
-	}
-
-	fmt.Println(result)
-}
-
-// To update a configuration template
-//
-// The following operation removes the configured CloudWatch custom health metrics configuration
-// ConfigDocument from a saved configuration template named my-template:
-func ExampleElasticBeanstalk_UpdateConfigurationTemplate_shared00() {
-	svc := elasticbeanstalk.New(session.New())
-	input := &elasticbeanstalk.UpdateConfigurationTemplateInput{
-		ApplicationName: aws.String("my-app"),
+	params := &elasticbeanstalk.CreateEnvironmentInput{
+		ApplicationName: aws.String("ApplicationName"), // Required
+		CNAMEPrefix:     aws.String("DNSCnamePrefix"),
+		Description:     aws.String("Description"),
+		EnvironmentName: aws.String("EnvironmentName"),
+		GroupName:       aws.String("GroupName"),
+		OptionSettings: []*elasticbeanstalk.ConfigurationOptionSetting{
+			{ // Required
+				Namespace:    aws.String("OptionNamespace"),
+				OptionName:   aws.String("ConfigurationOptionName"),
+				ResourceName: aws.String("ResourceName"),
+				Value:        aws.String("ConfigurationOptionValue"),
+			},
+			// More values...
+		},
 		OptionsToRemove: []*elasticbeanstalk.OptionSpecification{
-			{
-				Namespace:  aws.String("aws:elasticbeanstalk:healthreporting:system"),
-				OptionName: aws.String("ConfigDocument"),
+			{ // Required
+				Namespace:    aws.String("OptionNamespace"),
+				OptionName:   aws.String("ConfigurationOptionName"),
+				ResourceName: aws.String("ResourceName"),
 			},
+			// More values...
 		},
-		TemplateName: aws.String("my-template"),
+		PlatformArn:       aws.String("PlatformArn"),
+		SolutionStackName: aws.String("SolutionStackName"),
+		Tags: []*elasticbeanstalk.Tag{
+			{ // Required
+				Key:   aws.String("TagKey"),
+				Value: aws.String("TagValue"),
+			},
+			// More values...
+		},
+		TemplateName: aws.String("ConfigurationTemplateName"),
+		Tier: &elasticbeanstalk.EnvironmentTier{
+			Name:    aws.String("String"),
+			Type:    aws.String("String"),
+			Version: aws.String("String"),
+		},
+		VersionLabel: aws.String("VersionLabel"),
 	}
+	resp, err := svc.CreateEnvironment(params)
 
-	result, err := svc.UpdateConfigurationTemplate(input)
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case elasticbeanstalk.ErrCodeInsufficientPrivilegesException:
-				fmt.Println(elasticbeanstalk.ErrCodeInsufficientPrivilegesException, aerr.Error())
-			case elasticbeanstalk.ErrCodeTooManyBucketsException:
-				fmt.Println(elasticbeanstalk.ErrCodeTooManyBucketsException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
 		return
 	}
 
-	fmt.Println(result)
+	// Pretty-print the response data.
+	fmt.Println(resp)
 }
 
-// To update an environment to a new version
-//
-// The following operation updates an environment named "my-env" to version "v2" of
-// the application to which it belongs:
-func ExampleElasticBeanstalk_UpdateEnvironment_shared00() {
-	svc := elasticbeanstalk.New(session.New())
-	input := &elasticbeanstalk.UpdateEnvironmentInput{
-		EnvironmentName: aws.String("my-env"),
-		VersionLabel:    aws.String("v2"),
-	}
+func ExampleElasticBeanstalk_CreatePlatformVersion() {
+	sess := session.Must(session.NewSession())
 
-	result, err := svc.UpdateEnvironment(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case elasticbeanstalk.ErrCodeInsufficientPrivilegesException:
-				fmt.Println(elasticbeanstalk.ErrCodeInsufficientPrivilegesException, aerr.Error())
-			case elasticbeanstalk.ErrCodeTooManyBucketsException:
-				fmt.Println(elasticbeanstalk.ErrCodeTooManyBucketsException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-		return
-	}
+	svc := elasticbeanstalk.New(sess)
 
-	fmt.Println(result)
-}
-
-// To configure option settings
-//
-// The following operation configures several options in the aws:elb:loadbalancer namespace:
-func ExampleElasticBeanstalk_UpdateEnvironment_shared01() {
-	svc := elasticbeanstalk.New(session.New())
-	input := &elasticbeanstalk.UpdateEnvironmentInput{
-		EnvironmentName: aws.String("my-env"),
+	params := &elasticbeanstalk.CreatePlatformVersionInput{
+		PlatformDefinitionBundle: &elasticbeanstalk.S3Location{ // Required
+			S3Bucket: aws.String("S3Bucket"),
+			S3Key:    aws.String("S3Key"),
+		},
+		PlatformName:    aws.String("PlatformName"),    // Required
+		PlatformVersion: aws.String("PlatformVersion"), // Required
+		EnvironmentName: aws.String("EnvironmentName"),
 		OptionSettings: []*elasticbeanstalk.ConfigurationOptionSetting{
-			{
-				Namespace:  aws.String("aws:elb:healthcheck"),
-				OptionName: aws.String("Interval"),
-				Value:      aws.String("15"),
+			{ // Required
+				Namespace:    aws.String("OptionNamespace"),
+				OptionName:   aws.String("ConfigurationOptionName"),
+				ResourceName: aws.String("ResourceName"),
+				Value:        aws.String("ConfigurationOptionValue"),
 			},
-			{
-				Namespace:  aws.String("aws:elb:healthcheck"),
-				OptionName: aws.String("Timeout"),
-				Value:      aws.String("8"),
-			},
-			{
-				Namespace:  aws.String("aws:elb:healthcheck"),
-				OptionName: aws.String("HealthyThreshold"),
-				Value:      aws.String("2"),
-			},
-			{
-				Namespace:  aws.String("aws:elb:healthcheck"),
-				OptionName: aws.String("UnhealthyThreshold"),
-				Value:      aws.String("3"),
-			},
+			// More values...
 		},
 	}
+	resp, err := svc.CreatePlatformVersion(params)
 
-	result, err := svc.UpdateEnvironment(input)
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case elasticbeanstalk.ErrCodeInsufficientPrivilegesException:
-				fmt.Println(elasticbeanstalk.ErrCodeInsufficientPrivilegesException, aerr.Error())
-			case elasticbeanstalk.ErrCodeTooManyBucketsException:
-				fmt.Println(elasticbeanstalk.ErrCodeTooManyBucketsException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
 		return
 	}
 
-	fmt.Println(result)
+	// Pretty-print the response data.
+	fmt.Println(resp)
 }
 
-// To validate configuration settings
-//
-// The following operation validates a CloudWatch custom metrics config document:
-func ExampleElasticBeanstalk_ValidateConfigurationSettings_shared00() {
-	svc := elasticbeanstalk.New(session.New())
-	input := &elasticbeanstalk.ValidateConfigurationSettingsInput{
-		ApplicationName: aws.String("my-app"),
-		EnvironmentName: aws.String("my-env"),
-		OptionSettings: []*elasticbeanstalk.ConfigurationOptionSetting{
-			{
-				Namespace:  aws.String("aws:elasticbeanstalk:healthreporting:system"),
-				OptionName: aws.String("ConfigDocument"),
-				Value:      aws.String("{\"CloudWatchMetrics\": {\"Environment\": {\"ApplicationLatencyP99.9\": null,\"InstancesSevere\": 60,\"ApplicationLatencyP90\": 60,\"ApplicationLatencyP99\": null,\"ApplicationLatencyP95\": 60,\"InstancesUnknown\": 60,\"ApplicationLatencyP85\": 60,\"InstancesInfo\": null,\"ApplicationRequests2xx\": null,\"InstancesDegraded\": null,\"InstancesWarning\": 60,\"ApplicationLatencyP50\": 60,\"ApplicationRequestsTotal\": null,\"InstancesNoData\": null,\"InstancesPending\": 60,\"ApplicationLatencyP10\": null,\"ApplicationRequests5xx\": null,\"ApplicationLatencyP75\": null,\"InstancesOk\": 60,\"ApplicationRequests3xx\": null,\"ApplicationRequests4xx\": null},\"Instance\": {\"ApplicationLatencyP99.9\": null,\"ApplicationLatencyP90\": 60,\"ApplicationLatencyP99\": null,\"ApplicationLatencyP95\": null,\"ApplicationLatencyP85\": null,\"CPUUser\": 60,\"ApplicationRequests2xx\": null,\"CPUIdle\": null,\"ApplicationLatencyP50\": null,\"ApplicationRequestsTotal\": 60,\"RootFilesystemUtil\": null,\"LoadAverage1min\": null,\"CPUIrq\": null,\"CPUNice\": 60,\"CPUIowait\": 60,\"ApplicationLatencyP10\": null,\"LoadAverage5min\": null,\"ApplicationRequests5xx\": null,\"ApplicationLatencyP75\": 60,\"CPUSystem\": 60,\"ApplicationRequests3xx\": 60,\"ApplicationRequests4xx\": null,\"InstanceHealth\": null,\"CPUSoftirq\": 60}},\"Version\": 1}"),
-			},
-		},
-	}
+func ExampleElasticBeanstalk_CreateStorageLocation() {
+	sess := session.Must(session.NewSession())
 
-	result, err := svc.ValidateConfigurationSettings(input)
+	svc := elasticbeanstalk.New(sess)
+
+	var params *elasticbeanstalk.CreateStorageLocationInput
+	resp, err := svc.CreateStorageLocation(params)
+
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case elasticbeanstalk.ErrCodeInsufficientPrivilegesException:
-				fmt.Println(elasticbeanstalk.ErrCodeInsufficientPrivilegesException, aerr.Error())
-			case elasticbeanstalk.ErrCodeTooManyBucketsException:
-				fmt.Println(elasticbeanstalk.ErrCodeTooManyBucketsException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
 		return
 	}
 
-	fmt.Println(result)
+	// Pretty-print the response data.
+	fmt.Println(resp)
+}
+
+func ExampleElasticBeanstalk_DeleteApplication() {
+	sess := session.Must(session.NewSession())
+
+	svc := elasticbeanstalk.New(sess)
+
+	params := &elasticbeanstalk.DeleteApplicationInput{
+		ApplicationName:     aws.String("ApplicationName"), // Required
+		TerminateEnvByForce: aws.Bool(true),
+	}
+	resp, err := svc.DeleteApplication(params)
+
+	if err != nil {
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
+		return
+	}
+
+	// Pretty-print the response data.
+	fmt.Println(resp)
+}
+
+func ExampleElasticBeanstalk_DeleteApplicationVersion() {
+	sess := session.Must(session.NewSession())
+
+	svc := elasticbeanstalk.New(sess)
+
+	params := &elasticbeanstalk.DeleteApplicationVersionInput{
+		ApplicationName:    aws.String("ApplicationName"), // Required
+		VersionLabel:       aws.String("VersionLabel"),    // Required
+		DeleteSourceBundle: aws.Bool(true),
+	}
+	resp, err := svc.DeleteApplicationVersion(params)
+
+	if err != nil {
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
+		return
+	}
+
+	// Pretty-print the response data.
+	fmt.Println(resp)
+}
+
+func ExampleElasticBeanstalk_DeleteConfigurationTemplate() {
+	sess := session.Must(session.NewSession())
+
+	svc := elasticbeanstalk.New(sess)
+
+	params := &elasticbeanstalk.DeleteConfigurationTemplateInput{
+		ApplicationName: aws.String("ApplicationName"),           // Required
+		TemplateName:    aws.String("ConfigurationTemplateName"), // Required
+	}
+	resp, err := svc.DeleteConfigurationTemplate(params)
+
+	if err != nil {
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
+		return
+	}
+
+	// Pretty-print the response data.
+	fmt.Println(resp)
+}
+
+func ExampleElasticBeanstalk_DeleteEnvironmentConfiguration() {
+	sess := session.Must(session.NewSession())
+
+	svc := elasticbeanstalk.New(sess)
+
+	params := &elasticbeanstalk.DeleteEnvironmentConfigurationInput{
+		ApplicationName: aws.String("ApplicationName"), // Required
+		EnvironmentName: aws.String("EnvironmentName"), // Required
+	}
+	resp, err := svc.DeleteEnvironmentConfiguration(params)
+
+	if err != nil {
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
+		return
+	}
+
+	// Pretty-print the response data.
+	fmt.Println(resp)
+}
+
+func ExampleElasticBeanstalk_DeletePlatformVersion() {
+	sess := session.Must(session.NewSession())
+
+	svc := elasticbeanstalk.New(sess)
+
+	params := &elasticbeanstalk.DeletePlatformVersionInput{
+		PlatformArn: aws.String("PlatformArn"),
+	}
+	resp, err := svc.DeletePlatformVersion(params)
+
+	if err != nil {
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
+		return
+	}
+
+	// Pretty-print the response data.
+	fmt.Println(resp)
+}
+
+func ExampleElasticBeanstalk_DescribeApplicationVersions() {
+	sess := session.Must(session.NewSession())
+
+	svc := elasticbeanstalk.New(sess)
+
+	params := &elasticbeanstalk.DescribeApplicationVersionsInput{
+		ApplicationName: aws.String("ApplicationName"),
+		MaxRecords:      aws.Int64(1),
+		NextToken:       aws.String("Token"),
+		VersionLabels: []*string{
+			aws.String("VersionLabel"), // Required
+			// More values...
+		},
+	}
+	resp, err := svc.DescribeApplicationVersions(params)
+
+	if err != nil {
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
+		return
+	}
+
+	// Pretty-print the response data.
+	fmt.Println(resp)
+}
+
+func ExampleElasticBeanstalk_DescribeApplications() {
+	sess := session.Must(session.NewSession())
+
+	svc := elasticbeanstalk.New(sess)
+
+	params := &elasticbeanstalk.DescribeApplicationsInput{
+		ApplicationNames: []*string{
+			aws.String("ApplicationName"), // Required
+			// More values...
+		},
+	}
+	resp, err := svc.DescribeApplications(params)
+
+	if err != nil {
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
+		return
+	}
+
+	// Pretty-print the response data.
+	fmt.Println(resp)
+}
+
+func ExampleElasticBeanstalk_DescribeConfigurationOptions() {
+	sess := session.Must(session.NewSession())
+
+	svc := elasticbeanstalk.New(sess)
+
+	params := &elasticbeanstalk.DescribeConfigurationOptionsInput{
+		ApplicationName: aws.String("ApplicationName"),
+		EnvironmentName: aws.String("EnvironmentName"),
+		Options: []*elasticbeanstalk.OptionSpecification{
+			{ // Required
+				Namespace:    aws.String("OptionNamespace"),
+				OptionName:   aws.String("ConfigurationOptionName"),
+				ResourceName: aws.String("ResourceName"),
+			},
+			// More values...
+		},
+		PlatformArn:       aws.String("PlatformArn"),
+		SolutionStackName: aws.String("SolutionStackName"),
+		TemplateName:      aws.String("ConfigurationTemplateName"),
+	}
+	resp, err := svc.DescribeConfigurationOptions(params)
+
+	if err != nil {
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
+		return
+	}
+
+	// Pretty-print the response data.
+	fmt.Println(resp)
+}
+
+func ExampleElasticBeanstalk_DescribeConfigurationSettings() {
+	sess := session.Must(session.NewSession())
+
+	svc := elasticbeanstalk.New(sess)
+
+	params := &elasticbeanstalk.DescribeConfigurationSettingsInput{
+		ApplicationName: aws.String("ApplicationName"), // Required
+		EnvironmentName: aws.String("EnvironmentName"),
+		TemplateName:    aws.String("ConfigurationTemplateName"),
+	}
+	resp, err := svc.DescribeConfigurationSettings(params)
+
+	if err != nil {
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
+		return
+	}
+
+	// Pretty-print the response data.
+	fmt.Println(resp)
+}
+
+func ExampleElasticBeanstalk_DescribeEnvironmentHealth() {
+	sess := session.Must(session.NewSession())
+
+	svc := elasticbeanstalk.New(sess)
+
+	params := &elasticbeanstalk.DescribeEnvironmentHealthInput{
+		AttributeNames: []*string{
+			aws.String("EnvironmentHealthAttribute"), // Required
+			// More values...
+		},
+		EnvironmentId:   aws.String("EnvironmentId"),
+		EnvironmentName: aws.String("EnvironmentName"),
+	}
+	resp, err := svc.DescribeEnvironmentHealth(params)
+
+	if err != nil {
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
+		return
+	}
+
+	// Pretty-print the response data.
+	fmt.Println(resp)
+}
+
+func ExampleElasticBeanstalk_DescribeEnvironmentManagedActionHistory() {
+	sess := session.Must(session.NewSession())
+
+	svc := elasticbeanstalk.New(sess)
+
+	params := &elasticbeanstalk.DescribeEnvironmentManagedActionHistoryInput{
+		EnvironmentId:   aws.String("EnvironmentId"),
+		EnvironmentName: aws.String("EnvironmentName"),
+		MaxItems:        aws.Int64(1),
+		NextToken:       aws.String("String"),
+	}
+	resp, err := svc.DescribeEnvironmentManagedActionHistory(params)
+
+	if err != nil {
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
+		return
+	}
+
+	// Pretty-print the response data.
+	fmt.Println(resp)
+}
+
+func ExampleElasticBeanstalk_DescribeEnvironmentManagedActions() {
+	sess := session.Must(session.NewSession())
+
+	svc := elasticbeanstalk.New(sess)
+
+	params := &elasticbeanstalk.DescribeEnvironmentManagedActionsInput{
+		EnvironmentId:   aws.String("String"),
+		EnvironmentName: aws.String("String"),
+		Status:          aws.String("ActionStatus"),
+	}
+	resp, err := svc.DescribeEnvironmentManagedActions(params)
+
+	if err != nil {
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
+		return
+	}
+
+	// Pretty-print the response data.
+	fmt.Println(resp)
+}
+
+func ExampleElasticBeanstalk_DescribeEnvironmentResources() {
+	sess := session.Must(session.NewSession())
+
+	svc := elasticbeanstalk.New(sess)
+
+	params := &elasticbeanstalk.DescribeEnvironmentResourcesInput{
+		EnvironmentId:   aws.String("EnvironmentId"),
+		EnvironmentName: aws.String("EnvironmentName"),
+	}
+	resp, err := svc.DescribeEnvironmentResources(params)
+
+	if err != nil {
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
+		return
+	}
+
+	// Pretty-print the response data.
+	fmt.Println(resp)
+}
+
+func ExampleElasticBeanstalk_DescribeEnvironments() {
+	sess := session.Must(session.NewSession())
+
+	svc := elasticbeanstalk.New(sess)
+
+	params := &elasticbeanstalk.DescribeEnvironmentsInput{
+		ApplicationName: aws.String("ApplicationName"),
+		EnvironmentIds: []*string{
+			aws.String("EnvironmentId"), // Required
+			// More values...
+		},
+		EnvironmentNames: []*string{
+			aws.String("EnvironmentName"), // Required
+			// More values...
+		},
+		IncludeDeleted:        aws.Bool(true),
+		IncludedDeletedBackTo: aws.Time(time.Now()),
+		VersionLabel:          aws.String("VersionLabel"),
+	}
+	resp, err := svc.DescribeEnvironments(params)
+
+	if err != nil {
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
+		return
+	}
+
+	// Pretty-print the response data.
+	fmt.Println(resp)
+}
+
+func ExampleElasticBeanstalk_DescribeEvents() {
+	sess := session.Must(session.NewSession())
+
+	svc := elasticbeanstalk.New(sess)
+
+	params := &elasticbeanstalk.DescribeEventsInput{
+		ApplicationName: aws.String("ApplicationName"),
+		EndTime:         aws.Time(time.Now()),
+		EnvironmentId:   aws.String("EnvironmentId"),
+		EnvironmentName: aws.String("EnvironmentName"),
+		MaxRecords:      aws.Int64(1),
+		NextToken:       aws.String("Token"),
+		PlatformArn:     aws.String("PlatformArn"),
+		RequestId:       aws.String("RequestId"),
+		Severity:        aws.String("EventSeverity"),
+		StartTime:       aws.Time(time.Now()),
+		TemplateName:    aws.String("ConfigurationTemplateName"),
+		VersionLabel:    aws.String("VersionLabel"),
+	}
+	resp, err := svc.DescribeEvents(params)
+
+	if err != nil {
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
+		return
+	}
+
+	// Pretty-print the response data.
+	fmt.Println(resp)
+}
+
+func ExampleElasticBeanstalk_DescribeInstancesHealth() {
+	sess := session.Must(session.NewSession())
+
+	svc := elasticbeanstalk.New(sess)
+
+	params := &elasticbeanstalk.DescribeInstancesHealthInput{
+		AttributeNames: []*string{
+			aws.String("InstancesHealthAttribute"), // Required
+			// More values...
+		},
+		EnvironmentId:   aws.String("EnvironmentId"),
+		EnvironmentName: aws.String("EnvironmentName"),
+		NextToken:       aws.String("NextToken"),
+	}
+	resp, err := svc.DescribeInstancesHealth(params)
+
+	if err != nil {
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
+		return
+	}
+
+	// Pretty-print the response data.
+	fmt.Println(resp)
+}
+
+func ExampleElasticBeanstalk_DescribePlatformVersion() {
+	sess := session.Must(session.NewSession())
+
+	svc := elasticbeanstalk.New(sess)
+
+	params := &elasticbeanstalk.DescribePlatformVersionInput{
+		PlatformArn: aws.String("PlatformArn"),
+	}
+	resp, err := svc.DescribePlatformVersion(params)
+
+	if err != nil {
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
+		return
+	}
+
+	// Pretty-print the response data.
+	fmt.Println(resp)
+}
+
+func ExampleElasticBeanstalk_ListAvailableSolutionStacks() {
+	sess := session.Must(session.NewSession())
+
+	svc := elasticbeanstalk.New(sess)
+
+	var params *elasticbeanstalk.ListAvailableSolutionStacksInput
+	resp, err := svc.ListAvailableSolutionStacks(params)
+
+	if err != nil {
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
+		return
+	}
+
+	// Pretty-print the response data.
+	fmt.Println(resp)
+}
+
+func ExampleElasticBeanstalk_ListPlatformVersions() {
+	sess := session.Must(session.NewSession())
+
+	svc := elasticbeanstalk.New(sess)
+
+	params := &elasticbeanstalk.ListPlatformVersionsInput{
+		Filters: []*elasticbeanstalk.PlatformFilter{
+			{ // Required
+				Operator: aws.String("PlatformFilterOperator"),
+				Type:     aws.String("PlatformFilterType"),
+				Values: []*string{
+					aws.String("PlatformFilterValue"), // Required
+					// More values...
+				},
+			},
+			// More values...
+		},
+		MaxRecords: aws.Int64(1),
+		NextToken:  aws.String("Token"),
+	}
+	resp, err := svc.ListPlatformVersions(params)
+
+	if err != nil {
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
+		return
+	}
+
+	// Pretty-print the response data.
+	fmt.Println(resp)
+}
+
+func ExampleElasticBeanstalk_RebuildEnvironment() {
+	sess := session.Must(session.NewSession())
+
+	svc := elasticbeanstalk.New(sess)
+
+	params := &elasticbeanstalk.RebuildEnvironmentInput{
+		EnvironmentId:   aws.String("EnvironmentId"),
+		EnvironmentName: aws.String("EnvironmentName"),
+	}
+	resp, err := svc.RebuildEnvironment(params)
+
+	if err != nil {
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
+		return
+	}
+
+	// Pretty-print the response data.
+	fmt.Println(resp)
+}
+
+func ExampleElasticBeanstalk_RequestEnvironmentInfo() {
+	sess := session.Must(session.NewSession())
+
+	svc := elasticbeanstalk.New(sess)
+
+	params := &elasticbeanstalk.RequestEnvironmentInfoInput{
+		InfoType:        aws.String("EnvironmentInfoType"), // Required
+		EnvironmentId:   aws.String("EnvironmentId"),
+		EnvironmentName: aws.String("EnvironmentName"),
+	}
+	resp, err := svc.RequestEnvironmentInfo(params)
+
+	if err != nil {
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
+		return
+	}
+
+	// Pretty-print the response data.
+	fmt.Println(resp)
+}
+
+func ExampleElasticBeanstalk_RestartAppServer() {
+	sess := session.Must(session.NewSession())
+
+	svc := elasticbeanstalk.New(sess)
+
+	params := &elasticbeanstalk.RestartAppServerInput{
+		EnvironmentId:   aws.String("EnvironmentId"),
+		EnvironmentName: aws.String("EnvironmentName"),
+	}
+	resp, err := svc.RestartAppServer(params)
+
+	if err != nil {
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
+		return
+	}
+
+	// Pretty-print the response data.
+	fmt.Println(resp)
+}
+
+func ExampleElasticBeanstalk_RetrieveEnvironmentInfo() {
+	sess := session.Must(session.NewSession())
+
+	svc := elasticbeanstalk.New(sess)
+
+	params := &elasticbeanstalk.RetrieveEnvironmentInfoInput{
+		InfoType:        aws.String("EnvironmentInfoType"), // Required
+		EnvironmentId:   aws.String("EnvironmentId"),
+		EnvironmentName: aws.String("EnvironmentName"),
+	}
+	resp, err := svc.RetrieveEnvironmentInfo(params)
+
+	if err != nil {
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
+		return
+	}
+
+	// Pretty-print the response data.
+	fmt.Println(resp)
+}
+
+func ExampleElasticBeanstalk_SwapEnvironmentCNAMEs() {
+	sess := session.Must(session.NewSession())
+
+	svc := elasticbeanstalk.New(sess)
+
+	params := &elasticbeanstalk.SwapEnvironmentCNAMEsInput{
+		DestinationEnvironmentId:   aws.String("EnvironmentId"),
+		DestinationEnvironmentName: aws.String("EnvironmentName"),
+		SourceEnvironmentId:        aws.String("EnvironmentId"),
+		SourceEnvironmentName:      aws.String("EnvironmentName"),
+	}
+	resp, err := svc.SwapEnvironmentCNAMEs(params)
+
+	if err != nil {
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
+		return
+	}
+
+	// Pretty-print the response data.
+	fmt.Println(resp)
+}
+
+func ExampleElasticBeanstalk_TerminateEnvironment() {
+	sess := session.Must(session.NewSession())
+
+	svc := elasticbeanstalk.New(sess)
+
+	params := &elasticbeanstalk.TerminateEnvironmentInput{
+		EnvironmentId:      aws.String("EnvironmentId"),
+		EnvironmentName:    aws.String("EnvironmentName"),
+		ForceTerminate:     aws.Bool(true),
+		TerminateResources: aws.Bool(true),
+	}
+	resp, err := svc.TerminateEnvironment(params)
+
+	if err != nil {
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
+		return
+	}
+
+	// Pretty-print the response data.
+	fmt.Println(resp)
+}
+
+func ExampleElasticBeanstalk_UpdateApplication() {
+	sess := session.Must(session.NewSession())
+
+	svc := elasticbeanstalk.New(sess)
+
+	params := &elasticbeanstalk.UpdateApplicationInput{
+		ApplicationName: aws.String("ApplicationName"), // Required
+		Description:     aws.String("Description"),
+	}
+	resp, err := svc.UpdateApplication(params)
+
+	if err != nil {
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
+		return
+	}
+
+	// Pretty-print the response data.
+	fmt.Println(resp)
+}
+
+func ExampleElasticBeanstalk_UpdateApplicationResourceLifecycle() {
+	sess := session.Must(session.NewSession())
+
+	svc := elasticbeanstalk.New(sess)
+
+	params := &elasticbeanstalk.UpdateApplicationResourceLifecycleInput{
+		ApplicationName: aws.String("ApplicationName"), // Required
+		ResourceLifecycleConfig: &elasticbeanstalk.ApplicationResourceLifecycleConfig{ // Required
+			ServiceRole: aws.String("String"),
+			VersionLifecycleConfig: &elasticbeanstalk.ApplicationVersionLifecycleConfig{
+				MaxAgeRule: &elasticbeanstalk.MaxAgeRule{
+					Enabled:            aws.Bool(true), // Required
+					DeleteSourceFromS3: aws.Bool(true),
+					MaxAgeInDays:       aws.Int64(1),
+				},
+				MaxCountRule: &elasticbeanstalk.MaxCountRule{
+					Enabled:            aws.Bool(true), // Required
+					DeleteSourceFromS3: aws.Bool(true),
+					MaxCount:           aws.Int64(1),
+				},
+			},
+		},
+	}
+	resp, err := svc.UpdateApplicationResourceLifecycle(params)
+
+	if err != nil {
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
+		return
+	}
+
+	// Pretty-print the response data.
+	fmt.Println(resp)
+}
+
+func ExampleElasticBeanstalk_UpdateApplicationVersion() {
+	sess := session.Must(session.NewSession())
+
+	svc := elasticbeanstalk.New(sess)
+
+	params := &elasticbeanstalk.UpdateApplicationVersionInput{
+		ApplicationName: aws.String("ApplicationName"), // Required
+		VersionLabel:    aws.String("VersionLabel"),    // Required
+		Description:     aws.String("Description"),
+	}
+	resp, err := svc.UpdateApplicationVersion(params)
+
+	if err != nil {
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
+		return
+	}
+
+	// Pretty-print the response data.
+	fmt.Println(resp)
+}
+
+func ExampleElasticBeanstalk_UpdateConfigurationTemplate() {
+	sess := session.Must(session.NewSession())
+
+	svc := elasticbeanstalk.New(sess)
+
+	params := &elasticbeanstalk.UpdateConfigurationTemplateInput{
+		ApplicationName: aws.String("ApplicationName"),           // Required
+		TemplateName:    aws.String("ConfigurationTemplateName"), // Required
+		Description:     aws.String("Description"),
+		OptionSettings: []*elasticbeanstalk.ConfigurationOptionSetting{
+			{ // Required
+				Namespace:    aws.String("OptionNamespace"),
+				OptionName:   aws.String("ConfigurationOptionName"),
+				ResourceName: aws.String("ResourceName"),
+				Value:        aws.String("ConfigurationOptionValue"),
+			},
+			// More values...
+		},
+		OptionsToRemove: []*elasticbeanstalk.OptionSpecification{
+			{ // Required
+				Namespace:    aws.String("OptionNamespace"),
+				OptionName:   aws.String("ConfigurationOptionName"),
+				ResourceName: aws.String("ResourceName"),
+			},
+			// More values...
+		},
+	}
+	resp, err := svc.UpdateConfigurationTemplate(params)
+
+	if err != nil {
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
+		return
+	}
+
+	// Pretty-print the response data.
+	fmt.Println(resp)
+}
+
+func ExampleElasticBeanstalk_UpdateEnvironment() {
+	sess := session.Must(session.NewSession())
+
+	svc := elasticbeanstalk.New(sess)
+
+	params := &elasticbeanstalk.UpdateEnvironmentInput{
+		ApplicationName: aws.String("ApplicationName"),
+		Description:     aws.String("Description"),
+		EnvironmentId:   aws.String("EnvironmentId"),
+		EnvironmentName: aws.String("EnvironmentName"),
+		GroupName:       aws.String("GroupName"),
+		OptionSettings: []*elasticbeanstalk.ConfigurationOptionSetting{
+			{ // Required
+				Namespace:    aws.String("OptionNamespace"),
+				OptionName:   aws.String("ConfigurationOptionName"),
+				ResourceName: aws.String("ResourceName"),
+				Value:        aws.String("ConfigurationOptionValue"),
+			},
+			// More values...
+		},
+		OptionsToRemove: []*elasticbeanstalk.OptionSpecification{
+			{ // Required
+				Namespace:    aws.String("OptionNamespace"),
+				OptionName:   aws.String("ConfigurationOptionName"),
+				ResourceName: aws.String("ResourceName"),
+			},
+			// More values...
+		},
+		PlatformArn:       aws.String("PlatformArn"),
+		SolutionStackName: aws.String("SolutionStackName"),
+		TemplateName:      aws.String("ConfigurationTemplateName"),
+		Tier: &elasticbeanstalk.EnvironmentTier{
+			Name:    aws.String("String"),
+			Type:    aws.String("String"),
+			Version: aws.String("String"),
+		},
+		VersionLabel: aws.String("VersionLabel"),
+	}
+	resp, err := svc.UpdateEnvironment(params)
+
+	if err != nil {
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
+		return
+	}
+
+	// Pretty-print the response data.
+	fmt.Println(resp)
+}
+
+func ExampleElasticBeanstalk_ValidateConfigurationSettings() {
+	sess := session.Must(session.NewSession())
+
+	svc := elasticbeanstalk.New(sess)
+
+	params := &elasticbeanstalk.ValidateConfigurationSettingsInput{
+		ApplicationName: aws.String("ApplicationName"), // Required
+		OptionSettings: []*elasticbeanstalk.ConfigurationOptionSetting{ // Required
+			{ // Required
+				Namespace:    aws.String("OptionNamespace"),
+				OptionName:   aws.String("ConfigurationOptionName"),
+				ResourceName: aws.String("ResourceName"),
+				Value:        aws.String("ConfigurationOptionValue"),
+			},
+			// More values...
+		},
+		EnvironmentName: aws.String("EnvironmentName"),
+		TemplateName:    aws.String("ConfigurationTemplateName"),
+	}
+	resp, err := svc.ValidateConfigurationSettings(params)
+
+	if err != nil {
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
+		return
+	}
+
+	// Pretty-print the response data.
+	fmt.Println(resp)
 }

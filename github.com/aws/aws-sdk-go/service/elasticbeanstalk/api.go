@@ -17,18 +17,19 @@ const opAbortEnvironmentUpdate = "AbortEnvironmentUpdate"
 
 // AbortEnvironmentUpdateRequest generates a "aws/request.Request" representing the
 // client's request for the AbortEnvironmentUpdate operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See AbortEnvironmentUpdate for usage and error information.
 //
-// See AbortEnvironmentUpdate for more information on using the AbortEnvironmentUpdate
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the AbortEnvironmentUpdate method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the AbortEnvironmentUpdateRequest method.
 //    req, resp := client.AbortEnvironmentUpdateRequest(params)
@@ -100,18 +101,19 @@ const opApplyEnvironmentManagedAction = "ApplyEnvironmentManagedAction"
 
 // ApplyEnvironmentManagedActionRequest generates a "aws/request.Request" representing the
 // client's request for the ApplyEnvironmentManagedAction operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See ApplyEnvironmentManagedAction for usage and error information.
 //
-// See ApplyEnvironmentManagedAction for more information on using the ApplyEnvironmentManagedAction
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the ApplyEnvironmentManagedAction method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the ApplyEnvironmentManagedActionRequest method.
 //    req, resp := client.ApplyEnvironmentManagedActionRequest(params)
@@ -184,18 +186,19 @@ const opCheckDNSAvailability = "CheckDNSAvailability"
 
 // CheckDNSAvailabilityRequest generates a "aws/request.Request" representing the
 // client's request for the CheckDNSAvailability operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See CheckDNSAvailability for usage and error information.
 //
-// See CheckDNSAvailability for more information on using the CheckDNSAvailability
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the CheckDNSAvailability method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the CheckDNSAvailabilityRequest method.
 //    req, resp := client.CheckDNSAvailabilityRequest(params)
@@ -258,18 +261,19 @@ const opComposeEnvironments = "ComposeEnvironments"
 
 // ComposeEnvironmentsRequest generates a "aws/request.Request" representing the
 // client's request for the ComposeEnvironments operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See ComposeEnvironments for usage and error information.
 //
-// See ComposeEnvironments for more information on using the ComposeEnvironments
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the ComposeEnvironments method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the ComposeEnvironmentsRequest method.
 //    req, resp := client.ComposeEnvironmentsRequest(params)
@@ -347,18 +351,19 @@ const opCreateApplication = "CreateApplication"
 
 // CreateApplicationRequest generates a "aws/request.Request" representing the
 // client's request for the CreateApplication operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See CreateApplication for usage and error information.
 //
-// See CreateApplication for more information on using the CreateApplication
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the CreateApplication method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the CreateApplicationRequest method.
 //    req, resp := client.CreateApplicationRequest(params)
@@ -427,18 +432,19 @@ const opCreateApplicationVersion = "CreateApplicationVersion"
 
 // CreateApplicationVersionRequest generates a "aws/request.Request" representing the
 // client's request for the CreateApplicationVersion operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See CreateApplicationVersion for usage and error information.
 //
-// See CreateApplicationVersion for more information on using the CreateApplicationVersion
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the CreateApplicationVersion method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the CreateApplicationVersionRequest method.
 //    req, resp := client.CreateApplicationVersionRequest(params)
@@ -542,18 +548,19 @@ const opCreateConfigurationTemplate = "CreateConfigurationTemplate"
 
 // CreateConfigurationTemplateRequest generates a "aws/request.Request" representing the
 // client's request for the CreateConfigurationTemplate operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See CreateConfigurationTemplate for usage and error information.
 //
-// See CreateConfigurationTemplate for more information on using the CreateConfigurationTemplate
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the CreateConfigurationTemplate method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the CreateConfigurationTemplateRequest method.
 //    req, resp := client.CreateConfigurationTemplateRequest(params)
@@ -638,18 +645,19 @@ const opCreateEnvironment = "CreateEnvironment"
 
 // CreateEnvironmentRequest generates a "aws/request.Request" representing the
 // client's request for the CreateEnvironment operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See CreateEnvironment for usage and error information.
 //
-// See CreateEnvironment for more information on using the CreateEnvironment
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the CreateEnvironment method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the CreateEnvironmentRequest method.
 //    req, resp := client.CreateEnvironmentRequest(params)
@@ -722,18 +730,19 @@ const opCreatePlatformVersion = "CreatePlatformVersion"
 
 // CreatePlatformVersionRequest generates a "aws/request.Request" representing the
 // client's request for the CreatePlatformVersion operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See CreatePlatformVersion for usage and error information.
 //
-// See CreatePlatformVersion for more information on using the CreatePlatformVersion
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the CreatePlatformVersion method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the CreatePlatformVersionRequest method.
 //    req, resp := client.CreatePlatformVersionRequest(params)
@@ -809,18 +818,19 @@ const opCreateStorageLocation = "CreateStorageLocation"
 
 // CreateStorageLocationRequest generates a "aws/request.Request" representing the
 // client's request for the CreateStorageLocation operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See CreateStorageLocation for usage and error information.
 //
-// See CreateStorageLocation for more information on using the CreateStorageLocation
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the CreateStorageLocation method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the CreateStorageLocationRequest method.
 //    req, resp := client.CreateStorageLocationRequest(params)
@@ -897,18 +907,19 @@ const opDeleteApplication = "DeleteApplication"
 
 // DeleteApplicationRequest generates a "aws/request.Request" representing the
 // client's request for the DeleteApplication operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See DeleteApplication for usage and error information.
 //
-// See DeleteApplication for more information on using the DeleteApplication
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the DeleteApplication method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the DeleteApplicationRequest method.
 //    req, resp := client.DeleteApplicationRequest(params)
@@ -983,18 +994,19 @@ const opDeleteApplicationVersion = "DeleteApplicationVersion"
 
 // DeleteApplicationVersionRequest generates a "aws/request.Request" representing the
 // client's request for the DeleteApplicationVersion operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See DeleteApplicationVersion for usage and error information.
 //
-// See DeleteApplicationVersion for more information on using the DeleteApplicationVersion
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the DeleteApplicationVersion method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the DeleteApplicationVersionRequest method.
 //    req, resp := client.DeleteApplicationVersionRequest(params)
@@ -1086,18 +1098,19 @@ const opDeleteConfigurationTemplate = "DeleteConfigurationTemplate"
 
 // DeleteConfigurationTemplateRequest generates a "aws/request.Request" representing the
 // client's request for the DeleteConfigurationTemplate operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See DeleteConfigurationTemplate for usage and error information.
 //
-// See DeleteConfigurationTemplate for more information on using the DeleteConfigurationTemplate
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the DeleteConfigurationTemplate method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the DeleteConfigurationTemplateRequest method.
 //    req, resp := client.DeleteConfigurationTemplateRequest(params)
@@ -1172,18 +1185,19 @@ const opDeleteEnvironmentConfiguration = "DeleteEnvironmentConfiguration"
 
 // DeleteEnvironmentConfigurationRequest generates a "aws/request.Request" representing the
 // client's request for the DeleteEnvironmentConfiguration operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See DeleteEnvironmentConfiguration for usage and error information.
 //
-// See DeleteEnvironmentConfiguration for more information on using the DeleteEnvironmentConfiguration
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the DeleteEnvironmentConfiguration method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the DeleteEnvironmentConfigurationRequest method.
 //    req, resp := client.DeleteEnvironmentConfigurationRequest(params)
@@ -1255,18 +1269,19 @@ const opDeletePlatformVersion = "DeletePlatformVersion"
 
 // DeletePlatformVersionRequest generates a "aws/request.Request" representing the
 // client's request for the DeletePlatformVersion operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See DeletePlatformVersion for usage and error information.
 //
-// See DeletePlatformVersion for more information on using the DeletePlatformVersion
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the DeletePlatformVersion method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the DeletePlatformVersionRequest method.
 //    req, resp := client.DeletePlatformVersionRequest(params)
@@ -1346,18 +1361,19 @@ const opDescribeApplicationVersions = "DescribeApplicationVersions"
 
 // DescribeApplicationVersionsRequest generates a "aws/request.Request" representing the
 // client's request for the DescribeApplicationVersions operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See DescribeApplicationVersions for usage and error information.
 //
-// See DescribeApplicationVersions for more information on using the DescribeApplicationVersions
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the DescribeApplicationVersions method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the DescribeApplicationVersionsRequest method.
 //    req, resp := client.DescribeApplicationVersionsRequest(params)
@@ -1420,18 +1436,19 @@ const opDescribeApplications = "DescribeApplications"
 
 // DescribeApplicationsRequest generates a "aws/request.Request" representing the
 // client's request for the DescribeApplications operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See DescribeApplications for usage and error information.
 //
-// See DescribeApplications for more information on using the DescribeApplications
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the DescribeApplications method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the DescribeApplicationsRequest method.
 //    req, resp := client.DescribeApplicationsRequest(params)
@@ -1494,18 +1511,19 @@ const opDescribeConfigurationOptions = "DescribeConfigurationOptions"
 
 // DescribeConfigurationOptionsRequest generates a "aws/request.Request" representing the
 // client's request for the DescribeConfigurationOptions operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See DescribeConfigurationOptions for usage and error information.
 //
-// See DescribeConfigurationOptions for more information on using the DescribeConfigurationOptions
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the DescribeConfigurationOptions method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the DescribeConfigurationOptionsRequest method.
 //    req, resp := client.DescribeConfigurationOptionsRequest(params)
@@ -1577,18 +1595,19 @@ const opDescribeConfigurationSettings = "DescribeConfigurationSettings"
 
 // DescribeConfigurationSettingsRequest generates a "aws/request.Request" representing the
 // client's request for the DescribeConfigurationSettings operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See DescribeConfigurationSettings for usage and error information.
 //
-// See DescribeConfigurationSettings for more information on using the DescribeConfigurationSettings
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the DescribeConfigurationSettings method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the DescribeConfigurationSettingsRequest method.
 //    req, resp := client.DescribeConfigurationSettingsRequest(params)
@@ -1668,18 +1687,19 @@ const opDescribeEnvironmentHealth = "DescribeEnvironmentHealth"
 
 // DescribeEnvironmentHealthRequest generates a "aws/request.Request" representing the
 // client's request for the DescribeEnvironmentHealth operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See DescribeEnvironmentHealth for usage and error information.
 //
-// See DescribeEnvironmentHealth for more information on using the DescribeEnvironmentHealth
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the DescribeEnvironmentHealth method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the DescribeEnvironmentHealthRequest method.
 //    req, resp := client.DescribeEnvironmentHealthRequest(params)
@@ -1753,18 +1773,19 @@ const opDescribeEnvironmentManagedActionHistory = "DescribeEnvironmentManagedAct
 
 // DescribeEnvironmentManagedActionHistoryRequest generates a "aws/request.Request" representing the
 // client's request for the DescribeEnvironmentManagedActionHistory operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See DescribeEnvironmentManagedActionHistory for usage and error information.
 //
-// See DescribeEnvironmentManagedActionHistory for more information on using the DescribeEnvironmentManagedActionHistory
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the DescribeEnvironmentManagedActionHistory method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the DescribeEnvironmentManagedActionHistoryRequest method.
 //    req, resp := client.DescribeEnvironmentManagedActionHistoryRequest(params)
@@ -1832,18 +1853,19 @@ const opDescribeEnvironmentManagedActions = "DescribeEnvironmentManagedActions"
 
 // DescribeEnvironmentManagedActionsRequest generates a "aws/request.Request" representing the
 // client's request for the DescribeEnvironmentManagedActions operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See DescribeEnvironmentManagedActions for usage and error information.
 //
-// See DescribeEnvironmentManagedActions for more information on using the DescribeEnvironmentManagedActions
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the DescribeEnvironmentManagedActions method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the DescribeEnvironmentManagedActionsRequest method.
 //    req, resp := client.DescribeEnvironmentManagedActionsRequest(params)
@@ -1911,18 +1933,19 @@ const opDescribeEnvironmentResources = "DescribeEnvironmentResources"
 
 // DescribeEnvironmentResourcesRequest generates a "aws/request.Request" representing the
 // client's request for the DescribeEnvironmentResources operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See DescribeEnvironmentResources for usage and error information.
 //
-// See DescribeEnvironmentResources for more information on using the DescribeEnvironmentResources
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the DescribeEnvironmentResources method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the DescribeEnvironmentResourcesRequest method.
 //    req, resp := client.DescribeEnvironmentResourcesRequest(params)
@@ -1991,18 +2014,19 @@ const opDescribeEnvironments = "DescribeEnvironments"
 
 // DescribeEnvironmentsRequest generates a "aws/request.Request" representing the
 // client's request for the DescribeEnvironments operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See DescribeEnvironments for usage and error information.
 //
-// See DescribeEnvironments for more information on using the DescribeEnvironments
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the DescribeEnvironments method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the DescribeEnvironmentsRequest method.
 //    req, resp := client.DescribeEnvironmentsRequest(params)
@@ -2065,18 +2089,19 @@ const opDescribeEvents = "DescribeEvents"
 
 // DescribeEventsRequest generates a "aws/request.Request" representing the
 // client's request for the DescribeEvents operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See DescribeEvents for usage and error information.
 //
-// See DescribeEvents for more information on using the DescribeEvents
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the DescribeEvents method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the DescribeEventsRequest method.
 //    req, resp := client.DescribeEventsRequest(params)
@@ -2197,18 +2222,19 @@ const opDescribeInstancesHealth = "DescribeInstancesHealth"
 
 // DescribeInstancesHealthRequest generates a "aws/request.Request" representing the
 // client's request for the DescribeInstancesHealth operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See DescribeInstancesHealth for usage and error information.
 //
-// See DescribeInstancesHealth for more information on using the DescribeInstancesHealth
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the DescribeInstancesHealth method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the DescribeInstancesHealthRequest method.
 //    req, resp := client.DescribeInstancesHealthRequest(params)
@@ -2281,18 +2307,19 @@ const opDescribePlatformVersion = "DescribePlatformVersion"
 
 // DescribePlatformVersionRequest generates a "aws/request.Request" representing the
 // client's request for the DescribePlatformVersion operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See DescribePlatformVersion for usage and error information.
 //
-// See DescribePlatformVersion for more information on using the DescribePlatformVersion
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the DescribePlatformVersion method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the DescribePlatformVersionRequest method.
 //    req, resp := client.DescribePlatformVersionRequest(params)
@@ -2364,18 +2391,19 @@ const opListAvailableSolutionStacks = "ListAvailableSolutionStacks"
 
 // ListAvailableSolutionStacksRequest generates a "aws/request.Request" representing the
 // client's request for the ListAvailableSolutionStacks operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See ListAvailableSolutionStacks for usage and error information.
 //
-// See ListAvailableSolutionStacks for more information on using the ListAvailableSolutionStacks
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the ListAvailableSolutionStacks method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the ListAvailableSolutionStacksRequest method.
 //    req, resp := client.ListAvailableSolutionStacksRequest(params)
@@ -2439,18 +2467,19 @@ const opListPlatformVersions = "ListPlatformVersions"
 
 // ListPlatformVersionsRequest generates a "aws/request.Request" representing the
 // client's request for the ListPlatformVersions operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See ListPlatformVersions for usage and error information.
 //
-// See ListPlatformVersions for more information on using the ListPlatformVersions
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the ListPlatformVersions method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the ListPlatformVersionsRequest method.
 //    req, resp := client.ListPlatformVersionsRequest(params)
@@ -2522,18 +2551,19 @@ const opRebuildEnvironment = "RebuildEnvironment"
 
 // RebuildEnvironmentRequest generates a "aws/request.Request" representing the
 // client's request for the RebuildEnvironment operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See RebuildEnvironment for usage and error information.
 //
-// See RebuildEnvironment for more information on using the RebuildEnvironment
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the RebuildEnvironment method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the RebuildEnvironmentRequest method.
 //    req, resp := client.RebuildEnvironmentRequest(params)
@@ -2605,18 +2635,19 @@ const opRequestEnvironmentInfo = "RequestEnvironmentInfo"
 
 // RequestEnvironmentInfoRequest generates a "aws/request.Request" representing the
 // client's request for the RequestEnvironmentInfo operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See RequestEnvironmentInfo for usage and error information.
 //
-// See RequestEnvironmentInfo for more information on using the RequestEnvironmentInfo
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the RequestEnvironmentInfo method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the RequestEnvironmentInfoRequest method.
 //    req, resp := client.RequestEnvironmentInfoRequest(params)
@@ -2695,18 +2726,19 @@ const opRestartAppServer = "RestartAppServer"
 
 // RestartAppServerRequest generates a "aws/request.Request" representing the
 // client's request for the RestartAppServer operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See RestartAppServer for usage and error information.
 //
-// See RestartAppServer for more information on using the RestartAppServer
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the RestartAppServer method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the RestartAppServerRequest method.
 //    req, resp := client.RestartAppServerRequest(params)
@@ -2772,18 +2804,19 @@ const opRetrieveEnvironmentInfo = "RetrieveEnvironmentInfo"
 
 // RetrieveEnvironmentInfoRequest generates a "aws/request.Request" representing the
 // client's request for the RetrieveEnvironmentInfo operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See RetrieveEnvironmentInfo for usage and error information.
 //
-// See RetrieveEnvironmentInfo for more information on using the RetrieveEnvironmentInfo
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the RetrieveEnvironmentInfo method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the RetrieveEnvironmentInfoRequest method.
 //    req, resp := client.RetrieveEnvironmentInfoRequest(params)
@@ -2850,18 +2883,19 @@ const opSwapEnvironmentCNAMEs = "SwapEnvironmentCNAMEs"
 
 // SwapEnvironmentCNAMEsRequest generates a "aws/request.Request" representing the
 // client's request for the SwapEnvironmentCNAMEs operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See SwapEnvironmentCNAMEs for usage and error information.
 //
-// See SwapEnvironmentCNAMEs for more information on using the SwapEnvironmentCNAMEs
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the SwapEnvironmentCNAMEs method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the SwapEnvironmentCNAMEsRequest method.
 //    req, resp := client.SwapEnvironmentCNAMEsRequest(params)
@@ -2926,18 +2960,19 @@ const opTerminateEnvironment = "TerminateEnvironment"
 
 // TerminateEnvironmentRequest generates a "aws/request.Request" representing the
 // client's request for the TerminateEnvironment operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See TerminateEnvironment for usage and error information.
 //
-// See TerminateEnvironment for more information on using the TerminateEnvironment
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the TerminateEnvironment method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the TerminateEnvironmentRequest method.
 //    req, resp := client.TerminateEnvironmentRequest(params)
@@ -3006,18 +3041,19 @@ const opUpdateApplication = "UpdateApplication"
 
 // UpdateApplicationRequest generates a "aws/request.Request" representing the
 // client's request for the UpdateApplication operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See UpdateApplication for usage and error information.
 //
-// See UpdateApplication for more information on using the UpdateApplication
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the UpdateApplication method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the UpdateApplicationRequest method.
 //    req, resp := client.UpdateApplicationRequest(params)
@@ -3083,18 +3119,19 @@ const opUpdateApplicationResourceLifecycle = "UpdateApplicationResourceLifecycle
 
 // UpdateApplicationResourceLifecycleRequest generates a "aws/request.Request" representing the
 // client's request for the UpdateApplicationResourceLifecycle operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See UpdateApplicationResourceLifecycle for usage and error information.
 //
-// See UpdateApplicationResourceLifecycle for more information on using the UpdateApplicationResourceLifecycle
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the UpdateApplicationResourceLifecycle method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the UpdateApplicationResourceLifecycleRequest method.
 //    req, resp := client.UpdateApplicationResourceLifecycleRequest(params)
@@ -3163,18 +3200,19 @@ const opUpdateApplicationVersion = "UpdateApplicationVersion"
 
 // UpdateApplicationVersionRequest generates a "aws/request.Request" representing the
 // client's request for the UpdateApplicationVersion operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See UpdateApplicationVersion for usage and error information.
 //
-// See UpdateApplicationVersion for more information on using the UpdateApplicationVersion
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the UpdateApplicationVersion method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the UpdateApplicationVersionRequest method.
 //    req, resp := client.UpdateApplicationVersionRequest(params)
@@ -3240,18 +3278,19 @@ const opUpdateConfigurationTemplate = "UpdateConfigurationTemplate"
 
 // UpdateConfigurationTemplateRequest generates a "aws/request.Request" representing the
 // client's request for the UpdateConfigurationTemplate operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See UpdateConfigurationTemplate for usage and error information.
 //
-// See UpdateConfigurationTemplate for more information on using the UpdateConfigurationTemplate
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the UpdateConfigurationTemplate method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the UpdateConfigurationTemplateRequest method.
 //    req, resp := client.UpdateConfigurationTemplateRequest(params)
@@ -3331,18 +3370,19 @@ const opUpdateEnvironment = "UpdateEnvironment"
 
 // UpdateEnvironmentRequest generates a "aws/request.Request" representing the
 // client's request for the UpdateEnvironment operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See UpdateEnvironment for usage and error information.
 //
-// See UpdateEnvironment for more information on using the UpdateEnvironment
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the UpdateEnvironment method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the UpdateEnvironmentRequest method.
 //    req, resp := client.UpdateEnvironmentRequest(params)
@@ -3424,18 +3464,19 @@ const opValidateConfigurationSettings = "ValidateConfigurationSettings"
 
 // ValidateConfigurationSettingsRequest generates a "aws/request.Request" representing the
 // client's request for the ValidateConfigurationSettings operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See ValidateConfigurationSettings for usage and error information.
 //
-// See ValidateConfigurationSettings for more information on using the ValidateConfigurationSettings
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the ValidateConfigurationSettings method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the ValidateConfigurationSettingsRequest method.
 //    req, resp := client.ValidateConfigurationSettingsRequest(params)
@@ -4719,7 +4760,7 @@ type ConfigurationSettingsDescription struct {
 	// set.
 	OptionSettings []*ConfigurationOptionSetting `type:"list"`
 
-	// The ARN of the platform.
+	// The ARN of the custom platform.
 	PlatformArn *string `type:"string"`
 
 	// The name of the solution stack this configuration set uses.
@@ -5194,9 +5235,8 @@ type CreateEnvironmentInput struct {
 	//
 	// Constraint: Must be from 4 to 40 characters in length. The name can contain
 	// only letters, numbers, and hyphens. It cannot start or end with a hyphen.
-	// This name must be unique within a region in your account. If the specified
-	// name already exists in the region, AWS Elastic Beanstalk returns an InvalidParameterValue
-	// error.
+	// This name must be unique in your account. If the specified name already exists,
+	// AWS Elastic Beanstalk returns an InvalidParameterValue error.
 	//
 	// Default: If the CNAME parameter is not specified, the environment name becomes
 	// part of the CNAME, and therefore part of the visible URL for your application.
@@ -5219,7 +5259,7 @@ type CreateEnvironmentInput struct {
 	// set for this new environment.
 	OptionsToRemove []*OptionSpecification `type:"list"`
 
-	// The ARN of the platform.
+	// The ARN of the custom platform.
 	PlatformArn *string `type:"string"`
 
 	// This is an alternative to specifying a template name. If specified, AWS Elastic
@@ -5964,7 +6004,7 @@ type Deployment struct {
 	// deploy source code or change instance configuration settings.
 	DeploymentId *int64 `type:"long"`
 
-	// For in-progress deployments, the time that the deployment started.
+	// For in-progress deployments, the time that the deloyment started.
 	//
 	// For completed deployments, the time that the deployment ended.
 	DeploymentTime *time.Time `type:"timestamp" timestampFormat:"iso8601"`
@@ -6024,18 +6064,10 @@ type DescribeApplicationVersionsInput struct {
 	// Specify an application name to show only application versions for that application.
 	ApplicationName *string `min:"1" type:"string"`
 
-	// For a paginated request. Specify a maximum number of application versions
-	// to include in each response.
-	//
-	// If no MaxRecords is specified, all available application versions are retrieved
-	// in a single response.
+	// Specify a maximum number of application versions to paginate in the request.
 	MaxRecords *int64 `min:"1" type:"integer"`
 
-	// For a paginated request. Specify a token from a previous response page to
-	// retrieve the next response page. All other parameter values must be identical
-	// to the ones specified in the initial request.
-	//
-	// If no NextToken is specified, the first page is retrieved.
+	// Specify a next token to retrieve the next page in a paginated request.
 	NextToken *string `type:"string"`
 
 	// Specify a version label to show a specific application version.
@@ -6100,8 +6132,8 @@ type DescribeApplicationVersionsOutput struct {
 	// List of ApplicationVersionDescription objects sorted in order of creation.
 	ApplicationVersions []*ApplicationVersionDescription `type:"list"`
 
-	// In a paginated request, the token that you can pass in a subsequent request
-	// to get the next response page.
+	// For a paginated request, the token that you can pass in a subsequent request
+	// to get the next page.
 	NextToken *string `type:"string"`
 }
 
@@ -6288,7 +6320,7 @@ type DescribeConfigurationOptionsOutput struct {
 	// A list of ConfigurationOptionDescription.
 	Options []*ConfigurationOptionDescription `type:"list"`
 
-	// The ARN of the platform.
+	// The ARN of the custom platform.
 	PlatformArn *string `type:"string"`
 
 	// The name of the solution stack these configuration options belong to.
@@ -6856,20 +6888,6 @@ type DescribeEnvironmentsInput struct {
 	// after this date are displayed.
 	IncludedDeletedBackTo *time.Time `type:"timestamp" timestampFormat:"iso8601"`
 
-	// For a paginated request. Specify a maximum number of environments to include
-	// in each response.
-	//
-	// If no MaxRecords is specified, all available environments are retrieved in
-	// a single response.
-	MaxRecords *int64 `min:"1" type:"integer"`
-
-	// For a paginated request. Specify a token from a previous response page to
-	// retrieve the next response page. All other parameter values must be identical
-	// to the ones specified in the initial request.
-	//
-	// If no NextToken is specified, the first page is retrieved.
-	NextToken *string `type:"string"`
-
 	// If specified, AWS Elastic Beanstalk restricts the returned descriptions to
 	// include only those that are associated with this application version.
 	VersionLabel *string `min:"1" type:"string"`
@@ -6890,9 +6908,6 @@ func (s *DescribeEnvironmentsInput) Validate() error {
 	invalidParams := request.ErrInvalidParams{Context: "DescribeEnvironmentsInput"}
 	if s.ApplicationName != nil && len(*s.ApplicationName) < 1 {
 		invalidParams.Add(request.NewErrParamMinLen("ApplicationName", 1))
-	}
-	if s.MaxRecords != nil && *s.MaxRecords < 1 {
-		invalidParams.Add(request.NewErrParamMinValue("MaxRecords", 1))
 	}
 	if s.VersionLabel != nil && len(*s.VersionLabel) < 1 {
 		invalidParams.Add(request.NewErrParamMinLen("VersionLabel", 1))
@@ -6931,18 +6946,6 @@ func (s *DescribeEnvironmentsInput) SetIncludeDeleted(v bool) *DescribeEnvironme
 // SetIncludedDeletedBackTo sets the IncludedDeletedBackTo field's value.
 func (s *DescribeEnvironmentsInput) SetIncludedDeletedBackTo(v time.Time) *DescribeEnvironmentsInput {
 	s.IncludedDeletedBackTo = &v
-	return s
-}
-
-// SetMaxRecords sets the MaxRecords field's value.
-func (s *DescribeEnvironmentsInput) SetMaxRecords(v int64) *DescribeEnvironmentsInput {
-	s.MaxRecords = &v
-	return s
-}
-
-// SetNextToken sets the NextToken field's value.
-func (s *DescribeEnvironmentsInput) SetNextToken(v string) *DescribeEnvironmentsInput {
-	s.NextToken = &v
 	return s
 }
 
@@ -7339,10 +7342,6 @@ type EnvironmentDescription struct {
 	// For single-instance environments, the IP address of the instance.
 	EndpointURL *string `type:"string"`
 
-	// The environment's Amazon Resource Name (ARN), which can be used in other
-	// API reuqests that require an ARN.
-	EnvironmentArn *string `type:"string"`
-
 	// The ID of this environment.
 	EnvironmentId *string `type:"string"`
 
@@ -7374,7 +7373,7 @@ type EnvironmentDescription struct {
 	// For more information, see Health Colors and Statuses (http://docs.aws.amazon.com/elasticbeanstalk/latest/dg/health-enhanced-status.html).
 	HealthStatus *string `type:"string" enum:"EnvironmentHealthStatus"`
 
-	// The ARN of the platform.
+	// The ARN of the custom platform.
 	PlatformArn *string `type:"string"`
 
 	// The description of the AWS resources used by this environment.
@@ -7460,12 +7459,6 @@ func (s *EnvironmentDescription) SetEndpointURL(v string) *EnvironmentDescriptio
 	return s
 }
 
-// SetEnvironmentArn sets the EnvironmentArn field's value.
-func (s *EnvironmentDescription) SetEnvironmentArn(v string) *EnvironmentDescription {
-	s.EnvironmentArn = &v
-	return s
-}
-
 // SetEnvironmentId sets the EnvironmentId field's value.
 func (s *EnvironmentDescription) SetEnvironmentId(v string) *EnvironmentDescription {
 	s.EnvironmentId = &v
@@ -7545,10 +7538,6 @@ type EnvironmentDescriptionsMessage struct {
 
 	// Returns an EnvironmentDescription list.
 	Environments []*EnvironmentDescription `type:"list"`
-
-	// In a paginated request, the token that you can pass in a subsequent request
-	// to get the next response page.
-	NextToken *string `type:"string"`
 }
 
 // String returns the string representation
@@ -7564,12 +7553,6 @@ func (s EnvironmentDescriptionsMessage) GoString() string {
 // SetEnvironments sets the Environments field's value.
 func (s *EnvironmentDescriptionsMessage) SetEnvironments(v []*EnvironmentDescription) *EnvironmentDescriptionsMessage {
 	s.Environments = v
-	return s
-}
-
-// SetNextToken sets the NextToken field's value.
-func (s *EnvironmentDescriptionsMessage) SetNextToken(v string) *EnvironmentDescriptionsMessage {
-	s.NextToken = &v
 	return s
 }
 
@@ -7828,7 +7811,7 @@ type EventDescription struct {
 	// The event message.
 	Message *string `type:"string"`
 
-	// The ARN of the platform.
+	// The ARN of the custom platform.
 	PlatformArn *string `type:"string"`
 
 	// The web service request ID for the activity of this event.

@@ -47,8 +47,8 @@ type Version interface {
 type PairedVersion interface {
 	Version
 
-	// Underlying returns the immutable Revision that identifies this Version.
-	Underlying() Revision
+	// Revision returns the immutable Revision that identifies this Version.
+	Revision() Revision
 
 	// Unpair returns the surface-level UnpairedVersion that half of the pair.
 	//
@@ -64,9 +64,9 @@ type PairedVersion interface {
 // VersionPair by indicating the version's corresponding, underlying Revision.
 type UnpairedVersion interface {
 	Version
-	// Is takes the underlying Revision that this UnpairedVersion corresponds
+	// Pair takes the underlying Revision that this UnpairedVersion corresponds
 	// to and unites them into a PairedVersion.
-	Is(Revision) PairedVersion
+	Pair(Revision) PairedVersion
 	// Ensures it is impossible to be both a PairedVersion and an
 	// UnpairedVersion
 	_pair(bool)
@@ -119,6 +119,9 @@ func (r Revision) String() string {
 	return string(r)
 }
 
+// ImpliedCaretString follows the same rules as String(), but in accordance with
+// the Constraint interface will always print a leading "=", as all Versions,
+// when acting as a Constraint, act as exact matches.
 func (r Revision) ImpliedCaretString() string {
 	return r.String()
 }
@@ -188,6 +191,14 @@ func (r Revision) Intersect(c Constraint) Constraint {
 	}
 
 	return none
+}
+
+func (r Revision) identical(c Constraint) bool {
+	r2, ok := c.(Revision)
+	if !ok {
+		return false
+	}
+	return r == r2
 }
 
 type branchVersion struct {
@@ -267,11 +278,19 @@ func (v branchVersion) Intersect(c Constraint) Constraint {
 	return none
 }
 
-func (v branchVersion) Is(r Revision) PairedVersion {
+func (v branchVersion) Pair(r Revision) PairedVersion {
 	return versionPair{
 		v: v,
 		r: r,
 	}
+}
+
+func (v branchVersion) identical(c Constraint) bool {
+	v2, ok := c.(branchVersion)
+	if !ok {
+		return false
+	}
+	return v == v2
 }
 
 type plainVersion string
@@ -348,11 +367,19 @@ func (v plainVersion) Intersect(c Constraint) Constraint {
 	return none
 }
 
-func (v plainVersion) Is(r Revision) PairedVersion {
+func (v plainVersion) Pair(r Revision) PairedVersion {
 	return versionPair{
 		v: v,
 		r: r,
 	}
+}
+
+func (v plainVersion) identical(c Constraint) bool {
+	v2, ok := c.(plainVersion)
+	if !ok {
+		return false
+	}
+	return v == v2
 }
 
 type semVersion struct {
@@ -439,11 +466,19 @@ func (v semVersion) Intersect(c Constraint) Constraint {
 	return none
 }
 
-func (v semVersion) Is(r Revision) PairedVersion {
+func (v semVersion) Pair(r Revision) PairedVersion {
 	return versionPair{
 		v: v,
 		r: r,
 	}
+}
+
+func (v semVersion) identical(c Constraint) bool {
+	v2, ok := c.(semVersion)
+	if !ok {
+		return false
+	}
+	return v == v2
 }
 
 type versionPair struct {
@@ -460,14 +495,14 @@ func (v versionPair) ImpliedCaretString() string {
 }
 
 func (v versionPair) typedString() string {
-	return fmt.Sprintf("%s-%s", v.Unpair().typedString(), v.Underlying().typedString())
+	return fmt.Sprintf("%s-%s", v.Unpair().typedString(), v.Revision().typedString())
 }
 
 func (v versionPair) Type() VersionType {
 	return v.v.Type()
 }
 
-func (v versionPair) Underlying() Revision {
+func (v versionPair) Revision() Revision {
 	return v.r
 }
 
@@ -545,6 +580,17 @@ func (v versionPair) Intersect(c2 Constraint) Constraint {
 	}
 
 	return none
+}
+
+func (v versionPair) identical(c Constraint) bool {
+	v2, ok := c.(versionPair)
+	if !ok {
+		return false
+	}
+	if v.r != v2.r {
+		return false
+	}
+	return v.v.identical(v2.v)
 }
 
 // compareVersionType is a sort func helper that makes a coarse-grained sorting
@@ -786,7 +832,7 @@ func VersionComponentStrings(v Version) (revision string, branch string, version
 	case Revision:
 		revision = tv.String()
 	case PairedVersion:
-		revision = tv.Underlying().String()
+		revision = tv.Revision().String()
 	}
 
 	switch v.Type() {

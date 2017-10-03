@@ -95,9 +95,9 @@ func fromRawLock(raw rawLock) (*Lock, error) {
 			if ld.Branch != "" {
 				return nil, errors.Errorf("lock file specified both a branch (%s) and version (%s) for %s", ld.Branch, ld.Version, ld.Name)
 			}
-			v = gps.NewVersion(ld.Version).Is(r)
+			v = gps.NewVersion(ld.Version).Pair(r)
 		} else if ld.Branch != "" {
-			v = gps.NewBranch(ld.Branch).Is(r)
+			v = gps.NewBranch(ld.Branch).Pair(r)
 		} else if r == "" {
 			return nil, errors.Errorf("lock file has entry for %s, but specifies no branch or version", ld.Name)
 		}
@@ -122,6 +122,20 @@ func (l *Lock) Projects() []gps.LockedProject {
 	return l.P
 }
 
+// HasProjectWithRoot checks if the lock contains a project with the provided
+// ProjectRoot.
+//
+// This check is O(n) in the number of projects.
+func (l *Lock) HasProjectWithRoot(root gps.ProjectRoot) bool {
+	for _, p := range l.P {
+		if p.Ident().ProjectRoot == root {
+			return true
+		}
+	}
+
+	return false
+}
+
 // toRaw converts the manifest into a representation suitable to write to the lock file
 func (l *Lock) toRaw() rawLock {
 	raw := rawLock{
@@ -135,7 +149,9 @@ func (l *Lock) toRaw() rawLock {
 		Projects: make([]rawLockedProject, len(l.P)),
 	}
 
-	sort.Sort(SortedLockedProjects(l.P))
+	sort.Slice(l.P, func(i, j int) bool {
+		return l.P[i].Ident().Less(l.P[j].Ident())
+	})
 
 	for k, lp := range l.P {
 		id := lp.Ident()
@@ -182,22 +198,4 @@ func LockFromSolution(in gps.Solution) *Lock {
 	copy(l.SolveMeta.InputsDigest, h)
 	copy(l.P, p)
 	return l
-}
-
-// SortedLockedProjects implements sort.Interface.
-type SortedLockedProjects []gps.LockedProject
-
-func (s SortedLockedProjects) Len() int      { return len(s) }
-func (s SortedLockedProjects) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
-func (s SortedLockedProjects) Less(i, j int) bool {
-	l, r := s[i].Ident(), s[j].Ident()
-
-	if l.ProjectRoot < r.ProjectRoot {
-		return true
-	}
-	if r.ProjectRoot < l.ProjectRoot {
-		return false
-	}
-
-	return l.Source < r.Source
 }

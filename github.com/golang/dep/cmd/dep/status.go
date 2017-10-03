@@ -10,6 +10,8 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
+	"log"
 	"sort"
 	"text/tabwriter"
 
@@ -89,16 +91,10 @@ func (out *tableOutput) BasicFooter() {
 }
 
 func (out *tableOutput) BasicLine(bs *BasicStatus) {
-	var constraint string
-	if v, ok := bs.Constraint.(gps.Version); ok {
-		constraint = formatVersion(v)
-	} else {
-		constraint = bs.Constraint.String()
-	}
 	fmt.Fprintf(out.w,
 		"%s\t%s\t%s\t%s\t%s\t%d\t\n",
 		bs.ProjectRoot,
-		constraint,
+		bs.getConsolidatedConstraint(),
 		formatVersion(bs.Version),
 		formatVersion(bs.Revision),
 		formatVersion(bs.Latest),
@@ -124,12 +120,12 @@ func (out *tableOutput) MissingFooter() {
 
 type jsonOutput struct {
 	w       io.Writer
-	basic   []*BasicStatus
+	basic   []*rawStatus
 	missing []*MissingStatus
 }
 
 func (out *jsonOutput) BasicHeader() {
-	out.basic = []*BasicStatus{}
+	out.basic = []*rawStatus{}
 }
 
 func (out *jsonOutput) BasicFooter() {
@@ -137,7 +133,7 @@ func (out *jsonOutput) BasicFooter() {
 }
 
 func (out *jsonOutput) BasicLine(bs *BasicStatus) {
-	out.basic = append(out.basic, bs)
+	out.basic = append(out.basic, bs.marshalJSON())
 }
 
 func (out *jsonOutput) MissingHeader() {
@@ -162,7 +158,7 @@ type dotOutput struct {
 func (out *dotOutput) BasicHeader() {
 	out.g = new(graphviz).New()
 
-	ptree, _ := pkgtree.ListPackages(out.p.AbsRoot, string(out.p.ImportRoot))
+	ptree, _ := pkgtree.ListPackages(out.p.ResolvedAbsRoot, string(out.p.ImportRoot))
 	prm, _ := ptree.ToReachMap(true, false, false, nil)
 
 	out.g.createNode(string(out.p.ImportRoot), "", prm.FlattenFn(paths.IsStandardImportPath))
@@ -174,7 +170,7 @@ func (out *dotOutput) BasicFooter() {
 }
 
 func (out *dotOutput) BasicLine(bs *BasicStatus) {
-	out.g.createNode(bs.ProjectRoot, bs.Version.String(), bs.Children)
+	out.g.createNode(bs.ProjectRoot, bs.getConsolidatedVersion(), bs.Children)
 }
 
 func (out *dotOutput) MissingHeader()                {}
@@ -194,9 +190,21 @@ func (cmd *statusCommand) Run(ctx *dep.Ctx, args []string) error {
 	sm.UseDefaultSignalHandling()
 	defer sm.Release()
 
+	if err := dep.ValidateProjectRoots(ctx, p.Manifest, sm); err != nil {
+		return err
+	}
+
 	var buf bytes.Buffer
 	var out outputter
 	switch {
+	case cmd.modified:
+		return errors.Errorf("not implemented")
+	case cmd.unused:
+		return errors.Errorf("not implemented")
+	case cmd.missing:
+		return errors.Errorf("not implemented")
+	case cmd.old:
+		return errors.Errorf("not implemented")
 	case cmd.detailed:
 		return errors.Errorf("not implemented")
 	case cmd.json:
@@ -236,6 +244,15 @@ func (cmd *statusCommand) Run(ctx *dep.Ctx, args []string) error {
 	return nil
 }
 
+type rawStatus struct {
+	ProjectRoot  string
+	Constraint   string
+	Version      string
+	Revision     gps.Revision
+	Latest       gps.Version
+	PackageCount int
+}
+
 // BasicStatus contains all the information reported about a single dependency
 // in the summary/list status output mode.
 type BasicStatus struct {
@@ -246,8 +263,46 @@ type BasicStatus struct {
 	Revision     gps.Revision
 	Latest       gps.Version
 	PackageCount int
+	hasOverride  bool
 }
 
+func (bs *BasicStatus) getConsolidatedConstraint() string {
+	var constraint string
+	if bs.Constraint != nil {
+		if v, ok := bs.Constraint.(gps.Version); ok {
+			constraint = formatVersion(v)
+		} else {
+			constraint = bs.Constraint.String()
+		}
+	}
+
+	if bs.hasOverride {
+		constraint += " (override)"
+	}
+
+	return constraint
+}
+
+func (bs *BasicStatus) getConsolidatedVersion() string {
+	version := formatVersion(bs.Revision)
+	if bs.Version != nil {
+		version = formatVersion(bs.Version)
+	}
+	return version
+}
+
+func (bs *BasicStatus) marshalJSON() *rawStatus {
+	return &rawStatus{
+		ProjectRoot:  bs.ProjectRoot,
+		Constraint:   bs.getConsolidatedConstraint(),
+		Version:      formatVersion(bs.Version),
+		Revision:     bs.Revision,
+		Latest:       bs.Latest,
+		PackageCount: bs.PackageCount,
+	}
+}
+
+// MissingStatus contains information about all the missing packages in a project.
 type MissingStatus struct {
 	ProjectRoot     string
 	MissingPackages []string
@@ -257,15 +312,14 @@ func runStatusAll(ctx *dep.Ctx, out outputter, p *dep.Project, sm gps.SourceMana
 	var digestMismatch, hasMissingPkgs bool
 
 	if p.Lock == nil {
-		// TODO if we have no lock file, do...other stuff
-		return digestMismatch, hasMissingPkgs, nil
+		return digestMismatch, hasMissingPkgs, errors.Errorf("no Gopkg.lock found. Run `dep ensure` to generate lock file")
 	}
 
 	// While the network churns on ListVersions() requests, statically analyze
 	// code from the current project.
-	ptree, err := pkgtree.ListPackages(p.AbsRoot, string(p.ImportRoot))
+	ptree, err := pkgtree.ListPackages(p.ResolvedAbsRoot, string(p.ImportRoot))
 	if err != nil {
-		return digestMismatch, hasMissingPkgs, errors.Errorf("analysis of local packages failed: %v", err)
+		return digestMismatch, hasMissingPkgs, errors.Wrapf(err, "analysis of local packages failed")
 	}
 
 	// Set up a solver in order to check the InputHash.
@@ -276,13 +330,21 @@ func runStatusAll(ctx *dep.Ctx, out outputter, p *dep.Project, sm gps.SourceMana
 		Manifest:        p.Manifest,
 		// Locks aren't a part of the input hash check, so we can omit it.
 	}
+
+	logger := ctx.Err
 	if ctx.Verbose {
 		params.TraceLogger = ctx.Err
+	} else {
+		logger = log.New(ioutil.Discard, "", 0)
+	}
+
+	if err := ctx.ValidateParams(sm, params); err != nil {
+		return digestMismatch, hasMissingPkgs, err
 	}
 
 	s, err := gps.Prepare(params, sm)
 	if err != nil {
-		return digestMismatch, hasMissingPkgs, errors.Errorf("could not set up solver for input hashing: %s", err)
+		return digestMismatch, hasMissingPkgs, errors.Wrapf(err, "could not set up solver for input hashing")
 	}
 
 	cm := collectConstraints(ptree, p, sm)
@@ -291,7 +353,9 @@ func runStatusAll(ctx *dep.Ctx, out outputter, p *dep.Project, sm gps.SourceMana
 	// deterministically ordered. (This may be superfluous if the lock is always
 	// written in alpha order, but it doesn't hurt to double down.)
 	slp := p.Lock.Projects()
-	sort.Sort(dep.SortedLockedProjects(slp))
+	sort.Slice(slp, func(i, j int) bool {
+		return slp[i].Ident().Less(slp[j].Ident())
+	})
 
 	if bytes.Equal(s.HashInputs(), p.Lock.SolveMeta.InputsDigest) {
 		// If these are equal, we're guaranteed that the lock is a transitively
@@ -300,7 +364,11 @@ func runStatusAll(ctx *dep.Ctx, out outputter, p *dep.Project, sm gps.SourceMana
 
 		out.BasicHeader()
 
-		for _, proj := range slp {
+		logger.Println("Checking upstream projects:")
+
+		for i, proj := range slp {
+			logger.Printf("(%d/%d) %s\n", i+1, len(slp), proj.Ident().ProjectRoot)
+
 			bs := BasicStatus{
 				ProjectRoot:  string(proj.Ident().ProjectRoot),
 				PackageCount: len(proj.Packages()),
@@ -313,7 +381,7 @@ func runStatusAll(ctx *dep.Ctx, out outputter, p *dep.Project, sm gps.SourceMana
 				ptr, err := sm.ListPackages(proj.Ident(), proj.Version())
 
 				if err != nil {
-					return digestMismatch, hasMissingPkgs, fmt.Errorf("analysis of %s package failed: %v", proj.Ident().ProjectRoot, err)
+					return digestMismatch, hasMissingPkgs, errors.Wrapf(err, "analysis of %s package failed", proj.Ident().ProjectRoot)
 				}
 
 				prm, _ := ptr.ToReachMap(true, false, false, nil)
@@ -328,13 +396,13 @@ func runStatusAll(ctx *dep.Ctx, out outputter, p *dep.Project, sm gps.SourceMana
 				bs.Revision = tv
 			case gps.PairedVersion:
 				bs.Version = tv.Unpair()
-				bs.Revision = tv.Underlying()
+				bs.Revision = tv.Revision()
 			}
 
 			// Check if the manifest has an override for this project. If so,
 			// set that as the constraint.
 			if pp, has := p.Manifest.Ovr[proj.Ident().ProjectRoot]; has && pp.Constraint != nil {
-				// TODO note somehow that it's overridden
+				bs.hasOverride = true
 				bs.Constraint = pp.Constraint
 			} else {
 				bs.Constraint = gps.Any()
@@ -364,7 +432,7 @@ func runStatusAll(ctx *dep.Ctx, out outputter, p *dep.Project, sm gps.SourceMana
 						// upgrade, the first version we encounter that
 						// matches our constraint will be what we want.
 						if c.Constraint.Matches(v) {
-							bs.Latest = v.Underlying()
+							bs.Latest = v.Revision()
 							break
 						}
 					}
@@ -373,6 +441,7 @@ func runStatusAll(ctx *dep.Ctx, out outputter, p *dep.Project, sm gps.SourceMana
 
 			out.BasicLine(&bs)
 		}
+		logger.Println()
 		out.BasicFooter()
 
 		return digestMismatch, hasMissingPkgs, nil

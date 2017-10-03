@@ -44,7 +44,7 @@ func main() {
 
 	// Set up a SourceManager. This manages interaction with sources (repositories).
 	tempdir, _ := ioutil.TempDir("", "gps-repocache")
-	sourcemgr, _ := gps.NewSourceManager(filepath.Join(tempdir))
+	sourcemgr, _ := gps.NewSourceManager(gps.SourceManagerConfig{Cachedir: filepath.Join(tempdir)})
 	defer sourcemgr.Release()
 
 	// Prep and run the solver
@@ -70,6 +70,9 @@ func (a NaiveAnalyzer) DeriveManifestAndLock(path string, n gps.ProjectRoot) (gp
 
 // Reports the name and version of the analyzer. This is used internally as part
 // of gps' hashing memoization scheme.
-func (a NaiveAnalyzer) Info() (name string, version int) {
-	return "example-analyzer", 1
+func (a NaiveAnalyzer) Info() gps.ProjectAnalyzerInfo {
+	return gps.ProjectAnalyzerInfo{
+		Name:    "example-analyzer",
+		Version: 1,
+	}
 }

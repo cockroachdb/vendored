@@ -13,8 +13,10 @@ import (
 	"github.com/golang/dep/internal/gps"
 )
 
-var errProjectNotFound = fmt.Errorf("could not find project %s, use dep init to initiate a manifest", ManifestName)
-var errVendorBackupFailed = fmt.Errorf("Failed to create vendor backup. File with same name exists.")
+var (
+	errProjectNotFound    = fmt.Errorf("could not find project %s, use dep init to initiate a manifest", ManifestName)
+	errVendorBackupFailed = fmt.Errorf("failed to create vendor backup. File with same name exists")
+)
 
 // findProjectRoot searches from the starting directory upwards looking for a
 // manifest file until we get to the root of the filesystem.
@@ -43,10 +45,24 @@ func findProjectRoot(from string) (string, error) {
 type Project struct {
 	// AbsRoot is the absolute path to the root directory of the project.
 	AbsRoot string
+	// ResolvedAbsRoot is the resolved absolute path to the root directory of the project.
+	// If AbsRoot is not a symlink, then ResolvedAbsRoot should equal AbsRoot.
+	ResolvedAbsRoot string
 	// ImportRoot is the import path of the project's root directory.
 	ImportRoot gps.ProjectRoot
 	Manifest   *Manifest
 	Lock       *Lock // Optional
+}
+
+// SetRoot sets the project AbsRoot and ResolvedAbsRoot. If root is a not symlink, ResolvedAbsRoot will be set to root.
+func (p *Project) SetRoot(root string) error {
+	rroot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return err
+	}
+
+	p.ResolvedAbsRoot, p.AbsRoot = rroot, root
+	return nil
 }
 
 // MakeParams is a simple helper to create a gps.SolveParameters without setting
@@ -73,7 +89,7 @@ func (p *Project) MakeParams() gps.SolveParameters {
 func BackupVendor(vpath, suffix string) (string, error) {
 	// Check if there's a non-empty vendor directory
 	vendorExists, err := fs.IsNonEmptyDir(vpath)
-	if err != nil {
+	if err != nil && !os.IsNotExist(err) {
 		return "", err
 	}
 	if vendorExists {

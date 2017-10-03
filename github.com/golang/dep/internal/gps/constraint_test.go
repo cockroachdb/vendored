@@ -7,12 +7,14 @@ package gps
 import (
 	"fmt"
 	"testing"
+
+	"github.com/pkg/errors"
 )
 
 // gu - helper func for stringifying what we assume is a VersionPair (otherwise
 // will panic), but is given as a Constraint
 func gu(v Constraint) string {
-	return fmt.Sprintf("%q at rev %q", v, v.(PairedVersion).Underlying())
+	return fmt.Sprintf("%q at rev %q", v, v.(PairedVersion).Revision())
 }
 
 func TestBranchConstraintOps(t *testing.T) {
@@ -47,7 +49,7 @@ func TestBranchConstraintOps(t *testing.T) {
 
 	// Add rev to one
 	snuffster := Revision("snuffleupagus")
-	v3 := v1.Is(snuffster).(versionPair)
+	v3 := v1.Pair(snuffster).(versionPair)
 	if v2.Matches(v3) {
 		t.Errorf("%s should not match %s", v2, gu(v3))
 	}
@@ -70,7 +72,7 @@ func TestBranchConstraintOps(t *testing.T) {
 	}
 
 	// Add different rev to the other
-	v4 := v2.Is(Revision("cookie monster")).(versionPair)
+	v4 := v2.Pair(Revision("cookie monster")).(versionPair)
 	if v4.Matches(v3) {
 		t.Errorf("%s should not match %s", gu(v4), gu(v3))
 	}
@@ -93,10 +95,7 @@ func TestBranchConstraintOps(t *testing.T) {
 	}
 
 	// Now add same rev to different branches
-	// TODO(sdboyer) this might not actually be a good idea, when you consider the
-	// semantics of floating versions...matching on an underlying rev might be
-	// nice in the short term, but it's probably shit most of the time
-	v5 := v2.Is(Revision("snuffleupagus")).(versionPair)
+	v5 := v2.Pair(Revision("snuffleupagus")).(versionPair)
 	if !v5.Matches(v3) {
 		t.Errorf("%s should match %s", gu(v5), gu(v3))
 	}
@@ -122,9 +121,9 @@ func TestBranchConstraintOps(t *testing.T) {
 	cookie := Revision("cookie monster")
 	o1 := NewVersion("master").(plainVersion)
 	o2 := NewVersion("1.0.0").(semVersion)
-	o3 := o1.Is(cookie).(versionPair)
-	o4 := o2.Is(cookie).(versionPair)
-	v6 := v1.Is(cookie).(versionPair)
+	o3 := o1.Pair(cookie).(versionPair)
+	o4 := o2.Pair(cookie).(versionPair)
+	v6 := v1.Pair(cookie).(versionPair)
 
 	if v1.Matches(o1) {
 		t.Errorf("%s (branch) should not match %s (version) across types", v1, o1)
@@ -231,7 +230,7 @@ func TestVersionConstraintOps(t *testing.T) {
 
 	// Add rev to one
 	snuffster := Revision("snuffleupagus")
-	v3 := v1.Is(snuffster).(versionPair)
+	v3 := v1.Pair(snuffster).(versionPair)
 	if v2.Matches(v3) {
 		t.Errorf("%s should not match %s", v2, gu(v3))
 	}
@@ -254,7 +253,7 @@ func TestVersionConstraintOps(t *testing.T) {
 	}
 
 	// Add different rev to the other
-	v4 := v2.Is(Revision("cookie monster")).(versionPair)
+	v4 := v2.Pair(Revision("cookie monster")).(versionPair)
 	if v4.Matches(v3) {
 		t.Errorf("%s should not match %s", gu(v4), gu(v3))
 	}
@@ -277,7 +276,7 @@ func TestVersionConstraintOps(t *testing.T) {
 	}
 
 	// Now add same rev to different versions, and things should line up
-	v5 := v2.Is(Revision("snuffleupagus")).(versionPair)
+	v5 := v2.Pair(Revision("snuffleupagus")).(versionPair)
 	if !v5.Matches(v3) {
 		t.Errorf("%s should match %s", gu(v5), gu(v3))
 	}
@@ -303,9 +302,9 @@ func TestVersionConstraintOps(t *testing.T) {
 	cookie := Revision("cookie monster")
 	o1 := NewBranch("master").(branchVersion)
 	o2 := NewVersion("1.0.0").(semVersion)
-	o3 := o1.Is(cookie).(versionPair)
-	o4 := o2.Is(cookie).(versionPair)
-	v6 := v1.Is(cookie).(versionPair)
+	o3 := o1.Pair(cookie).(versionPair)
+	o4 := o2.Pair(cookie).(versionPair)
+	v6 := v1.Pair(cookie).(versionPair)
 
 	if v1.Matches(o1) {
 		t.Errorf("%s (version) should not match %s (branch) across types", v1, o1)
@@ -412,7 +411,7 @@ func TestSemverVersionConstraintOps(t *testing.T) {
 
 	// Add rev to one
 	snuffster := Revision("snuffleupagus")
-	v3 := v1.Is(snuffster).(versionPair)
+	v3 := v1.Pair(snuffster).(versionPair)
 	if v2.Matches(v3) {
 		t.Errorf("%s should not match %s", v2, gu(v3))
 	}
@@ -435,7 +434,7 @@ func TestSemverVersionConstraintOps(t *testing.T) {
 	}
 
 	// Add different rev to the other
-	v4 := v2.Is(Revision("cookie monster")).(versionPair)
+	v4 := v2.Pair(Revision("cookie monster")).(versionPair)
 	if v4.Matches(v3) {
 		t.Errorf("%s should not match %s", gu(v4), gu(v3))
 	}
@@ -458,7 +457,7 @@ func TestSemverVersionConstraintOps(t *testing.T) {
 	}
 
 	// Now add same rev to different versions, and things should line up
-	v5 := v2.Is(Revision("snuffleupagus")).(versionPair)
+	v5 := v2.Pair(Revision("snuffleupagus")).(versionPair)
 	if !v5.Matches(v3) {
 		t.Errorf("%s should match %s", gu(v5), gu(v3))
 	}
@@ -484,9 +483,9 @@ func TestSemverVersionConstraintOps(t *testing.T) {
 	cookie := Revision("cookie monster")
 	o1 := NewBranch("master").(branchVersion)
 	o2 := NewVersion("ab123").(plainVersion)
-	o3 := o1.Is(cookie).(versionPair)
-	o4 := o2.Is(cookie).(versionPair)
-	v6 := v1.Is(cookie).(versionPair)
+	o3 := o1.Pair(cookie).(versionPair)
+	o4 := o2.Pair(cookie).(versionPair)
+	v6 := v1.Pair(cookie).(versionPair)
 
 	if v1.Matches(o1) {
 		t.Errorf("%s (semver) should not match %s (branch) across types", v1, o1)
@@ -586,9 +585,9 @@ func TestSemverConstraintOps(t *testing.T) {
 	v3 := NewVersion("1.0.0").(semVersion)
 
 	fozzie := Revision("fozzie bear")
-	v4 := v1.Is(fozzie).(versionPair)
-	v5 := v2.Is(fozzie).(versionPair)
-	v6 := v3.Is(fozzie).(versionPair)
+	v4 := v1.Pair(fozzie).(versionPair)
+	v5 := v2.Pair(fozzie).(versionPair)
+	v6 := v3.Pair(fozzie).(versionPair)
 
 	// TODO(sdboyer) we can't use the same range as below b/c semver.rangeConstraint is
 	// still an incomparable type
@@ -702,9 +701,9 @@ func TestVersionUnion(t *testing.T) {
 	rev := Revision("flooboofoobooo")
 	v1 := NewBranch("master")
 	v2 := NewBranch("test")
-	v3 := NewVersion("1.0.0").Is(rev)
+	v3 := NewVersion("1.0.0").Pair(rev)
 	v4 := NewVersion("1.0.1")
-	v5 := NewVersion("v2.0.5").Is(Revision("notamatch"))
+	v5 := NewVersion("v2.0.5").Pair(Revision("notamatch"))
 
 	uv1 := versionTypeUnion{v1, v4, rev}
 	uv2 := versionTypeUnion{v2, v3}
@@ -877,7 +876,7 @@ func TestTypedConstraintString(t *testing.T) {
 	// Also tests typedVersionString(), as this nests down into that
 	rev := Revision("flooboofoobooo")
 	v1 := NewBranch("master")
-	v2 := NewBranch("test").Is(rev)
+	v2 := NewBranch("test").Pair(rev)
 	v3 := NewVersion("1.0.1")
 	v4 := NewVersion("v2.0.5")
 	v5 := NewVersion("2.0.5.2")
@@ -926,4 +925,40 @@ func TestTypedConstraintString(t *testing.T) {
 			t.Errorf("Typed string for %v (%T) was not expected %q; got %q", fix.in, fix.in, fix.out, got)
 		}
 	}
+}
+
+func TestConstraintsIdentical(t *testing.T) {
+	for _, test := range []struct {
+		a, b Constraint
+		eq   bool
+	}{
+		{Any(), Any(), true},
+		{none, noneConstraint{}, true},
+		{NewVersion("test"), NewVersion("test"), true},
+		{NewVersion("test"), NewVersion("test2"), false},
+		{NewBranch("test"), NewBranch("test"), true},
+		{NewBranch("test"), newDefaultBranch("test"), false},
+		{newDefaultBranch("test"), newDefaultBranch("test"), true},
+		{Revision("test"), Revision("test"), true},
+		{Revision("test"), Revision("test2"), false},
+		{testSemverConstraint(t, "v2.10.7"), testSemverConstraint(t, "v2.10.7"), true},
+		{versionTypeUnion{NewVersion("test"), NewBranch("branch")},
+			versionTypeUnion{NewBranch("branch"), NewVersion("test")}, true},
+	} {
+		if test.eq != test.a.identical(test.b) {
+			want := "identical"
+			if !test.eq {
+				want = "not " + want
+			}
+			t.Errorf("expected %s:\n\t(a) %#v\n\t(b) %#v", want, test.a, test.b)
+		}
+	}
+}
+
+func testSemverConstraint(t *testing.T, body string) Constraint {
+	c, err := NewSemverConstraint(body)
+	if err != nil {
+		t.Fatal(errors.Wrapf(err, "failed to create semver constraint: %s", body))
+	}
+	return c
 }

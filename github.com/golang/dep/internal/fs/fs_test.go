@@ -75,7 +75,11 @@ func TestHasFilepathPrefix(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if got := HasFilepathPrefix(c.path, c.prefix); c.want != got {
+		got, err := HasFilepathPrefix(c.path, c.prefix)
+		if err != nil {
+			t.Fatalf("unexpected error: %s", err)
+		}
+		if c.want != got {
 			t.Fatalf("dir: %q, prefix: %q, expected: %v, got: %v", c.path, c.prefix, c.want, got)
 		}
 	}
@@ -112,7 +116,7 @@ func TestHasFilepathPrefix_Files(t *testing.T) {
 	}
 
 	existingFile := filepath.Join(dir, "exists")
-	if _, err := os.Create(existingFile); err != nil {
+	if err = os.MkdirAll(existingFile, 0755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -122,14 +126,67 @@ func TestHasFilepathPrefix_Files(t *testing.T) {
 		path   string
 		prefix string
 		want   bool
+		err    bool
 	}{
-		{existingFile, filepath.Join(dir2), false},
-		{nonExistingFile, filepath.Join(dir2), true},
+		{existingFile, filepath.Join(dir2), true, false},
+		{nonExistingFile, filepath.Join(dir2), false, true},
 	}
 
 	for _, c := range cases {
-		if got := HasFilepathPrefix(c.path, c.prefix); c.want != got {
+		got, err := HasFilepathPrefix(c.path, c.prefix)
+		if err != nil && !c.err {
+			t.Fatalf("unexpected error: %s", err)
+		}
+		if c.want != got {
 			t.Fatalf("dir: %q, prefix: %q, expected: %v, got: %v", c.path, c.prefix, c.want, got)
+		}
+	}
+}
+
+func TestEquivalentPaths(t *testing.T) {
+	h := test.NewHelper(t)
+	h.TempDir("dir")
+	h.TempDir("dir2")
+
+	h.TempFile("file", "")
+	h.TempFile("file2", "")
+
+	h.TempDir("DIR")
+	h.TempFile("FILE", "")
+
+	testcases := []struct {
+		p1, p2                   string
+		caseSensitiveEquivalent  bool
+		caseInensitiveEquivalent bool
+		err                      bool
+	}{
+		{h.Path("dir"), h.Path("dir"), true, true, false},
+		{h.Path("file"), h.Path("file"), true, true, false},
+		{h.Path("dir"), h.Path("dir2"), false, false, false},
+		{h.Path("file"), h.Path("file2"), false, false, false},
+		{h.Path("dir"), h.Path("file"), false, false, false},
+		{h.Path("dir"), h.Path("DIR"), false, true, false},
+		{strings.ToLower(h.Path("dir")), strings.ToUpper(h.Path("dir")), false, true, true},
+	}
+
+	caseSensitive, err := isCaseSensitiveFilesystem(h.Path("dir"))
+	if err != nil {
+		t.Fatal("unexpcted error:", err)
+	}
+
+	for _, tc := range testcases {
+		got, err := EquivalentPaths(tc.p1, tc.p2)
+		if err != nil && !tc.err {
+			t.Error("unexpected error:", err)
+		}
+		if caseSensitive {
+			if tc.caseSensitiveEquivalent != got {
+				t.Errorf("expected EquivalentPaths(%q, %q) to be %t on case-sensitive filesystem, got %t", tc.p1, tc.p2, tc.caseSensitiveEquivalent, got)
+			}
+		} else {
+			if tc.caseInensitiveEquivalent != got {
+				t.Errorf("expected EquivalentPaths(%q, %q) to be %t on case-insensitive filesystem, got %t", tc.p1, tc.p2, tc.caseInensitiveEquivalent, got)
+			}
 		}
 	}
 }
@@ -499,73 +556,84 @@ func TestCopyFile(t *testing.T) {
 }
 
 func TestCopyFileSymlink(t *testing.T) {
-	dir, err := ioutil.TempDir("", "dep")
+	h := test.NewHelper(t)
+	defer h.Cleanup()
+	h.TempDir(".")
+
+	testcases := map[string]string{
+		filepath.Join("./testdata/symlinks/file-symlink"):         filepath.Join(h.Path("."), "dst-file"),
+		filepath.Join("./testdata/symlinks/windows-file-symlink"): filepath.Join(h.Path("."), "windows-dst-file"),
+		filepath.Join("./testdata/symlinks/dir-symlink"):          filepath.Join(h.Path("."), "dst-dir"),
+		filepath.Join("./testdata/symlinks/invalid-symlink"):      filepath.Join(h.Path("."), "invalid-symlink"),
+	}
+
+	for symlink, dst := range testcases {
+		t.Run(symlink, func(t *testing.T) {
+			var err error
+			if err = copyFile(symlink, dst); err != nil {
+				t.Fatalf("failed to copy symlink: %s", err)
+			}
+
+			var want, got string
+
+			if runtime.GOOS == "windows" {
+				// Creating symlinks on Windows require an additional permission
+				// regular users aren't granted usually. So we copy the file
+				// content as a fall back instead of creating a real symlink.
+				srcb, err := ioutil.ReadFile(symlink)
+				h.Must(err)
+				dstb, err := ioutil.ReadFile(dst)
+				h.Must(err)
+
+				want = string(srcb)
+				got = string(dstb)
+			} else {
+				want, err = os.Readlink(symlink)
+				h.Must(err)
+
+				got, err = os.Readlink(dst)
+				if err != nil {
+					t.Fatalf("could not resolve symlink: %s", err)
+				}
+			}
+
+			if want != got {
+				t.Fatalf("resolved path is incorrect. expected %s, got %s", want, got)
+			}
+		})
+	}
+}
+
+func TestCopyFileLongFilePath(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		// We want to ensure the temporary fix actually fixes the issue with
+		// os.Chmod and long file paths. This is only applicable on Windows.
+		t.Skip("skipping on non-windows")
+	}
+
+	h := test.NewHelper(t)
+	h.TempDir(".")
+
+	tmpPath := h.Path(".")
+
+	// Create a directory with a long-enough path name to cause the bug in #774.
+	dirName := ""
+	for len(tmpPath+string(os.PathSeparator)+dirName) <= 300 {
+		dirName += "directory"
+	}
+
+	h.TempDir(dirName)
+	h.TempFile(dirName+string(os.PathSeparator)+"src", "")
+
+	tmpDirPath := tmpPath + string(os.PathSeparator) + dirName + string(os.PathSeparator)
+
+	err := copyFile(tmpDirPath+"src", tmpDirPath+"dst")
 	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
-
-	srcPath := filepath.Join(dir, "src")
-	symlinkPath := filepath.Join(dir, "symlink")
-	dstPath := filepath.Join(dir, "dst")
-
-	srcf, err := os.Create(srcPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	srcf.Close()
-
-	if err = os.Symlink(srcPath, symlinkPath); err != nil {
-		t.Fatalf("could not create symlink: %s", err)
-	}
-
-	if err = copyFile(symlinkPath, dstPath); err != nil {
-		t.Fatalf("failed to copy symlink: %s", err)
-	}
-
-	resolvedPath, err := os.Readlink(dstPath)
-	if err != nil {
-		t.Fatalf("could not resolve symlink: %s", err)
-	}
-
-	if resolvedPath != srcPath {
-		t.Fatalf("resolved path is incorrect. expected %s, got %s", srcPath, resolvedPath)
+		t.Fatalf("unexpected error while copying file: %v", err)
 	}
 }
 
-func TestCopyFileSymlinkToDirectory(t *testing.T) {
-	dir, err := ioutil.TempDir("", "dep")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
-
-	srcPath := filepath.Join(dir, "src")
-	symlinkPath := filepath.Join(dir, "symlink")
-	dstPath := filepath.Join(dir, "dst")
-
-	err = os.MkdirAll(srcPath, 0777)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err = os.Symlink(srcPath, symlinkPath); err != nil {
-		t.Fatalf("could not create symlink: %v", err)
-	}
-
-	if err = copyFile(symlinkPath, dstPath); err != nil {
-		t.Fatalf("failed to copy symlink: %s", err)
-	}
-
-	resolvedPath, err := os.Readlink(dstPath)
-	if err != nil {
-		t.Fatalf("could not resolve symlink: %s", err)
-	}
-
-	if resolvedPath != srcPath {
-		t.Fatalf("resolved path is incorrect. expected %s, got %s", srcPath, resolvedPath)
-	}
-}
+// C:\Users\appveyor\AppData\Local\Temp\1\gotest639065787\dir4567890\dir4567890\dir4567890\dir4567890\dir4567890\dir4567890\dir4567890\dir4567890\dir4567890\dir4567890\dir4567890\dir4567890\dir4567890\dir4567890\dir4567890\dir4567890\dir4567890\dir4567890\dir4567890\dir4567890\dir4567890\dir4567890\dir4567890
 
 func TestCopyFileFail(t *testing.T) {
 	if runtime.GOOS == "windows" {
@@ -733,7 +801,7 @@ func TestIsDir(t *testing.T) {
 	}{
 		wd: {true, false},
 		filepath.Join(wd, "testdata"):                       {true, false},
-		filepath.Join(wd, "main.go"):                        {false, false},
+		filepath.Join(wd, "main.go"):                        {false, true},
 		filepath.Join(wd, "this_file_does_not_exist.thing"): {false, true},
 		dn: {false, true},
 	}
@@ -748,13 +816,8 @@ func TestIsDir(t *testing.T) {
 
 	for f, want := range tests {
 		got, err := IsDir(f)
-		if err != nil {
-			if want.exists != got {
-				t.Fatalf("expected %t for %s, got %t", want.exists, f, got)
-			}
-			if !want.err {
-				t.Fatalf("expected no error, got %v", err)
-			}
+		if err != nil && !want.err {
+			t.Fatalf("expected no error, got %v", err)
 		}
 
 		if got != want.exists {
@@ -763,7 +826,7 @@ func TestIsDir(t *testing.T) {
 	}
 }
 
-func TestIsEmpty(t *testing.T) {
+func TestIsNonEmptyDir(t *testing.T) {
 	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -773,45 +836,52 @@ func TestIsEmpty(t *testing.T) {
 	defer h.Cleanup()
 
 	h.TempDir("empty")
-	tests := map[string]string{
-		wd:                                                  "true",
-		"testdata":                                          "true",
-		filepath.Join(wd, "fs.go"):                          "err",
-		filepath.Join(wd, "this_file_does_not_exist.thing"): "false",
-		h.Path("empty"):                                     "false",
+
+	testCases := []struct {
+		path  string
+		empty bool
+		err   bool
+	}{
+		{wd, true, false},
+		{"testdata", true, false},
+		{filepath.Join(wd, "fs.go"), false, true},
+		{filepath.Join(wd, "this_file_does_not_exist.thing"), false, false},
+		{h.Path("empty"), false, false},
 	}
 
-	for f, want := range tests {
-		empty, err := IsNonEmptyDir(f)
-		if want == "err" {
-			if err == nil {
-				t.Fatalf("Wanted an error for %v, but it was nil", f)
+	// This test case doesn't work on Microsoft Windows because of the
+	// differences in how file permissions are implemented.
+	if runtime.GOOS != "windows" {
+		var inaccessibleDir string
+		cleanup := setupInaccessibleDir(t, func(dir string) error {
+			inaccessibleDir = filepath.Join(dir, "empty")
+			return os.Mkdir(inaccessibleDir, 0777)
+		})
+		defer cleanup()
+
+		testCases = append(testCases, struct {
+			path  string
+			empty bool
+			err   bool
+		}{inaccessibleDir, false, true})
+	}
+
+	for _, want := range testCases {
+		got, err := IsNonEmptyDir(want.path)
+		if want.err && err == nil {
+			if got {
+				t.Fatalf("wanted false with error for %v, but got true", want.path)
 			}
-			if empty {
-				t.Fatalf("Wanted false with error for %v, but got true", f)
-			}
-		} else if err != nil {
-			t.Fatalf("Wanted no error for %v, got %v", f, err)
+			t.Fatalf("wanted an error for %v, but it was nil", want.path)
 		}
 
-		if want == "true" && !empty {
-			t.Fatalf("Wanted true for %v, but got false", f)
-		}
-
-		if want == "false" && empty {
-			t.Fatalf("Wanted false for %v, but got true", f)
+		if got != want.empty {
+			t.Fatalf("wanted %t for %v, but got %t", want.empty, want.path, got)
 		}
 	}
 }
 
 func TestIsSymlink(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		// XXX: creating symlinks is not supported in Go on
-		// Microsoft Windows. Skipping this this until a solution
-		// for creating symlinks is is provided.
-		t.Skip("skipping on windows")
-	}
-
 	dir, err := ioutil.TempDir("", "dep")
 	if err != nil {
 		t.Fatal(err)
@@ -832,6 +902,7 @@ func TestIsSymlink(t *testing.T) {
 
 	dirSymlink := filepath.Join(dir, "dirSymlink")
 	fileSymlink := filepath.Join(dir, "fileSymlink")
+
 	if err = os.Symlink(dirPath, dirSymlink); err != nil {
 		t.Fatal(err)
 	}
@@ -857,16 +928,20 @@ func TestIsSymlink(t *testing.T) {
 	})
 	defer cleanup()
 
-	tests := map[string]struct {
-		expected bool
-		err      bool
-	}{
+	tests := map[string]struct{ expected, err bool }{
 		dirPath:             {false, false},
 		filePath:            {false, false},
 		dirSymlink:          {true, false},
 		fileSymlink:         {true, false},
 		inaccessibleFile:    {false, true},
 		inaccessibleSymlink: {false, true},
+	}
+
+	if runtime.GOOS == "windows" {
+		// XXX: setting permissions works differently in Windows. Skipping
+		// these cases until a compatible implementation is provided.
+		delete(tests, inaccessibleFile)
+		delete(tests, inaccessibleSymlink)
 	}
 
 	for path, want := range tests {

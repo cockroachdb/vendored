@@ -353,6 +353,28 @@ var bimodalFixtures = map[string]bimodalFixture{
 			"b 1.0.2",
 		),
 	},
+	"unify project on disjoint package imports + source switching": {
+		ds: []depspec{
+			dsp(mkDepspec("root 0.0.0", "b from baz 1.0.0"),
+				pkg("root", "a", "b"),
+			),
+			dsp(mkDepspec("a 1.0.0"),
+				pkg("a", "b/foo"),
+			),
+			dsp(mkDepspec("b 1.0.0"),
+				pkg("b"),
+				pkg("b/foo"),
+			),
+			dsp(mkDepspec("baz 1.0.0"),
+				pkg("b"),
+				pkg("b/foo"),
+			),
+		},
+		r: mksolution(
+			"a 1.0.0",
+			mklp("b from baz 1.0.0", ".", "foo"),
+		),
+	},
 	"project cycle not involving root": {
 		ds: []depspec{
 			dsp(mkDepspec("root 0.0.0", "a ~1.0.0"),
@@ -661,6 +683,221 @@ var bimodalFixtures = map[string]bimodalFixture{
 			"a 1.0.0",
 		),
 	},
+	"simple case-only differences": {
+		ds: []depspec{
+			dsp(mkDepspec("root 0.0.0"),
+				pkg("root", "foo", "bar")),
+			dsp(mkDepspec("foo 1.0.0"),
+				pkg("foo", "Bar")),
+			dsp(mkDepspec("bar 1.0.0"),
+				pkg("bar")),
+		},
+		fail: &noVersionError{
+			pn: mkPI("foo"),
+			fails: []failedVersion{
+				{
+					v: NewVersion("1.0.0"),
+					f: &caseMismatchFailure{
+						goal:    mkDep("foo 1.0.0", "Bar 1.0.0", "Bar"),
+						current: ProjectRoot("bar"),
+						failsib: []dependency{mkDep("root", "bar 1.0.0", "bar")},
+					},
+				},
+			},
+		},
+	},
+	"case variations acceptable with agreement": {
+		ds: []depspec{
+			dsp(mkDepspec("root 0.0.0"),
+				pkg("root", "foo")),
+			dsp(mkDepspec("foo 1.0.0"),
+				pkg("foo", "Bar", "baz")),
+			dsp(mkDepspec("baz 1.0.0"),
+				pkg("baz", "Bar")),
+			dsp(mkDepspec("bar 1.0.0"),
+				pkg("bar")),
+		},
+		r: mksolution(
+			"foo 1.0.0",
+			"Bar 1.0.0",
+			"baz 1.0.0",
+		),
+	},
+	"case variations within root": {
+		ds: []depspec{
+			dsp(mkDepspec("root 0.0.0"),
+				pkg("root", "foo", "bar", "Bar")),
+			dsp(mkDepspec("foo 1.0.0"),
+				pkg("foo")),
+			dsp(mkDepspec("bar 1.0.0"),
+				pkg("bar")),
+		},
+		fail: &noVersionError{
+			pn: mkPI("foo"),
+			fails: []failedVersion{
+				{
+					v: NewVersion("1.0.0"),
+					f: &caseMismatchFailure{
+						goal:    mkDep("foo 1.0.0", "Bar 1.0.0", "Bar"),
+						current: ProjectRoot("bar"),
+						failsib: []dependency{mkDep("root", "foo 1.0.0", "foo")},
+					},
+				},
+			},
+		},
+		broken: "need to implement checking for import case variations *within* the root",
+	},
+	"case variations within single dep": {
+		ds: []depspec{
+			dsp(mkDepspec("root 0.0.0"),
+				pkg("root", "foo")),
+			dsp(mkDepspec("foo 1.0.0"),
+				pkg("foo", "bar", "Bar")),
+			dsp(mkDepspec("bar 1.0.0"),
+				pkg("bar")),
+		},
+		fail: &noVersionError{
+			pn: mkPI("foo"),
+			fails: []failedVersion{
+				{
+					v: NewVersion("1.0.0"),
+					f: &caseMismatchFailure{
+						goal:    mkDep("foo 1.0.0", "Bar 1.0.0", "Bar"),
+						current: ProjectRoot("bar"),
+						failsib: []dependency{mkDep("root", "foo 1.0.0", "foo")},
+					},
+				},
+			},
+		},
+		broken: "need to implement checking for import case variations *within* a single project",
+	},
+	"case variations across multiple deps": {
+		ds: []depspec{
+			dsp(mkDepspec("root 0.0.0"),
+				pkg("root", "foo", "bar")),
+			dsp(mkDepspec("foo 1.0.0"),
+				pkg("foo", "bar", "baz")),
+			dsp(mkDepspec("baz 1.0.0"),
+				pkg("baz", "Bar")),
+			dsp(mkDepspec("bar 1.0.0"),
+				pkg("bar")),
+		},
+		fail: &noVersionError{
+			pn: mkPI("baz"),
+			fails: []failedVersion{
+				{
+					v: NewVersion("1.0.0"),
+					f: &caseMismatchFailure{
+						goal:    mkDep("baz 1.0.0", "Bar 1.0.0", "Bar"),
+						current: ProjectRoot("bar"),
+						failsib: []dependency{
+							mkDep("root", "bar 1.0.0", "bar"),
+							mkDep("foo 1.0.0", "bar 1.0.0", "bar"),
+						},
+					},
+				},
+			},
+		},
+	},
+	// This isn't actually as crazy as it might seem, as the root is defined by
+	// the addresser, not the addressee. It would occur (to provide a
+	// real-as-of-this-writing example) if something imports
+	// github.com/Sirupsen/logrus, as the contained subpackage at
+	// github.com/Sirupsen/logrus/hooks/syslog imports
+	// github.com/sirupsen/logrus. The only reason that doesn't blow up all the
+	// time is that most people only import the root package, not the syslog
+	// subpackage.
+	"canonical case is established by mutual self-imports": {
+		ds: []depspec{
+			dsp(mkDepspec("root 0.0.0"),
+				pkg("root", "foo")),
+			dsp(mkDepspec("foo 1.0.0"),
+				pkg("foo", "Bar")),
+			dsp(mkDepspec("bar 1.0.0"),
+				pkg("bar", "bar/subpkg"),
+				pkg("bar/subpkg")),
+		},
+		fail: &noVersionError{
+			pn: mkPI("Bar"),
+			fails: []failedVersion{
+				{
+					v: NewVersion("1.0.0"),
+					f: &wrongCaseFailure{
+						correct: ProjectRoot("bar"),
+						goal:    mkDep("Bar 1.0.0", "bar 1.0.0", "bar"),
+						badcase: []dependency{mkDep("foo 1.0.0", "Bar 1.0.0", "Bar/subpkg")},
+					},
+				},
+			},
+		},
+	},
+	"canonical case only applies if relevant imports are activated": {
+		ds: []depspec{
+			dsp(mkDepspec("root 0.0.0"),
+				pkg("root", "foo")),
+			dsp(mkDepspec("foo 1.0.0"),
+				pkg("foo", "Bar/subpkg")),
+			dsp(mkDepspec("bar 1.0.0"),
+				pkg("bar", "bar/subpkg"),
+				pkg("bar/subpkg")),
+		},
+		r: mksolution(
+			"foo 1.0.0",
+			mklp("Bar 1.0.0", "subpkg"),
+		),
+	},
+	"simple case-only variations plus source variance": {
+		ds: []depspec{
+			dsp(mkDepspec("root 0.0.0"),
+				pkg("root", "foo", "bar")),
+			dsp(mkDepspec("foo 1.0.0", "Bar from quux 1.0.0"),
+				pkg("foo", "Bar")),
+			dsp(mkDepspec("bar 1.0.0"),
+				pkg("bar")),
+			dsp(mkDepspec("quux 1.0.0"),
+				pkg("bar")),
+		},
+		fail: &noVersionError{
+			pn: mkPI("foo"),
+			fails: []failedVersion{
+				{
+					v: NewVersion("1.0.0"),
+					f: &caseMismatchFailure{
+						goal:    mkDep("foo 1.0.0", "Bar from quux 1.0.0", "Bar"),
+						current: ProjectRoot("bar"),
+						failsib: []dependency{mkDep("root", "bar 1.0.0", "bar")},
+					},
+				},
+			},
+		},
+	},
+	"case-only variations plus source variance with internal canonicality": {
+		ds: []depspec{
+			dsp(mkDepspec("root 0.0.0", "Bar from quux 1.0.0"),
+				pkg("root", "foo", "Bar")),
+			dsp(mkDepspec("foo 1.0.0", "Bar from quux 1.0.0"),
+				pkg("foo", "Bar")),
+			dsp(mkDepspec("bar 1.0.0"),
+				pkg("bar", "bar/subpkg"),
+				pkg("bar/subpkg")),
+			dsp(mkDepspec("quux 1.0.0"),
+				pkg("bar", "bar/subpkg"),
+				pkg("bar/subpkg")),
+		},
+		fail: &noVersionError{
+			pn: mkPI("Bar"),
+			fails: []failedVersion{
+				{
+					v: NewVersion("1.0.0"),
+					f: &wrongCaseFailure{
+						correct: ProjectRoot("bar"),
+						goal:    mkDep("Bar from quux 1.0.0", "bar 1.0.0", "bar"),
+						badcase: []dependency{mkDep("root", "Bar 1.0.0", "Bar/subpkg")},
+					},
+				},
+			},
+		},
+	},
 	"alternate net address": {
 		ds: []depspec{
 			dsp(mkDepspec("root 1.0.0", "foo from bar 2.0.0"),
@@ -887,6 +1124,23 @@ var bimodalFixtures = map[string]bimodalFixture{
 			"baz 1.0.0",
 		),
 	},
+	"require activates constraints": {
+		ds: []depspec{
+			dsp(mkDepspec("root 0.0.0", "foo 1.0.0", "bar 1.0.0"),
+				pkg("root", "foo")),
+			dsp(mkDepspec("foo 1.0.0"),
+				pkg("foo", "bar")),
+			dsp(mkDepspec("bar 1.0.0"),
+				pkg("bar")),
+			dsp(mkDepspec("bar 1.1.0"),
+				pkg("bar")),
+		},
+		require: []string{"bar"},
+		r: mksolution(
+			"foo 1.0.0",
+			"bar 1.0.0",
+		),
+	},
 	"require subpackage": {
 		ds: []depspec{
 			dsp(mkDepspec("root 0.0.0", "bar 1.0.0"),
@@ -1066,6 +1320,9 @@ type bimodalFixture struct {
 	ignore []string
 	// pkgs to require
 	require []string
+	// if the fixture is currently broken/expected to fail, this has a message
+	// recording why
+	broken string
 }
 
 func (f bimodalFixture) name() string {
@@ -1087,7 +1344,6 @@ func (f bimodalFixture) solution() map[ProjectIdentifier]LockedProject {
 func (f bimodalFixture) rootmanifest() RootManifest {
 	m := simpleRootManifest{
 		c:   pcSliceToMap(f.ds[0].deps),
-		tc:  pcSliceToMap(f.ds[0].devdeps),
 		ovr: f.ovr,
 		ig:  make(map[string]bool),
 		req: make(map[string]bool),
@@ -1149,14 +1405,36 @@ func newbmSM(bmf bimodalFixture) *bmSourceManager {
 }
 
 func (sm *bmSourceManager) ListPackages(id ProjectIdentifier, v Version) (pkgtree.PackageTree, error) {
+	// Deal with address-based root-switching with both case folding and
+	// alternate sources.
+	var src, fsrc, root, froot string
+	src, fsrc = id.normalizedSource(), toFold(id.normalizedSource())
+	if id.Source != "" {
+		root = string(id.ProjectRoot)
+		froot = toFold(root)
+	} else {
+		root, froot = src, fsrc
+	}
+
 	for k, ds := range sm.specs {
 		// Cheat for root, otherwise we blow up b/c version is empty
-		if id.normalizedSource() == string(ds.n) && (k == 0 || ds.v.Matches(v)) {
+		if fsrc == string(ds.n) && (k == 0 || ds.v.Matches(v)) {
+			var replace bool
+			if root != string(ds.n) {
+				// We're in a case-varying lookup; ensure we replace the actual
+				// leading ProjectRoot portion of import paths with the literal
+				// string from the input.
+				replace = true
+			}
+
 			ptree := pkgtree.PackageTree{
-				ImportRoot: id.normalizedSource(),
+				ImportRoot: src,
 				Packages:   make(map[string]pkgtree.PackageOrErr),
 			}
 			for _, pkg := range ds.pkgs {
+				if replace {
+					pkg.path = strings.Replace(pkg.path, froot, root, 1)
+				}
 				ptree.Packages[pkg.path] = pkgtree.PackageOrErr{
 					P: pkgtree.Package{
 						ImportPath: pkg.path,
@@ -1170,13 +1448,14 @@ func (sm *bmSourceManager) ListPackages(id ProjectIdentifier, v Version) (pkgtre
 		}
 	}
 
-	return pkgtree.PackageTree{}, fmt.Errorf("Project %s at version %s could not be found", id.errString(), v)
+	return pkgtree.PackageTree{}, fmt.Errorf("Project %s at version %s could not be found", id, v)
 }
 
 func (sm *bmSourceManager) GetManifestAndLock(id ProjectIdentifier, v Version, an ProjectAnalyzer) (Manifest, Lock, error) {
+	src := toFold(id.normalizedSource())
 	for _, ds := range sm.specs {
-		if id.normalizedSource() == string(ds.n) && v.Matches(ds.v) {
-			if l, exists := sm.lm[id.normalizedSource()+" "+v.String()]; exists {
+		if src == string(ds.n) && v.Matches(ds.v) {
+			if l, exists := sm.lm[src+" "+v.String()]; exists {
 				return ds, l, nil
 			}
 			return ds, dummyLock{}, nil
@@ -1184,7 +1463,7 @@ func (sm *bmSourceManager) GetManifestAndLock(id ProjectIdentifier, v Version, a
 	}
 
 	// TODO(sdboyer) proper solver-type errors
-	return nil, nil, fmt.Errorf("Project %s at version %s could not be found", id.errString(), v)
+	return nil, nil, fmt.Errorf("Project %s at version %s could not be found", id, v)
 }
 
 // computeBimodalExternalMap takes a set of depspecs and computes an

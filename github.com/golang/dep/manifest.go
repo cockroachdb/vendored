@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"regexp"
 	"sort"
+	"sync"
 
 	"github.com/golang/dep/internal/gps"
 	"github.com/pelletier/go-toml"
@@ -19,6 +20,15 @@ import (
 
 // ManifestName is the manifest file name used by dep.
 const ManifestName = "Gopkg.toml"
+
+// Errors
+var (
+	errInvalidConstraint  = errors.New("\"constraint\" must be a TOML array of tables")
+	errInvalidOverride    = errors.New("\"override\" must be a TOML array of tables")
+	errInvalidRequired    = errors.New("\"required\" must be a TOML list of strings")
+	errInvalidIgnored     = errors.New("\"ignored\" must be a TOML list of strings")
+	errInvalidProjectRoot = errors.New("ProjectRoot name validation failed")
+)
 
 // Manifest holds manifest file data and implements gps.RootManifest.
 type Manifest struct {
@@ -43,12 +53,20 @@ type rawProject struct {
 	Source   string `toml:"source,omitempty"`
 }
 
+// NewManifest instantites a new manifest.
+func NewManifest() *Manifest {
+	return &Manifest{
+		Constraints: make(gps.ProjectConstraints),
+		Ovr:         make(gps.ProjectConstraints),
+	}
+}
+
 func validateManifest(s string) ([]error, error) {
-	var errs []error
+	var warns []error
 	// Load the TomlTree from string
 	tree, err := toml.Load(s)
 	if err != nil {
-		return errs, errors.Wrap(err, "Unable to load TomlTree from string")
+		return warns, errors.Wrap(err, "Unable to load TomlTree from string")
 	}
 	// Convert tree to a map
 	manifest := tree.ToMap()
@@ -61,46 +79,125 @@ func validateManifest(s string) ([]error, error) {
 		case "metadata":
 			// Check if metadata is of Map type
 			if reflect.TypeOf(val).Kind() != reflect.Map {
-				errs = append(errs, errors.New("metadata should be a TOML table"))
+				warns = append(warns, errors.New("metadata should be a TOML table"))
 			}
 		case "constraint", "override":
+			valid := true
 			// Invalid if type assertion fails. Not a TOML array of tables.
 			if rawProj, ok := val.([]interface{}); ok {
-				// Iterate through each array of tables
-				for _, v := range rawProj {
-					// Check the individual field's key to be valid
-					for key, value := range v.(map[string]interface{}) {
-						// Check if the key is valid
-						switch key {
-						case "name", "branch", "version", "source":
-							// valid key
-						case "revision":
-							if valueStr, ok := value.(string); ok {
-								if abbrevRevHash.MatchString(valueStr) {
-									errs = append(errs, fmt.Errorf("revision %q should not be in abbreviated form", valueStr))
+				// Check element type. Must be a map. Checking one element would be
+				// enough because TOML doesn't allow mixing of types.
+				if reflect.TypeOf(rawProj[0]).Kind() != reflect.Map {
+					valid = false
+				}
+
+				if valid {
+					// Iterate through each array of tables
+					for _, v := range rawProj {
+						// Check the individual field's key to be valid
+						for key, value := range v.(map[string]interface{}) {
+							// Check if the key is valid
+							switch key {
+							case "name", "branch", "version", "source":
+								// valid key
+							case "revision":
+								if valueStr, ok := value.(string); ok {
+									if abbrevRevHash.MatchString(valueStr) {
+										warns = append(warns, fmt.Errorf("revision %q should not be in abbreviated form", valueStr))
+									}
 								}
+							case "metadata":
+								// Check if metadata is of Map type
+								if reflect.TypeOf(value).Kind() != reflect.Map {
+									warns = append(warns, fmt.Errorf("metadata in %q should be a TOML table", prop))
+								}
+							default:
+								// unknown/invalid key
+								warns = append(warns, fmt.Errorf("Invalid key %q in %q", key, prop))
 							}
-						case "metadata":
-							// Check if metadata is of Map type
-							if reflect.TypeOf(value).Kind() != reflect.Map {
-								errs = append(errs, fmt.Errorf("metadata in %q should be a TOML table", prop))
-							}
-						default:
-							// unknown/invalid key
-							errs = append(errs, fmt.Errorf("Invalid key %q in %q", key, prop))
 						}
 					}
 				}
 			} else {
-				errs = append(errs, fmt.Errorf("%v should be a TOML array of tables", prop))
+				valid = false
+			}
+
+			if !valid {
+				if prop == "constraint" {
+					return warns, errInvalidConstraint
+				}
+				if prop == "override" {
+					return warns, errInvalidOverride
+				}
 			}
 		case "ignored", "required":
+			valid := true
+			if rawList, ok := val.([]interface{}); ok {
+				// Check element type of the array. TOML doesn't let mixing of types in
+				// array. Checking one element would be enough. Empty array is valid.
+				if len(rawList) > 0 && reflect.TypeOf(rawList[0]).Kind() != reflect.String {
+					valid = false
+				}
+			} else {
+				valid = false
+			}
+
+			if !valid {
+				if prop == "ignored" {
+					return warns, errInvalidIgnored
+				}
+				if prop == "required" {
+					return warns, errInvalidRequired
+				}
+			}
 		default:
-			errs = append(errs, fmt.Errorf("Unknown field in manifest: %v", prop))
+			warns = append(warns, fmt.Errorf("Unknown field in manifest: %v", prop))
 		}
 	}
 
-	return errs, nil
+	return warns, nil
+}
+
+// ValidateProjectRoots validates the project roots present in manifest.
+func ValidateProjectRoots(c *Ctx, m *Manifest, sm gps.SourceManager) error {
+	// Channel to receive all the errors
+	errorCh := make(chan error, len(m.Constraints)+len(m.Ovr))
+
+	var wg sync.WaitGroup
+
+	validate := func(pr gps.ProjectRoot) {
+		defer wg.Done()
+		origPR, err := sm.DeduceProjectRoot(string(pr))
+		if err != nil {
+			errorCh <- err
+		} else if origPR != pr {
+			errorCh <- fmt.Errorf("the name for %q should be changed to %q", pr, origPR)
+		}
+	}
+
+	for pr := range m.Constraints {
+		wg.Add(1)
+		go validate(pr)
+	}
+	for pr := range m.Ovr {
+		wg.Add(1)
+		go validate(pr)
+	}
+
+	wg.Wait()
+	close(errorCh)
+
+	var valErr error
+	if len(errorCh) > 0 {
+		valErr = errInvalidProjectRoot
+		c.Err.Printf("The following issues were found in Gopkg.toml:\n\n")
+		for err := range errorCh {
+			c.Err.Println("  ✗", err.Error())
+		}
+		c.Err.Println()
+	}
+
+	return valErr
 }
 
 // readManifest returns a Manifest read from r and a slice of validation warnings.
@@ -127,12 +224,12 @@ func readManifest(r io.Reader) (*Manifest, []error, error) {
 }
 
 func fromRawManifest(raw rawManifest) (*Manifest, error) {
-	m := &Manifest{
-		Constraints: make(gps.ProjectConstraints, len(raw.Constraints)),
-		Ovr:         make(gps.ProjectConstraints, len(raw.Overrides)),
-		Ignored:     raw.Ignored,
-		Required:    raw.Required,
-	}
+	m := NewManifest()
+
+	m.Constraints = make(gps.ProjectConstraints, len(raw.Constraints))
+	m.Ovr = make(gps.ProjectConstraints, len(raw.Overrides))
+	m.Ignored = raw.Ignored
+	m.Required = raw.Required
 
 	for i := 0; i < len(raw.Constraints); i++ {
 		name, prj, err := toProject(raw.Constraints[i])
@@ -149,6 +246,9 @@ func fromRawManifest(raw rawManifest) (*Manifest, error) {
 		name, prj, err := toProject(raw.Overrides[i])
 		if err != nil {
 			return nil, err
+		}
+		if _, exists := m.Ovr[name]; exists {
+			return nil, errors.Errorf("multiple overrides specified for %s, can only specify one", name)
 		}
 		m.Ovr[name] = prj
 	}
@@ -270,12 +370,6 @@ func (m *Manifest) DependencyConstraints() gps.ProjectConstraints {
 	return m.Constraints
 }
 
-// TestDependencyConstraints remains unimplemented by returning nil for now.
-func (m *Manifest) TestDependencyConstraints() gps.ProjectConstraints {
-	// TODO decide whether we're going to incorporate this or not
-	return nil
-}
-
 // Overrides returns a list of project-level override constraints.
 func (m *Manifest) Overrides() gps.ProjectConstraints {
 	return m.Ovr
@@ -293,6 +387,19 @@ func (m *Manifest) IgnoredPackages() map[string]bool {
 	}
 
 	return mp
+}
+
+// HasConstraintsOn checks if the manifest contains either constraints or
+// overrides on the provided ProjectRoot.
+func (m *Manifest) HasConstraintsOn(root gps.ProjectRoot) bool {
+	if _, has := m.Constraints[root]; has {
+		return true
+	}
+	if _, has := m.Ovr[root]; has {
+		return true
+	}
+
+	return false
 }
 
 // RequiredPackages returns a set of import paths to require.

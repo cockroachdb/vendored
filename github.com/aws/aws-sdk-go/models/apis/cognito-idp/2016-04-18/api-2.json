@@ -126,24 +126,6 @@
         {"shape":"InternalErrorException"}
       ]
     },
-    "AdminDisableProviderForUser":{
-      "name":"AdminDisableProviderForUser",
-      "http":{
-        "method":"POST",
-        "requestUri":"/"
-      },
-      "input":{"shape":"AdminDisableProviderForUserRequest"},
-      "output":{"shape":"AdminDisableProviderForUserResponse"},
-      "errors":[
-        {"shape":"ResourceNotFoundException"},
-        {"shape":"InvalidParameterException"},
-        {"shape":"TooManyRequestsException"},
-        {"shape":"NotAuthorizedException"},
-        {"shape":"UserNotFoundException"},
-        {"shape":"AliasExistsException"},
-        {"shape":"InternalErrorException"}
-      ]
-    },
     "AdminDisableUser":{
       "name":"AdminDisableUser",
       "http":{
@@ -255,24 +237,6 @@
         {"shape":"UserNotConfirmedException"}
       ]
     },
-    "AdminLinkProviderForUser":{
-      "name":"AdminLinkProviderForUser",
-      "http":{
-        "method":"POST",
-        "requestUri":"/"
-      },
-      "input":{"shape":"AdminLinkProviderForUserRequest"},
-      "output":{"shape":"AdminLinkProviderForUserResponse"},
-      "errors":[
-        {"shape":"ResourceNotFoundException"},
-        {"shape":"InvalidParameterException"},
-        {"shape":"TooManyRequestsException"},
-        {"shape":"NotAuthorizedException"},
-        {"shape":"UserNotFoundException"},
-        {"shape":"AliasExistsException"},
-        {"shape":"InternalErrorException"}
-      ]
-    },
     "AdminListDevices":{
       "name":"AdminListDevices",
       "http":{
@@ -341,9 +305,6 @@
         {"shape":"TooManyRequestsException"},
         {"shape":"LimitExceededException"},
         {"shape":"UserNotFoundException"},
-        {"shape":"InvalidSmsRoleAccessPolicyException"},
-        {"shape":"InvalidEmailRoleAccessPolicyException"},
-        {"shape":"InvalidSmsRoleTrustRelationshipException"},
         {"shape":"InternalErrorException"}
       ]
     },
@@ -565,41 +526,6 @@
         {"shape":"InternalErrorException"}
       ]
     },
-    "CreateIdentityProvider":{
-      "name":"CreateIdentityProvider",
-      "http":{
-        "method":"POST",
-        "requestUri":"/"
-      },
-      "input":{"shape":"CreateIdentityProviderRequest"},
-      "output":{"shape":"CreateIdentityProviderResponse"},
-      "errors":[
-        {"shape":"InvalidParameterException"},
-        {"shape":"DuplicateProviderException"},
-        {"shape":"ResourceNotFoundException"},
-        {"shape":"NotAuthorizedException"},
-        {"shape":"TooManyRequestsException"},
-        {"shape":"LimitExceededException"},
-        {"shape":"InternalErrorException"}
-      ]
-    },
-    "CreateResourceServer":{
-      "name":"CreateResourceServer",
-      "http":{
-        "method":"POST",
-        "requestUri":"/"
-      },
-      "input":{"shape":"CreateResourceServerRequest"},
-      "output":{"shape":"CreateResourceServerResponse"},
-      "errors":[
-        {"shape":"InvalidParameterException"},
-        {"shape":"ResourceNotFoundException"},
-        {"shape":"NotAuthorizedException"},
-        {"shape":"TooManyRequestsException"},
-        {"shape":"LimitExceededException"},
-        {"shape":"InternalErrorException"}
-      ]
-    },
     "CreateUserImportJob":{
       "name":"CreateUserImportJob",
       "http":{
@@ -652,23 +578,6 @@
         {"shape":"TooManyRequestsException"},
         {"shape":"LimitExceededException"},
         {"shape":"NotAuthorizedException"},
-        {"shape":"ScopeDoesNotExistException"},
-        {"shape":"InvalidOAuthFlowException"},
-        {"shape":"InternalErrorException"}
-      ]
-    },
-    "CreateUserPoolDomain":{
-      "name":"CreateUserPoolDomain",
-      "http":{
-        "method":"POST",
-        "requestUri":"/"
-      },
-      "input":{"shape":"CreateUserPoolDomainRequest"},
-      "output":{"shape":"CreateUserPoolDomainResponse"},
-      "errors":[
-        {"shape":"InvalidParameterException"},
-        {"shape":"NotAuthorizedException"},
-        {"shape":"ResourceNotFoundException"},
         {"shape":"InternalErrorException"}
       ]
     },
@@ -684,37 +593,6 @@
         {"shape":"InvalidParameterException"},
         {"shape":"TooManyRequestsException"},
         {"shape":"NotAuthorizedException"},
-        {"shape":"InternalErrorException"}
-      ]
-    },
-    "DeleteIdentityProvider":{
-      "name":"DeleteIdentityProvider",
-      "http":{
-        "method":"POST",
-        "requestUri":"/"
-      },
-      "input":{"shape":"DeleteIdentityProviderRequest"},
-      "errors":[
-        {"shape":"InvalidParameterException"},
-        {"shape":"UnsupportedIdentityProviderException"},
-        {"shape":"ResourceNotFoundException"},
-        {"shape":"NotAuthorizedException"},
-        {"shape":"TooManyRequestsException"},
-        {"shape":"InternalErrorException"}
-      ]
-    },
-    "DeleteResourceServer":{
-      "name":"DeleteResourceServer",
-      "http":{
-        "method":"POST",
-        "requestUri":"/"
-      },
-      "input":{"shape":"DeleteResourceServerRequest"},
-      "errors":[
-        {"shape":"InvalidParameterException"},
-        {"shape":"ResourceNotFoundException"},
-        {"shape":"NotAuthorizedException"},
-        {"shape":"TooManyRequestsException"},
         {"shape":"InternalErrorException"}
       ]
     },
@@ -788,53 +666,6 @@
         {"shape":"InternalErrorException"}
       ]
     },
-    "DeleteUserPoolDomain":{
-      "name":"DeleteUserPoolDomain",
-      "http":{
-        "method":"POST",
-        "requestUri":"/"
-      },
-      "input":{"shape":"DeleteUserPoolDomainRequest"},
-      "output":{"shape":"DeleteUserPoolDomainResponse"},
-      "errors":[
-        {"shape":"NotAuthorizedException"},
-        {"shape":"InvalidParameterException"},
-        {"shape":"ResourceNotFoundException"},
-        {"shape":"InternalErrorException"}
-      ]
-    },
-    "DescribeIdentityProvider":{
-      "name":"DescribeIdentityProvider",
-      "http":{
-        "method":"POST",
-        "requestUri":"/"
-      },
-      "input":{"shape":"DescribeIdentityProviderRequest"},
-      "output":{"shape":"DescribeIdentityProviderResponse"},
-      "errors":[
-        {"shape":"InvalidParameterException"},
-        {"shape":"ResourceNotFoundException"},
-        {"shape":"NotAuthorizedException"},
-        {"shape":"TooManyRequestsException"},
-        {"shape":"InternalErrorException"}
-      ]
-    },
-    "DescribeResourceServer":{
-      "name":"DescribeResourceServer",
-      "http":{
-        "method":"POST",
-        "requestUri":"/"
-      },
-      "input":{"shape":"DescribeResourceServerRequest"},
-      "output":{"shape":"DescribeResourceServerResponse"},
-      "errors":[
-        {"shape":"InvalidParameterException"},
-        {"shape":"ResourceNotFoundException"},
-        {"shape":"NotAuthorizedException"},
-        {"shape":"TooManyRequestsException"},
-        {"shape":"InternalErrorException"}
-      ]
-    },
     "DescribeUserImportJob":{
       "name":"DescribeUserImportJob",
       "http":{
@@ -881,21 +712,6 @@
         {"shape":"InvalidParameterException"},
         {"shape":"TooManyRequestsException"},
         {"shape":"NotAuthorizedException"},
-        {"shape":"InternalErrorException"}
-      ]
-    },
-    "DescribeUserPoolDomain":{
-      "name":"DescribeUserPoolDomain",
-      "http":{
-        "method":"POST",
-        "requestUri":"/"
-      },
-      "input":{"shape":"DescribeUserPoolDomainRequest"},
-      "output":{"shape":"DescribeUserPoolDomainResponse"},
-      "errors":[
-        {"shape":"NotAuthorizedException"},
-        {"shape":"InvalidParameterException"},
-        {"shape":"ResourceNotFoundException"},
         {"shape":"InternalErrorException"}
       ]
     },
@@ -994,38 +810,6 @@
         {"shape":"InvalidParameterException"},
         {"shape":"TooManyRequestsException"},
         {"shape":"NotAuthorizedException"},
-        {"shape":"InternalErrorException"}
-      ]
-    },
-    "GetIdentityProviderByIdentifier":{
-      "name":"GetIdentityProviderByIdentifier",
-      "http":{
-        "method":"POST",
-        "requestUri":"/"
-      },
-      "input":{"shape":"GetIdentityProviderByIdentifierRequest"},
-      "output":{"shape":"GetIdentityProviderByIdentifierResponse"},
-      "errors":[
-        {"shape":"InvalidParameterException"},
-        {"shape":"ResourceNotFoundException"},
-        {"shape":"NotAuthorizedException"},
-        {"shape":"TooManyRequestsException"},
-        {"shape":"InternalErrorException"}
-      ]
-    },
-    "GetUICustomization":{
-      "name":"GetUICustomization",
-      "http":{
-        "method":"POST",
-        "requestUri":"/"
-      },
-      "input":{"shape":"GetUICustomizationRequest"},
-      "output":{"shape":"GetUICustomizationResponse"},
-      "errors":[
-        {"shape":"InvalidParameterException"},
-        {"shape":"ResourceNotFoundException"},
-        {"shape":"NotAuthorizedException"},
-        {"shape":"TooManyRequestsException"},
         {"shape":"InternalErrorException"}
       ]
     },
@@ -1151,38 +935,6 @@
         {"shape":"ResourceNotFoundException"},
         {"shape":"TooManyRequestsException"},
         {"shape":"NotAuthorizedException"},
-        {"shape":"InternalErrorException"}
-      ]
-    },
-    "ListIdentityProviders":{
-      "name":"ListIdentityProviders",
-      "http":{
-        "method":"POST",
-        "requestUri":"/"
-      },
-      "input":{"shape":"ListIdentityProvidersRequest"},
-      "output":{"shape":"ListIdentityProvidersResponse"},
-      "errors":[
-        {"shape":"InvalidParameterException"},
-        {"shape":"ResourceNotFoundException"},
-        {"shape":"NotAuthorizedException"},
-        {"shape":"TooManyRequestsException"},
-        {"shape":"InternalErrorException"}
-      ]
-    },
-    "ListResourceServers":{
-      "name":"ListResourceServers",
-      "http":{
-        "method":"POST",
-        "requestUri":"/"
-      },
-      "input":{"shape":"ListResourceServersRequest"},
-      "output":{"shape":"ListResourceServersResponse"},
-      "errors":[
-        {"shape":"InvalidParameterException"},
-        {"shape":"ResourceNotFoundException"},
-        {"shape":"NotAuthorizedException"},
-        {"shape":"TooManyRequestsException"},
         {"shape":"InternalErrorException"}
       ]
     },
@@ -1321,22 +1073,6 @@
         {"shape":"InternalErrorException"}
       ]
     },
-    "SetUICustomization":{
-      "name":"SetUICustomization",
-      "http":{
-        "method":"POST",
-        "requestUri":"/"
-      },
-      "input":{"shape":"SetUICustomizationRequest"},
-      "output":{"shape":"SetUICustomizationResponse"},
-      "errors":[
-        {"shape":"InvalidParameterException"},
-        {"shape":"ResourceNotFoundException"},
-        {"shape":"NotAuthorizedException"},
-        {"shape":"TooManyRequestsException"},
-        {"shape":"InternalErrorException"}
-      ]
-    },
     "SetUserSettings":{
       "name":"SetUserSettings",
       "http":{
@@ -1452,39 +1188,6 @@
         {"shape":"InternalErrorException"}
       ]
     },
-    "UpdateIdentityProvider":{
-      "name":"UpdateIdentityProvider",
-      "http":{
-        "method":"POST",
-        "requestUri":"/"
-      },
-      "input":{"shape":"UpdateIdentityProviderRequest"},
-      "output":{"shape":"UpdateIdentityProviderResponse"},
-      "errors":[
-        {"shape":"InvalidParameterException"},
-        {"shape":"UnsupportedIdentityProviderException"},
-        {"shape":"ResourceNotFoundException"},
-        {"shape":"NotAuthorizedException"},
-        {"shape":"TooManyRequestsException"},
-        {"shape":"InternalErrorException"}
-      ]
-    },
-    "UpdateResourceServer":{
-      "name":"UpdateResourceServer",
-      "http":{
-        "method":"POST",
-        "requestUri":"/"
-      },
-      "input":{"shape":"UpdateResourceServerRequest"},
-      "output":{"shape":"UpdateResourceServerResponse"},
-      "errors":[
-        {"shape":"InvalidParameterException"},
-        {"shape":"ResourceNotFoundException"},
-        {"shape":"NotAuthorizedException"},
-        {"shape":"TooManyRequestsException"},
-        {"shape":"InternalErrorException"}
-      ]
-    },
     "UpdateUserAttributes":{
       "name":"UpdateUserAttributes",
       "http":{
@@ -1550,8 +1253,6 @@
         {"shape":"InvalidParameterException"},
         {"shape":"TooManyRequestsException"},
         {"shape":"NotAuthorizedException"},
-        {"shape":"ScopeDoesNotExistException"},
-        {"shape":"InvalidOAuthFlowException"},
         {"shape":"InternalErrorException"}
       ]
     },
@@ -1580,7 +1281,6 @@
     }
   },
   "shapes":{
-    "AWSAccountIdType":{"type":"string"},
     "AddCustomAttributesRequest":{
       "type":"structure",
       "required":[
@@ -1689,22 +1389,6 @@
       "members":{
         "UserPoolId":{"shape":"UserPoolIdType"},
         "Username":{"shape":"UsernameType"}
-      }
-    },
-    "AdminDisableProviderForUserRequest":{
-      "type":"structure",
-      "required":[
-        "UserPoolId",
-        "User"
-      ],
-      "members":{
-        "UserPoolId":{"shape":"StringType"},
-        "User":{"shape":"ProviderUserIdentifierType"}
-      }
-    },
-    "AdminDisableProviderForUserResponse":{
-      "type":"structure",
-      "members":{
       }
     },
     "AdminDisableUserRequest":{
@@ -1818,24 +1502,6 @@
         "Session":{"shape":"SessionType"},
         "ChallengeParameters":{"shape":"ChallengeParametersType"},
         "AuthenticationResult":{"shape":"AuthenticationResultType"}
-      }
-    },
-    "AdminLinkProviderForUserRequest":{
-      "type":"structure",
-      "required":[
-        "UserPoolId",
-        "DestinationUser",
-        "SourceUser"
-      ],
-      "members":{
-        "UserPoolId":{"shape":"StringType"},
-        "DestinationUser":{"shape":"ProviderUserIdentifierType"},
-        "SourceUser":{"shape":"ProviderUserIdentifierType"}
-      }
-    },
-    "AdminLinkProviderForUserResponse":{
-      "type":"structure",
-      "members":{
       }
     },
     "AdminListDevicesRequest":{
@@ -2040,16 +1706,6 @@
       "type":"list",
       "member":{"shape":"AttributeType"}
     },
-    "AttributeMappingKeyType":{
-      "type":"string",
-      "max":32,
-      "min":1
-    },
-    "AttributeMappingType":{
-      "type":"map",
-      "key":{"shape":"AttributeMappingKeyType"},
-      "value":{"shape":"StringType"}
-    },
     "AttributeNameListType":{
       "type":"list",
       "member":{"shape":"AttributeNameType"}
@@ -2100,14 +1756,6 @@
       }
     },
     "BooleanType":{"type":"boolean"},
-    "CSSType":{"type":"string"},
-    "CSSVersionType":{"type":"string"},
-    "CallbackURLsListType":{
-      "type":"list",
-      "member":{"shape":"RedirectUrlType"},
-      "max":100,
-      "min":0
-    },
     "ChallengeNameType":{
       "type":"string",
       "enum":[
@@ -2134,8 +1782,7 @@
       "type":"structure",
       "required":[
         "PreviousPassword",
-        "ProposedPassword",
-        "AccessToken"
+        "ProposedPassword"
       ],
       "members":{
         "PreviousPassword":{"shape":"PasswordType"},
@@ -2307,51 +1954,6 @@
         "Group":{"shape":"GroupType"}
       }
     },
-    "CreateIdentityProviderRequest":{
-      "type":"structure",
-      "required":[
-        "UserPoolId",
-        "ProviderName",
-        "ProviderType",
-        "ProviderDetails"
-      ],
-      "members":{
-        "UserPoolId":{"shape":"UserPoolIdType"},
-        "ProviderName":{"shape":"ProviderNameTypeV1"},
-        "ProviderType":{"shape":"IdentityProviderTypeType"},
-        "ProviderDetails":{"shape":"ProviderDetailsType"},
-        "AttributeMapping":{"shape":"AttributeMappingType"},
-        "IdpIdentifiers":{"shape":"IdpIdentifiersListType"}
-      }
-    },
-    "CreateIdentityProviderResponse":{
-      "type":"structure",
-      "required":["IdentityProvider"],
-      "members":{
-        "IdentityProvider":{"shape":"IdentityProviderType"}
-      }
-    },
-    "CreateResourceServerRequest":{
-      "type":"structure",
-      "required":[
-        "UserPoolId",
-        "Identifier",
-        "Name"
-      ],
-      "members":{
-        "UserPoolId":{"shape":"UserPoolIdType"},
-        "Identifier":{"shape":"ResourceServerIdentifierType"},
-        "Name":{"shape":"ResourceServerNameType"},
-        "Scopes":{"shape":"ResourceServerScopeListType"}
-      }
-    },
-    "CreateResourceServerResponse":{
-      "type":"structure",
-      "required":["ResourceServer"],
-      "members":{
-        "ResourceServer":{"shape":"ResourceServerType"}
-      }
-    },
     "CreateUserImportJobRequest":{
       "type":"structure",
       "required":[
@@ -2384,36 +1986,13 @@
         "RefreshTokenValidity":{"shape":"RefreshTokenValidityType"},
         "ReadAttributes":{"shape":"ClientPermissionListType"},
         "WriteAttributes":{"shape":"ClientPermissionListType"},
-        "ExplicitAuthFlows":{"shape":"ExplicitAuthFlowsListType"},
-        "SupportedIdentityProviders":{"shape":"SupportedIdentityProvidersListType"},
-        "CallbackURLs":{"shape":"CallbackURLsListType"},
-        "LogoutURLs":{"shape":"LogoutURLsListType"},
-        "DefaultRedirectURI":{"shape":"RedirectUrlType"},
-        "AllowedOAuthFlows":{"shape":"OAuthFlowsType"},
-        "AllowedOAuthScopes":{"shape":"ScopeListType"},
-        "AllowedOAuthFlowsUserPoolClient":{"shape":"BooleanType"}
+        "ExplicitAuthFlows":{"shape":"ExplicitAuthFlowsListType"}
       }
     },
     "CreateUserPoolClientResponse":{
       "type":"structure",
       "members":{
         "UserPoolClient":{"shape":"UserPoolClientType"}
-      }
-    },
-    "CreateUserPoolDomainRequest":{
-      "type":"structure",
-      "required":[
-        "Domain",
-        "UserPoolId"
-      ],
-      "members":{
-        "Domain":{"shape":"DomainType"},
-        "UserPoolId":{"shape":"UserPoolIdType"}
-      }
-    },
-    "CreateUserPoolDomainResponse":{
-      "type":"structure",
-      "members":{
       }
     },
     "CreateUserPoolRequest":{
@@ -2425,11 +2004,9 @@
         "LambdaConfig":{"shape":"LambdaConfigType"},
         "AutoVerifiedAttributes":{"shape":"VerifiedAttributesListType"},
         "AliasAttributes":{"shape":"AliasAttributesListType"},
-        "UsernameAttributes":{"shape":"UsernameAttributesListType"},
         "SmsVerificationMessage":{"shape":"SmsVerificationMessageType"},
         "EmailVerificationMessage":{"shape":"EmailVerificationMessageType"},
         "EmailVerificationSubject":{"shape":"EmailVerificationSubjectType"},
-        "VerificationMessageTemplate":{"shape":"VerificationMessageTemplateType"},
         "SmsAuthenticationMessage":{"shape":"SmsVerificationMessageType"},
         "MfaConfiguration":{"shape":"UserPoolMfaType"},
         "DeviceConfiguration":{"shape":"DeviceConfigurationType"},
@@ -2459,13 +2036,6 @@
       "min":1
     },
     "DateType":{"type":"timestamp"},
-    "DefaultEmailOptionType":{
-      "type":"string",
-      "enum":[
-        "CONFIRM_WITH_LINK",
-        "CONFIRM_WITH_CODE"
-      ]
-    },
     "DeleteGroupRequest":{
       "type":"structure",
       "required":[
@@ -2477,34 +2047,9 @@
         "UserPoolId":{"shape":"UserPoolIdType"}
       }
     },
-    "DeleteIdentityProviderRequest":{
-      "type":"structure",
-      "required":[
-        "UserPoolId",
-        "ProviderName"
-      ],
-      "members":{
-        "UserPoolId":{"shape":"UserPoolIdType"},
-        "ProviderName":{"shape":"ProviderNameType"}
-      }
-    },
-    "DeleteResourceServerRequest":{
-      "type":"structure",
-      "required":[
-        "UserPoolId",
-        "Identifier"
-      ],
-      "members":{
-        "UserPoolId":{"shape":"UserPoolIdType"},
-        "Identifier":{"shape":"ResourceServerIdentifierType"}
-      }
-    },
     "DeleteUserAttributesRequest":{
       "type":"structure",
-      "required":[
-        "UserAttributeNames",
-        "AccessToken"
-      ],
+      "required":["UserAttributeNames"],
       "members":{
         "UserAttributeNames":{"shape":"AttributeNameListType"},
         "AccessToken":{"shape":"TokenModelType"}
@@ -2526,22 +2071,6 @@
         "ClientId":{"shape":"ClientIdType"}
       }
     },
-    "DeleteUserPoolDomainRequest":{
-      "type":"structure",
-      "required":[
-        "Domain",
-        "UserPoolId"
-      ],
-      "members":{
-        "Domain":{"shape":"DomainType"},
-        "UserPoolId":{"shape":"UserPoolIdType"}
-      }
-    },
-    "DeleteUserPoolDomainResponse":{
-      "type":"structure",
-      "members":{
-      }
-    },
     "DeleteUserPoolRequest":{
       "type":"structure",
       "required":["UserPoolId"],
@@ -2551,7 +2080,6 @@
     },
     "DeleteUserRequest":{
       "type":"structure",
-      "required":["AccessToken"],
       "members":{
         "AccessToken":{"shape":"TokenModelType"}
       }
@@ -2566,42 +2094,6 @@
         "SMS",
         "EMAIL"
       ]
-    },
-    "DescribeIdentityProviderRequest":{
-      "type":"structure",
-      "required":[
-        "UserPoolId",
-        "ProviderName"
-      ],
-      "members":{
-        "UserPoolId":{"shape":"UserPoolIdType"},
-        "ProviderName":{"shape":"ProviderNameType"}
-      }
-    },
-    "DescribeIdentityProviderResponse":{
-      "type":"structure",
-      "required":["IdentityProvider"],
-      "members":{
-        "IdentityProvider":{"shape":"IdentityProviderType"}
-      }
-    },
-    "DescribeResourceServerRequest":{
-      "type":"structure",
-      "required":[
-        "UserPoolId",
-        "Identifier"
-      ],
-      "members":{
-        "UserPoolId":{"shape":"UserPoolIdType"},
-        "Identifier":{"shape":"ResourceServerIdentifierType"}
-      }
-    },
-    "DescribeResourceServerResponse":{
-      "type":"structure",
-      "required":["ResourceServer"],
-      "members":{
-        "ResourceServer":{"shape":"ResourceServerType"}
-      }
     },
     "DescribeUserImportJobRequest":{
       "type":"structure",
@@ -2635,19 +2127,6 @@
       "type":"structure",
       "members":{
         "UserPoolClient":{"shape":"UserPoolClientType"}
-      }
-    },
-    "DescribeUserPoolDomainRequest":{
-      "type":"structure",
-      "required":["Domain"],
-      "members":{
-        "Domain":{"shape":"DomainType"}
-      }
-    },
-    "DescribeUserPoolDomainResponse":{
-      "type":"structure",
-      "members":{
-        "DomainDescription":{"shape":"DomainDescriptionType"}
       }
     },
     "DescribeUserPoolRequest":{
@@ -2713,46 +2192,6 @@
         "DeviceLastAuthenticatedDate":{"shape":"DateType"}
       }
     },
-    "DomainDescriptionType":{
-      "type":"structure",
-      "members":{
-        "UserPoolId":{"shape":"UserPoolIdType"},
-        "AWSAccountId":{"shape":"AWSAccountIdType"},
-        "Domain":{"shape":"DomainType"},
-        "S3Bucket":{"shape":"S3BucketType"},
-        "CloudFrontDistribution":{"shape":"ArnType"},
-        "Version":{"shape":"DomainVersionType"},
-        "Status":{"shape":"DomainStatusType"}
-      }
-    },
-    "DomainStatusType":{
-      "type":"string",
-      "enum":[
-        "CREATING",
-        "DELETING",
-        "UPDATING",
-        "ACTIVE",
-        "FAILED"
-      ]
-    },
-    "DomainType":{
-      "type":"string",
-      "max":63,
-      "min":1,
-      "pattern":"^[a-z0-9](?:[a-z0-9\\-]{0,61}[a-z0-9])?$"
-    },
-    "DomainVersionType":{
-      "type":"string",
-      "max":20,
-      "min":1
-    },
-    "DuplicateProviderException":{
-      "type":"structure",
-      "members":{
-        "message":{"shape":"MessageType"}
-      },
-      "exception":true
-    },
     "EmailAddressType":{
       "type":"string",
       "pattern":"[\\p{L}\\p{M}\\p{S}\\p{N}\\p{P}]+@[\\p{L}\\p{M}\\p{S}\\p{N}\\p{P}]+"
@@ -2764,23 +2203,11 @@
         "ReplyToEmailAddress":{"shape":"EmailAddressType"}
       }
     },
-    "EmailVerificationMessageByLinkType":{
-      "type":"string",
-      "max":20000,
-      "min":6,
-      "pattern":"[\\p{L}\\p{M}\\p{S}\\p{N}\\p{P}\\s*]*\\{##[\\p{L}\\p{M}\\p{S}\\p{N}\\p{P}\\s*]*##\\}[\\p{L}\\p{M}\\p{S}\\p{N}\\p{P}\\s*]*"
-    },
     "EmailVerificationMessageType":{
       "type":"string",
-      "max":20000,
+      "max":2048,
       "min":6,
       "pattern":"[\\p{L}\\p{M}\\p{S}\\p{N}\\p{P}\\s*]*\\{####\\}[\\p{L}\\p{M}\\p{S}\\p{N}\\p{P}\\s*]*"
-    },
-    "EmailVerificationSubjectByLinkType":{
-      "type":"string",
-      "max":140,
-      "min":1,
-      "pattern":"[\\p{L}\\p{M}\\p{S}\\p{N}\\p{P}\\s]+"
     },
     "EmailVerificationSubjectType":{
       "type":"string",
@@ -2880,45 +2307,9 @@
         "Group":{"shape":"GroupType"}
       }
     },
-    "GetIdentityProviderByIdentifierRequest":{
-      "type":"structure",
-      "required":[
-        "UserPoolId",
-        "IdpIdentifier"
-      ],
-      "members":{
-        "UserPoolId":{"shape":"UserPoolIdType"},
-        "IdpIdentifier":{"shape":"IdpIdentifierType"}
-      }
-    },
-    "GetIdentityProviderByIdentifierResponse":{
-      "type":"structure",
-      "required":["IdentityProvider"],
-      "members":{
-        "IdentityProvider":{"shape":"IdentityProviderType"}
-      }
-    },
-    "GetUICustomizationRequest":{
-      "type":"structure",
-      "required":["UserPoolId"],
-      "members":{
-        "UserPoolId":{"shape":"UserPoolIdType"},
-        "ClientId":{"shape":"ClientIdType"}
-      }
-    },
-    "GetUICustomizationResponse":{
-      "type":"structure",
-      "required":["UICustomization"],
-      "members":{
-        "UICustomization":{"shape":"UICustomizationType"}
-      }
-    },
     "GetUserAttributeVerificationCodeRequest":{
       "type":"structure",
-      "required":[
-        "AccessToken",
-        "AttributeName"
-      ],
+      "required":["AttributeName"],
       "members":{
         "AccessToken":{"shape":"TokenModelType"},
         "AttributeName":{"shape":"AttributeNameType"}
@@ -2932,7 +2323,6 @@
     },
     "GetUserRequest":{
       "type":"structure",
-      "required":["AccessToken"],
       "members":{
         "AccessToken":{"shape":"TokenModelType"}
       }
@@ -2951,7 +2341,6 @@
     },
     "GlobalSignOutRequest":{
       "type":"structure",
-      "required":["AccessToken"],
       "members":{
         "AccessToken":{"shape":"TokenModelType"}
       }
@@ -2990,42 +2379,6 @@
         "CreationDate":{"shape":"DateType"}
       }
     },
-    "IdentityProviderType":{
-      "type":"structure",
-      "members":{
-        "UserPoolId":{"shape":"UserPoolIdType"},
-        "ProviderName":{"shape":"ProviderNameType"},
-        "ProviderType":{"shape":"IdentityProviderTypeType"},
-        "ProviderDetails":{"shape":"ProviderDetailsType"},
-        "AttributeMapping":{"shape":"AttributeMappingType"},
-        "IdpIdentifiers":{"shape":"IdpIdentifiersListType"},
-        "LastModifiedDate":{"shape":"DateType"},
-        "CreationDate":{"shape":"DateType"}
-      }
-    },
-    "IdentityProviderTypeType":{
-      "type":"string",
-      "enum":[
-        "SAML",
-        "Facebook",
-        "Google",
-        "LoginWithAmazon"
-      ]
-    },
-    "IdpIdentifierType":{
-      "type":"string",
-      "max":40,
-      "min":1,
-      "pattern":"[\\w\\s+=.@-]+"
-    },
-    "IdpIdentifiersListType":{
-      "type":"list",
-      "member":{"shape":"IdpIdentifierType"},
-      "max":50,
-      "min":0
-    },
-    "ImageFileType":{"type":"blob"},
-    "ImageUrlType":{"type":"string"},
     "InitiateAuthRequest":{
       "type":"structure",
       "required":[
@@ -3065,13 +2418,6 @@
       "exception":true
     },
     "InvalidLambdaResponseException":{
-      "type":"structure",
-      "members":{
-        "message":{"shape":"MessageType"}
-      },
-      "exception":true
-    },
-    "InvalidOAuthFlowException":{
       "type":"structure",
       "members":{
         "message":{"shape":"MessageType"}
@@ -3165,53 +2511,9 @@
         "NextToken":{"shape":"PaginationKey"}
       }
     },
-    "ListIdentityProvidersRequest":{
-      "type":"structure",
-      "required":["UserPoolId"],
-      "members":{
-        "UserPoolId":{"shape":"UserPoolIdType"},
-        "MaxResults":{"shape":"ListProvidersLimitType"},
-        "NextToken":{"shape":"PaginationKeyType"}
-      }
-    },
-    "ListIdentityProvidersResponse":{
-      "type":"structure",
-      "required":["Providers"],
-      "members":{
-        "Providers":{"shape":"ProvidersListType"},
-        "NextToken":{"shape":"PaginationKeyType"}
-      }
-    },
     "ListOfStringTypes":{
       "type":"list",
       "member":{"shape":"StringType"}
-    },
-    "ListProvidersLimitType":{
-      "type":"integer",
-      "max":60,
-      "min":1
-    },
-    "ListResourceServersLimitType":{
-      "type":"integer",
-      "max":50,
-      "min":1
-    },
-    "ListResourceServersRequest":{
-      "type":"structure",
-      "required":["UserPoolId"],
-      "members":{
-        "UserPoolId":{"shape":"UserPoolIdType"},
-        "MaxResults":{"shape":"ListResourceServersLimitType"},
-        "NextToken":{"shape":"PaginationKeyType"}
-      }
-    },
-    "ListResourceServersResponse":{
-      "type":"structure",
-      "required":["ResourceServers"],
-      "members":{
-        "ResourceServers":{"shape":"ResourceServersListType"},
-        "NextToken":{"shape":"PaginationKeyType"}
-      }
     },
     "ListUserImportJobsRequest":{
       "type":"structure",
@@ -3301,12 +2603,6 @@
         "PaginationToken":{"shape":"SearchPaginationTokenType"}
       }
     },
-    "LogoutURLsListType":{
-      "type":"list",
-      "member":{"shape":"RedirectUrlType"},
-      "max":100,
-      "min":0
-    },
     "LongType":{"type":"long"},
     "MFAMethodNotFoundException":{
       "type":"structure",
@@ -3362,20 +2658,6 @@
         "MinValue":{"shape":"StringType"},
         "MaxValue":{"shape":"StringType"}
       }
-    },
-    "OAuthFlowType":{
-      "type":"string",
-      "enum":[
-        "code",
-        "implicit",
-        "client_credentials"
-      ]
-    },
-    "OAuthFlowsType":{
-      "type":"list",
-      "member":{"shape":"OAuthFlowType"},
-      "max":3,
-      "min":0
     },
     "PaginationKey":{
       "type":"string",
@@ -3437,46 +2719,6 @@
       },
       "exception":true
     },
-    "ProviderDescription":{
-      "type":"structure",
-      "members":{
-        "ProviderName":{"shape":"ProviderNameType"},
-        "ProviderType":{"shape":"IdentityProviderTypeType"},
-        "LastModifiedDate":{"shape":"DateType"},
-        "CreationDate":{"shape":"DateType"}
-      }
-    },
-    "ProviderDetailsType":{
-      "type":"map",
-      "key":{"shape":"StringType"},
-      "value":{"shape":"StringType"}
-    },
-    "ProviderNameType":{
-      "type":"string",
-      "max":32,
-      "min":1,
-      "pattern":"[\\p{L}\\p{M}\\p{S}\\p{N}\\p{P}]+"
-    },
-    "ProviderNameTypeV1":{
-      "type":"string",
-      "max":32,
-      "min":1,
-      "pattern":"[^_][\\p{L}\\p{M}\\p{S}\\p{N}\\p{P}][^_]+"
-    },
-    "ProviderUserIdentifierType":{
-      "type":"structure",
-      "members":{
-        "ProviderName":{"shape":"ProviderNameType"},
-        "ProviderAttributeName":{"shape":"StringType"},
-        "ProviderAttributeValue":{"shape":"StringType"}
-      }
-    },
-    "ProvidersListType":{
-      "type":"list",
-      "member":{"shape":"ProviderDescription"},
-      "max":50,
-      "min":0
-    },
     "QueryLimit":{
       "type":"integer",
       "max":60,
@@ -3486,12 +2728,6 @@
       "type":"integer",
       "max":60,
       "min":0
-    },
-    "RedirectUrlType":{
-      "type":"string",
-      "max":1024,
-      "min":1,
-      "pattern":"[\\p{L}\\p{M}\\p{S}\\p{N}\\p{P}]+"
     },
     "RefreshTokenValidityType":{
       "type":"integer",
@@ -3523,58 +2759,6 @@
       },
       "exception":true
     },
-    "ResourceServerIdentifierType":{
-      "type":"string",
-      "max":256,
-      "min":1,
-      "pattern":"[\\x21\\x23-\\x5B\\x5D-\\x7E]+"
-    },
-    "ResourceServerNameType":{
-      "type":"string",
-      "max":256,
-      "min":1,
-      "pattern":"[\\w\\s+=,.@-]+"
-    },
-    "ResourceServerScopeDescriptionType":{
-      "type":"string",
-      "max":256,
-      "min":1
-    },
-    "ResourceServerScopeListType":{
-      "type":"list",
-      "member":{"shape":"ResourceServerScopeType"},
-      "max":25
-    },
-    "ResourceServerScopeNameType":{
-      "type":"string",
-      "max":256,
-      "min":1,
-      "pattern":"[\\x21\\x23-\\x2E\\x30-\\x5B\\x5D-\\x7E]+"
-    },
-    "ResourceServerScopeType":{
-      "type":"structure",
-      "required":[
-        "ScopeName",
-        "ScopeDescription"
-      ],
-      "members":{
-        "ScopeName":{"shape":"ResourceServerScopeNameType"},
-        "ScopeDescription":{"shape":"ResourceServerScopeDescriptionType"}
-      }
-    },
-    "ResourceServerType":{
-      "type":"structure",
-      "members":{
-        "UserPoolId":{"shape":"UserPoolIdType"},
-        "Identifier":{"shape":"ResourceServerIdentifierType"},
-        "Name":{"shape":"ResourceServerNameType"},
-        "Scopes":{"shape":"ResourceServerScopeListType"}
-      }
-    },
-    "ResourceServersListType":{
-      "type":"list",
-      "member":{"shape":"ResourceServerType"}
-    },
     "RespondToAuthChallengeRequest":{
       "type":"structure",
       "required":[
@@ -3596,12 +2780,6 @@
         "ChallengeParameters":{"shape":"ChallengeParametersType"},
         "AuthenticationResult":{"shape":"AuthenticationResultType"}
       }
-    },
-    "S3BucketType":{
-      "type":"string",
-      "max":1024,
-      "min":3,
-      "pattern":"^[0-9A-Za-z\\.\\-_]*(?<!\\.)$"
     },
     "SchemaAttributeType":{
       "type":"structure",
@@ -3630,24 +2808,6 @@
       "max":50,
       "min":1
     },
-    "ScopeDoesNotExistException":{
-      "type":"structure",
-      "members":{
-        "message":{"shape":"MessageType"}
-      },
-      "exception":true
-    },
-    "ScopeListType":{
-      "type":"list",
-      "member":{"shape":"ScopeType"},
-      "max":25
-    },
-    "ScopeType":{
-      "type":"string",
-      "max":256,
-      "min":1,
-      "pattern":"[\\x21\\x23-\\x5B\\x5D-\\x7E]+"
-    },
     "SearchPaginationTokenType":{
       "type":"string",
       "min":1,
@@ -3668,23 +2828,6 @@
       "type":"string",
       "max":2048,
       "min":20
-    },
-    "SetUICustomizationRequest":{
-      "type":"structure",
-      "required":["UserPoolId"],
-      "members":{
-        "UserPoolId":{"shape":"UserPoolIdType"},
-        "ClientId":{"shape":"ClientIdType"},
-        "CSS":{"shape":"CSSType"},
-        "ImageFile":{"shape":"ImageFileType"}
-      }
-    },
-    "SetUICustomizationResponse":{
-      "type":"structure",
-      "required":["UICustomization"],
-      "members":{
-        "UICustomization":{"shape":"UICustomizationType"}
-      }
     },
     "SetUserSettingsRequest":{
       "type":"structure",
@@ -3720,14 +2863,9 @@
     },
     "SignUpResponse":{
       "type":"structure",
-      "required":[
-        "UserConfirmed",
-        "UserSub"
-      ],
       "members":{
         "UserConfirmed":{"shape":"BooleanType"},
-        "CodeDeliveryDetails":{"shape":"CodeDeliveryDetailsType"},
-        "UserSub":{"shape":"StringType"}
+        "CodeDeliveryDetails":{"shape":"CodeDeliveryDetailsType"}
       }
     },
     "SmsConfigurationType":{
@@ -3793,10 +2931,6 @@
       }
     },
     "StringType":{"type":"string"},
-    "SupportedIdentityProvidersListType":{
-      "type":"list",
-      "member":{"shape":"ProviderNameType"}
-    },
     "TokenModelType":{
       "type":"string",
       "pattern":"[A-Za-z0-9-_=.]+",
@@ -3816,26 +2950,7 @@
       },
       "exception":true
     },
-    "UICustomizationType":{
-      "type":"structure",
-      "members":{
-        "UserPoolId":{"shape":"UserPoolIdType"},
-        "ClientId":{"shape":"ClientIdType"},
-        "ImageUrl":{"shape":"ImageUrlType"},
-        "CSS":{"shape":"CSSType"},
-        "CSSVersion":{"shape":"CSSVersionType"},
-        "LastModifiedDate":{"shape":"DateType"},
-        "CreationDate":{"shape":"DateType"}
-      }
-    },
     "UnexpectedLambdaException":{
-      "type":"structure",
-      "members":{
-        "message":{"shape":"MessageType"}
-      },
-      "exception":true
-    },
-    "UnsupportedIdentityProviderException":{
       "type":"structure",
       "members":{
         "message":{"shape":"MessageType"}
@@ -3886,54 +3001,9 @@
         "Group":{"shape":"GroupType"}
       }
     },
-    "UpdateIdentityProviderRequest":{
-      "type":"structure",
-      "required":[
-        "UserPoolId",
-        "ProviderName"
-      ],
-      "members":{
-        "UserPoolId":{"shape":"UserPoolIdType"},
-        "ProviderName":{"shape":"ProviderNameType"},
-        "ProviderDetails":{"shape":"ProviderDetailsType"},
-        "AttributeMapping":{"shape":"AttributeMappingType"},
-        "IdpIdentifiers":{"shape":"IdpIdentifiersListType"}
-      }
-    },
-    "UpdateIdentityProviderResponse":{
-      "type":"structure",
-      "required":["IdentityProvider"],
-      "members":{
-        "IdentityProvider":{"shape":"IdentityProviderType"}
-      }
-    },
-    "UpdateResourceServerRequest":{
-      "type":"structure",
-      "required":[
-        "UserPoolId",
-        "Identifier",
-        "Name"
-      ],
-      "members":{
-        "UserPoolId":{"shape":"UserPoolIdType"},
-        "Identifier":{"shape":"ResourceServerIdentifierType"},
-        "Name":{"shape":"ResourceServerNameType"},
-        "Scopes":{"shape":"ResourceServerScopeListType"}
-      }
-    },
-    "UpdateResourceServerResponse":{
-      "type":"structure",
-      "required":["ResourceServer"],
-      "members":{
-        "ResourceServer":{"shape":"ResourceServerType"}
-      }
-    },
     "UpdateUserAttributesRequest":{
       "type":"structure",
-      "required":[
-        "UserAttributes",
-        "AccessToken"
-      ],
+      "required":["UserAttributes"],
       "members":{
         "UserAttributes":{"shape":"AttributeListType"},
         "AccessToken":{"shape":"TokenModelType"}
@@ -3958,14 +3028,7 @@
         "RefreshTokenValidity":{"shape":"RefreshTokenValidityType"},
         "ReadAttributes":{"shape":"ClientPermissionListType"},
         "WriteAttributes":{"shape":"ClientPermissionListType"},
-        "ExplicitAuthFlows":{"shape":"ExplicitAuthFlowsListType"},
-        "SupportedIdentityProviders":{"shape":"SupportedIdentityProvidersListType"},
-        "CallbackURLs":{"shape":"CallbackURLsListType"},
-        "LogoutURLs":{"shape":"LogoutURLsListType"},
-        "DefaultRedirectURI":{"shape":"RedirectUrlType"},
-        "AllowedOAuthFlows":{"shape":"OAuthFlowsType"},
-        "AllowedOAuthScopes":{"shape":"ScopeListType"},
-        "AllowedOAuthFlowsUserPoolClient":{"shape":"BooleanType"}
+        "ExplicitAuthFlows":{"shape":"ExplicitAuthFlowsListType"}
       }
     },
     "UpdateUserPoolClientResponse":{
@@ -3985,7 +3048,6 @@
         "SmsVerificationMessage":{"shape":"SmsVerificationMessageType"},
         "EmailVerificationMessage":{"shape":"EmailVerificationMessageType"},
         "EmailVerificationSubject":{"shape":"EmailVerificationSubjectType"},
-        "VerificationMessageTemplate":{"shape":"VerificationMessageTemplateType"},
         "SmsAuthenticationMessage":{"shape":"SmsVerificationMessageType"},
         "MfaConfiguration":{"shape":"UserPoolMfaType"},
         "DeviceConfiguration":{"shape":"DeviceConfigurationType"},
@@ -4105,17 +3167,7 @@
         "RefreshTokenValidity":{"shape":"RefreshTokenValidityType"},
         "ReadAttributes":{"shape":"ClientPermissionListType"},
         "WriteAttributes":{"shape":"ClientPermissionListType"},
-        "ExplicitAuthFlows":{"shape":"ExplicitAuthFlowsListType"},
-        "SupportedIdentityProviders":{"shape":"SupportedIdentityProvidersListType"},
-        "CallbackURLs":{"shape":"CallbackURLsListType"},
-        "LogoutURLs":{"shape":"LogoutURLsListType"},
-        "DefaultRedirectURI":{"shape":"RedirectUrlType"},
-        "AllowedOAuthFlows":{"shape":"OAuthFlowsType"},
-        "AllowedOAuthScopes":{"shape":"ScopeListType"},
-        "AllowedOAuthFlowsUserPoolClient":{
-          "shape":"BooleanType",
-          "box":true
-        }
+        "ExplicitAuthFlows":{"shape":"ExplicitAuthFlowsListType"}
       }
     },
     "UserPoolDescriptionType":{
@@ -4184,11 +3236,9 @@
         "SchemaAttributes":{"shape":"SchemaAttributesListType"},
         "AutoVerifiedAttributes":{"shape":"VerifiedAttributesListType"},
         "AliasAttributes":{"shape":"AliasAttributesListType"},
-        "UsernameAttributes":{"shape":"UsernameAttributesListType"},
         "SmsVerificationMessage":{"shape":"SmsVerificationMessageType"},
         "EmailVerificationMessage":{"shape":"EmailVerificationMessageType"},
         "EmailVerificationSubject":{"shape":"EmailVerificationSubjectType"},
-        "VerificationMessageTemplate":{"shape":"VerificationMessageTemplateType"},
         "SmsAuthenticationMessage":{"shape":"SmsVerificationMessageType"},
         "MfaConfiguration":{"shape":"UserPoolMfaType"},
         "DeviceConfiguration":{"shape":"DeviceConfigurationType"},
@@ -4225,17 +3275,6 @@
         "MFAOptions":{"shape":"MFAOptionListType"}
       }
     },
-    "UsernameAttributeType":{
-      "type":"string",
-      "enum":[
-        "phone_number",
-        "email"
-      ]
-    },
-    "UsernameAttributesListType":{
-      "type":"list",
-      "member":{"shape":"UsernameAttributeType"}
-    },
     "UsernameExistsException":{
       "type":"structure",
       "members":{
@@ -4254,17 +3293,6 @@
       "type":"list",
       "member":{"shape":"UserType"}
     },
-    "VerificationMessageTemplateType":{
-      "type":"structure",
-      "members":{
-        "SmsMessage":{"shape":"SmsVerificationMessageType"},
-        "EmailMessage":{"shape":"EmailVerificationMessageType"},
-        "EmailSubject":{"shape":"EmailVerificationSubjectType"},
-        "EmailMessageByLink":{"shape":"EmailVerificationMessageByLinkType"},
-        "EmailSubjectByLink":{"shape":"EmailVerificationSubjectByLinkType"},
-        "DefaultEmailOption":{"shape":"DefaultEmailOptionType"}
-      }
-    },
     "VerifiedAttributeType":{
       "type":"string",
       "enum":[
@@ -4279,7 +3307,6 @@
     "VerifyUserAttributeRequest":{
       "type":"structure",
       "required":[
-        "AccessToken",
         "AttributeName",
         "Code"
       ],

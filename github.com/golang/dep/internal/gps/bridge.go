@@ -56,12 +56,6 @@ type bridge struct {
 	// held by the solver that it ends up being easier and saner to do this.
 	s *solver
 
-	// Simple, local cache of the root's PackageTree
-	crp *struct {
-		ptree pkgtree.PackageTree
-		err   error
-	}
-
 	// Map of project root name to their available version list. This cache is
 	// layered on top of the proper SourceManager's cache; the only difference
 	// is that this keeps the versions sorted in the direction required by the
@@ -195,14 +189,15 @@ func (b *bridge) breakLock() {
 	// No real conceivable circumstance in which multiple calls are made to
 	// this, but being that this is the entrance point to a bunch of async work,
 	// protect it with an atomic CAS in case things change in the future.
+	//
+	// We avoid using a sync.Once here, as there's no reason for other callers
+	// to block until completion.
 	if !atomic.CompareAndSwapInt32(&b.lockbroken, 0, 1) {
 		return
 	}
 
 	for _, lp := range b.s.rd.rl.Projects() {
 		if _, is := b.s.sel.selected(lp.pi); !is {
-			// TODO(sdboyer) use this as an opportunity to detect
-			// inconsistencies between upstream and the lock (e.g., moved tags)?
 			pi, v := lp.pi, lp.Version()
 			go func() {
 				// Sync first

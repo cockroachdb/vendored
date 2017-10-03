@@ -1,6 +1,7 @@
 {
   "version":"2.0",
   "metadata":{
+    "uid":"email-2010-12-01",
     "apiVersion":"2010-12-01",
     "endpointPrefix":"email",
     "protocol":"query",
@@ -8,7 +9,6 @@
     "serviceFullName":"Amazon Simple Email Service",
     "signatureVersion":"v4",
     "signingName":"ses",
-    "uid":"email-2010-12-01",
     "xmlNamespace":"http://ses.amazonaws.com/doc/2010-12-01/"
   },
   "operations":{
@@ -62,25 +62,7 @@
         {"shape":"EventDestinationAlreadyExistsException"},
         {"shape":"InvalidCloudWatchDestinationException"},
         {"shape":"InvalidFirehoseDestinationException"},
-        {"shape":"InvalidSNSDestinationException"},
         {"shape":"LimitExceededException"}
-      ]
-    },
-    "CreateConfigurationSetTrackingOptions":{
-      "name":"CreateConfigurationSetTrackingOptions",
-      "http":{
-        "method":"POST",
-        "requestUri":"/"
-      },
-      "input":{"shape":"CreateConfigurationSetTrackingOptionsRequest"},
-      "output":{
-        "shape":"CreateConfigurationSetTrackingOptionsResponse",
-        "resultWrapper":"CreateConfigurationSetTrackingOptionsResult"
-      },
-      "errors":[
-        {"shape":"ConfigurationSetDoesNotExistException"},
-        {"shape":"TrackingOptionsAlreadyExistsException"},
-        {"shape":"InvalidTrackingOptionsException"}
       ]
     },
     "CreateReceiptFilter":{
@@ -165,22 +147,6 @@
       "errors":[
         {"shape":"ConfigurationSetDoesNotExistException"},
         {"shape":"EventDestinationDoesNotExistException"}
-      ]
-    },
-    "DeleteConfigurationSetTrackingOptions":{
-      "name":"DeleteConfigurationSetTrackingOptions",
-      "http":{
-        "method":"POST",
-        "requestUri":"/"
-      },
-      "input":{"shape":"DeleteConfigurationSetTrackingOptionsRequest"},
-      "output":{
-        "shape":"DeleteConfigurationSetTrackingOptionsResponse",
-        "resultWrapper":"DeleteConfigurationSetTrackingOptionsResult"
-      },
-      "errors":[
-        {"shape":"ConfigurationSetDoesNotExistException"},
-        {"shape":"TrackingOptionsDoesNotExistException"}
       ]
     },
     "DeleteIdentity":{
@@ -654,25 +620,7 @@
         {"shape":"ConfigurationSetDoesNotExistException"},
         {"shape":"EventDestinationDoesNotExistException"},
         {"shape":"InvalidCloudWatchDestinationException"},
-        {"shape":"InvalidFirehoseDestinationException"},
-        {"shape":"InvalidSNSDestinationException"}
-      ]
-    },
-    "UpdateConfigurationSetTrackingOptions":{
-      "name":"UpdateConfigurationSetTrackingOptions",
-      "http":{
-        "method":"POST",
-        "requestUri":"/"
-      },
-      "input":{"shape":"UpdateConfigurationSetTrackingOptionsRequest"},
-      "output":{
-        "shape":"UpdateConfigurationSetTrackingOptionsResponse",
-        "resultWrapper":"UpdateConfigurationSetTrackingOptionsResult"
-      },
-      "errors":[
-        {"shape":"ConfigurationSetDoesNotExistException"},
-        {"shape":"TrackingOptionsDoesNotExistException"},
-        {"shape":"InvalidTrackingOptionsException"}
+        {"shape":"InvalidFirehoseDestinationException"}
       ]
     },
     "UpdateReceiptRule":{
@@ -903,10 +851,7 @@
     },
     "ConfigurationSetAttribute":{
       "type":"string",
-      "enum":[
-        "eventDestinations",
-        "trackingOptions"
-      ]
+      "enum":["eventDestinations"]
     },
     "ConfigurationSetAttributeList":{
       "type":"list",
@@ -966,22 +911,6 @@
       "members":{
       }
     },
-    "CreateConfigurationSetTrackingOptionsRequest":{
-      "type":"structure",
-      "required":[
-        "ConfigurationSetName",
-        "TrackingOptions"
-      ],
-      "members":{
-        "ConfigurationSetName":{"shape":"ConfigurationSetName"},
-        "TrackingOptions":{"shape":"TrackingOptions"}
-      }
-    },
-    "CreateConfigurationSetTrackingOptionsResponse":{
-      "type":"structure",
-      "members":{
-      }
-    },
     "CreateReceiptFilterRequest":{
       "type":"structure",
       "required":["Filter"],
@@ -1032,7 +961,6 @@
         "TemporaryFailure"
       ]
     },
-    "CustomRedirectDomain":{"type":"string"},
     "DefaultDimensionValue":{"type":"string"},
     "DeleteConfigurationSetEventDestinationRequest":{
       "type":"structure",
@@ -1058,18 +986,6 @@
       }
     },
     "DeleteConfigurationSetResponse":{
-      "type":"structure",
-      "members":{
-      }
-    },
-    "DeleteConfigurationSetTrackingOptionsRequest":{
-      "type":"structure",
-      "required":["ConfigurationSetName"],
-      "members":{
-        "ConfigurationSetName":{"shape":"ConfigurationSetName"}
-      }
-    },
-    "DeleteConfigurationSetTrackingOptionsResponse":{
       "type":"structure",
       "members":{
       }
@@ -1173,8 +1089,7 @@
       "type":"structure",
       "members":{
         "ConfigurationSet":{"shape":"ConfigurationSet"},
-        "EventDestinations":{"shape":"EventDestinations"},
-        "TrackingOptions":{"shape":"TrackingOptions"}
+        "EventDestinations":{"shape":"EventDestinations"}
       }
     },
     "DescribeReceiptRuleRequest":{
@@ -1222,8 +1137,7 @@
       "type":"string",
       "enum":[
         "messageTag",
-        "emailHeader",
-        "linkTag"
+        "emailHeader"
       ]
     },
     "DkimAttributes":{
@@ -1255,8 +1169,7 @@
         "Enabled":{"shape":"Enabled"},
         "MatchingEventTypes":{"shape":"EventTypes"},
         "KinesisFirehoseDestination":{"shape":"KinesisFirehoseDestination"},
-        "CloudWatchDestination":{"shape":"CloudWatchDestination"},
-        "SNSDestination":{"shape":"SNSDestination"}
+        "CloudWatchDestination":{"shape":"CloudWatchDestination"}
       }
     },
     "EventDestinationAlreadyExistsException":{
@@ -1297,9 +1210,7 @@
         "reject",
         "bounce",
         "complaint",
-        "delivery",
-        "open",
-        "click"
+        "delivery"
       ]
     },
     "EventTypes":{
@@ -1549,19 +1460,6 @@
       },
       "exception":true
     },
-    "InvalidSNSDestinationException":{
-      "type":"structure",
-      "members":{
-        "ConfigurationSetName":{"shape":"ConfigurationSetName"},
-        "EventDestinationName":{"shape":"EventDestinationName"}
-      },
-      "error":{
-        "code":"InvalidSNSDestination",
-        "httpStatusCode":400,
-        "senderFault":true
-      },
-      "exception":true
-    },
     "InvalidSnsTopicException":{
       "type":"structure",
       "members":{
@@ -1569,17 +1467,6 @@
       },
       "error":{
         "code":"InvalidSnsTopic",
-        "httpStatusCode":400,
-        "senderFault":true
-      },
-      "exception":true
-    },
-    "InvalidTrackingOptionsException":{
-      "type":"structure",
-      "members":{
-      },
-      "error":{
-        "code":"InvalidTrackingOptions",
         "httpStatusCode":400,
         "senderFault":true
       },
@@ -2001,13 +1888,6 @@
         "Base64"
       ]
     },
-    "SNSDestination":{
-      "type":"structure",
-      "required":["TopicARN"],
-      "members":{
-        "TopicARN":{"shape":"AmazonResourceName"}
-      }
-    },
     "SendBounceRequest":{
       "type":"structure",
       "required":[
@@ -2221,36 +2101,6 @@
         "Optional"
       ]
     },
-    "TrackingOptions":{
-      "type":"structure",
-      "members":{
-        "CustomRedirectDomain":{"shape":"CustomRedirectDomain"}
-      }
-    },
-    "TrackingOptionsAlreadyExistsException":{
-      "type":"structure",
-      "members":{
-        "ConfigurationSetName":{"shape":"ConfigurationSetName"}
-      },
-      "error":{
-        "code":"TrackingOptionsAlreadyExistsException",
-        "httpStatusCode":400,
-        "senderFault":true
-      },
-      "exception":true
-    },
-    "TrackingOptionsDoesNotExistException":{
-      "type":"structure",
-      "members":{
-        "ConfigurationSetName":{"shape":"ConfigurationSetName"}
-      },
-      "error":{
-        "code":"TrackingOptionsDoesNotExistException",
-        "httpStatusCode":400,
-        "senderFault":true
-      },
-      "exception":true
-    },
     "UpdateConfigurationSetEventDestinationRequest":{
       "type":"structure",
       "required":[
@@ -2263,22 +2113,6 @@
       }
     },
     "UpdateConfigurationSetEventDestinationResponse":{
-      "type":"structure",
-      "members":{
-      }
-    },
-    "UpdateConfigurationSetTrackingOptionsRequest":{
-      "type":"structure",
-      "required":[
-        "ConfigurationSetName",
-        "TrackingOptions"
-      ],
-      "members":{
-        "ConfigurationSetName":{"shape":"ConfigurationSetName"},
-        "TrackingOptions":{"shape":"TrackingOptions"}
-      }
-    },
-    "UpdateConfigurationSetTrackingOptionsResponse":{
       "type":"structure",
       "members":{
       }

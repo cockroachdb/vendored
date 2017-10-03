@@ -5,6 +5,8 @@
 package main
 
 import (
+	"io/ioutil"
+	"log"
 	"reflect"
 	"testing"
 
@@ -16,30 +18,39 @@ import (
 const testProject1 string = "github.com/sdboyer/deptest"
 const testProject2 string = "github.com/sdboyer/deptestdos"
 
-func TestGopathScanner_OverlayManifestConstraints(t *testing.T) {
-	t.Parallel()
+// NewTestContext creates a unique context with its own GOPATH for a single test.
+func NewTestContext(h *test.Helper) *dep.Ctx {
+	h.TempDir("src")
+	pwd := h.Path(".")
+	discardLogger := log.New(ioutil.Discard, "", 0)
 
+	return &dep.Ctx{
+		GOPATH: pwd,
+		Out:    discardLogger,
+		Err:    discardLogger,
+	}
+}
+
+func TestGopathScanner_OverlayManifestConstraints(t *testing.T) {
 	h := test.NewHelper(t)
-	ctx := newTestContext(h)
+	h.Parallel()
+	defer h.Cleanup()
+
+	ctx := NewTestContext(h)
 
 	pi1 := gps.ProjectIdentifier{ProjectRoot: gps.ProjectRoot(testProject1)}
 	pi2 := gps.ProjectIdentifier{ProjectRoot: gps.ProjectRoot(testProject2)}
 	v1 := gps.NewVersion("v1.0.0")
 	v2 := gps.NewVersion("v2.0.0")
 	v3 := gps.NewVersion("v3.0.0")
-	rootM := &dep.Manifest{
-		Constraints: gps.ProjectConstraints{
-			pi1.ProjectRoot: gps.ProjectProperties{Constraint: v1},
-		},
-	}
+	rootM := dep.NewManifest()
+	rootM.Constraints[pi1.ProjectRoot] = gps.ProjectProperties{Constraint: v1}
 	rootL := &dep.Lock{}
+	origM := dep.NewManifest()
+	origM.Constraints[pi1.ProjectRoot] = gps.ProjectProperties{Constraint: v2}
+	origM.Constraints[pi2.ProjectRoot] = gps.ProjectProperties{Constraint: v3}
 	gs := gopathScanner{
-		origM: &dep.Manifest{
-			Constraints: gps.ProjectConstraints{
-				pi1.ProjectRoot: gps.ProjectProperties{Constraint: v2},
-				pi2.ProjectRoot: gps.ProjectProperties{Constraint: v3},
-			},
-		},
+		origM: origM,
 		origL: &dep.Lock{},
 		ctx:   ctx,
 		pd: projectData{
@@ -74,12 +85,13 @@ func TestGopathScanner_OverlayManifestConstraints(t *testing.T) {
 }
 
 func TestGopathScanner_OverlayLockProjects(t *testing.T) {
-	t.Parallel()
-
 	h := test.NewHelper(t)
-	ctx := newTestContext(h)
+	h.Parallel()
+	defer h.Cleanup()
 
-	rootM := &dep.Manifest{}
+	ctx := NewTestContext(h)
+
+	rootM := dep.NewManifest()
 	pi1 := gps.ProjectIdentifier{ProjectRoot: gps.ProjectRoot(testProject1)}
 	pi2 := gps.ProjectIdentifier{ProjectRoot: gps.ProjectRoot(testProject2)}
 	v1 := gps.NewVersion("v1.0.0")
@@ -89,7 +101,7 @@ func TestGopathScanner_OverlayLockProjects(t *testing.T) {
 		P: []gps.LockedProject{gps.NewLockedProject(pi1, v1, []string{})},
 	}
 	gs := gopathScanner{
-		origM: &dep.Manifest{Constraints: make(gps.ProjectConstraints)},
+		origM: dep.NewManifest(),
 		origL: &dep.Lock{
 			P: []gps.LockedProject{
 				gps.NewLockedProject(pi1, v2, []string{}), // ignored, already exists in lock
@@ -151,11 +163,11 @@ func TestGetProjectPropertiesFromVersion(t *testing.T) {
 			want:    wantSemver,
 		},
 		{
-			version: gps.NewBranch("foo-branch").Is("some-revision"),
+			version: gps.NewBranch("foo-branch").Pair("some-revision"),
 			want:    gps.NewBranch("foo-branch"),
 		},
 		{
-			version: gps.NewVersion("foo-version").Is("some-revision"),
+			version: gps.NewVersion("foo-version").Pair("some-revision"),
 			want:    gps.NewVersion("foo-version"),
 		},
 		{
@@ -163,7 +175,7 @@ func TestGetProjectPropertiesFromVersion(t *testing.T) {
 			want:    nil,
 		},
 		{
-			version: gps.NewVersion("v1.0.0").Is("some-revision"),
+			version: gps.NewVersion("v1.0.0").Pair("some-revision"),
 			want:    wantSemver,
 		},
 	}

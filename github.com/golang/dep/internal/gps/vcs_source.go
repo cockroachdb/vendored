@@ -12,11 +12,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/Masterminds/semver"
 	"github.com/golang/dep/internal/fs"
 	"github.com/golang/dep/internal/gps/pkgtree"
+	"github.com/pkg/errors"
 )
 
 type baseVCSSource struct {
@@ -38,6 +38,14 @@ func (bs *baseVCSSource) existsUpstream(ctx context.Context) bool {
 
 func (bs *baseVCSSource) upstreamURL() string {
 	return bs.repo.Remote()
+}
+
+func (bs *baseVCSSource) disambiguateRevision(ctx context.Context, r Revision) (Revision, error) {
+	ci, err := bs.repo.CommitInfo(string(r))
+	if err != nil {
+		return "", err
+	}
+	return Revision(ci.Commit), nil
 }
 
 func (bs *baseVCSSource) getManifestAndLock(ctx context.Context, pr ProjectRoot, r Revision, an ProjectAnalyzer) (Manifest, Lock, error) {
@@ -107,9 +115,6 @@ func (bs *baseVCSSource) exportRevisionTo(ctx context.Context, r Revision, to st
 		return unwrapVcsErr(err)
 	}
 
-	// TODO(sdboyer) this is a simplistic approach and relying on the tools
-	// themselves might make it faster, but git's the overwhelming case (and has
-	// its own method) so fine for now
 	return fs.CopyDir(bs.repo.LocalPath(), to)
 }
 
@@ -136,9 +141,12 @@ func (s *gitSource) exportRevisionTo(ctx context.Context, rev Revision, to strin
 	// could have an err here...but it's hard to imagine how?
 	defer fs.RenameWithFallback(bak, idx)
 
-	out, err := runFromRepoDir(ctx, r, "git", "read-tree", rev.String())
-	if err != nil {
-		return fmt.Errorf("%s: %s", out, err)
+	{
+		cmd := exec.CommandContext(ctx, "git", "read-tree", rev.String())
+		cmd.Dir = r.LocalPath()
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return errors.Wrap(err, string(out))
+		}
 	}
 
 	// Ensure we have exactly one trailing slash
@@ -152,9 +160,12 @@ func (s *gitSource) exportRevisionTo(ctx context.Context, rev Revision, to strin
 	// though we have a bunch of housekeeping to do to set up, then tear
 	// down, the sparse checkout controls, as well as restore the original
 	// index and HEAD.
-	out, err = runFromRepoDir(ctx, r, "git", "checkout-index", "-a", "--prefix="+to)
-	if err != nil {
-		return fmt.Errorf("%s: %s", out, err)
+	{
+		cmd := exec.CommandContext(ctx, "git", "checkout-index", "-a", "--prefix="+to)
+		cmd.Dir = r.LocalPath()
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return errors.Wrap(err, string(out))
+		}
 	}
 
 	return nil
@@ -163,12 +174,10 @@ func (s *gitSource) exportRevisionTo(ctx context.Context, rev Revision, to strin
 func (s *gitSource) listVersions(ctx context.Context) (vlist []PairedVersion, err error) {
 	r := s.repo
 
-	var out []byte
-	c := newMonitoredCmd(exec.Command("git", "ls-remote", r.Remote()), 30*time.Second)
+	cmd := exec.CommandContext(ctx, "git", "ls-remote", r.Remote())
 	// Ensure no prompting for PWs
-	c.cmd.Env = mergeEnvLists([]string{"GIT_ASKPASS=", "GIT_TERMINAL_PROMPT=0"}, os.Environ())
-	out, err = c.combinedOutput(ctx)
-
+	cmd.Env = append([]string{"GIT_ASKPASS=", "GIT_TERMINAL_PROMPT=0"}, os.Environ()...)
+	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, err
 	}
@@ -204,15 +213,18 @@ func (s *gitSource) listVersions(ctx context.Context) (vlist []PairedVersion, er
 	//
 	// If all of those conditions are met, then the user would end up with an
 	// erroneous non-default branch in their lock file.
-	headrev := Revision(all[0][:40])
+	var headrev Revision
 	var onedef, multidef, defmaster bool
 
 	smap := make(map[string]bool)
 	uniq := 0
-	vlist = make([]PairedVersion, len(all)-1) // less 1, because always ignore HEAD
+	vlist = make([]PairedVersion, len(all))
 	for _, pair := range all {
 		var v PairedVersion
-		if string(pair[46:51]) == "heads" {
+		if string(pair[41:]) == "HEAD" {
+			// If HEAD is present, it's always first
+			headrev = Revision(pair[:40])
+		} else if string(pair[46:51]) == "heads" {
 			rev := Revision(pair[:40])
 
 			isdef := rev == headrev
@@ -229,7 +241,7 @@ func (s *gitSource) listVersions(ctx context.Context) (vlist []PairedVersion, er
 			v = branchVersion{
 				name:      n,
 				isDefault: isdef,
-			}.Is(rev).(PairedVersion)
+			}.Pair(rev).(PairedVersion)
 
 			vlist[uniq] = v
 			uniq++
@@ -247,7 +259,7 @@ func (s *gitSource) listVersions(ctx context.Context) (vlist []PairedVersion, er
 				// version first. Which should be impossible, but this
 				// covers us in case of weirdness, anyway.
 			}
-			v = NewVersion(vstr).Is(Revision(pair[:40])).(PairedVersion)
+			v = NewVersion(vstr).Pair(Revision(pair[:40])).(PairedVersion)
 			smap[vstr] = true
 			vlist[uniq] = v
 			uniq++
@@ -265,7 +277,7 @@ func (s *gitSource) listVersions(ctx context.Context) (vlist []PairedVersion, er
 			if bv, ok := pv.Unpair().(branchVersion); ok {
 				if bv.name != "master" && bv.isDefault {
 					bv.isDefault = false
-					vlist[k] = bv.Is(pv.Underlying())
+					vlist[k] = bv.Pair(pv.Revision())
 				}
 			}
 		}
@@ -280,6 +292,13 @@ type gopkginSource struct {
 	gitSource
 	major    uint64
 	unstable bool
+	// The aliased URL we report as being the one we talk to, even though we're
+	// actually talking directly to GitHub.
+	aliasURL string
+}
+
+func (s *gopkginSource) upstreamURL() string {
+	return s.aliasURL
 }
 
 func (s *gopkginSource) listVersions(ctx context.Context) ([]PairedVersion, error) {
@@ -341,7 +360,7 @@ func (s *gopkginSource) listVersions(ctx context.Context) ([]PairedVersion, erro
 		vlist[dbranch] = branchVersion{
 			name:      dbv.v.(branchVersion).name,
 			isDefault: true,
-		}.Is(dbv.r)
+		}.Pair(dbv.r)
 	}
 
 	return vlist, nil
@@ -351,6 +370,18 @@ func (s *gopkginSource) listVersions(ctx context.Context) ([]PairedVersion, erro
 // all standard bazaar remotes.
 type bzrSource struct {
 	baseVCSSource
+}
+
+func (s *bzrSource) exportRevisionTo(ctx context.Context, rev Revision, to string) error {
+	if err := s.baseVCSSource.exportRevisionTo(ctx, rev, to); err != nil {
+		return err
+	}
+
+	if err := os.RemoveAll(filepath.Join(to, ".bzr")); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (s *bzrSource) listVersions(ctx context.Context) ([]PairedVersion, error) {
@@ -365,18 +396,20 @@ func (s *bzrSource) listVersions(ctx context.Context) ([]PairedVersion, error) {
 	}
 
 	// Now, list all the tags
-	out, err := runFromRepoDir(ctx, r, "bzr", "tags", "--show-ids", "-v")
+	tagsCmd := exec.CommandContext(ctx, "bzr", "tags", "--show-ids", "-v")
+	tagsCmd.Dir = r.LocalPath()
+	out, err := tagsCmd.CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("%s: %s", err, string(out))
+		return nil, errors.Wrap(err, string(out))
 	}
 
 	all := bytes.Split(bytes.TrimSpace(out), []byte("\n"))
 
-	var branchrev []byte
-	branchrev, err = runFromRepoDir(ctx, r, "bzr", "version-info", "--custom", "--template={revision_id}", "--revision=branch:.")
-	br := string(branchrev)
+	viCmd := exec.CommandContext(ctx, "bzr", "version-info", "--custom", "--template={revision_id}", "--revision=branch:.")
+	viCmd.Dir = r.LocalPath()
+	branchrev, err := viCmd.CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("%s: %s", err, br)
+		return nil, errors.Wrap(err, string(branchrev))
 	}
 
 	vlist := make([]PairedVersion, 0, len(all)+1)
@@ -386,21 +419,50 @@ func (s *bzrSource) listVersions(ctx context.Context) ([]PairedVersion, error) {
 		idx := bytes.IndexByte(line, 32) // space
 		v := NewVersion(string(line[:idx]))
 		r := Revision(bytes.TrimSpace(line[idx:]))
-		vlist = append(vlist, v.Is(r))
+		vlist = append(vlist, v.Pair(r))
 	}
 
 	// Last, add the default branch, hardcoding the visual representation of it
 	// that bzr uses when operating in the workflow mode we're using.
 	v := newDefaultBranch("(default)")
-	vlist = append(vlist, v.Is(Revision(string(branchrev))))
+	vlist = append(vlist, v.Pair(Revision(string(branchrev))))
 
 	return vlist, nil
+}
+
+func (s *bzrSource) disambiguateRevision(ctx context.Context, r Revision) (Revision, error) {
+	// If we used the default baseVCSSource behavior here, we would return the
+	// bazaar revision number, which is not a globally unique identifier - it is
+	// only unique within a branch. This is just the way that
+	// github.com/Masterminds/vcs chooses to handle bazaar. We want a
+	// disambiguated unique ID, though, so we need slightly different behavior:
+	// check whether r doesn't error when we try to look it up. If so, trust that
+	// it's a revision.
+	_, err := s.repo.CommitInfo(string(r))
+	if err != nil {
+		return "", err
+	}
+	return r, nil
 }
 
 // hgSource is a generic hg repository implementation that should work with
 // all standard mercurial servers.
 type hgSource struct {
 	baseVCSSource
+}
+
+func (s *hgSource) exportRevisionTo(ctx context.Context, rev Revision, to string) error {
+	// TODO: use hg instead of the generic approach in
+	// baseVCSSource.exportRevisionTo to make it faster.
+	if err := s.baseVCSSource.exportRevisionTo(ctx, rev, to); err != nil {
+		return err
+	}
+
+	if err := os.RemoveAll(filepath.Join(to, ".hg")); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (s *hgSource) listVersions(ctx context.Context) ([]PairedVersion, error) {
@@ -416,9 +478,11 @@ func (s *hgSource) listVersions(ctx context.Context) ([]PairedVersion, error) {
 	}
 
 	// Now, list all the tags
-	out, err := runFromRepoDir(ctx, r, "hg", "tags", "--debug", "--verbose")
+	tagsCmd := exec.CommandContext(ctx, "hg", "tags", "--debug", "--verbose")
+	tagsCmd.Dir = r.LocalPath()
+	out, err := tagsCmd.CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("%s: %s", err, string(out))
+		return nil, errors.Wrap(err, string(out))
 	}
 
 	all := bytes.Split(bytes.TrimSpace(out), []byte("\n"))
@@ -443,17 +507,19 @@ func (s *hgSource) listVersions(ctx context.Context) ([]PairedVersion, error) {
 		}
 
 		idx := bytes.IndexByte(pair[0], 32) // space
-		v := NewVersion(string(pair[0][:idx])).Is(Revision(pair[1])).(PairedVersion)
+		v := NewVersion(string(pair[0][:idx])).Pair(Revision(pair[1])).(PairedVersion)
 		vlist = append(vlist, v)
 	}
 
 	// bookmarks next, because the presence of the magic @ bookmark has to
 	// determine how we handle the branches
 	var magicAt bool
-	out, err = runFromRepoDir(ctx, r, "hg", "bookmarks", "--debug")
+	bookmarksCmd := exec.CommandContext(ctx, "hg", "bookmarks", "--debug")
+	bookmarksCmd.Dir = r.LocalPath()
+	out, err = bookmarksCmd.CombinedOutput()
 	if err != nil {
 		// better nothing than partial and misleading
-		return nil, fmt.Errorf("%s: %s", err, string(out))
+		return nil, errors.Wrap(err, string(out))
 	}
 
 	out = bytes.TrimSpace(out)
@@ -475,18 +541,20 @@ func (s *hgSource) listVersions(ctx context.Context) ([]PairedVersion, error) {
 			var v PairedVersion
 			if str == "@" {
 				magicAt = true
-				v = newDefaultBranch(str).Is(Revision(pair[1])).(PairedVersion)
+				v = newDefaultBranch(str).Pair(Revision(pair[1])).(PairedVersion)
 			} else {
-				v = NewBranch(str).Is(Revision(pair[1])).(PairedVersion)
+				v = NewBranch(str).Pair(Revision(pair[1])).(PairedVersion)
 			}
 			vlist = append(vlist, v)
 		}
 	}
 
-	out, err = runFromRepoDir(ctx, r, "hg", "branches", "-c", "--debug")
+	cmd := exec.CommandContext(ctx, "hg", "branches", "-c", "--debug")
+	cmd.Dir = r.LocalPath()
+	out, err = cmd.CombinedOutput()
 	if err != nil {
 		// better nothing than partial and misleading
-		return nil, fmt.Errorf("%s: %s", err, string(out))
+		return nil, errors.Wrap(err, string(out))
 	}
 
 	all = bytes.Split(bytes.TrimSpace(out), []byte("\n"))
@@ -504,33 +572,12 @@ func (s *hgSource) listVersions(ctx context.Context) ([]PairedVersion, error) {
 		// "default" branch, then mark it as default branch
 		var v PairedVersion
 		if !magicAt && str == "default" {
-			v = newDefaultBranch(str).Is(Revision(pair[1])).(PairedVersion)
+			v = newDefaultBranch(str).Pair(Revision(pair[1])).(PairedVersion)
 		} else {
-			v = NewBranch(str).Is(Revision(pair[1])).(PairedVersion)
+			v = NewBranch(str).Pair(Revision(pair[1])).(PairedVersion)
 		}
 		vlist = append(vlist, v)
 	}
 
 	return vlist, nil
-}
-
-type repo struct {
-	// Object for direct repo interaction
-	r ctxRepo
-}
-
-// This func copied from Masterminds/vcs so we can exec our own commands
-func mergeEnvLists(in, out []string) []string {
-NextVar:
-	for _, inkv := range in {
-		k := strings.SplitAfterN(inkv, "=", 2)[0]
-		for i, outkv := range out {
-			if strings.HasPrefix(outkv, k) {
-				out[i] = inkv
-				continue NextVar
-			}
-		}
-		out = append(out, inkv)
-	}
-	return out
 }

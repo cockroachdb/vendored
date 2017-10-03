@@ -5,6 +5,7 @@
 package gps
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"strings"
@@ -113,7 +114,7 @@ func mkAtom(info string) atom {
 	}
 
 	if rev != "" {
-		v = v.(UnpairedVersion).Is(rev)
+		v = v.(UnpairedVersion).Pair(rev)
 	}
 
 	return atom{
@@ -164,7 +165,7 @@ func mkPCstrnt(info string) ProjectConstraint {
 		// Of course, this *will* panic if the predicate is a revision or a
 		// semver constraint, neither of which implement UnpairedVersion. This
 		// is as intended, to prevent bad data from entering the system.
-		c = c.(UnpairedVersion).Is(rev)
+		c = c.(UnpairedVersion).Pair(rev)
 	}
 
 	return ProjectConstraint{
@@ -191,11 +192,10 @@ func mkCDep(pdep string, pl ...string) completeDep {
 // A depspec is a fixture representing all the information a SourceManager would
 // ordinarily glean directly from interrogating a repository.
 type depspec struct {
-	n       ProjectRoot
-	v       Version
-	deps    []ProjectConstraint
-	devdeps []ProjectConstraint
-	pkgs    []tpkg
+	n    ProjectRoot
+	v    Version
+	deps []ProjectConstraint
+	pkgs []tpkg
 }
 
 // mkDepspec creates a depspec by processing a series of strings, each of which
@@ -205,9 +205,6 @@ type depspec struct {
 // described - see the docs on mkAtom for details. subsequent strings are
 // interpreted as dep constraints of that dep at that version. See the docs on
 // mkPDep for details.
-//
-// If a string other than the first includes a "(dev) " prefix, it will be
-// treated as a test-only dependency.
 func mkDepspec(pi string, deps ...string) depspec {
 	pa := mkAtom(pi)
 	if string(pa.id.ProjectRoot) != pa.id.Source && pa.id.Source != "" {
@@ -220,15 +217,7 @@ func mkDepspec(pi string, deps ...string) depspec {
 	}
 
 	for _, dep := range deps {
-		var sl *[]ProjectConstraint
-		if strings.HasPrefix(dep, "(dev) ") {
-			dep = strings.TrimPrefix(dep, "(dev) ")
-			sl = &ds.devdeps
-		} else {
-			sl = &ds.deps
-		}
-
-		*sl = append(*sl, mkPCstrnt(dep))
+		ds.deps = append(ds.deps, mkPCstrnt(dep))
 	}
 
 	return ds
@@ -293,7 +282,7 @@ func mkrevlock(pairs ...string) fixLock {
 	l := make(fixLock, 0)
 	for _, s := range pairs {
 		pa := mkAtom(s)
-		l = append(l, NewLockedProject(pa.id, pa.v.(PairedVersion).Underlying(), nil))
+		l = append(l, NewLockedProject(pa.id, pa.v.(PairedVersion).Revision(), nil))
 	}
 
 	return l
@@ -356,13 +345,6 @@ func computeBasicReachMap(ds []depspec) reachMap {
 		for _, dep := range d.deps {
 			lm[n] = append(lm[n], string(dep.Ident.ProjectRoot))
 		}
-
-		// first is root
-		if k == 0 {
-			for _, dep := range d.devdeps {
-				lm[n] = append(lm[n], string(dep.Ident.ProjectRoot))
-			}
-		}
 	}
 
 	return rm
@@ -418,6 +400,9 @@ type basicFixture struct {
 	changeall bool
 	// individual projects to change
 	changelist []ProjectRoot
+	// if the fixture is currently broken/expected to fail, this has a message
+	// recording why
+	broken string
 }
 
 func (f basicFixture) name() string {
@@ -439,18 +424,14 @@ func (f basicFixture) solution() map[ProjectIdentifier]LockedProject {
 func (f basicFixture) rootmanifest() RootManifest {
 	return simpleRootManifest{
 		c:   pcSliceToMap(f.ds[0].deps),
-		tc:  pcSliceToMap(f.ds[0].devdeps),
 		ovr: f.ovr,
 	}
 }
 
 func (f basicFixture) rootTree() pkgtree.PackageTree {
-	var imp, timp []string
+	var imp []string
 	for _, dep := range f.ds[0].deps {
 		imp = append(imp, string(dep.Ident.ProjectRoot))
-	}
-	for _, dep := range f.ds[0].devdeps {
-		timp = append(timp, string(dep.Ident.ProjectRoot))
 	}
 
 	n := string(f.ds[0].n)
@@ -459,10 +440,9 @@ func (f basicFixture) rootTree() pkgtree.PackageTree {
 		Packages: map[string]pkgtree.PackageOrErr{
 			string(n): {
 				P: pkgtree.Package{
-					ImportPath:  n,
-					Name:        n,
-					Imports:     imp,
-					TestImports: timp,
+					ImportPath: n,
+					Name:       n,
+					Imports:    imp,
 				},
 			},
 		},
@@ -917,38 +897,6 @@ var basicFixtures = map[string]basicFixture{
 			"foo ptaggerino oldrev",
 		),
 	},
-	"includes root package's dev dependencies": {
-		ds: []depspec{
-			mkDepspec("root 1.0.0", "(dev) foo 1.0.0", "(dev) bar 1.0.0"),
-			mkDepspec("foo 1.0.0"),
-			mkDepspec("bar 1.0.0"),
-		},
-		r: mksolution(
-			"foo 1.0.0",
-			"bar 1.0.0",
-		),
-	},
-	"includes dev dependency's transitive dependencies": {
-		ds: []depspec{
-			mkDepspec("root 1.0.0", "(dev) foo 1.0.0"),
-			mkDepspec("foo 1.0.0", "bar 1.0.0"),
-			mkDepspec("bar 1.0.0"),
-		},
-		r: mksolution(
-			"foo 1.0.0",
-			"bar 1.0.0",
-		),
-	},
-	"ignores transitive dependency's dev dependencies": {
-		ds: []depspec{
-			mkDepspec("root 1.0.0", "(dev) foo 1.0.0"),
-			mkDepspec("foo 1.0.0", "(dev) bar 1.0.0"),
-			mkDepspec("bar 1.0.0"),
-		},
-		r: mksolution(
-			"foo 1.0.0",
-		),
-	},
 	"no version that matches requirement": {
 		ds: []depspec{
 			mkDepspec("root 0.0.0", "foo ^1.0.0"),
@@ -1399,27 +1347,19 @@ func (sm *depspecSourceManager) GetManifestAndLock(id ProjectIdentifier, v Versi
 		v = pv.Unpair()
 	}
 
+	src := toFold(id.normalizedSource())
 	for _, ds := range sm.specs {
-		if id.normalizedSource() == string(ds.n) && v.Matches(ds.v) {
+		if src == string(ds.n) && v.Matches(ds.v) {
 			return ds, dummyLock{}, nil
 		}
 	}
 
-	// TODO(sdboyer) proper solver-type errors
-	return nil, nil, fmt.Errorf("Project %s at version %s could not be found", id.errString(), v)
-}
-
-func (sm *depspecSourceManager) ExternalReach(id ProjectIdentifier, v Version) (map[string][]string, error) {
-	pid := pident{n: ProjectRoot(id.normalizedSource()), v: v}
-	if m, exists := sm.rm[pid]; exists {
-		return m, nil
-	}
-	return nil, fmt.Errorf("No reach data for %s at version %s", id.errString(), v)
+	return nil, nil, fmt.Errorf("Project %s at version %s could not be found", id, v)
 }
 
 func (sm *depspecSourceManager) ListPackages(id ProjectIdentifier, v Version) (pkgtree.PackageTree, error) {
-	pid := pident{n: ProjectRoot(id.normalizedSource()), v: v}
-	if pv, ok := v.(PairedVersion); ok && pv.Underlying() == "FAKEREV" {
+	pid := pident{n: ProjectRoot(toFold(id.normalizedSource())), v: v}
+	if pv, ok := v.(PairedVersion); ok && pv.Revision() == "FAKEREV" {
 		// An empty rev may come in here because that's what we produce in
 		// ListVersions(). If that's what we see, then just pretend like we have
 		// an unpaired.
@@ -1428,7 +1368,7 @@ func (sm *depspecSourceManager) ListPackages(id ProjectIdentifier, v Version) (p
 
 	if r, exists := sm.rm[pid]; exists {
 		return pkgtree.PackageTree{
-			ImportRoot: string(pid.n),
+			ImportRoot: id.normalizedSource(),
 			Packages: map[string]pkgtree.PackageOrErr{
 				string(pid.n): {
 					P: pkgtree.Package{
@@ -1448,7 +1388,7 @@ func (sm *depspecSourceManager) ListPackages(id ProjectIdentifier, v Version) (p
 		for pid, r := range sm.rm {
 			if uv.Matches(pid.v) {
 				return pkgtree.PackageTree{
-					ImportRoot: string(pid.n),
+					ImportRoot: id.normalizedSource(),
 					Packages: map[string]pkgtree.PackageOrErr{
 						string(pid.n): {
 							P: pkgtree.Package{
@@ -1468,8 +1408,9 @@ func (sm *depspecSourceManager) ListPackages(id ProjectIdentifier, v Version) (p
 
 func (sm *depspecSourceManager) ListVersions(id ProjectIdentifier) ([]PairedVersion, error) {
 	var pvl []PairedVersion
+	src := toFold(id.normalizedSource())
 	for _, ds := range sm.specs {
-		if id.normalizedSource() != string(ds.n) {
+		if src != string(ds.n) {
 			continue
 		}
 
@@ -1482,31 +1423,33 @@ func (sm *depspecSourceManager) ListVersions(id ProjectIdentifier) ([]PairedVers
 		case UnpairedVersion:
 			// Dummy revision; if the fixture doesn't provide it, we know
 			// the test doesn't need revision info, anyway.
-			pvl = append(pvl, tv.Is(Revision("FAKEREV")))
+			pvl = append(pvl, tv.Pair(Revision("FAKEREV")))
 		default:
-			panic(fmt.Sprintf("unreachable: type of version was %#v for spec %s", ds.v, id.errString()))
+			panic(fmt.Sprintf("unreachable: type of version was %#v for spec %s", ds.v, id))
 		}
 	}
 
 	if len(pvl) == 0 {
-		return nil, fmt.Errorf("Project %s could not be found", id.errString())
+		return nil, fmt.Errorf("Project %s could not be found", id)
 	}
 	return pvl, nil
 }
 
 func (sm *depspecSourceManager) RevisionPresentIn(id ProjectIdentifier, r Revision) (bool, error) {
+	src := toFold(id.normalizedSource())
 	for _, ds := range sm.specs {
-		if id.normalizedSource() == string(ds.n) && r == ds.v {
+		if src == string(ds.n) && r == ds.v {
 			return true, nil
 		}
 	}
 
-	return false, fmt.Errorf("Project %s has no revision %s", id.errString(), r)
+	return false, fmt.Errorf("Project %s has no revision %s", id, r)
 }
 
 func (sm *depspecSourceManager) SourceExists(id ProjectIdentifier) (bool, error) {
+	src := toFold(id.normalizedSource())
 	for _, ds := range sm.specs {
-		if id.normalizedSource() == string(ds.n) {
+		if src == string(ds.n) {
 			return true, nil
 		}
 	}
@@ -1517,22 +1460,23 @@ func (sm *depspecSourceManager) SourceExists(id ProjectIdentifier) (bool, error)
 func (sm *depspecSourceManager) SyncSourceFor(id ProjectIdentifier) error {
 	// Ignore err because it can't happen
 	if exist, _ := sm.SourceExists(id); !exist {
-		return fmt.Errorf("Source %s does not exist", id.errString())
+		return fmt.Errorf("Source %s does not exist", id)
 	}
 	return nil
 }
 
 func (sm *depspecSourceManager) Release() {}
 
-func (sm *depspecSourceManager) ExportProject(id ProjectIdentifier, v Version, to string) error {
+func (sm *depspecSourceManager) ExportProject(context.Context, ProjectIdentifier, Version, string) error {
 	return fmt.Errorf("dummy sm doesn't support exporting")
 }
 
 func (sm *depspecSourceManager) DeduceProjectRoot(ip string) (ProjectRoot, error) {
+	fip := toFold(ip)
 	for _, ds := range sm.allSpecs() {
 		n := string(ds.n)
-		if ip == n || strings.HasPrefix(ip, n+"/") {
-			return ProjectRoot(n), nil
+		if fip == n || strings.HasPrefix(fip, n+"/") {
+			return ProjectRoot(ip[:len(n)]), nil
 		}
 	}
 	return "", fmt.Errorf("Could not find %s, or any parent, in list of known fixtures", ip)
@@ -1548,6 +1492,15 @@ func (sm *depspecSourceManager) allSpecs() []depspec {
 
 func (sm *depspecSourceManager) ignore() map[string]bool {
 	return sm.ig
+}
+
+// InferConstraint tries to puzzle out what kind of version is given in a string -
+// semver, a revision, or as a fallback, a plain tag. This current implementation
+// is a panic because there's no current circumstance under which the depspecSourceManager
+// is useful outside of the gps solving tests, and it shouldn't be used anywhere else without a conscious and intentional
+// expansion of its semantics.
+func (sm *depspecSourceManager) InferConstraint(s string, pi ProjectIdentifier) (Constraint, error) {
+	panic("depsecSourceManager is only for gps solving tests")
 }
 
 type depspecBridge struct {
@@ -1568,7 +1521,7 @@ func (b *depspecBridge) listVersions(id ProjectIdentifier) ([]Version, error) {
 	// remove the underlying component.
 	vl := make([]Version, 0, len(pvl))
 	for _, v := range pvl {
-		if v.Underlying() == "FAKEREV" {
+		if v.Revision() == "FAKEREV" {
 			vl = append(vl, v.Unpair())
 		} else {
 			vl = append(vl, v)
@@ -1613,16 +1566,7 @@ func (ds depspec) DependencyConstraints() ProjectConstraints {
 	return pcSliceToMap(ds.deps)
 }
 
-// impl Spec interface
-func (ds depspec) TestDependencyConstraints() ProjectConstraints {
-	return pcSliceToMap(ds.devdeps)
-}
-
 type fixLock []LockedProject
-
-func (fixLock) SolverVersion() string {
-	return "-1"
-}
 
 // impl Lock interface
 func (fixLock) InputHash() []byte {
@@ -1635,11 +1579,6 @@ func (l fixLock) Projects() []LockedProject {
 }
 
 type dummyLock struct{}
-
-// impl Lock interface
-func (dummyLock) SolverVersion() string {
-	return "-1"
-}
 
 // impl Lock interface
 func (dummyLock) InputHash() []byte {

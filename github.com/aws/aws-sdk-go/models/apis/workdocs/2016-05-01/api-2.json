@@ -60,44 +60,6 @@
         {"shape":"ServiceUnavailableException"}
       ]
     },
-    "CreateComment":{
-      "name":"CreateComment",
-      "http":{
-        "method":"POST",
-        "requestUri":"/api/v1/documents/{DocumentId}/versions/{VersionId}/comment",
-        "responseCode":201
-      },
-      "input":{"shape":"CreateCommentRequest"},
-      "output":{"shape":"CreateCommentResponse"},
-      "errors":[
-        {"shape":"EntityNotExistsException"},
-        {"shape":"ProhibitedStateException"},
-        {"shape":"UnauthorizedOperationException"},
-        {"shape":"UnauthorizedResourceAccessException"},
-        {"shape":"FailedDependencyException"},
-        {"shape":"ServiceUnavailableException"},
-        {"shape":"DocumentLockedForCommentsException"}
-      ]
-    },
-    "CreateCustomMetadata":{
-      "name":"CreateCustomMetadata",
-      "http":{
-        "method":"PUT",
-        "requestUri":"/api/v1/resources/{ResourceId}/customMetadata",
-        "responseCode":200
-      },
-      "input":{"shape":"CreateCustomMetadataRequest"},
-      "output":{"shape":"CreateCustomMetadataResponse"},
-      "errors":[
-        {"shape":"EntityNotExistsException"},
-        {"shape":"UnauthorizedOperationException"},
-        {"shape":"UnauthorizedResourceAccessException"},
-        {"shape":"ProhibitedStateException"},
-        {"shape":"CustomMetadataLimitExceededException"},
-        {"shape":"FailedDependencyException"},
-        {"shape":"ServiceUnavailableException"}
-      ]
-    },
     "CreateFolder":{
       "name":"CreateFolder",
       "http":{
@@ -116,24 +78,6 @@
         {"shape":"UnauthorizedResourceAccessException"},
         {"shape":"FailedDependencyException"},
         {"shape":"ServiceUnavailableException"}
-      ]
-    },
-    "CreateLabels":{
-      "name":"CreateLabels",
-      "http":{
-        "method":"PUT",
-        "requestUri":"/api/v1/resources/{ResourceId}/labels",
-        "responseCode":200
-      },
-      "input":{"shape":"CreateLabelsRequest"},
-      "output":{"shape":"CreateLabelsResponse"},
-      "errors":[
-        {"shape":"EntityNotExistsException"},
-        {"shape":"UnauthorizedOperationException"},
-        {"shape":"UnauthorizedResourceAccessException"},
-        {"shape":"FailedDependencyException"},
-        {"shape":"ServiceUnavailableException"},
-        {"shape":"TooManyLabelsException"}
       ]
     },
     "CreateNotificationSubscription":{
@@ -180,42 +124,6 @@
         {"shape":"EntityNotExistsException"},
         {"shape":"UnauthorizedOperationException"},
         {"shape":"UnauthorizedResourceAccessException"},
-        {"shape":"FailedDependencyException"},
-        {"shape":"ServiceUnavailableException"}
-      ]
-    },
-    "DeleteComment":{
-      "name":"DeleteComment",
-      "http":{
-        "method":"DELETE",
-        "requestUri":"/api/v1/documents/{DocumentId}/versions/{VersionId}/comment/{CommentId}",
-        "responseCode":204
-      },
-      "input":{"shape":"DeleteCommentRequest"},
-      "errors":[
-        {"shape":"EntityNotExistsException"},
-        {"shape":"ProhibitedStateException"},
-        {"shape":"UnauthorizedOperationException"},
-        {"shape":"UnauthorizedResourceAccessException"},
-        {"shape":"FailedDependencyException"},
-        {"shape":"ServiceUnavailableException"},
-        {"shape":"DocumentLockedForCommentsException"}
-      ]
-    },
-    "DeleteCustomMetadata":{
-      "name":"DeleteCustomMetadata",
-      "http":{
-        "method":"DELETE",
-        "requestUri":"/api/v1/resources/{ResourceId}/customMetadata",
-        "responseCode":200
-      },
-      "input":{"shape":"DeleteCustomMetadataRequest"},
-      "output":{"shape":"DeleteCustomMetadataResponse"},
-      "errors":[
-        {"shape":"EntityNotExistsException"},
-        {"shape":"UnauthorizedOperationException"},
-        {"shape":"UnauthorizedResourceAccessException"},
-        {"shape":"ProhibitedStateException"},
         {"shape":"FailedDependencyException"},
         {"shape":"ServiceUnavailableException"}
       ]
@@ -272,23 +180,6 @@
         {"shape":"ServiceUnavailableException"}
       ]
     },
-    "DeleteLabels":{
-      "name":"DeleteLabels",
-      "http":{
-        "method":"DELETE",
-        "requestUri":"/api/v1/resources/{ResourceId}/labels",
-        "responseCode":200
-      },
-      "input":{"shape":"DeleteLabelsRequest"},
-      "output":{"shape":"DeleteLabelsResponse"},
-      "errors":[
-        {"shape":"EntityNotExistsException"},
-        {"shape":"UnauthorizedOperationException"},
-        {"shape":"UnauthorizedResourceAccessException"},
-        {"shape":"FailedDependencyException"},
-        {"shape":"ServiceUnavailableException"}
-      ]
-    },
     "DeleteNotificationSubscription":{
       "name":"DeleteNotificationSubscription",
       "http":{
@@ -314,41 +205,6 @@
       "input":{"shape":"DeleteUserRequest"},
       "errors":[
         {"shape":"EntityNotExistsException"},
-        {"shape":"UnauthorizedOperationException"},
-        {"shape":"UnauthorizedResourceAccessException"},
-        {"shape":"FailedDependencyException"},
-        {"shape":"ServiceUnavailableException"}
-      ]
-    },
-    "DescribeActivities":{
-      "name":"DescribeActivities",
-      "http":{
-        "method":"GET",
-        "requestUri":"/api/v1/activities",
-        "responseCode":200
-      },
-      "input":{"shape":"DescribeActivitiesRequest"},
-      "output":{"shape":"DescribeActivitiesResponse"},
-      "errors":[
-        {"shape":"UnauthorizedOperationException"},
-        {"shape":"UnauthorizedResourceAccessException"},
-        {"shape":"InvalidArgumentException"},
-        {"shape":"FailedDependencyException"},
-        {"shape":"ServiceUnavailableException"}
-      ]
-    },
-    "DescribeComments":{
-      "name":"DescribeComments",
-      "http":{
-        "method":"GET",
-        "requestUri":"/api/v1/documents/{DocumentId}/versions/{VersionId}/comments",
-        "responseCode":200
-      },
-      "input":{"shape":"DescribeCommentsRequest"},
-      "output":{"shape":"DescribeCommentsResponse"},
-      "errors":[
-        {"shape":"EntityNotExistsException"},
-        {"shape":"ProhibitedStateException"},
         {"shape":"UnauthorizedOperationException"},
         {"shape":"UnauthorizedResourceAccessException"},
         {"shape":"FailedDependencyException"},
@@ -423,23 +279,6 @@
         {"shape":"ServiceUnavailableException"}
       ]
     },
-    "DescribeRootFolders":{
-      "name":"DescribeRootFolders",
-      "http":{
-        "method":"GET",
-        "requestUri":"/api/v1/me/root",
-        "responseCode":200
-      },
-      "input":{"shape":"DescribeRootFoldersRequest"},
-      "output":{"shape":"DescribeRootFoldersResponse"},
-      "errors":[
-        {"shape":"UnauthorizedOperationException"},
-        {"shape":"UnauthorizedResourceAccessException"},
-        {"shape":"InvalidArgumentException"},
-        {"shape":"FailedDependencyException"},
-        {"shape":"ServiceUnavailableException"}
-      ]
-    },
     "DescribeUsers":{
       "name":"DescribeUsers",
       "http":{
@@ -455,23 +294,6 @@
         {"shape":"FailedDependencyException"},
         {"shape":"ServiceUnavailableException"},
         {"shape":"InvalidArgumentException"}
-      ]
-    },
-    "GetCurrentUser":{
-      "name":"GetCurrentUser",
-      "http":{
-        "method":"GET",
-        "requestUri":"/api/v1/me",
-        "responseCode":200
-      },
-      "input":{"shape":"GetCurrentUserRequest"},
-      "output":{"shape":"GetCurrentUserResponse"},
-      "errors":[
-        {"shape":"EntityNotExistsException"},
-        {"shape":"UnauthorizedOperationException"},
-        {"shape":"UnauthorizedResourceAccessException"},
-        {"shape":"FailedDependencyException"},
-        {"shape":"ServiceUnavailableException"}
       ]
     },
     "GetDocument":{
@@ -581,9 +403,7 @@
         {"shape":"UnauthorizedOperationException"},
         {"shape":"UnauthorizedResourceAccessException"},
         {"shape":"FailedDependencyException"},
-        {"shape":"ServiceUnavailableException"},
-        {"shape":"DraftUploadOutOfSyncException"},
-        {"shape":"ResourceAlreadyCheckedOutException"}
+        {"shape":"ServiceUnavailableException"}
       ]
     },
     "RemoveAllResourcePermissions":{
@@ -703,11 +523,6 @@
         "VersionId"
       ],
       "members":{
-        "AuthenticationToken":{
-          "shape":"AuthenticationHeaderType",
-          "location":"header",
-          "locationName":"Authentication"
-        },
         "DocumentId":{
           "shape":"ResourceIdType",
           "location":"uri",
@@ -728,11 +543,6 @@
           "shape":"IdType",
           "location":"uri",
           "locationName":"UserId"
-        },
-        "AuthenticationToken":{
-          "shape":"AuthenticationHeaderType",
-          "location":"header",
-          "locationName":"Authentication"
         }
       }
     },
@@ -742,55 +552,6 @@
         "User":{"shape":"User"}
       }
     },
-    "Activity":{
-      "type":"structure",
-      "members":{
-        "Type":{"shape":"ActivityType"},
-        "TimeStamp":{"shape":"TimestampType"},
-        "OrganizationId":{"shape":"IdType"},
-        "Initiator":{"shape":"UserMetadata"},
-        "Participants":{"shape":"Participants"},
-        "ResourceMetadata":{"shape":"ResourceMetadata"},
-        "OriginalParent":{"shape":"ResourceMetadata"},
-        "CommentMetadata":{"shape":"CommentMetadata"}
-      }
-    },
-    "ActivityType":{
-      "type":"string",
-      "enum":[
-        "DOCUMENT_CHECKED_IN",
-        "DOCUMENT_CHECKED_OUT",
-        "DOCUMENT_RENAMED",
-        "DOCUMENT_VERSION_UPLOADED",
-        "DOCUMENT_VERSION_DELETED",
-        "DOCUMENT_RECYCLED",
-        "DOCUMENT_RESTORED",
-        "DOCUMENT_REVERTED",
-        "DOCUMENT_SHARED",
-        "DOCUMENT_UNSHARED",
-        "DOCUMENT_SHARE_PERMISSION_CHANGED",
-        "DOCUMENT_SHAREABLE_LINK_CREATED",
-        "DOCUMENT_SHAREABLE_LINK_REMOVED",
-        "DOCUMENT_SHAREABLE_LINK_PERMISSION_CHANGED",
-        "DOCUMENT_MOVED",
-        "DOCUMENT_COMMENT_ADDED",
-        "DOCUMENT_COMMENT_DELETED",
-        "DOCUMENT_ANNOTATION_ADDED",
-        "DOCUMENT_ANNOTATION_DELETED",
-        "FOLDER_CREATED",
-        "FOLDER_DELETED",
-        "FOLDER_RENAMED",
-        "FOLDER_RECYCLED",
-        "FOLDER_RESTORED",
-        "FOLDER_SHARED",
-        "FOLDER_UNSHARED",
-        "FOLDER_SHARE_PERMISSION_CHANGED",
-        "FOLDER_SHAREABLE_LINK_CREATED",
-        "FOLDER_SHAREABLE_LINK_REMOVED",
-        "FOLDER_SHAREABLE_LINK_PERMISSION_CHANGED",
-        "FOLDER_MOVED"
-      ]
-    },
     "AddResourcePermissionsRequest":{
       "type":"structure",
       "required":[
@@ -798,11 +559,6 @@
         "Principals"
       ],
       "members":{
-        "AuthenticationToken":{
-          "shape":"AuthenticationHeaderType",
-          "location":"header",
-          "locationName":"Authentication"
-        },
         "ResourceId":{
           "shape":"ResourceIdType",
           "location":"uri",
@@ -817,69 +573,6 @@
         "ShareResults":{"shape":"ShareResultsList"}
       }
     },
-    "AuthenticationHeaderType":{
-      "type":"string",
-      "max":8199,
-      "min":1,
-      "sensitive":true
-    },
-    "BooleanType":{"type":"boolean"},
-    "Comment":{
-      "type":"structure",
-      "required":["CommentId"],
-      "members":{
-        "CommentId":{"shape":"CommentIdType"},
-        "ParentId":{"shape":"CommentIdType"},
-        "ThreadId":{"shape":"CommentIdType"},
-        "Text":{"shape":"CommentTextType"},
-        "Contributor":{"shape":"User"},
-        "CreatedTimestamp":{"shape":"TimestampType"},
-        "Status":{"shape":"CommentStatusType"},
-        "Visibility":{"shape":"CommentVisibilityType"},
-        "RecipientId":{"shape":"IdType"}
-      }
-    },
-    "CommentIdType":{
-      "type":"string",
-      "max":128,
-      "min":1,
-      "pattern":"[\\w+-.@]+"
-    },
-    "CommentList":{
-      "type":"list",
-      "member":{"shape":"Comment"}
-    },
-    "CommentMetadata":{
-      "type":"structure",
-      "members":{
-        "CommentId":{"shape":"CommentIdType"},
-        "Contributor":{"shape":"User"},
-        "CreatedTimestamp":{"shape":"TimestampType"},
-        "CommentStatus":{"shape":"CommentStatusType"},
-        "RecipientId":{"shape":"IdType"}
-      }
-    },
-    "CommentStatusType":{
-      "type":"string",
-      "enum":[
-        "DRAFT",
-        "PUBLISHED",
-        "DELETED"
-      ]
-    },
-    "CommentTextType":{
-      "type":"string",
-      "max":2048,
-      "min":1,
-      "sensitive":true
-    },
-    "CommentVisibilityType":{
-      "type":"string",
-      "enum":[
-        "PUBLIC",
-        "PRIVATE"
-      ]
-    },
     "ConcurrentModificationException":{
       "type":"structure",
       "members":{
@@ -888,81 +581,10 @@
       "error":{"httpStatusCode":409},
       "exception":true
     },
-    "CreateCommentRequest":{
-      "type":"structure",
-      "required":[
-        "DocumentId",
-        "VersionId",
-        "Text"
-      ],
-      "members":{
-        "AuthenticationToken":{
-          "shape":"AuthenticationHeaderType",
-          "location":"header",
-          "locationName":"Authentication"
-        },
-        "DocumentId":{
-          "shape":"ResourceIdType",
-          "location":"uri",
-          "locationName":"DocumentId"
-        },
-        "VersionId":{
-          "shape":"DocumentVersionIdType",
-          "location":"uri",
-          "locationName":"VersionId"
-        },
-        "ParentId":{"shape":"CommentIdType"},
-        "ThreadId":{"shape":"CommentIdType"},
-        "Text":{"shape":"CommentTextType"},
-        "Visibility":{"shape":"CommentVisibilityType"},
-        "NotifyCollaborators":{"shape":"BooleanType"}
-      }
-    },
-    "CreateCommentResponse":{
-      "type":"structure",
-      "members":{
-        "Comment":{"shape":"Comment"}
-      }
-    },
-    "CreateCustomMetadataRequest":{
-      "type":"structure",
-      "required":[
-        "ResourceId",
-        "CustomMetadata"
-      ],
-      "members":{
-        "AuthenticationToken":{
-          "shape":"AuthenticationHeaderType",
-          "location":"header",
-          "locationName":"Authentication"
-        },
-        "ResourceId":{
-          "shape":"ResourceIdType",
-          "location":"uri",
-          "locationName":"ResourceId"
-        },
-        "VersionId":{
-          "shape":"DocumentVersionIdType",
-          "location":"querystring",
-          "locationName":"versionid"
-        },
-        "CustomMetadata":{"shape":"CustomMetadataMap"}
-      }
-    },
-    "CreateCustomMetadataResponse":{
-      "type":"structure",
-      "members":{
-      }
-    },
     "CreateFolderRequest":{
       "type":"structure",
       "required":["ParentFolderId"],
       "members":{
-        "AuthenticationToken":{
-          "shape":"AuthenticationHeaderType",
-          "location":"header",
-          "locationName":"Authentication"
-        },
         "Name":{"shape":"ResourceNameType"},
         "ParentFolderId":{"shape":"ResourceIdType"}
       }
@@ -971,31 +593,6 @@
       "type":"structure",
       "members":{
         "Metadata":{"shape":"FolderMetadata"}
-      }
-    },
-    "CreateLabelsRequest":{
-      "type":"structure",
-      "required":[
-        "ResourceId",
-        "Labels"
-      ],
-      "members":{
-        "ResourceId":{
-          "shape":"ResourceIdType",
-          "location":"uri",
-          "locationName":"ResourceId"
-        },
-        "Labels":{"shape":"Labels"},
-        "AuthenticationToken":{
-          "shape":"AuthenticationHeaderType",
-          "location":"header",
-          "locationName":"Authentication"
-        }
-      }
-    },
-    "CreateLabelsResponse":{
-      "type":"structure",
-      "members":{
       }
     },
     "CreateNotificationSubscriptionRequest":{
@@ -1034,17 +631,11 @@
       "members":{
         "OrganizationId":{"shape":"IdType"},
         "Username":{"shape":"UsernameType"},
-        "EmailAddress":{"shape":"EmailAddressType"},
         "GivenName":{"shape":"UserAttributeValueType"},
         "Surname":{"shape":"UserAttributeValueType"},
         "Password":{"shape":"PasswordType"},
         "TimeZoneId":{"shape":"TimeZoneIdType"},
-        "StorageRule":{"shape":"StorageRuleType"},
-        "AuthenticationToken":{
-          "shape":"AuthenticationHeaderType",
-          "location":"header",
-          "locationName":"Authentication"
-        }
+        "StorageRule":{"shape":"StorageRuleType"}
       }
     },
     "CreateUserResponse":{
@@ -1052,38 +643,6 @@
       "members":{
         "User":{"shape":"User"}
       }
-    },
-    "CustomMetadataKeyList":{
-      "type":"list",
-      "member":{"shape":"CustomMetadataKeyType"},
-      "max":8
-    },
-    "CustomMetadataKeyType":{
-      "type":"string",
-      "max":56,
-      "min":1,
-      "pattern":"[a-zA-Z0-9._+-/=][a-zA-Z0-9 ._+-/=]*"
-    },
-    "CustomMetadataLimitExceededException":{
-      "type":"structure",
-      "members":{
-        "Message":{"shape":"ErrorMessageType"}
-      },
-      "error":{"httpStatusCode":429},
-      "exception":true
-    },
-    "CustomMetadataMap":{
-      "type":"map",
-      "key":{"shape":"CustomMetadataKeyType"},
-      "value":{"shape":"CustomMetadataValueType"},
-      "max":8,
-      "min":1
-    },
-    "CustomMetadataValueType":{
-      "type":"string",
-      "max":256,
-      "min":1,
-      "pattern":"[a-zA-Z0-9._+-/=][a-zA-Z0-9 ._+-/=]*"
     },
     "DeactivateUserRequest":{
       "type":"structure",
@@ -1093,11 +652,6 @@
           "shape":"IdType",
           "location":"uri",
           "locationName":"UserId"
-        },
-        "AuthenticationToken":{
-          "shape":"AuthenticationHeaderType",
-          "location":"header",
-          "locationName":"Authentication"
         }
       }
     },
@@ -1108,81 +662,10 @@
       "error":{"httpStatusCode":409},
       "exception":true
     },
-    "DeleteCommentRequest":{
-      "type":"structure",
-      "required":[
-        "DocumentId",
-        "VersionId",
-        "CommentId"
-      ],
-      "members":{
-        "AuthenticationToken":{
-          "shape":"AuthenticationHeaderType",
-          "location":"header",
-          "locationName":"Authentication"
-        },
-        "DocumentId":{
-          "shape":"ResourceIdType",
-          "location":"uri",
-          "locationName":"DocumentId"
-        },
-        "VersionId":{
-          "shape":"DocumentVersionIdType",
-          "location":"uri",
-          "locationName":"VersionId"
-        },
-        "CommentId":{
-          "shape":"CommentIdType",
-          "location":"uri",
-          "locationName":"CommentId"
-        }
-      }
-    },
-    "DeleteCustomMetadataRequest":{
-      "type":"structure",
-      "required":["ResourceId"],
-      "members":{
-        "AuthenticationToken":{
-          "shape":"AuthenticationHeaderType",
-          "location":"header",
-          "locationName":"Authentication"
-        },
-        "ResourceId":{
-          "shape":"ResourceIdType",
-          "location":"uri",
-          "locationName":"ResourceId"
-        },
-        "VersionId":{
-          "shape":"DocumentVersionIdType",
-          "location":"querystring",
-          "locationName":"versionId"
-        },
-        "Keys":{
-          "shape":"CustomMetadataKeyList",
-          "location":"querystring",
-          "locationName":"keys"
-        },
-        "DeleteAll":{
-          "shape":"BooleanType",
-          "location":"querystring",
-          "locationName":"deleteAll"
-        }
-      }
-    },
-    "DeleteCustomMetadataResponse":{
-      "type":"structure",
-      "members":{
-      }
-    },
     "DeleteDocumentRequest":{
       "type":"structure",
       "required":["DocumentId"],
       "members":{
-        "AuthenticationToken":{
-          "shape":"AuthenticationHeaderType",
-          "location":"header",
-          "locationName":"Authentication"
-        },
         "DocumentId":{
           "shape":"ResourceIdType",
           "location":"uri",
@@ -1194,11 +677,6 @@
       "type":"structure",
       "required":["FolderId"],
       "members":{
-        "AuthenticationToken":{
-          "shape":"AuthenticationHeaderType",
-          "location":"header",
-          "locationName":"Authentication"
-        },
         "FolderId":{
           "shape":"ResourceIdType",
           "location":"uri",
@@ -1210,47 +688,11 @@
       "type":"structure",
       "required":["FolderId"],
       "members":{
-        "AuthenticationToken":{
-          "shape":"AuthenticationHeaderType",
-          "location":"header",
-          "locationName":"Authentication"
-        },
         "FolderId":{
           "shape":"ResourceIdType",
           "location":"uri",
           "locationName":"FolderId"
         }
-      }
-    },
-    "DeleteLabelsRequest":{
-      "type":"structure",
-      "required":["ResourceId"],
-      "members":{
-        "ResourceId":{
-          "shape":"ResourceIdType",
-          "location":"uri",
-          "locationName":"ResourceId"
-        },
-        "AuthenticationToken":{
-          "shape":"AuthenticationHeaderType",
-          "location":"header",
-          "locationName":"Authentication"
-        },
-        "Labels":{
-          "shape":"Labels",
-          "location":"querystring",
-          "locationName":"labels"
-        },
-        "DeleteAll":{
-          "shape":"BooleanType",
-          "location":"querystring",
-          "locationName":"deleteAll"
-        }
-      }
-    },
-    "DeleteLabelsResponse":{
-      "type":"structure",
-      "members":{
       }
     },
     "DeleteNotificationSubscriptionRequest":{
@@ -1276,11 +718,6 @@
       "type":"structure",
       "required":["UserId"],
       "members":{
-        "AuthenticationToken":{
-          "shape":"AuthenticationHeaderType",
-          "location":"header",
-          "locationName":"Authentication"
-        },
         "UserId":{
           "shape":"IdType",
           "location":"uri",
@@ -1288,103 +725,10 @@
         }
       }
     },
-    "DescribeActivitiesRequest":{
-      "type":"structure",
-      "members":{
-        "AuthenticationToken":{
-          "shape":"AuthenticationHeaderType",
-          "location":"header",
-          "locationName":"Authentication"
-        },
-        "StartTime":{
-          "shape":"TimestampType",
-          "location":"querystring",
-          "locationName":"startTime"
-        },
-        "EndTime":{
-          "shape":"TimestampType",
-          "location":"querystring",
-          "locationName":"endTime"
-        },
-        "OrganizationId":{
-          "shape":"IdType",
-          "location":"querystring",
-          "locationName":"organizationId"
-        },
-        "UserId":{
-          "shape":"IdType",
-          "location":"querystring",
-          "locationName":"userId"
-        },
-        "Limit":{
-          "shape":"LimitType",
-          "location":"querystring",
-          "locationName":"limit"
-        },
-        "Marker":{
-          "shape":"MarkerType",
-          "location":"querystring",
-          "locationName":"marker"
-        }
-      }
-    },
-    "DescribeActivitiesResponse":{
-      "type":"structure",
-      "members":{
-        "UserActivities":{"shape":"UserActivities"},
-        "Marker":{"shape":"MarkerType"}
-      }
-    },
-    "DescribeCommentsRequest":{
-      "type":"structure",
-      "required":[
-        "DocumentId",
-        "VersionId"
-      ],
-      "members":{
-        "AuthenticationToken":{
-          "shape":"AuthenticationHeaderType",
-          "location":"header",
-          "locationName":"Authentication"
-        },
-        "DocumentId":{
-          "shape":"ResourceIdType",
-          "location":"uri",
-          "locationName":"DocumentId"
-        },
-        "VersionId":{
-          "shape":"DocumentVersionIdType",
-          "location":"uri",
-          "locationName":"VersionId"
-        },
-        "Limit":{
-          "shape":"LimitType",
-          "location":"querystring",
-          "locationName":"limit"
-        },
-        "Marker":{
-          "shape":"MarkerType",
-          "location":"querystring",
-          "locationName":"marker"
-        }
-      }
-    },
-    "DescribeCommentsResponse":{
-      "type":"structure",
-      "members":{
-        "Comments":{"shape":"CommentList"},
-        "Marker":{"shape":"MarkerType"}
-      }
-    },
     "DescribeDocumentVersionsRequest":{
       "type":"structure",
       "required":["DocumentId"],
       "members":{
-        "AuthenticationToken":{
-          "shape":"AuthenticationHeaderType",
-          "location":"header",
-          "locationName":"Authentication"
-        },
         "DocumentId":{
           "shape":"ResourceIdType",
           "location":"uri",
@@ -1423,11 +767,6 @@
       "type":"structure",
       "required":["FolderId"],
       "members":{
-        "AuthenticationToken":{
-          "shape":"AuthenticationHeaderType",
-          "location":"header",
-          "locationName":"Authentication"
-        },
         "FolderId":{
           "shape":"ResourceIdType",
           "location":"uri",
@@ -1505,11 +844,6 @@
       "type":"structure",
       "required":["ResourceId"],
       "members":{
-        "AuthenticationToken":{
-          "shape":"AuthenticationHeaderType",
-          "location":"header",
-          "locationName":"Authentication"
-        },
         "ResourceId":{
           "shape":"ResourceIdType",
           "location":"uri",
@@ -1534,42 +868,9 @@
         "Marker":{"shape":"PageMarkerType"}
       }
     },
-    "DescribeRootFoldersRequest":{
-      "type":"structure",
-      "required":["AuthenticationToken"],
-      "members":{
-        "AuthenticationToken":{
-          "shape":"AuthenticationHeaderType",
-          "location":"header",
-          "locationName":"Authentication"
-        },
-        "Limit":{
-          "shape":"LimitType",
-          "location":"querystring",
-          "locationName":"limit"
-        },
-        "Marker":{
-          "shape":"PageMarkerType",
-          "location":"querystring",
-          "locationName":"marker"
-        }
-      }
-    },
-    "DescribeRootFoldersResponse":{
-      "type":"structure",
-      "members":{
-        "Folders":{"shape":"FolderMetadataList"},
-        "Marker":{"shape":"PageMarkerType"}
-      }
-    },
     "DescribeUsersRequest":{
       "type":"structure",
       "members":{
-        "AuthenticationToken":{
-          "shape":"AuthenticationHeaderType",
-          "location":"header",
-          "locationName":"Authentication"
-        },
         "OrganizationId":{
           "shape":"IdType",
           "location":"querystring",
@@ -1630,14 +931,6 @@
       "max":128,
       "min":1
     },
-    "DocumentLockedForCommentsException":{
-      "type":"structure",
-      "members":{
-        "Message":{"shape":"ErrorMessageType"}
-      },
-      "error":{"httpStatusCode":409},
-      "exception":true
-    },
     "DocumentMetadata":{
       "type":"structure",
       "members":{
@@ -1647,8 +940,7 @@
         "CreatedTimestamp":{"shape":"TimestampType"},
         "ModifiedTimestamp":{"shape":"TimestampType"},
         "LatestVersionMetadata":{"shape":"DocumentVersionMetadata"},
-        "ResourceState":{"shape":"ResourceStateType"},
-        "Labels":{"shape":"Labels"}
+        "ResourceState":{"shape":"ResourceStateType"}
       }
     },
     "DocumentMetadataList":{
@@ -1719,14 +1011,6 @@
       "type":"string",
       "enum":["ACTIVE"]
     },
-    "DraftUploadOutOfSyncException":{
-      "type":"structure",
-      "members":{
-        "Message":{"shape":"ErrorMessageType"}
-      },
-      "error":{"httpStatusCode":409},
-      "exception":true
-    },
     "EmailAddressType":{
       "type":"string",
       "max":256,
@@ -1787,42 +1071,17 @@
         "CreatedTimestamp":{"shape":"TimestampType"},
         "ModifiedTimestamp":{"shape":"TimestampType"},
         "ResourceState":{"shape":"ResourceStateType"},
-        "Signature":{"shape":"HashType"},
-        "Labels":{"shape":"Labels"},
-        "Size":{"shape":"SizeType"},
-        "LatestVersionSize":{"shape":"SizeType"}
+        "Signature":{"shape":"HashType"}
       }
     },
     "FolderMetadataList":{
       "type":"list",
       "member":{"shape":"FolderMetadata"}
     },
-    "GetCurrentUserRequest":{
-      "type":"structure",
-      "required":["AuthenticationToken"],
-      "members":{
-        "AuthenticationToken":{
-          "shape":"AuthenticationHeaderType",
-          "location":"header",
-          "locationName":"Authentication"
-        }
-      }
-    },
-    "GetCurrentUserResponse":{
-      "type":"structure",
-      "members":{
-        "User":{"shape":"User"}
-      }
-    },
     "GetDocumentPathRequest":{
       "type":"structure",
       "required":["DocumentId"],
       "members":{
-        "AuthenticationToken":{
-          "shape":"AuthenticationHeaderType",
-          "location":"header",
-          "locationName":"Authentication"
-        },
         "DocumentId":{
           "shape":"IdType",
           "location":"uri",
@@ -1855,28 +1114,17 @@
       "type":"structure",
       "required":["DocumentId"],
       "members":{
-        "AuthenticationToken":{
-          "shape":"AuthenticationHeaderType",
-          "location":"header",
-          "locationName":"Authentication"
-        },
         "DocumentId":{
           "shape":"ResourceIdType",
           "location":"uri",
           "locationName":"DocumentId"
-        },
-        "IncludeCustomMetadata":{
-          "shape":"BooleanType",
-          "location":"querystring",
-          "locationName":"includeCustomMetadata"
         }
       }
     },
     "GetDocumentResponse":{
       "type":"structure",
       "members":{
-        "Metadata":{"shape":"DocumentMetadata"},
-        "CustomMetadata":{"shape":"CustomMetadataMap"}
+        "Metadata":{"shape":"DocumentMetadata"}
       }
     },
     "GetDocumentVersionRequest":{
@@ -1886,11 +1134,6 @@
         "VersionId"
       ],
       "members":{
-        "AuthenticationToken":{
-          "shape":"AuthenticationHeaderType",
-          "location":"header",
-          "locationName":"Authentication"
-        },
         "DocumentId":{
           "shape":"ResourceIdType",
           "location":"uri",
@@ -1905,30 +1148,19 @@
           "shape":"FieldNamesType",
           "location":"querystring",
           "locationName":"fields"
-        },
-        "IncludeCustomMetadata":{
-          "shape":"BooleanType",
-          "location":"querystring",
-          "locationName":"includeCustomMetadata"
         }
       }
     },
     "GetDocumentVersionResponse":{
       "type":"structure",
       "members":{
-        "Metadata":{"shape":"DocumentVersionMetadata"},
-        "CustomMetadata":{"shape":"CustomMetadataMap"}
+        "Metadata":{"shape":"DocumentVersionMetadata"}
       }
     },
     "GetFolderPathRequest":{
       "type":"structure",
       "required":["FolderId"],
       "members":{
-        "AuthenticationToken":{
-          "shape":"AuthenticationHeaderType",
-          "location":"header",
-          "locationName":"Authentication"
-        },
         "FolderId":{
           "shape":"IdType",
           "location":"uri",
@@ -1961,42 +1193,19 @@
       "type":"structure",
       "required":["FolderId"],
       "members":{
-        "AuthenticationToken":{
-          "shape":"AuthenticationHeaderType",
-          "location":"header",
-          "locationName":"Authentication"
-        },
         "FolderId":{
           "shape":"ResourceIdType",
           "location":"uri",
           "locationName":"FolderId"
-        },
-        "IncludeCustomMetadata":{
-          "shape":"BooleanType",
-          "location":"querystring",
-          "locationName":"includeCustomMetadata"
         }
       }
     },
     "GetFolderResponse":{
       "type":"structure",
       "members":{
-        "Metadata":{"shape":"FolderMetadata"},
-        "CustomMetadata":{"shape":"CustomMetadataMap"}
+        "Metadata":{"shape":"FolderMetadata"}
       }
     },
-    "GroupMetadata":{
-      "type":"structure",
-      "members":{
-        "Id":{"shape":"IdType"},
-        "Name":{"shape":"GroupNameType"}
-      }
-    },
-    "GroupMetadataList":{
-      "type":"list",
-      "member":{"shape":"GroupMetadata"}
-    },
-    "GroupNameType":{"type":"string"},
     "HashType":{
       "type":"string",
       "max":128,
@@ -2032,11 +1241,6 @@
       "type":"structure",
       "required":["ParentFolderId"],
       "members":{
-        "AuthenticationToken":{
-          "shape":"AuthenticationHeaderType",
-          "location":"header",
-          "locationName":"Authentication"
-        },
         "Id":{"shape":"ResourceIdType"},
         "Name":{"shape":"ResourceNameType"},
         "ContentCreatedTimestamp":{"shape":"TimestampType"},
@@ -2069,17 +1273,6 @@
       "error":{"httpStatusCode":405},
       "exception":true
     },
-    "Label":{
-      "type":"string",
-      "max":32,
-      "min":1,
-      "pattern":"[a-zA-Z0-9._+-/=][a-zA-Z0-9 ._+-/=]*"
-    },
-    "Labels":{
-      "type":"list",
-      "member":{"shape":"Label"},
-      "max":20
-    },
     "LimitExceededException":{
       "type":"structure",
       "members":{
@@ -2109,12 +1302,6 @@
         "default"
       ]
     },
-    "MarkerType":{
-      "type":"string",
-      "max":2048,
-      "min":1,
-      "pattern":"[\\u0000-\\u00FF]+"
-    },
     "MessageType":{
       "type":"string",
       "max":2048,
@@ -2136,13 +1323,6 @@
       "type":"string",
       "max":2048,
       "min":1
-    },
-    "Participants":{
-      "type":"structure",
-      "members":{
-        "Users":{"shape":"UserMetadataList"},
-        "Groups":{"shape":"GroupMetadataList"}
-      }
     },
     "PasswordType":{
       "type":"string",
@@ -2200,11 +1380,6 @@
       "type":"structure",
       "required":["ResourceId"],
       "members":{
-        "AuthenticationToken":{
-          "shape":"AuthenticationHeaderType",
-          "location":"header",
-          "locationName":"Authentication"
-        },
         "ResourceId":{
           "shape":"ResourceIdType",
           "location":"uri",
@@ -2219,11 +1394,6 @@
         "PrincipalId"
       ],
       "members":{
-        "AuthenticationToken":{
-          "shape":"AuthenticationHeaderType",
-          "location":"header",
-          "locationName":"Authentication"
-        },
         "ResourceId":{
           "shape":"ResourceIdType",
           "location":"uri",
@@ -2241,31 +1411,11 @@
         }
       }
     },
-    "ResourceAlreadyCheckedOutException":{
-      "type":"structure",
-      "members":{
-        "Message":{"shape":"ErrorMessageType"}
-      },
-      "error":{"httpStatusCode":409},
-      "exception":true
-    },
     "ResourceIdType":{
       "type":"string",
       "max":128,
       "min":1,
       "pattern":"[\\w+-.@]+"
-    },
-    "ResourceMetadata":{
-      "type":"structure",
-      "members":{
-        "Type":{"shape":"ResourceType"},
-        "Name":{"shape":"ResourceNameType"},
-        "OriginalName":{"shape":"ResourceNameType"},
-        "Id":{"shape":"ResourceIdType"},
-        "VersionId":{"shape":"DocumentVersionIdType"},
-        "Owner":{"shape":"UserMetadata"},
-        "ParentId":{"shape":"ResourceIdType"}
-      }
     },
     "ResourceNameType":{
       "type":"string",
@@ -2304,13 +1454,6 @@
         "RESTORING",
         "RECYCLING",
         "RECYCLED"
-      ]
-    },
-    "ResourceType":{
-      "type":"string",
-      "enum":[
-        "FOLDER",
-        "DOCUMENT"
       ]
     },
     "RolePermissionType":{
@@ -2451,14 +1594,6 @@
       "min":1
     },
     "TimestampType":{"type":"timestamp"},
-    "TooManyLabelsException":{
-      "type":"structure",
-      "members":{
-        "Message":{"shape":"ErrorMessageType"}
-      },
-      "error":{"httpStatusCode":429},
-      "exception":true
-    },
     "TooManySubscriptionsException":{
       "type":"structure",
       "members":{
@@ -2486,11 +1621,6 @@
       "type":"structure",
       "required":["DocumentId"],
       "members":{
-        "AuthenticationToken":{
-          "shape":"AuthenticationHeaderType",
-          "location":"header",
-          "locationName":"Authentication"
-        },
         "DocumentId":{
           "shape":"ResourceIdType",
           "location":"uri",
@@ -2508,11 +1638,6 @@
         "VersionId"
       ],
       "members":{
-        "AuthenticationToken":{
-          "shape":"AuthenticationHeaderType",
-          "location":"header",
-          "locationName":"Authentication"
-        },
         "DocumentId":{
           "shape":"ResourceIdType",
           "location":"uri",
@@ -2530,11 +1655,6 @@
       "type":"structure",
       "required":["FolderId"],
       "members":{
-        "AuthenticationToken":{
-          "shape":"AuthenticationHeaderType",
-          "location":"header",
-          "locationName":"Authentication"
-        },
         "FolderId":{
           "shape":"ResourceIdType",
           "location":"uri",
@@ -2549,11 +1669,6 @@
       "type":"structure",
       "required":["UserId"],
       "members":{
-        "AuthenticationToken":{
-          "shape":"AuthenticationHeaderType",
-          "location":"header",
-          "locationName":"Authentication"
-        },
         "UserId":{
           "shape":"IdType",
           "location":"uri",
@@ -2606,10 +1721,6 @@
         "Storage":{"shape":"UserStorageMetadata"}
       }
     },
-    "UserActivities":{
-      "type":"list",
-      "member":{"shape":"Activity"}
-    },
     "UserAttributeValueType":{
       "type":"string",
       "max":64,
@@ -2627,20 +1738,6 @@
       "max":2000,
       "min":1,
       "pattern":"[&\\w+-.@, ]+"
-    },
-    "UserMetadata":{
-      "type":"structure",
-      "members":{
-        "Id":{"shape":"IdType"},
-        "Username":{"shape":"UsernameType"},
-        "GivenName":{"shape":"UserAttributeValueType"},
-        "Surname":{"shape":"UserAttributeValueType"},
-        "EmailAddress":{"shape":"EmailAddressType"}
-      }
-    },
-    "UserMetadataList":{
-      "type":"list",
-      "member":{"shape":"UserMetadata"}
     },
     "UserSortType":{
       "type":"string",
@@ -2678,7 +1775,7 @@
       "type":"string",
       "max":256,
       "min":1,
-      "pattern":"[\\w\\-+.]+(@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]+)?"
+      "pattern":"[\\w\\-.]+(@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]+)?"
     }
   }
 }

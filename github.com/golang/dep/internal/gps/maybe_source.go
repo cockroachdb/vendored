@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/Masterminds/vcs"
+	"github.com/pkg/errors"
 )
 
 // A maybeSource represents a set of information that, given some
@@ -27,21 +28,29 @@ type maybeSource interface {
 	getURL() string
 }
 
+type errorSlice []error
+
+func (errs *errorSlice) Error() string {
+	var buf bytes.Buffer
+	for _, err := range *errs {
+		fmt.Fprintf(&buf, "\n\t%s", err)
+	}
+	return buf.String()
+}
+
 type maybeSources []maybeSource
 
 func (mbs maybeSources) try(ctx context.Context, cachedir string, c singleSourceCache, superv *supervisor) (source, sourceState, error) {
-	var e sourceFailures
+	var errs errorSlice
 	for _, mb := range mbs {
 		src, state, err := mb.try(ctx, cachedir, c, superv)
 		if err == nil {
 			return src, state, nil
 		}
-		e = append(e, sourceSetupFailure{
-			ident: mb.getURL(),
-			err:   err,
-		})
+		errs = append(errs, errors.Wrapf(err, "failed to set up %q", mb.getURL()))
 	}
-	return nil, 0, e
+
+	return nil, 0, errors.Wrap(&errs, "no valid source could be created")
 }
 
 // This really isn't generally intended to be used - the interface is for
@@ -55,25 +64,9 @@ func (mbs maybeSources) getURL() string {
 	return strings.Join(strslice, "\n")
 }
 
-type sourceSetupFailure struct {
-	ident string
-	err   error
-}
-
-func (e sourceSetupFailure) Error() string {
-	return fmt.Sprintf("failed to set up %q, error %s", e.ident, e.err.Error())
-}
-
-type sourceFailures []sourceSetupFailure
-
-func (sf sourceFailures) Error() string {
-	var buf bytes.Buffer
-	fmt.Fprintf(&buf, "no valid source could be created:")
-	for _, e := range sf {
-		fmt.Fprintf(&buf, "\n\t%s", e.Error())
-	}
-
-	return buf.String()
+// sourceCachePath returns a url-sanitized source cache dir path.
+func sourceCachePath(cacheDir, sourceURL string) string {
+	return filepath.Join(cacheDir, "sources", sanitizer.Replace(sourceURL))
 }
 
 type maybeGitSource struct {
@@ -82,10 +75,8 @@ type maybeGitSource struct {
 
 func (m maybeGitSource) try(ctx context.Context, cachedir string, c singleSourceCache, superv *supervisor) (source, sourceState, error) {
 	ustr := m.url.String()
-	path := filepath.Join(cachedir, "sources", sanitizer.Replace(ustr))
 
-	r, err := newCtxRepo(vcs.Git, ustr, path)
-
+	r, err := newCtxRepo(vcs.Git, ustr, sourceCachePath(cachedir, ustr))
 	if err != nil {
 		return nil, 0, unwrapVcsErr(err)
 	}
@@ -98,17 +89,15 @@ func (m maybeGitSource) try(ctx context.Context, cachedir string, c singleSource
 
 	// Pinging invokes the same action as calling listVersions, so just do that.
 	var vl []PairedVersion
-	err = superv.do(ctx, "git:lv:maybe", ctListVersions, func(ctx context.Context) (err error) {
-		if vl, err = src.listVersions(ctx); err != nil {
-			return fmt.Errorf("remote repository at %s does not exist, or is inaccessible", ustr)
-		}
-		return nil
-	})
-	if err != nil {
+	if err := superv.do(ctx, "git:lv:maybe", ctListVersions, func(ctx context.Context) error {
+		var err error
+		vl, err = src.listVersions(ctx)
+		return errors.Wrapf(err, "remote repository at %s does not exist, or is inaccessible", ustr)
+	}); err != nil {
 		return nil, 0, err
 	}
 
-	c.storeVersionMap(vl, true)
+	c.setVersionMap(vl)
 	state := sourceIsSetUp | sourceExistsUpstream | sourceHasLatestVersionList
 
 	if r.CheckLocal() {
@@ -140,10 +129,11 @@ func (m maybeGopkginSource) try(ctx context.Context, cachedir string, c singleSo
 	// We don't actually need a fully consistent transform into the on-disk path
 	// - just something that's unique to the particular gopkg.in domain context.
 	// So, it's OK to just dumb-join the scheme with the path.
-	path := filepath.Join(cachedir, "sources", sanitizer.Replace(m.url.Scheme+"/"+m.opath))
+	aliasURL := m.url.Scheme + "://" + m.opath
+	path := sourceCachePath(cachedir, aliasURL)
 	ustr := m.url.String()
-	r, err := newCtxRepo(vcs.Git, ustr, path)
 
+	r, err := newCtxRepo(vcs.Git, ustr, path)
 	if err != nil {
 		return nil, 0, unwrapVcsErr(err)
 	}
@@ -156,20 +146,19 @@ func (m maybeGopkginSource) try(ctx context.Context, cachedir string, c singleSo
 		},
 		major:    m.major,
 		unstable: m.unstable,
+		aliasURL: aliasURL,
 	}
 
 	var vl []PairedVersion
-	err = superv.do(ctx, "git:lv:maybe", ctListVersions, func(ctx context.Context) (err error) {
-		if vl, err = src.listVersions(ctx); err != nil {
-			return fmt.Errorf("remote repository at %s does not exist, or is inaccessible", ustr)
-		}
-		return nil
-	})
-	if err != nil {
+	if err := superv.do(ctx, "git:lv:maybe", ctListVersions, func(ctx context.Context) error {
+		var err error
+		vl, err = src.listVersions(ctx)
+		return errors.Wrapf(err, "remote repository at %s does not exist, or is inaccessible", ustr)
+	}); err != nil {
 		return nil, 0, err
 	}
 
-	c.storeVersionMap(vl, true)
+	c.setVersionMap(vl)
 	state := sourceIsSetUp | sourceExistsUpstream | sourceHasLatestVersionList
 
 	if r.CheckLocal() {
@@ -189,21 +178,18 @@ type maybeBzrSource struct {
 
 func (m maybeBzrSource) try(ctx context.Context, cachedir string, c singleSourceCache, superv *supervisor) (source, sourceState, error) {
 	ustr := m.url.String()
-	path := filepath.Join(cachedir, "sources", sanitizer.Replace(ustr))
 
-	r, err := newCtxRepo(vcs.Bzr, ustr, path)
-
+	r, err := newCtxRepo(vcs.Bzr, ustr, sourceCachePath(cachedir, ustr))
 	if err != nil {
 		return nil, 0, unwrapVcsErr(err)
 	}
 
-	err = superv.do(ctx, "bzr:ping", ctSourcePing, func(ctx context.Context) error {
+	if err := superv.do(ctx, "bzr:ping", ctSourcePing, func(ctx context.Context) error {
 		if !r.Ping() {
 			return fmt.Errorf("remote repository at %s does not exist, or is inaccessible", ustr)
 		}
 		return nil
-	})
-	if err != nil {
+	}); err != nil {
 		return nil, 0, err
 	}
 
@@ -231,21 +217,18 @@ type maybeHgSource struct {
 
 func (m maybeHgSource) try(ctx context.Context, cachedir string, c singleSourceCache, superv *supervisor) (source, sourceState, error) {
 	ustr := m.url.String()
-	path := filepath.Join(cachedir, "sources", sanitizer.Replace(ustr))
 
-	r, err := newCtxRepo(vcs.Hg, ustr, path)
-
+	r, err := newCtxRepo(vcs.Hg, ustr, sourceCachePath(cachedir, ustr))
 	if err != nil {
 		return nil, 0, unwrapVcsErr(err)
 	}
 
-	err = superv.do(ctx, "hg:ping", ctSourcePing, func(ctx context.Context) error {
+	if err := superv.do(ctx, "hg:ping", ctSourcePing, func(ctx context.Context) error {
 		if !r.Ping() {
 			return fmt.Errorf("remote repository at %s does not exist, or is inaccessible", ustr)
 		}
 		return nil
-	})
-	if err != nil {
+	}); err != nil {
 		return nil, 0, err
 	}
 

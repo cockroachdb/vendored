@@ -8,11 +8,15 @@ import (
 	"context"
 	"io/ioutil"
 	"net/url"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/golang/dep/internal/test"
 )
 
 // Parent test that executes all the slow vcs interaction tests in parallel.
@@ -21,8 +25,7 @@ func TestSlowVcs(t *testing.T) {
 	t.Run("source-gateway", testSourceGateway)
 	t.Run("bzr-repo", testBzrRepo)
 	t.Run("bzr-source", testBzrSourceInteractions)
-	// TODO(kris-nova) re-enable syn-repo after gps is merged into dep
-	//t.Run("svn-repo", testSvnRepo)
+	t.Run("svn-repo", testSvnRepo)
 	// TODO(sdboyer) svn-source
 	t.Run("hg-repo", testHgRepo)
 	t.Run("hg-source", testHgSourceInteractions)
@@ -45,7 +48,7 @@ func testGitSourceInteractions(t *testing.T) {
 		t.Errorf("Failed to create temp dir: %s", err)
 	}
 	defer func() {
-		if err := removeAll(cpath); err != nil {
+		if err := os.RemoveAll(cpath); err != nil {
 			t.Errorf("removeAll failed: %s", err)
 		}
 	}()
@@ -105,13 +108,13 @@ func testGitSourceInteractions(t *testing.T) {
 	} else {
 		SortForUpgrade(vlist)
 		evl := []Version{
-			NewVersion("v2.0.0").Is(Revision("4a54adf81c75375d26d376459c00d5ff9b703e5e")),
-			NewVersion("v1.1.0").Is(Revision("b2cb48dda625f6640b34d9ffb664533359ac8b91")),
-			NewVersion("v1.0.0").Is(Revision("bf85021c0405edbc4f3648b0603818d641674f72")),
-			newDefaultBranch("master").Is(Revision("bf85021c0405edbc4f3648b0603818d641674f72")),
-			NewBranch("v1").Is(Revision("e3777f683305eafca223aefe56b4e8ecf103f467")),
-			NewBranch("v1.1").Is(Revision("f1fbc520489a98306eb28c235204e39fa8a89c84")),
-			NewBranch("v3").Is(Revision("4a54adf81c75375d26d376459c00d5ff9b703e5e")),
+			NewVersion("v2.0.0").Pair(Revision("4a54adf81c75375d26d376459c00d5ff9b703e5e")),
+			NewVersion("v1.1.0").Pair(Revision("b2cb48dda625f6640b34d9ffb664533359ac8b91")),
+			NewVersion("v1.0.0").Pair(Revision("bf85021c0405edbc4f3648b0603818d641674f72")),
+			newDefaultBranch("master").Pair(Revision("bf85021c0405edbc4f3648b0603818d641674f72")),
+			NewBranch("v1").Pair(Revision("e3777f683305eafca223aefe56b4e8ecf103f467")),
+			NewBranch("v1.1").Pair(Revision("f1fbc520489a98306eb28c235204e39fa8a89c84")),
+			NewBranch("v3").Pair(Revision("4a54adf81c75375d26d376459c00d5ff9b703e5e")),
 		}
 		if !reflect.DeepEqual(vlist, evl) {
 			t.Errorf("Version list was not what we expected:\n\t(GOT): %s\n\t(WNT): %s", vlist, evl)
@@ -141,14 +144,14 @@ func testGopkginSourceInteractions(t *testing.T) {
 		t.Errorf("Failed to create temp dir: %s", err)
 	}
 	defer func() {
-		if err := removeAll(cpath); err != nil {
+		if err := os.RemoveAll(cpath); err != nil {
 			t.Errorf("removeAll failed: %s", err)
 		}
 	}()
 
 	tfunc := func(opath, n string, major uint64, evl []Version) {
-		un := "https://" + n
-		u, err := url.Parse(un)
+		un := "https://" + opath
+		u, err := url.Parse("https://" + n)
 		if err != nil {
 			t.Errorf("URL was bad, lolwut? errtext: %s", err)
 			return
@@ -193,7 +196,7 @@ func testGopkginSourceInteractions(t *testing.T) {
 		}
 
 		// check that an expected rev is present
-		rev := evl[0].(PairedVersion).Underlying()
+		rev := evl[0].(PairedVersion).Revision()
 		is, err := src.revisionPresentIn(rev)
 		if err != nil {
 			t.Errorf("Unexpected error while checking revision presence: %s", err)
@@ -246,31 +249,31 @@ func testGopkginSourceInteractions(t *testing.T) {
 	wg.Add(4)
 	go func() {
 		tfunc("gopkg.in/sdboyer/gpkt.v1", "github.com/sdboyer/gpkt", 1, []Version{
-			NewVersion("v1.1.0").Is(Revision("b2cb48dda625f6640b34d9ffb664533359ac8b91")),
-			NewVersion("v1.0.0").Is(Revision("bf85021c0405edbc4f3648b0603818d641674f72")),
-			newDefaultBranch("v1.1").Is(Revision("f1fbc520489a98306eb28c235204e39fa8a89c84")),
-			NewBranch("v1").Is(Revision("e3777f683305eafca223aefe56b4e8ecf103f467")),
+			NewVersion("v1.1.0").Pair(Revision("b2cb48dda625f6640b34d9ffb664533359ac8b91")),
+			NewVersion("v1.0.0").Pair(Revision("bf85021c0405edbc4f3648b0603818d641674f72")),
+			newDefaultBranch("v1.1").Pair(Revision("f1fbc520489a98306eb28c235204e39fa8a89c84")),
+			NewBranch("v1").Pair(Revision("e3777f683305eafca223aefe56b4e8ecf103f467")),
 		})
 		wg.Done()
 	}()
 
 	go func() {
 		tfunc("gopkg.in/sdboyer/gpkt.v2", "github.com/sdboyer/gpkt", 2, []Version{
-			NewVersion("v2.0.0").Is(Revision("4a54adf81c75375d26d376459c00d5ff9b703e5e")),
+			NewVersion("v2.0.0").Pair(Revision("4a54adf81c75375d26d376459c00d5ff9b703e5e")),
 		})
 		wg.Done()
 	}()
 
 	go func() {
 		tfunc("gopkg.in/sdboyer/gpkt.v3", "github.com/sdboyer/gpkt", 3, []Version{
-			newDefaultBranch("v3").Is(Revision("4a54adf81c75375d26d376459c00d5ff9b703e5e")),
+			newDefaultBranch("v3").Pair(Revision("4a54adf81c75375d26d376459c00d5ff9b703e5e")),
 		})
 		wg.Done()
 	}()
 
 	go func() {
 		tfunc("github.com/sdboyer/gpkt2.v1-unstable", "github.com/sdboyer/gpkt2", 1, []Version{
-			newDefaultBranch("v1-unstable").Is(Revision("24de0be8f4a0b8a44321562117749b257bfcef69")),
+			newDefaultBranch("v1-unstable").Pair(Revision("24de0be8f4a0b8a44321562117749b257bfcef69")),
 		})
 		wg.Done()
 	}()
@@ -292,7 +295,7 @@ func testBzrSourceInteractions(t *testing.T) {
 		t.Errorf("Failed to create temp dir: %s", err)
 	}
 	defer func() {
-		if err := removeAll(cpath); err != nil {
+		if err := os.RemoveAll(cpath); err != nil {
 			t.Errorf("removeAll failed: %s", err)
 		}
 	}()
@@ -321,7 +324,7 @@ func testBzrSourceInteractions(t *testing.T) {
 
 	err = isrc.initLocal(ctx)
 	if err != nil {
-		t.Fatalf("Error on cloning git repo: %s", err)
+		t.Fatalf("Error on cloning bzr repo: %s", err)
 	}
 
 	src, ok := isrc.(*bzrSource)
@@ -336,8 +339,8 @@ func testBzrSourceInteractions(t *testing.T) {
 		t.Errorf("Expected %s as source URL, got %s", un, src.upstreamURL())
 	}
 	evl := []Version{
-		NewVersion("1.0.0").Is(Revision("matt@mattfarina.com-20150731135137-pbphasfppmygpl68")),
-		newDefaultBranch("(default)").Is(Revision("matt@mattfarina.com-20150731135137-pbphasfppmygpl68")),
+		NewVersion("1.0.0").Pair(Revision("matt@mattfarina.com-20150731135137-pbphasfppmygpl68")),
+		newDefaultBranch("(default)").Pair(Revision("matt@mattfarina.com-20150731135137-pbphasfppmygpl68")),
 	}
 
 	// check that an expected rev is present
@@ -402,7 +405,7 @@ func testHgSourceInteractions(t *testing.T) {
 		t.Errorf("Failed to create temp dir: %s", err)
 	}
 	defer func() {
-		if err := removeAll(cpath); err != nil {
+		if err := os.RemoveAll(cpath); err != nil {
 			t.Errorf("removeAll failed: %s", err)
 		}
 	}()
@@ -433,7 +436,7 @@ func testHgSourceInteractions(t *testing.T) {
 
 		err = isrc.initLocal(ctx)
 		if err != nil {
-			t.Fatalf("Error on cloning git repo: %s", err)
+			t.Fatalf("Error on cloning hg repo: %s", err)
 		}
 
 		src, ok := isrc.(*hgSource)
@@ -501,23 +504,188 @@ func testHgSourceInteractions(t *testing.T) {
 	donech := make(chan struct{})
 	go func() {
 		tfunc("bitbucket.org/sdboyer/withbm", []Version{
-			NewVersion("v1.0.0").Is(Revision("aa110802a0c64195d0a6c375c9f66668827c90b4")),
-			newDefaultBranch("@").Is(Revision("b10d05d581e5401f383e48ccfeb84b48fde99d06")),
-			NewBranch("another").Is(Revision("b10d05d581e5401f383e48ccfeb84b48fde99d06")),
-			NewBranch("default").Is(Revision("3d466f437f6616da594bbab6446cc1cb4328d1bb")),
-			NewBranch("newbranch").Is(Revision("5e2a01be9aee942098e44590ae545c7143da9675")),
+			NewVersion("v1.0.0").Pair(Revision("aa110802a0c64195d0a6c375c9f66668827c90b4")),
+			newDefaultBranch("@").Pair(Revision("b10d05d581e5401f383e48ccfeb84b48fde99d06")),
+			NewBranch("another").Pair(Revision("b10d05d581e5401f383e48ccfeb84b48fde99d06")),
+			NewBranch("default").Pair(Revision("3d466f437f6616da594bbab6446cc1cb4328d1bb")),
+			NewBranch("newbranch").Pair(Revision("5e2a01be9aee942098e44590ae545c7143da9675")),
 		})
 		close(donech)
 	}()
 
 	tfunc("bitbucket.org/sdboyer/nobm", []Version{
-		NewVersion("v1.0.0").Is(Revision("aa110802a0c64195d0a6c375c9f66668827c90b4")),
-		newDefaultBranch("default").Is(Revision("3d466f437f6616da594bbab6446cc1cb4328d1bb")),
-		NewBranch("another").Is(Revision("b10d05d581e5401f383e48ccfeb84b48fde99d06")),
-		NewBranch("newbranch").Is(Revision("5e2a01be9aee942098e44590ae545c7143da9675")),
+		NewVersion("v1.0.0").Pair(Revision("aa110802a0c64195d0a6c375c9f66668827c90b4")),
+		newDefaultBranch("default").Pair(Revision("3d466f437f6616da594bbab6446cc1cb4328d1bb")),
+		NewBranch("another").Pair(Revision("b10d05d581e5401f383e48ccfeb84b48fde99d06")),
+		NewBranch("newbranch").Pair(Revision("5e2a01be9aee942098e44590ae545c7143da9675")),
 	})
 
 	<-donech
+}
+
+func TestGitSourceListVersionsNoHEAD(t *testing.T) {
+	t.Parallel()
+
+	requiresBins(t, "git")
+
+	h := test.NewHelper(t)
+	defer h.Cleanup()
+	h.TempDir("smcache")
+	cpath := h.Path("smcache")
+	h.TempDir("repo")
+	repoPath := h.Path("repo")
+
+	// Create test repo with a single commit on the master branch
+	h.RunGit(repoPath, "init")
+	h.RunGit(repoPath, "config", "--local", "user.email", "test@example.com")
+	h.RunGit(repoPath, "config", "--local", "user.name", "Test author")
+	h.RunGit(repoPath, "commit", "--allow-empty", `--message="Initial commit"`)
+
+	// Make HEAD point at a nonexistent branch (deleting it is not allowed)
+	// The `git ls-remote` that listVersions() calls will not return a HEAD ref
+	// because it points at a nonexistent branch
+	h.RunGit(repoPath, "symbolic-ref", "HEAD", "refs/heads/nonexistent")
+
+	un := "file://" + filepath.ToSlash(repoPath)
+	u, err := url.Parse(un)
+	if err != nil {
+		t.Fatalf("Error parsing URL %s: %s", un, err)
+	}
+	mb := maybeGitSource{u}
+
+	ctx := context.Background()
+	superv := newSupervisor(ctx)
+	isrc, _, err := mb.try(ctx, cpath, newMemoryCache(), superv)
+	if err != nil {
+		t.Fatalf("Unexpected error while setting up gitSource for test repo: %s", err)
+	}
+
+	err = isrc.initLocal(ctx)
+	if err != nil {
+		t.Fatalf("Error on cloning git repo: %s", err)
+	}
+
+	src, ok := isrc.(*gitSource)
+	if !ok {
+		t.Fatalf("Expected a gitSource, got a %T", isrc)
+	}
+
+	pvlist, err := src.listVersions(ctx)
+	if err != nil {
+		t.Fatalf("Unexpected error getting version pairs from git repo: %s", err)
+	}
+
+	if len(pvlist) != 1 {
+		t.Errorf("Unexpected version pair length:\n\t(GOT): %d\n\t(WNT): %d", len(pvlist), 1)
+	}
+}
+
+func Test_bzrSource_exportRevisionTo_removeVcsFiles(t *testing.T) {
+	t.Parallel()
+
+	// This test is slow, so skip it on -short
+	if testing.Short() {
+		t.Skip("Skipping hg source version fetching test in short mode")
+	}
+	requiresBins(t, "bzr")
+
+	h := test.NewHelper(t)
+	defer h.Cleanup()
+	h.TempDir("smcache")
+	cpath := h.Path("smcache")
+	repoPath := filepath.Join(h.Path("."), "repo")
+
+	rev := Revision("matt@mattfarina.com-20150731135137-pbphasfppmygpl68")
+	n := "launchpad.net/govcstestbzrrepo"
+	un := "https://" + n
+	u, err := url.Parse(un)
+	if err != nil {
+		t.Errorf("URL was bad, lolwut? errtext: %s", err)
+		return
+	}
+	mb := maybeBzrSource{u}
+
+	ctx := context.Background()
+	superv := newSupervisor(ctx)
+	isrc, _, err := mb.try(ctx, cpath, newMemoryCache(), superv)
+	if err != nil {
+		t.Fatalf("unexpected error while setting up hgSource for test repo: %s", err)
+	}
+
+	err = isrc.initLocal(ctx)
+	if err != nil {
+		t.Fatalf("Error on cloning bzr repo: %s", err)
+	}
+
+	src, ok := isrc.(*bzrSource)
+	if !ok {
+		t.Fatalf("expected a bzrSource, got a %T", isrc)
+	}
+
+	if err := src.exportRevisionTo(ctx, rev, repoPath); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	_, err = os.Stat(filepath.Join(repoPath, ".bzr"))
+	if err == nil {
+		t.Fatal("expected .bzr/ to not exists")
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func Test_hgSource_exportRevisionTo_removeVcsFiles(t *testing.T) {
+	t.Parallel()
+
+	// This test is slow, so skip it on -short
+	if testing.Short() {
+		t.Skip("Skipping hg source version fetching test in short mode")
+	}
+	requiresBins(t, "hg")
+
+	h := test.NewHelper(t)
+	defer h.Cleanup()
+	h.TempDir("smcache")
+	cpath := h.Path("smcache")
+	repoPath := filepath.Join(h.Path("."), "repo")
+
+	rev := Revision("6f55e1f03d91f8a7cce35d1968eb60a2352e4d59")
+	n := "bitbucket.org/golang-dep/dep-test"
+	un := "https://" + n
+	u, err := url.Parse(un)
+	if err != nil {
+		t.Errorf("URL was bad, lolwut? errtext: %s", err)
+		return
+	}
+	mb := maybeHgSource{u}
+
+	ctx := context.Background()
+	superv := newSupervisor(ctx)
+	isrc, _, err := mb.try(ctx, cpath, newMemoryCache(), superv)
+	if err != nil {
+		t.Fatalf("unexpected error while setting up hgSource for test repo: %s", err)
+	}
+
+	err = isrc.initLocal(ctx)
+	if err != nil {
+		t.Fatalf("Error on cloning hg repo: %s", err)
+	}
+
+	src, ok := isrc.(*hgSource)
+	if !ok {
+		t.Fatalf("expected a hgSource, got a %T", isrc)
+	}
+
+	if err := src.exportRevisionTo(ctx, rev, repoPath); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	_, err = os.Stat(filepath.Join(repoPath, ".hg"))
+	if err == nil {
+		t.Fatal("expected .hg/ to not exists")
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 // Fail a test if the specified binaries aren't installed.

@@ -80,14 +80,14 @@ type ProjectIdentifier struct {
 	Source      string
 }
 
-func (i ProjectIdentifier) less(j ProjectIdentifier) bool {
+// Less compares by ProjectRoot then normalized Source.
+func (i ProjectIdentifier) Less(j ProjectIdentifier) bool {
 	if i.ProjectRoot < j.ProjectRoot {
 		return true
 	}
 	if j.ProjectRoot < i.ProjectRoot {
 		return false
 	}
-
 	return i.normalizedSource() < j.normalizedSource()
 }
 
@@ -141,7 +141,7 @@ func (i ProjectIdentifier) normalizedSource() string {
 	return i.Source
 }
 
-func (i ProjectIdentifier) errString() string {
+func (i ProjectIdentifier) String() string {
 	if i.Source == "" || i.Source == string(i.ProjectRoot) {
 		return string(i.ProjectRoot)
 	}
@@ -217,6 +217,9 @@ type completeDep struct {
 	pl []string
 }
 
+// dependency represents an incomplete edge in the depgraph. It has a
+// fully-realized atom as the depender (the tail/source of the edge), and a set
+// of requirements that any atom to be attached at the head/target must satisfy.
 type dependency struct {
 	depender atom
 	dep      completeDep

@@ -8,7 +8,7 @@ Keep an eye on the [Roadmap](https://github.com/golang/dep/wiki/Roadmap) for a s
 
 ## Filing issues
 
-Please check the existing issues and [FAQ](FAQ.md) to see if your feedback has already been reported.
+Please check the existing issues and [FAQ](docs/FAQ.md) to see if your feedback has already been reported.
 
 When [filing an issue](https://github.com/golang/dep/issues/new), make sure to answer these five questions:
 
@@ -21,6 +21,10 @@ General questions should go to the [golang-nuts mailing list](https://groups.goo
 The gophers there will answer or ask you to file an issue if you've tripped over a bug.
 
 ## Contributing code
+
+Let us know if you are interested in working on an issue by leaving a comment
+on the issue in GitHub. This helps avoid multiple people unknowingly 
+working on the same issue.
 
 Please read the [Contribution Guidelines](https://golang.org/doc/contribute.html)
 before sending patches.

@@ -7,6 +7,8 @@ package gps
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
+	"log"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -17,6 +19,8 @@ import (
 	"time"
 
 	"github.com/golang/dep/internal/gps/pkgtree"
+	"github.com/nightlyone/lockfile"
+	"github.com/pkg/errors"
 	"github.com/sdboyer/constext"
 )
 
@@ -41,7 +45,6 @@ type SourceManager interface {
 
 	// ListVersions retrieves a list of the available versions for a given
 	// repository name.
-	// TODO convert to []PairedVersion
 	ListVersions(ProjectIdentifier) ([]PairedVersion, error)
 
 	// RevisionPresentIn indicates whether the provided Version is present in
@@ -62,9 +65,9 @@ type SourceManager interface {
 
 	// ExportProject writes out the tree of the provided import path, at the
 	// provided version, to the provided directory.
-	ExportProject(ProjectIdentifier, Version, string) error
+	ExportProject(context.Context, ProjectIdentifier, Version, string) error
 
-	// DeduceRootProject takes an import path and deduces the corresponding
+	// DeduceProjectRoot takes an import path and deduces the corresponding
 	// project/source root.
 	DeduceProjectRoot(ip string) (ProjectRoot, error)
 
@@ -72,6 +75,10 @@ type SourceManager interface {
 	// no longer safe to call methods against it; all method calls will
 	// immediately result in errors.
 	Release()
+
+	// InferConstraint tries to puzzle out what kind of version is given in a string -
+	// semver, a revision, or as a fallback, a plain tag
+	InferConstraint(s string, pi ProjectIdentifier) (Constraint, error)
 }
 
 // A ProjectAnalyzer is responsible for analyzing a given path for Manifest and
@@ -87,8 +94,19 @@ type ProjectAnalyzer interface {
 	// expected files containing Manifest and Lock data are merely absent.
 	DeriveManifestAndLock(path string, importRoot ProjectRoot) (Manifest, Lock, error)
 
-	// Report the name and version of this ProjectAnalyzer.
-	Info() (name string, version int)
+	// Info reports this project analyzer's info.
+	Info() ProjectAnalyzerInfo
+}
+
+// ProjectAnalyzerInfo indicates a ProjectAnalyzer's name and version.
+type ProjectAnalyzerInfo struct {
+	Name    string
+	Version int
+}
+
+// String returns a string like: "<name>.<decimal version>"
+func (p ProjectAnalyzerInfo) String() string {
+	return fmt.Sprintf("%s.%d", p.Name, p.Version)
 }
 
 // SourceMgr is the default SourceManager for gps.
@@ -97,7 +115,7 @@ type ProjectAnalyzer interface {
 // tools; control via dependency injection is intended to be sufficient.
 type SourceMgr struct {
 	cachedir    string                // path to root of cache dir
-	lf          *os.File              // handle for the sm lock file on disk
+	lf          *lockfile.Lockfile    // handle for the sm lock file on disk
 	suprvsr     *supervisor           // subsystem that supervises running calls/io
 	cancelAll   context.CancelFunc    // cancel func to kill all running work
 	deduceCoord *deductionCoordinator // subsystem that manages import path deduction
@@ -116,9 +134,13 @@ func (smIsReleased) Error() string {
 
 var _ SourceManager = &SourceMgr{}
 
-// NewSourceManager produces an instance of gps's built-in SourceManager. It
-// takes a cache directory, where local instances of upstream sources are
-// stored.
+// SourceManagerConfig holds configuration information for creating SourceMgrs.
+type SourceManagerConfig struct {
+	Cachedir string      // Where to store local instances of upstream sources.
+	Logger   *log.Logger // Optional info/warn logger. Discards if nil.
+}
+
+// NewSourceManager produces an instance of gps's built-in SourceManager.
 //
 // The returned SourceManager aggressively caches information wherever possible.
 // If tools need to do preliminary work involving upstream repository analysis
@@ -129,27 +151,79 @@ var _ SourceManager = &SourceMgr{}
 // gps's SourceManager is intended to be threadsafe (if it's not, please file a
 // bug!). It should be safe to reuse across concurrent solving runs, even on
 // unrelated projects.
-func NewSourceManager(cachedir string) (*SourceMgr, error) {
-	err := os.MkdirAll(filepath.Join(cachedir, "sources"), 0777)
+func NewSourceManager(c SourceManagerConfig) (*SourceMgr, error) {
+	if c.Logger == nil {
+		c.Logger = log.New(ioutil.Discard, "", 0)
+	}
+
+	err := os.MkdirAll(filepath.Join(c.Cachedir, "sources"), 0777)
 	if err != nil {
 		return nil, err
 	}
 
-	glpath := filepath.Join(cachedir, "sm.lock")
-	_, err = os.Stat(glpath)
-	if err == nil {
-		return nil, CouldNotCreateLockError{
-			Path: glpath,
-			Err:  fmt.Errorf("cache lock file %s exists - another process crashed or is still running?", glpath),
-		}
-	}
+	// Fix for #820
+	//
+	// Consult https://godoc.org/github.com/nightlyone/lockfile for the lockfile
+	// behaviour. It's magic. It deals with stale processes, and if there is
+	// a process keeping the lock busy, it will pass back a temporary error that
+	// we can spin on.
 
-	fi, err := os.OpenFile(glpath, os.O_CREATE|os.O_EXCL, 0600) // is 0600 sane for this purpose?
+	glpath := filepath.Join(c.Cachedir, "sm.lock")
+	lockfile, err := lockfile.New(glpath)
 	if err != nil {
 		return nil, CouldNotCreateLockError{
 			Path: glpath,
-			Err:  fmt.Errorf("err on attempting to create global cache lock: %s", err),
+			Err:  errors.Wrapf(err, "unable to create lock %s", glpath),
 		}
+	}
+
+	process, err := lockfile.GetOwner()
+	if err == nil {
+		// If we didn't get an error, then the lockfile exists already. We should
+		// check to see if it's us already:
+		if process.Pid == os.Getpid() {
+			return nil, CouldNotCreateLockError{
+				Path: glpath,
+				Err:  fmt.Errorf("lockfile %s already locked by this process", glpath),
+			}
+		}
+
+		// There is a lockfile, but it's owned by someone else. We'll try to lock
+		// it anyway.
+	}
+
+	// If it's a TemporaryError, we retry every second. Otherwise, we fail
+	// permanently.
+	//
+	// TODO: #534 needs to be implemented to provide a better way to log warnings,
+	// but until then we will just use stderr.
+
+	// Implicit Time of 0.
+	var lasttime time.Time
+	err = lockfile.TryLock()
+	for err != nil {
+		nowtime := time.Now()
+		duration := nowtime.Sub(lasttime)
+
+		// The first time this is evaluated, duration will be very large as lasttime is 0.
+		// Unless time travel is invented and someone travels back to the year 1, we should
+		// be ok.
+		if duration > 15*time.Second {
+			fmt.Fprintf(os.Stderr, "waiting for lockfile %s: %s\n", glpath, err.Error())
+			lasttime = nowtime
+		}
+
+		if t, ok := err.(interface {
+			Temporary() bool
+		}); ok && t.Temporary() {
+			time.Sleep(time.Second * 1)
+		} else {
+			return nil, CouldNotCreateLockError{
+				Path: glpath,
+				Err:  errors.Wrapf(err, "unable to lock %s", glpath),
+			}
+		}
+		err = lockfile.TryLock()
 	}
 
 	ctx, cf := context.WithCancel(context.TODO())
@@ -157,12 +231,12 @@ func NewSourceManager(cachedir string) (*SourceMgr, error) {
 	deducer := newDeductionCoordinator(superv)
 
 	sm := &SourceMgr{
-		cachedir:    cachedir,
-		lf:          fi,
+		cachedir:    c.Cachedir,
+		lf:          &lockfile,
 		suprvsr:     superv,
 		cancelAll:   cf,
 		deduceCoord: deducer,
-		srcCoord:    newSourceCoordinator(superv, deducer, cachedir),
+		srcCoord:    newSourceCoordinator(superv, deducer, c.Cachedir, c.Logger),
 		qch:         make(chan struct{}),
 	}
 
@@ -201,42 +275,22 @@ func (sm *SourceMgr) HandleSignals(sigch chan os.Signal) {
 	// Run a new goroutine with the input sigch and the fresh qch
 	go func(sch chan os.Signal, qch <-chan struct{}) {
 		defer signal.Stop(sch)
-		for {
-			select {
-			case <-sch:
-				// Set up a timer to uninstall the signal handler after three
-				// seconds, so that the user can easily force termination with a
-				// second ctrl-c
-				go func(c <-chan time.Time) {
-					<-c
-					signal.Stop(sch)
-				}(time.After(3 * time.Second))
+		select {
+		case <-sch:
+			// Set up a timer to uninstall the signal handler after three
+			// seconds, so that the user can easily force termination with a
+			// second ctrl-c
+			time.AfterFunc(3*time.Second, func() {
+				signal.Stop(sch)
+			})
 
-				if !atomic.CompareAndSwapInt32(&sm.releasing, 0, 1) {
-					// Something's already called Release() on this sm, so we
-					// don't have to do anything, as we'd just be redoing
-					// that work. Instead, deregister and return.
-					return
-				}
-
-				opc := sm.suprvsr.count()
-				if opc > 0 {
-					fmt.Printf("Signal received: waiting for %v ops to complete...\n", opc)
-				}
-
-				// Mutex interaction in a signal handler is, as a general rule,
-				// unsafe. I'm not clear on whether the guarantees Go provides
-				// around signal handling, or having passed this through a
-				// channel in general, obviate those concerns, but it's a lot
-				// easier to just rely on the mutex contained in the Once right
-				// now, so do that until it proves problematic or someone
-				// provides a clear explanation.
-				sm.relonce.Do(func() { sm.doRelease() })
-				return
-			case <-qch:
-				// quit channel triggered - deregister our sigch and return
-				return
+			if opc := sm.suprvsr.count(); opc > 0 {
+				fmt.Printf("Signal received: waiting for %v ops to complete...\n", opc)
 			}
+
+			sm.Release()
+		case <-qch:
+			// quit channel triggered - deregister our sigch and return
 		}
 	}(sigch, sm.qch)
 	// Try to ensure handler is blocked in for-select before releasing the mutex
@@ -275,35 +329,26 @@ func (e CouldNotCreateLockError) Error() string {
 // longer safe to call methods against it; all method calls will immediately
 // result in errors.
 func (sm *SourceMgr) Release() {
-	// Set sm.releasing before entering the Once func to guarantee that no
-	// _more_ method calls will stack up if/while waiting.
-	atomic.CompareAndSwapInt32(&sm.releasing, 0, 1)
+	atomic.StoreInt32(&sm.releasing, 1)
 
-	// Whether 'releasing' is set or not, we don't want this function to return
-	// until after the doRelease process is done, as doing so could cause the
-	// process to terminate before a signal-driven doRelease() call has a chance
-	// to finish its cleanup.
-	sm.relonce.Do(func() { sm.doRelease() })
-}
+	sm.relonce.Do(func() {
+		// Send the signal to the supervisor to cancel all running calls.
+		sm.cancelAll()
+		sm.suprvsr.wait()
 
-// doRelease actually releases physical resources (files on disk, etc.).
-//
-// This must be called only and exactly once. Calls to it should be wrapped in
-// the sm.relonce sync.Once instance.
-func (sm *SourceMgr) doRelease() {
-	// Send the signal to the supervisor to cancel all running calls
-	sm.cancelAll()
-	sm.suprvsr.wait()
+		// Close the source coordinator.
+		sm.srcCoord.close()
 
-	// Close the file handle for the lock file and remove it from disk
-	sm.lf.Close()
-	os.Remove(filepath.Join(sm.cachedir, "sm.lock"))
+		// Close the file handle for the lock file and remove it from disk
+		sm.lf.Unlock()
+		os.Remove(filepath.Join(sm.cachedir, "sm.lock"))
 
-	// Close the qch, if non-nil, so the signal handlers run out. This will
-	// also deregister the sig channel, if any has been set up.
-	if sm.qch != nil {
-		close(sm.qch)
-	}
+		// Close the qch, if non-nil, so the signal handlers run out. This will
+		// also deregister the sig channel, if any has been set up.
+		if sm.qch != nil {
+			close(sm.qch)
+		}
+	})
 }
 
 // GetManifestAndLock returns manifest and lock information for the provided
@@ -311,7 +356,7 @@ func (sm *SourceMgr) doRelease() {
 // manifest and lock is delegated to the provided ProjectAnalyzer's
 // DeriveManifestAndLock() method.
 func (sm *SourceMgr) GetManifestAndLock(id ProjectIdentifier, v Version, an ProjectAnalyzer) (Manifest, Lock, error) {
-	if atomic.CompareAndSwapInt32(&sm.releasing, 1, 1) {
+	if atomic.LoadInt32(&sm.releasing) == 1 {
 		return nil, nil, smIsReleased{}
 	}
 
@@ -326,7 +371,7 @@ func (sm *SourceMgr) GetManifestAndLock(id ProjectIdentifier, v Version, an Proj
 // ListPackages parses the tree of the Go packages at and below the ProjectRoot
 // of the given ProjectIdentifier, at the given version.
 func (sm *SourceMgr) ListPackages(id ProjectIdentifier, v Version) (pkgtree.PackageTree, error) {
-	if atomic.CompareAndSwapInt32(&sm.releasing, 1, 1) {
+	if atomic.LoadInt32(&sm.releasing) == 1 {
 		return pkgtree.PackageTree{}, smIsReleased{}
 	}
 
@@ -351,7 +396,7 @@ func (sm *SourceMgr) ListPackages(id ProjectIdentifier, v Version) (pkgtree.Pack
 // is not accessible (network outage, access issues, or the resource actually
 // went away), an error will be returned.
 func (sm *SourceMgr) ListVersions(id ProjectIdentifier) ([]PairedVersion, error) {
-	if atomic.CompareAndSwapInt32(&sm.releasing, 1, 1) {
+	if atomic.LoadInt32(&sm.releasing) == 1 {
 		return nil, smIsReleased{}
 	}
 
@@ -367,7 +412,7 @@ func (sm *SourceMgr) ListVersions(id ProjectIdentifier) ([]PairedVersion, error)
 // RevisionPresentIn indicates whether the provided Revision is present in the given
 // repository.
 func (sm *SourceMgr) RevisionPresentIn(id ProjectIdentifier, r Revision) (bool, error) {
-	if atomic.CompareAndSwapInt32(&sm.releasing, 1, 1) {
+	if atomic.LoadInt32(&sm.releasing) == 1 {
 		return false, smIsReleased{}
 	}
 
@@ -383,7 +428,7 @@ func (sm *SourceMgr) RevisionPresentIn(id ProjectIdentifier, r Revision) (bool, 
 // SourceExists checks if a repository exists, either upstream or in the cache,
 // for the provided ProjectIdentifier.
 func (sm *SourceMgr) SourceExists(id ProjectIdentifier) (bool, error) {
-	if atomic.CompareAndSwapInt32(&sm.releasing, 1, 1) {
+	if atomic.LoadInt32(&sm.releasing) == 1 {
 		return false, smIsReleased{}
 	}
 
@@ -401,7 +446,7 @@ func (sm *SourceMgr) SourceExists(id ProjectIdentifier) (bool, error) {
 //
 // The primary use case for this is prefetching.
 func (sm *SourceMgr) SyncSourceFor(id ProjectIdentifier) error {
-	if atomic.CompareAndSwapInt32(&sm.releasing, 1, 1) {
+	if atomic.LoadInt32(&sm.releasing) == 1 {
 		return smIsReleased{}
 	}
 
@@ -415,17 +460,17 @@ func (sm *SourceMgr) SyncSourceFor(id ProjectIdentifier) error {
 
 // ExportProject writes out the tree of the provided ProjectIdentifier's
 // ProjectRoot, at the provided version, to the provided directory.
-func (sm *SourceMgr) ExportProject(id ProjectIdentifier, v Version, to string) error {
-	if atomic.CompareAndSwapInt32(&sm.releasing, 1, 1) {
+func (sm *SourceMgr) ExportProject(ctx context.Context, id ProjectIdentifier, v Version, to string) error {
+	if atomic.LoadInt32(&sm.releasing) == 1 {
 		return smIsReleased{}
 	}
 
-	srcg, err := sm.srcCoord.getSourceGatewayFor(context.TODO(), id)
+	srcg, err := sm.srcCoord.getSourceGatewayFor(ctx, id)
 	if err != nil {
 		return err
 	}
 
-	return srcg.exportVersionTo(context.TODO(), v, to)
+	return srcg.exportVersionTo(ctx, v, to)
 }
 
 // DeduceProjectRoot takes an import path and deduces the corresponding
@@ -436,12 +481,73 @@ func (sm *SourceMgr) ExportProject(id ProjectIdentifier, v Version, to string) e
 // paths. (A special exception is written for gopkg.in to minimize network
 // activity, as its behavior is well-structured)
 func (sm *SourceMgr) DeduceProjectRoot(ip string) (ProjectRoot, error) {
-	if atomic.CompareAndSwapInt32(&sm.releasing, 1, 1) {
+	if atomic.LoadInt32(&sm.releasing) == 1 {
 		return "", smIsReleased{}
 	}
 
 	pd, err := sm.deduceCoord.deduceRootPath(context.TODO(), ip)
 	return ProjectRoot(pd.root), err
+}
+
+// InferConstraint tries to puzzle out what kind of version is given in a
+// string. Preference is given first for branches, then semver constraints, then
+// plain tags, and then revisions.
+func (sm *SourceMgr) InferConstraint(s string, pi ProjectIdentifier) (Constraint, error) {
+	if s == "" {
+		return Any(), nil
+	}
+
+	// Lookup the string in the repository
+	var version PairedVersion
+	versions, err := sm.ListVersions(pi)
+	if err != nil {
+		return nil, errors.Wrapf(err, "list versions for %s", pi) // means repo does not exist
+	}
+	SortPairedForUpgrade(versions)
+	for _, v := range versions {
+		if s == v.String() {
+			version = v
+			break
+		}
+	}
+
+	// Branch
+	if version != nil && version.Type() == IsBranch {
+		return version.Unpair(), nil
+	}
+
+	// Semver Constraint
+	c, err := NewSemverConstraintIC(s)
+	if c != nil && err == nil {
+		return c, nil
+	}
+
+	// Tag
+	if version != nil {
+		return version.Unpair(), nil
+	}
+
+	// Revision, possibly abbreviated
+	r, err := sm.disambiguateRevision(context.TODO(), pi, Revision(s))
+	if err == nil {
+		return r, nil
+	}
+
+	return nil, errors.Errorf("%s is not a valid version for the package %s(%s)", s, pi.ProjectRoot, pi.Source)
+}
+
+// disambiguateRevision looks up a revision in the underlying source, spitting
+// it back out in an unabbreviated, disambiguated form.
+//
+// For example, if pi refers to a git-based project, then rev could be an
+// abbreviated git commit hash. disambiguateRevision would return the complete
+// hash.
+func (sm *SourceMgr) disambiguateRevision(ctx context.Context, pi ProjectIdentifier, rev Revision) (Revision, error) {
+	srcg, err := sm.srcCoord.getSourceGatewayFor(context.TODO(), pi)
+	if err != nil {
+		return "", err
+	}
+	return srcg.disambiguateRevision(ctx, rev)
 }
 
 type timeCount struct {
@@ -455,21 +561,18 @@ type durCount struct {
 }
 
 type supervisor struct {
-	ctx        context.Context
-	cancelFunc context.CancelFunc
-	mu         sync.Mutex // Guards all maps
-	cond       sync.Cond  // Wraps mu so callers can wait until all calls end
-	running    map[callInfo]timeCount
-	ran        map[callType]durCount
+	ctx     context.Context
+	mu      sync.Mutex // Guards all maps
+	cond    sync.Cond  // Wraps mu so callers can wait until all calls end
+	running map[callInfo]timeCount
+	ran     map[callType]durCount
 }
 
 func newSupervisor(ctx context.Context) *supervisor {
-	ctx, cf := context.WithCancel(ctx)
 	supv := &supervisor{
-		ctx:        ctx,
-		cancelFunc: cf,
-		running:    make(map[callInfo]timeCount),
-		ran:        make(map[callType]durCount),
+		ctx:     ctx,
+		running: make(map[callInfo]timeCount),
+		ran:     make(map[callType]durCount),
 	}
 
 	supv.cond = sync.Cond{L: &supv.mu}
@@ -497,16 +600,12 @@ func (sup *supervisor) do(inctx context.Context, name string, typ callType, f fu
 	return err
 }
 
-func (sup *supervisor) getLifetimeContext() context.Context {
-	return sup.ctx
-}
-
 func (sup *supervisor) start(ci callInfo) (context.Context, error) {
 	sup.mu.Lock()
 	defer sup.mu.Unlock()
-	if sup.ctx.Err() != nil {
+	if err := sup.ctx.Err(); err != nil {
 		// We've already been canceled; error out.
-		return nil, sup.ctx.Err()
+		return nil, err
 	}
 
 	if existingInfo, has := sup.running[ci]; has {
@@ -578,7 +677,6 @@ const (
 	ctSourcePing
 	ctSourceInit
 	ctSourceFetch
-	ctCheckoutVersion
 	ctExportTree
 )
 

@@ -5,17 +5,23 @@
 package gps
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"path"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"testing"
+	"text/tabwriter"
 	"time"
+
+	"github.com/golang/dep/internal/test"
 )
 
 // An analyzer that passes nothing back, but doesn't error. This is the naive
@@ -27,8 +33,11 @@ func (naiveAnalyzer) DeriveManifestAndLock(string, ProjectRoot) (Manifest, Lock,
 	return nil, nil, nil
 }
 
-func (a naiveAnalyzer) Info() (name string, version int) {
-	return "naive-analyzer", 1
+func (a naiveAnalyzer) Info() ProjectAnalyzerInfo {
+	return ProjectAnalyzerInfo{
+		Name:    "naive-analyzer",
+		Version: 1,
+	}
 }
 
 func mkNaiveSM(t *testing.T) (*SourceMgr, func()) {
@@ -37,14 +46,17 @@ func mkNaiveSM(t *testing.T) (*SourceMgr, func()) {
 		t.Fatalf("Failed to create temp dir: %s", err)
 	}
 
-	sm, err := NewSourceManager(cpath)
+	sm, err := NewSourceManager(SourceManagerConfig{
+		Cachedir: cpath,
+		Logger:   log.New(test.Writer{TB: t}, "", 0),
+	})
 	if err != nil {
 		t.Fatalf("Unexpected error on SourceManager creation: %s", err)
 	}
 
 	return sm, func() {
 		sm.Release()
-		err := removeAll(cpath)
+		err := os.RemoveAll(cpath)
 		if err != nil {
 			t.Errorf("removeAll failed: %s", err)
 		}
@@ -55,14 +67,17 @@ func remakeNaiveSM(osm *SourceMgr, t *testing.T) (*SourceMgr, func()) {
 	cpath := osm.cachedir
 	osm.Release()
 
-	sm, err := NewSourceManager(cpath)
+	sm, err := NewSourceManager(SourceManagerConfig{
+		Cachedir: cpath,
+		Logger:   log.New(test.Writer{TB: t}, "", 0),
+	})
 	if err != nil {
 		t.Fatalf("unexpected error on SourceManager recreation: %s", err)
 	}
 
 	return sm, func() {
 		sm.Release()
-		err := removeAll(cpath)
+		err := os.RemoveAll(cpath)
 		if err != nil {
 			t.Errorf("removeAll failed: %s", err)
 		}
@@ -74,13 +89,18 @@ func TestSourceManagerInit(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to create temp dir: %s", err)
 	}
-	sm, err := NewSourceManager(cpath)
+	cfg := SourceManagerConfig{
+		Cachedir: cpath,
+		Logger:   log.New(test.Writer{TB: t}, "", 0),
+	}
+
+	sm, err := NewSourceManager(cfg)
 
 	if err != nil {
 		t.Errorf("Unexpected error on SourceManager creation: %s", err)
 	}
 
-	_, err = NewSourceManager(cpath)
+	_, err = NewSourceManager(cfg)
 	if err == nil {
 		t.Errorf("Creating second SourceManager should have failed due to file lock contention")
 	} else if te, ok := err.(CouldNotCreateLockError); !ok {
@@ -92,7 +112,7 @@ func TestSourceManagerInit(t *testing.T) {
 	}
 
 	sm.Release()
-	err = removeAll(cpath)
+	err = os.RemoveAll(cpath)
 	if err != nil {
 		t.Errorf("removeAll failed: %s", err)
 	}
@@ -102,13 +122,13 @@ func TestSourceManagerInit(t *testing.T) {
 	}
 
 	// Set another one up at the same spot now, just to be sure
-	sm, err = NewSourceManager(cpath)
+	sm, err = NewSourceManager(cfg)
 	if err != nil {
 		t.Errorf("Creating a second SourceManager should have succeeded when the first was released, but failed with err %s", err)
 	}
 
 	sm.Release()
-	err = removeAll(cpath)
+	err = os.RemoveAll(cpath)
 	if err != nil {
 		t.Errorf("removeAll failed: %s", err)
 	}
@@ -125,14 +145,17 @@ func TestSourceInit(t *testing.T) {
 		t.Fatalf("Failed to create temp dir: %s", err)
 	}
 
-	sm, err := NewSourceManager(cpath)
+	sm, err := NewSourceManager(SourceManagerConfig{
+		Cachedir: cpath,
+		Logger:   log.New(test.Writer{TB: t}, "", 0),
+	})
 	if err != nil {
 		t.Fatalf("Unexpected error on SourceManager creation: %s", err)
 	}
 
 	defer func() {
 		sm.Release()
-		err := removeAll(cpath)
+		err := os.RemoveAll(cpath)
 		if err != nil {
 			t.Errorf("removeAll failed: %s", err)
 		}
@@ -148,13 +171,13 @@ func TestSourceInit(t *testing.T) {
 		t.Errorf("Expected seven version results from the test repo, got %v", len(pvl))
 	} else {
 		expected := []PairedVersion{
-			NewVersion("v2.0.0").Is(Revision("4a54adf81c75375d26d376459c00d5ff9b703e5e")),
-			NewVersion("v1.1.0").Is(Revision("b2cb48dda625f6640b34d9ffb664533359ac8b91")),
-			NewVersion("v1.0.0").Is(Revision("bf85021c0405edbc4f3648b0603818d641674f72")),
-			newDefaultBranch("master").Is(Revision("bf85021c0405edbc4f3648b0603818d641674f72")),
-			NewBranch("v1").Is(Revision("e3777f683305eafca223aefe56b4e8ecf103f467")),
-			NewBranch("v1.1").Is(Revision("f1fbc520489a98306eb28c235204e39fa8a89c84")),
-			NewBranch("v3").Is(Revision("4a54adf81c75375d26d376459c00d5ff9b703e5e")),
+			NewVersion("v2.0.0").Pair(Revision("4a54adf81c75375d26d376459c00d5ff9b703e5e")),
+			NewVersion("v1.1.0").Pair(Revision("b2cb48dda625f6640b34d9ffb664533359ac8b91")),
+			NewVersion("v1.0.0").Pair(Revision("bf85021c0405edbc4f3648b0603818d641674f72")),
+			newDefaultBranch("master").Pair(Revision("bf85021c0405edbc4f3648b0603818d641674f72")),
+			NewBranch("v1").Pair(Revision("e3777f683305eafca223aefe56b4e8ecf103f467")),
+			NewBranch("v1.1").Pair(Revision("f1fbc520489a98306eb28c235204e39fa8a89c84")),
+			NewBranch("v3").Pair(Revision("4a54adf81c75375d26d376459c00d5ff9b703e5e")),
 		}
 
 		// SourceManager itself doesn't guarantee ordering; sort them here so we
@@ -186,13 +209,13 @@ func TestSourceInit(t *testing.T) {
 		t.Errorf("Expected seven version results from the test repo, got %v", len(vl))
 	} else {
 		expected := []Version{
-			NewVersion("v2.0.0").Is(Revision("4a54adf81c75375d26d376459c00d5ff9b703e5e")),
-			NewVersion("v1.1.0").Is(Revision("b2cb48dda625f6640b34d9ffb664533359ac8b91")),
-			NewVersion("v1.0.0").Is(Revision("bf85021c0405edbc4f3648b0603818d641674f72")),
-			newDefaultBranch("master").Is(Revision("bf85021c0405edbc4f3648b0603818d641674f72")),
-			NewBranch("v1").Is(Revision("e3777f683305eafca223aefe56b4e8ecf103f467")),
-			NewBranch("v1.1").Is(Revision("f1fbc520489a98306eb28c235204e39fa8a89c84")),
-			NewBranch("v3").Is(Revision("4a54adf81c75375d26d376459c00d5ff9b703e5e")),
+			NewVersion("v2.0.0").Pair(Revision("4a54adf81c75375d26d376459c00d5ff9b703e5e")),
+			NewVersion("v1.1.0").Pair(Revision("b2cb48dda625f6640b34d9ffb664533359ac8b91")),
+			NewVersion("v1.0.0").Pair(Revision("bf85021c0405edbc4f3648b0603818d641674f72")),
+			newDefaultBranch("master").Pair(Revision("bf85021c0405edbc4f3648b0603818d641674f72")),
+			NewBranch("v1").Pair(Revision("e3777f683305eafca223aefe56b4e8ecf103f467")),
+			NewBranch("v1.1").Pair(Revision("f1fbc520489a98306eb28c235204e39fa8a89c84")),
+			NewBranch("v3").Pair(Revision("4a54adf81c75375d26d376459c00d5ff9b703e5e")),
 		}
 
 		for k, e := range expected {
@@ -273,9 +296,9 @@ func TestDefaultBranchAssignment(t *testing.T) {
 		brev := Revision("fda020843ac81352004b9dca3fcccdd517600149")
 		mrev := Revision("9f9c3a591773d9b28128309ac7a9a72abcab267d")
 		expected := []PairedVersion{
-			NewBranch("branchone").Is(brev),
-			NewBranch("otherbranch").Is(brev),
-			NewBranch("master").Is(mrev),
+			NewBranch("branchone").Pair(brev),
+			NewBranch("otherbranch").Pair(brev),
+			NewBranch("master").Pair(mrev),
 		}
 
 		SortPairedForUpgrade(v)
@@ -323,8 +346,99 @@ func TestMgrMethodsFailWithBadPath(t *testing.T) {
 	if _, _, err = sm.GetManifestAndLock(bad, nil, naiveAnalyzer{}); err == nil {
 		t.Error("GetManifestAndLock() did not error on bad input")
 	}
-	if err = sm.ExportProject(bad, nil, ""); err == nil {
+	if err = sm.ExportProject(context.Background(), bad, nil, ""); err == nil {
 		t.Error("ExportProject() did not error on bad input")
+	}
+}
+
+type sourceCreationTestFixture struct {
+	roots               []ProjectIdentifier
+	namecount, srccount int
+}
+
+func (f sourceCreationTestFixture) run(t *testing.T) {
+	t.Parallel()
+	sm, clean := mkNaiveSM(t)
+	defer clean()
+
+	for _, pi := range f.roots {
+		_, err := sm.SourceExists(pi)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if len(sm.srcCoord.nameToURL) != f.namecount {
+		t.Errorf("want %v names in the name->url map, but got %v. contents: \n%v", f.namecount, len(sm.srcCoord.nameToURL), sm.srcCoord.nameToURL)
+	}
+
+	if len(sm.srcCoord.srcs) != f.srccount {
+		t.Errorf("want %v gateways in the sources map, but got %v", f.srccount, len(sm.srcCoord.srcs))
+	}
+
+	var keys []string
+	for k := range sm.srcCoord.nameToURL {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	var buf bytes.Buffer
+	w := tabwriter.NewWriter(&buf, 0, 4, 2, ' ', 0)
+	fmt.Fprint(w, "NAME\tMAPPED URL\n")
+	for _, r := range keys {
+		fmt.Fprintf(w, "%s\t%s\n", r, sm.srcCoord.nameToURL[r])
+	}
+	w.Flush()
+	t.Log("\n", buf.String())
+
+	t.Log("SRC KEYS")
+	for k := range sm.srcCoord.srcs {
+		t.Log(k)
+	}
+}
+
+// This test is primarily about making sure that the logic around folding
+// together different ways of referencing the same underlying resource - whether
+// that be intentionally folding them, or intentionally keeping them separate -
+// work as intended.
+func TestSourceCreationCounts(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping slow test in short mode")
+	}
+
+	fixtures := map[string]sourceCreationTestFixture{
+		"gopkgin uniqueness": {
+			roots: []ProjectIdentifier{
+				mkPI("gopkg.in/sdboyer/gpkt.v1"),
+				mkPI("gopkg.in/sdboyer/gpkt.v2"),
+				mkPI("gopkg.in/sdboyer/gpkt.v3"),
+			},
+			namecount: 6,
+			srccount:  3,
+		},
+		"gopkgin separation from github": {
+			roots: []ProjectIdentifier{
+				mkPI("gopkg.in/sdboyer/gpkt.v1"),
+				mkPI("github.com/sdboyer/gpkt"),
+			},
+			namecount: 4,
+			srccount:  2,
+		},
+		"case variance across path and URL-based access": {
+			roots: []ProjectIdentifier{
+				ProjectIdentifier{ProjectRoot: ProjectRoot("github.com/sdboyer/gpkt"), Source: "https://github.com/Sdboyer/gpkt"},
+				ProjectIdentifier{ProjectRoot: ProjectRoot("github.com/sdboyer/gpkt"), Source: "https://github.com/SdbOyer/gpkt"},
+				mkPI("github.com/sdboyer/gpkt"),
+				ProjectIdentifier{ProjectRoot: ProjectRoot("github.com/sdboyer/gpkt"), Source: "https://github.com/sdboyeR/gpkt"},
+				mkPI("github.com/sdboyeR/gpkt"),
+			},
+			namecount: 6,
+			srccount:  1,
+		},
+	}
+
+	for name, fix := range fixtures {
+		t.Run(name, fix.run)
 	}
 }
 
@@ -387,11 +501,68 @@ func TestGetSources(t *testing.T) {
 	})
 
 	// nine entries (of which three are dupes): for each vcs, raw import path,
-	// the https url, and the http url
-	if len(sm.srcCoord.nameToURL) != 9 {
-		t.Errorf("Should have nine discrete entries in the nameToURL map, got %v", len(sm.srcCoord.nameToURL))
+	// the https url, and the http url. also three more from case folding of
+	// github.com/Masterminds/VCSTestRepo -> github.com/masterminds/vcstestrepo
+	if len(sm.srcCoord.nameToURL) != 12 {
+		t.Errorf("Should have twelve discrete entries in the nameToURL map, got %v", len(sm.srcCoord.nameToURL))
 	}
 	clean()
+}
+
+func TestFSCaseSensitivityConvergesSources(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping slow test in short mode")
+	}
+
+	f := func(name string, pi1, pi2 ProjectIdentifier) {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			sm, clean := mkNaiveSM(t)
+			defer clean()
+
+			sm.SyncSourceFor(pi1)
+			sg1, err := sm.srcCoord.getSourceGatewayFor(context.Background(), pi1)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			sm.SyncSourceFor(pi2)
+			sg2, err := sm.srcCoord.getSourceGatewayFor(context.Background(), pi2)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			path1 := sg1.src.(*gitSource).repo.LocalPath()
+			t.Log("path1:", path1)
+			stat1, err := os.Stat(path1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			path2 := sg2.src.(*gitSource).repo.LocalPath()
+			t.Log("path2:", path2)
+			stat2, err := os.Stat(path2)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			same, count := os.SameFile(stat1, stat2), len(sm.srcCoord.srcs)
+			if same && count != 1 {
+				t.Log("are same, count", count)
+				t.Fatal("on case-insensitive filesystem, case-varying sources should have been folded together but were not")
+			}
+			if !same && count != 2 {
+				t.Log("not same, count", count)
+				t.Fatal("on case-sensitive filesystem, case-varying sources should not have been folded together, but were")
+			}
+		})
+	}
+
+	folded := mkPI("github.com/sdboyer/deptest").normalize()
+	casevar1 := mkPI("github.com/Sdboyer/deptest").normalize()
+	casevar2 := mkPI("github.com/SdboyeR/deptest").normalize()
+	f("folded first", folded, casevar1)
+	f("folded second", casevar1, folded)
+	f("both unfolded", casevar1, casevar2)
 }
 
 // Regression test for #32
@@ -519,7 +690,7 @@ func TestMultiFetchThreadsafe(t *testing.T) {
 		mkPI("gopkg.in/sdboyer/gpkt.v2"),
 		mkPI("github.com/Masterminds/VCSTestRepo"),
 		mkPI("github.com/go-yaml/yaml"),
-		mkPI("github.com/Sirupsen/logrus"),
+		mkPI("github.com/sirupsen/logrus"),
 		mkPI("github.com/Masterminds/semver"),
 		mkPI("github.com/Masterminds/vcs"),
 		//mkPI("bitbucket.org/sdboyer/withbm"),
@@ -543,14 +714,14 @@ func TestMultiFetchThreadsafe(t *testing.T) {
 
 				switch op {
 				case 0:
-					t.Run(fmt.Sprintf("deduce:%v:%s", opcount, id.errString()), func(t *testing.T) {
+					t.Run(fmt.Sprintf("deduce:%v:%s", opcount, id), func(t *testing.T) {
 						t.Parallel()
 						if _, err := sm.DeduceProjectRoot(string(id.ProjectRoot)); err != nil {
 							t.Error(err)
 						}
 					})
 				case 1:
-					t.Run(fmt.Sprintf("sync:%v:%s", opcount, id.errString()), func(t *testing.T) {
+					t.Run(fmt.Sprintf("sync:%v:%s", opcount, id), func(t *testing.T) {
 						t.Parallel()
 						err := sm.SyncSourceFor(id)
 						if err != nil {
@@ -558,7 +729,7 @@ func TestMultiFetchThreadsafe(t *testing.T) {
 						}
 					})
 				case 2:
-					t.Run(fmt.Sprintf("listVersions:%v:%s", opcount, id.errString()), func(t *testing.T) {
+					t.Run(fmt.Sprintf("listVersions:%v:%s", opcount, id), func(t *testing.T) {
 						t.Parallel()
 						vl, err := sm.ListVersions(id)
 						if err != nil {
@@ -569,7 +740,7 @@ func TestMultiFetchThreadsafe(t *testing.T) {
 						}
 					})
 				case 3:
-					t.Run(fmt.Sprintf("exists:%v:%s", opcount, id.errString()), func(t *testing.T) {
+					t.Run(fmt.Sprintf("exists:%v:%s", opcount, id), func(t *testing.T) {
 						t.Parallel()
 						y, err := sm.SourceExists(id)
 						if err != nil {
@@ -678,7 +849,7 @@ func TestErrAfterRelease(t *testing.T) {
 		t.Errorf("GetManifestAndLock errored after Release(), but with unexpected error: %T %s", terr, terr.Error())
 	}
 
-	err = sm.ExportProject(id, nil, "")
+	err = sm.ExportProject(context.Background(), id, nil, "")
 	if err == nil {
 		t.Errorf("ExportProject did not error after calling Release()")
 	} else if terr, ok := err.(smIsReleased); !ok {
@@ -710,10 +881,6 @@ func TestSignalHandling(t *testing.T) {
 		t.Error("Releasing flag did not get set")
 	}
 
-	lpath := filepath.Join(sm.cachedir, "sm.lock")
-	if _, err := os.Stat(lpath); err == nil {
-		t.Fatal("Expected error on statting what should be an absent lock file")
-	}
 	clean()
 
 	// Test again, this time with a running call

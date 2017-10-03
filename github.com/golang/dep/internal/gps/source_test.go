@@ -8,10 +8,13 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"log"
+	"os"
 	"reflect"
 	"testing"
 
 	"github.com/golang/dep/internal/gps/pkgtree"
+	"github.com/golang/dep/internal/test"
 )
 
 // Executed in parallel by TestSlowVcs
@@ -30,14 +33,14 @@ func testSourceGateway(t *testing.T) {
 	bgc := context.Background()
 	ctx, cancelFunc := context.WithCancel(bgc)
 	defer func() {
-		removeAll(cachedir)
+		os.RemoveAll(cachedir)
 		cancelFunc()
 	}()
 
 	do := func(wantstate sourceState) func(t *testing.T) {
 		return func(t *testing.T) {
 			superv := newSupervisor(ctx)
-			sc := newSourceCoordinator(superv, newDeductionCoordinator(superv), cachedir)
+			sc := newSourceCoordinator(superv, newDeductionCoordinator(superv), cachedir, log.New(test.Writer{TB: t}, "", 0))
 
 			id := mkPI("github.com/sdboyer/deptest")
 			sg, err := sc.getSourceGatewayFor(ctx, id)
@@ -81,10 +84,10 @@ func testSourceGateway(t *testing.T) {
 			} else {
 				SortPairedForUpgrade(vlist)
 				evl := []PairedVersion{
-					NewVersion("v1.0.0").Is(Revision("ff2948a2ac8f538c4ecd55962e919d1e13e74baf")),
-					NewVersion("v0.8.1").Is(Revision("3f4c3bea144e112a69bbe5d8d01c1b09a544253f")),
-					NewVersion("v0.8.0").Is(Revision("ff2948a2ac8f538c4ecd55962e919d1e13e74baf")),
-					newDefaultBranch("master").Is(Revision("3f4c3bea144e112a69bbe5d8d01c1b09a544253f")),
+					NewVersion("v1.0.0").Pair(Revision("ff2948a2ac8f538c4ecd55962e919d1e13e74baf")),
+					NewVersion("v0.8.1").Pair(Revision("3f4c3bea144e112a69bbe5d8d01c1b09a544253f")),
+					NewVersion("v0.8.0").Pair(Revision("ff2948a2ac8f538c4ecd55962e919d1e13e74baf")),
+					newDefaultBranch("master").Pair(Revision("3f4c3bea144e112a69bbe5d8d01c1b09a544253f")),
 				}
 				if !reflect.DeepEqual(vlist, evl) {
 					t.Fatalf("Version list was not what we expected:\n\t(GOT): %s\n\t(WNT): %s", vlist, evl)

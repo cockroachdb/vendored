@@ -227,8 +227,7 @@
         "containerInstanceArn":{"shape":"String"},
         "taskArn":{"shape":"String"},
         "exitCode":{"shape":"Integer"},
-        "reason":{"shape":"String"},
-        "logStreamName":{"shape":"String"}
+        "reason":{"shape":"String"}
       }
     },
     "AttemptDetail":{
@@ -392,8 +391,7 @@
         "exitCode":{"shape":"Integer"},
         "reason":{"shape":"String"},
         "containerInstanceArn":{"shape":"String"},
-        "taskArn":{"shape":"String"},
-        "logStreamName":{"shape":"String"}
+        "taskArn":{"shape":"String"}
       }
     },
     "ContainerOverrides":{

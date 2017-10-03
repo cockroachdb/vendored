@@ -40,12 +40,14 @@ func (a Analyzer) DeriveManifestAndLock(path string, n gps.ProjectRoot) (gps.Man
 	if err != nil {
 		return nil, nil, err
 	}
-	// TODO: No need to return lock til we decide about preferred versions, see
-	// https://github.com/sdboyer/gps/wiki/gps-for-Implementors#preferred-versions.
+
 	return m, nil, nil
 }
 
-// Info returns the name and version of this ProjectAnalyzer.
-func (a Analyzer) Info() (string, int) {
-	return "dep", 1
+// Info returns Analyzer's name and version info.
+func (a Analyzer) Info() gps.ProjectAnalyzerInfo {
+	return gps.ProjectAnalyzerInfo{
+		Name:    "dep",
+		Version: 1,
+	}
 }
