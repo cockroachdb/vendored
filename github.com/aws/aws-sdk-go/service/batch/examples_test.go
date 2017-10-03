@@ -3,720 +3,513 @@
 package batch_test
 
 import (
+	"bytes"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/batch"
 )
 
 var _ time.Duration
-var _ strings.Reader
-var _ aws.Config
+var _ bytes.Buffer
 
-func parseTime(layout, value string) *time.Time {
-	t, err := time.Parse(layout, value)
-	if err != nil {
-		panic(err)
+func ExampleBatch_CancelJob() {
+	sess := session.Must(session.NewSession())
+
+	svc := batch.New(sess)
+
+	params := &batch.CancelJobInput{
+		JobId:  aws.String("String"), // Required
+		Reason: aws.String("String"), // Required
 	}
-	return &t
-}
+	resp, err := svc.CancelJob(params)
 
-// To cancel a job
-//
-// This example cancels a job with the specified job ID.
-func ExampleBatch_CancelJob_shared00() {
-	svc := batch.New(session.New())
-	input := &batch.CancelJobInput{
-		JobId:  aws.String("1d828f65-7a4d-42e8-996d-3b900ed59dc4"),
-		Reason: aws.String("Cancelling job."),
-	}
-
-	result, err := svc.CancelJob(input)
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case batch.ErrCodeClientException:
-				fmt.Println(batch.ErrCodeClientException, aerr.Error())
-			case batch.ErrCodeServerException:
-				fmt.Println(batch.ErrCodeServerException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
 		return
 	}
 
-	fmt.Println(result)
+	// Pretty-print the response data.
+	fmt.Println(resp)
 }
 
-// To create a managed EC2 compute environment
-//
-// This example creates a managed compute environment with specific C4 instance types
-// that are launched on demand. The compute environment is called C4OnDemand.
-func ExampleBatch_CreateComputeEnvironment_shared00() {
-	svc := batch.New(session.New())
-	input := &batch.CreateComputeEnvironmentInput{
-		ComputeEnvironmentName: aws.String("C4OnDemand"),
+func ExampleBatch_CreateComputeEnvironment() {
+	sess := session.Must(session.NewSession())
+
+	svc := batch.New(sess)
+
+	params := &batch.CreateComputeEnvironmentInput{
+		ComputeEnvironmentName: aws.String("String"), // Required
+		ServiceRole:            aws.String("String"), // Required
+		Type:                   aws.String("CEType"), // Required
 		ComputeResources: &batch.ComputeResource{
-			DesiredvCpus: aws.Int64(48),
-			Ec2KeyPair:   aws.String("id_rsa"),
-			InstanceRole: aws.String("ecsInstanceRole"),
-			InstanceTypes: []*string{
-				aws.String("c4.large"),
-				aws.String("c4.xlarge"),
-				aws.String("c4.2xlarge"),
-				aws.String("c4.4xlarge"),
-				aws.String("c4.8xlarge"),
+			InstanceRole: aws.String("String"), // Required
+			InstanceTypes: []*string{ // Required
+				aws.String("String"), // Required
+				// More values...
 			},
-			MaxvCpus: aws.Int64(128),
-			MinvCpus: aws.Int64(0),
-			SecurityGroupIds: []*string{
-				aws.String("sg-cf5093b2"),
+			MaxvCpus: aws.Int64(1), // Required
+			MinvCpus: aws.Int64(1), // Required
+			SecurityGroupIds: []*string{ // Required
+				aws.String("String"), // Required
+				// More values...
 			},
-			Subnets: []*string{
-				aws.String("subnet-220c0e0a"),
-				aws.String("subnet-1a95556d"),
-				aws.String("subnet-978f6dce"),
+			Subnets: []*string{ // Required
+				aws.String("String"), // Required
+				// More values...
 			},
+			Type:             aws.String("CRType"), // Required
+			BidPercentage:    aws.Int64(1),
+			DesiredvCpus:     aws.Int64(1),
+			Ec2KeyPair:       aws.String("String"),
+			ImageId:          aws.String("String"),
+			SpotIamFleetRole: aws.String("String"),
 			Tags: map[string]*string{
-				"Name": aws.String("Batch Instance - C4OnDemand"),
-			},
-			Type: aws.String("EC2"),
-		},
-		ServiceRole: aws.String("arn:aws:iam::012345678910:role/AWSBatchServiceRole"),
-		State:       aws.String("ENABLED"),
-		Type:        aws.String("MANAGED"),
-	}
-
-	result, err := svc.CreateComputeEnvironment(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case batch.ErrCodeClientException:
-				fmt.Println(batch.ErrCodeClientException, aerr.Error())
-			case batch.ErrCodeServerException:
-				fmt.Println(batch.ErrCodeServerException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-		return
-	}
-
-	fmt.Println(result)
-}
-
-// To create a managed EC2 Spot compute environment
-//
-// This example creates a managed compute environment with the M4 instance type that
-// is launched when the Spot bid price is at or below 20% of the On-Demand price for
-// the instance type. The compute environment is called M4Spot.
-func ExampleBatch_CreateComputeEnvironment_shared01() {
-	svc := batch.New(session.New())
-	input := &batch.CreateComputeEnvironmentInput{
-		ComputeEnvironmentName: aws.String("M4Spot"),
-		ComputeResources: &batch.ComputeResource{
-			BidPercentage: aws.Int64(20),
-			DesiredvCpus:  aws.Int64(4),
-			Ec2KeyPair:    aws.String("id_rsa"),
-			InstanceRole:  aws.String("ecsInstanceRole"),
-			InstanceTypes: []*string{
-				aws.String("m4"),
-			},
-			MaxvCpus: aws.Int64(128),
-			MinvCpus: aws.Int64(0),
-			SecurityGroupIds: []*string{
-				aws.String("sg-cf5093b2"),
-			},
-			SpotIamFleetRole: aws.String("arn:aws:iam::012345678910:role/aws-ec2-spot-fleet-role"),
-			Subnets: []*string{
-				aws.String("subnet-220c0e0a"),
-				aws.String("subnet-1a95556d"),
-				aws.String("subnet-978f6dce"),
-			},
-			Tags: map[string]*string{
-				"Name": aws.String("Batch Instance - M4Spot"),
-			},
-			Type: aws.String("SPOT"),
-		},
-		ServiceRole: aws.String("arn:aws:iam::012345678910:role/AWSBatchServiceRole"),
-		State:       aws.String("ENABLED"),
-		Type:        aws.String("MANAGED"),
-	}
-
-	result, err := svc.CreateComputeEnvironment(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case batch.ErrCodeClientException:
-				fmt.Println(batch.ErrCodeClientException, aerr.Error())
-			case batch.ErrCodeServerException:
-				fmt.Println(batch.ErrCodeServerException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-		return
-	}
-
-	fmt.Println(result)
-}
-
-// To create a job queue with a single compute environment
-//
-// This example creates a job queue called LowPriority that uses the M4Spot compute
-// environment.
-func ExampleBatch_CreateJobQueue_shared00() {
-	svc := batch.New(session.New())
-	input := &batch.CreateJobQueueInput{
-		ComputeEnvironmentOrder: []*batch.ComputeEnvironmentOrder{
-			{
-				ComputeEnvironment: aws.String("M4Spot"),
-				Order:              aws.Int64(1),
+				"Key": aws.String("String"), // Required
+				// More values...
 			},
 		},
-		JobQueueName: aws.String("LowPriority"),
-		Priority:     aws.Int64(1),
-		State:        aws.String("ENABLED"),
+		State: aws.String("CEState"),
 	}
+	resp, err := svc.CreateComputeEnvironment(params)
 
-	result, err := svc.CreateJobQueue(input)
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case batch.ErrCodeClientException:
-				fmt.Println(batch.ErrCodeClientException, aerr.Error())
-			case batch.ErrCodeServerException:
-				fmt.Println(batch.ErrCodeServerException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
 		return
 	}
 
-	fmt.Println(result)
+	// Pretty-print the response data.
+	fmt.Println(resp)
 }
 
-// To create a job queue with multiple compute environments
-//
-// This example creates a job queue called HighPriority that uses the C4OnDemand compute
-// environment with an order of 1 and the M4Spot compute environment with an order of
-// 2.
-func ExampleBatch_CreateJobQueue_shared01() {
-	svc := batch.New(session.New())
-	input := &batch.CreateJobQueueInput{
-		ComputeEnvironmentOrder: []*batch.ComputeEnvironmentOrder{
-			{
-				ComputeEnvironment: aws.String("C4OnDemand"),
-				Order:              aws.Int64(1),
+func ExampleBatch_CreateJobQueue() {
+	sess := session.Must(session.NewSession())
+
+	svc := batch.New(sess)
+
+	params := &batch.CreateJobQueueInput{
+		ComputeEnvironmentOrder: []*batch.ComputeEnvironmentOrder{ // Required
+			{ // Required
+				ComputeEnvironment: aws.String("String"), // Required
+				Order:              aws.Int64(1),         // Required
 			},
-			{
-				ComputeEnvironment: aws.String("M4Spot"),
-				Order:              aws.Int64(2),
-			},
+			// More values...
 		},
-		JobQueueName: aws.String("HighPriority"),
-		Priority:     aws.Int64(10),
-		State:        aws.String("ENABLED"),
+		JobQueueName: aws.String("String"), // Required
+		Priority:     aws.Int64(1),         // Required
+		State:        aws.String("JQState"),
 	}
+	resp, err := svc.CreateJobQueue(params)
 
-	result, err := svc.CreateJobQueue(input)
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case batch.ErrCodeClientException:
-				fmt.Println(batch.ErrCodeClientException, aerr.Error())
-			case batch.ErrCodeServerException:
-				fmt.Println(batch.ErrCodeServerException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
 		return
 	}
 
-	fmt.Println(result)
+	// Pretty-print the response data.
+	fmt.Println(resp)
 }
 
-// To delete a compute environment
-//
-// This example deletes the P2OnDemand compute environment.
-func ExampleBatch_DeleteComputeEnvironment_shared00() {
-	svc := batch.New(session.New())
-	input := &batch.DeleteComputeEnvironmentInput{
-		ComputeEnvironment: aws.String("P2OnDemand"),
-	}
+func ExampleBatch_DeleteComputeEnvironment() {
+	sess := session.Must(session.NewSession())
 
-	result, err := svc.DeleteComputeEnvironment(input)
+	svc := batch.New(sess)
+
+	params := &batch.DeleteComputeEnvironmentInput{
+		ComputeEnvironment: aws.String("String"), // Required
+	}
+	resp, err := svc.DeleteComputeEnvironment(params)
+
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case batch.ErrCodeClientException:
-				fmt.Println(batch.ErrCodeClientException, aerr.Error())
-			case batch.ErrCodeServerException:
-				fmt.Println(batch.ErrCodeServerException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
 		return
 	}
 
-	fmt.Println(result)
+	// Pretty-print the response data.
+	fmt.Println(resp)
 }
 
-// To delete a job queue
-//
-// This example deletes the GPGPU job queue.
-func ExampleBatch_DeleteJobQueue_shared00() {
-	svc := batch.New(session.New())
-	input := &batch.DeleteJobQueueInput{
-		JobQueue: aws.String("GPGPU"),
-	}
+func ExampleBatch_DeleteJobQueue() {
+	sess := session.Must(session.NewSession())
 
-	result, err := svc.DeleteJobQueue(input)
+	svc := batch.New(sess)
+
+	params := &batch.DeleteJobQueueInput{
+		JobQueue: aws.String("String"), // Required
+	}
+	resp, err := svc.DeleteJobQueue(params)
+
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case batch.ErrCodeClientException:
-				fmt.Println(batch.ErrCodeClientException, aerr.Error())
-			case batch.ErrCodeServerException:
-				fmt.Println(batch.ErrCodeServerException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
 		return
 	}
 
-	fmt.Println(result)
+	// Pretty-print the response data.
+	fmt.Println(resp)
 }
 
-// To deregister a job definition
-//
-// This example deregisters a job definition called sleep10.
-func ExampleBatch_DeregisterJobDefinition_shared00() {
-	svc := batch.New(session.New())
-	input := &batch.DeregisterJobDefinitionInput{
-		JobDefinition: aws.String("sleep10"),
-	}
+func ExampleBatch_DeregisterJobDefinition() {
+	sess := session.Must(session.NewSession())
 
-	result, err := svc.DeregisterJobDefinition(input)
+	svc := batch.New(sess)
+
+	params := &batch.DeregisterJobDefinitionInput{
+		JobDefinition: aws.String("String"), // Required
+	}
+	resp, err := svc.DeregisterJobDefinition(params)
+
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case batch.ErrCodeClientException:
-				fmt.Println(batch.ErrCodeClientException, aerr.Error())
-			case batch.ErrCodeServerException:
-				fmt.Println(batch.ErrCodeServerException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
 		return
 	}
 
-	fmt.Println(result)
+	// Pretty-print the response data.
+	fmt.Println(resp)
 }
 
-// To describe a compute environment
-//
-// This example describes the P2OnDemand compute environment.
-func ExampleBatch_DescribeComputeEnvironments_shared00() {
-	svc := batch.New(session.New())
-	input := &batch.DescribeComputeEnvironmentsInput{
+func ExampleBatch_DescribeComputeEnvironments() {
+	sess := session.Must(session.NewSession())
+
+	svc := batch.New(sess)
+
+	params := &batch.DescribeComputeEnvironmentsInput{
 		ComputeEnvironments: []*string{
-			aws.String("P2OnDemand"),
+			aws.String("String"), // Required
+			// More values...
 		},
+		MaxResults: aws.Int64(1),
+		NextToken:  aws.String("String"),
 	}
+	resp, err := svc.DescribeComputeEnvironments(params)
 
-	result, err := svc.DescribeComputeEnvironments(input)
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case batch.ErrCodeClientException:
-				fmt.Println(batch.ErrCodeClientException, aerr.Error())
-			case batch.ErrCodeServerException:
-				fmt.Println(batch.ErrCodeServerException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
 		return
 	}
 
-	fmt.Println(result)
+	// Pretty-print the response data.
+	fmt.Println(resp)
 }
 
-// To describe active job definitions
-//
-// This example describes all of your active job definitions.
-func ExampleBatch_DescribeJobDefinitions_shared00() {
-	svc := batch.New(session.New())
-	input := &batch.DescribeJobDefinitionsInput{
-		Status: aws.String("ACTIVE"),
-	}
+func ExampleBatch_DescribeJobDefinitions() {
+	sess := session.Must(session.NewSession())
 
-	result, err := svc.DescribeJobDefinitions(input)
+	svc := batch.New(sess)
+
+	params := &batch.DescribeJobDefinitionsInput{
+		JobDefinitionName: aws.String("String"),
+		JobDefinitions: []*string{
+			aws.String("String"), // Required
+			// More values...
+		},
+		MaxResults: aws.Int64(1),
+		NextToken:  aws.String("String"),
+		Status:     aws.String("String"),
+	}
+	resp, err := svc.DescribeJobDefinitions(params)
+
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case batch.ErrCodeClientException:
-				fmt.Println(batch.ErrCodeClientException, aerr.Error())
-			case batch.ErrCodeServerException:
-				fmt.Println(batch.ErrCodeServerException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
 		return
 	}
 
-	fmt.Println(result)
+	// Pretty-print the response data.
+	fmt.Println(resp)
 }
 
-// To describe a job queue
-//
-// This example describes the HighPriority job queue.
-func ExampleBatch_DescribeJobQueues_shared00() {
-	svc := batch.New(session.New())
-	input := &batch.DescribeJobQueuesInput{
+func ExampleBatch_DescribeJobQueues() {
+	sess := session.Must(session.NewSession())
+
+	svc := batch.New(sess)
+
+	params := &batch.DescribeJobQueuesInput{
 		JobQueues: []*string{
-			aws.String("HighPriority"),
+			aws.String("String"), // Required
+			// More values...
+		},
+		MaxResults: aws.Int64(1),
+		NextToken:  aws.String("String"),
+	}
+	resp, err := svc.DescribeJobQueues(params)
+
+	if err != nil {
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
+		return
+	}
+
+	// Pretty-print the response data.
+	fmt.Println(resp)
+}
+
+func ExampleBatch_DescribeJobs() {
+	sess := session.Must(session.NewSession())
+
+	svc := batch.New(sess)
+
+	params := &batch.DescribeJobsInput{
+		Jobs: []*string{ // Required
+			aws.String("String"), // Required
+			// More values...
 		},
 	}
+	resp, err := svc.DescribeJobs(params)
 
-	result, err := svc.DescribeJobQueues(input)
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case batch.ErrCodeClientException:
-				fmt.Println(batch.ErrCodeClientException, aerr.Error())
-			case batch.ErrCodeServerException:
-				fmt.Println(batch.ErrCodeServerException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
 		return
 	}
 
-	fmt.Println(result)
+	// Pretty-print the response data.
+	fmt.Println(resp)
 }
 
-// To describe a specific job
-//
-// This example describes a job with the specified job ID.
-func ExampleBatch_DescribeJobs_shared00() {
-	svc := batch.New(session.New())
-	input := &batch.DescribeJobsInput{
-		Jobs: []*string{
-			aws.String("24fa2d7a-64c4-49d2-8b47-f8da4fbde8e9"),
-		},
-	}
+func ExampleBatch_ListJobs() {
+	sess := session.Must(session.NewSession())
 
-	result, err := svc.DescribeJobs(input)
+	svc := batch.New(sess)
+
+	params := &batch.ListJobsInput{
+		JobQueue:   aws.String("String"), // Required
+		JobStatus:  aws.String("JobStatus"),
+		MaxResults: aws.Int64(1),
+		NextToken:  aws.String("String"),
+	}
+	resp, err := svc.ListJobs(params)
+
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case batch.ErrCodeClientException:
-				fmt.Println(batch.ErrCodeClientException, aerr.Error())
-			case batch.ErrCodeServerException:
-				fmt.Println(batch.ErrCodeServerException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
 		return
 	}
 
-	fmt.Println(result)
+	// Pretty-print the response data.
+	fmt.Println(resp)
 }
 
-// To list running jobs
-//
-// This example lists the running jobs in the HighPriority job queue.
-func ExampleBatch_ListJobs_shared00() {
-	svc := batch.New(session.New())
-	input := &batch.ListJobsInput{
-		JobQueue: aws.String("HighPriority"),
-	}
+func ExampleBatch_RegisterJobDefinition() {
+	sess := session.Must(session.NewSession())
 
-	result, err := svc.ListJobs(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case batch.ErrCodeClientException:
-				fmt.Println(batch.ErrCodeClientException, aerr.Error())
-			case batch.ErrCodeServerException:
-				fmt.Println(batch.ErrCodeServerException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-		return
-	}
+	svc := batch.New(sess)
 
-	fmt.Println(result)
-}
-
-// To list submitted jobs
-//
-// This example lists jobs in the HighPriority job queue that are in the SUBMITTED job
-// status.
-func ExampleBatch_ListJobs_shared01() {
-	svc := batch.New(session.New())
-	input := &batch.ListJobsInput{
-		JobQueue:  aws.String("HighPriority"),
-		JobStatus: aws.String("SUBMITTED"),
-	}
-
-	result, err := svc.ListJobs(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case batch.ErrCodeClientException:
-				fmt.Println(batch.ErrCodeClientException, aerr.Error())
-			case batch.ErrCodeServerException:
-				fmt.Println(batch.ErrCodeServerException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-		return
-	}
-
-	fmt.Println(result)
-}
-
-// To register a job definition
-//
-// This example registers a job definition for a simple container job.
-func ExampleBatch_RegisterJobDefinition_shared00() {
-	svc := batch.New(session.New())
-	input := &batch.RegisterJobDefinitionInput{
+	params := &batch.RegisterJobDefinitionInput{
+		JobDefinitionName: aws.String("String"),            // Required
+		Type:              aws.String("JobDefinitionType"), // Required
 		ContainerProperties: &batch.ContainerProperties{
+			Image:  aws.String("String"), // Required
+			Memory: aws.Int64(1),         // Required
+			Vcpus:  aws.Int64(1),         // Required
 			Command: []*string{
-				aws.String("sleep"),
-				aws.String("10"),
+				aws.String("String"), // Required
+				// More values...
 			},
-			Image:  aws.String("busybox"),
-			Memory: aws.Int64(128),
+			Environment: []*batch.KeyValuePair{
+				{ // Required
+					Name:  aws.String("String"),
+					Value: aws.String("String"),
+				},
+				// More values...
+			},
+			JobRoleArn: aws.String("String"),
+			MountPoints: []*batch.MountPoint{
+				{ // Required
+					ContainerPath: aws.String("String"),
+					ReadOnly:      aws.Bool(true),
+					SourceVolume:  aws.String("String"),
+				},
+				// More values...
+			},
+			Privileged:             aws.Bool(true),
+			ReadonlyRootFilesystem: aws.Bool(true),
+			Ulimits: []*batch.Ulimit{
+				{ // Required
+					HardLimit: aws.Int64(1),         // Required
+					Name:      aws.String("String"), // Required
+					SoftLimit: aws.Int64(1),         // Required
+				},
+				// More values...
+			},
+			User: aws.String("String"),
+			Volumes: []*batch.Volume{
+				{ // Required
+					Host: &batch.Host{
+						SourcePath: aws.String("String"),
+					},
+					Name: aws.String("String"),
+				},
+				// More values...
+			},
+		},
+		Parameters: map[string]*string{
+			"Key": aws.String("String"), // Required
+			// More values...
+		},
+		RetryStrategy: &batch.RetryStrategy{
+			Attempts: aws.Int64(1),
+		},
+	}
+	resp, err := svc.RegisterJobDefinition(params)
+
+	if err != nil {
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
+		return
+	}
+
+	// Pretty-print the response data.
+	fmt.Println(resp)
+}
+
+func ExampleBatch_SubmitJob() {
+	sess := session.Must(session.NewSession())
+
+	svc := batch.New(sess)
+
+	params := &batch.SubmitJobInput{
+		JobDefinition: aws.String("String"), // Required
+		JobName:       aws.String("String"), // Required
+		JobQueue:      aws.String("String"), // Required
+		ContainerOverrides: &batch.ContainerOverrides{
+			Command: []*string{
+				aws.String("String"), // Required
+				// More values...
+			},
+			Environment: []*batch.KeyValuePair{
+				{ // Required
+					Name:  aws.String("String"),
+					Value: aws.String("String"),
+				},
+				// More values...
+			},
+			Memory: aws.Int64(1),
 			Vcpus:  aws.Int64(1),
 		},
-		JobDefinitionName: aws.String("sleep10"),
-		Type:              aws.String("container"),
+		DependsOn: []*batch.JobDependency{
+			{ // Required
+				JobId: aws.String("String"),
+			},
+			// More values...
+		},
+		Parameters: map[string]*string{
+			"Key": aws.String("String"), // Required
+			// More values...
+		},
+		RetryStrategy: &batch.RetryStrategy{
+			Attempts: aws.Int64(1),
+		},
 	}
+	resp, err := svc.SubmitJob(params)
 
-	result, err := svc.RegisterJobDefinition(input)
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case batch.ErrCodeClientException:
-				fmt.Println(batch.ErrCodeClientException, aerr.Error())
-			case batch.ErrCodeServerException:
-				fmt.Println(batch.ErrCodeServerException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
 		return
 	}
 
-	fmt.Println(result)
+	// Pretty-print the response data.
+	fmt.Println(resp)
 }
 
-// To submit a job to a queue
-//
-// This example submits a simple container job called example to the HighPriority job
-// queue.
-func ExampleBatch_SubmitJob_shared00() {
-	svc := batch.New(session.New())
-	input := &batch.SubmitJobInput{
-		JobDefinition: aws.String("sleep60"),
-		JobName:       aws.String("example"),
-		JobQueue:      aws.String("HighPriority"),
-	}
+func ExampleBatch_TerminateJob() {
+	sess := session.Must(session.NewSession())
 
-	result, err := svc.SubmitJob(input)
+	svc := batch.New(sess)
+
+	params := &batch.TerminateJobInput{
+		JobId:  aws.String("String"), // Required
+		Reason: aws.String("String"), // Required
+	}
+	resp, err := svc.TerminateJob(params)
+
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case batch.ErrCodeClientException:
-				fmt.Println(batch.ErrCodeClientException, aerr.Error())
-			case batch.ErrCodeServerException:
-				fmt.Println(batch.ErrCodeServerException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
 		return
 	}
 
-	fmt.Println(result)
+	// Pretty-print the response data.
+	fmt.Println(resp)
 }
 
-// To terminate a job
-//
-// This example terminates a job with the specified job ID.
-func ExampleBatch_TerminateJob_shared00() {
-	svc := batch.New(session.New())
-	input := &batch.TerminateJobInput{
-		JobId:  aws.String("61e743ed-35e4-48da-b2de-5c8333821c84"),
-		Reason: aws.String("Terminating job."),
-	}
+func ExampleBatch_UpdateComputeEnvironment() {
+	sess := session.Must(session.NewSession())
 
-	result, err := svc.TerminateJob(input)
+	svc := batch.New(sess)
+
+	params := &batch.UpdateComputeEnvironmentInput{
+		ComputeEnvironment: aws.String("String"), // Required
+		ComputeResources: &batch.ComputeResourceUpdate{
+			DesiredvCpus: aws.Int64(1),
+			MaxvCpus:     aws.Int64(1),
+			MinvCpus:     aws.Int64(1),
+		},
+		ServiceRole: aws.String("String"),
+		State:       aws.String("CEState"),
+	}
+	resp, err := svc.UpdateComputeEnvironment(params)
+
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case batch.ErrCodeClientException:
-				fmt.Println(batch.ErrCodeClientException, aerr.Error())
-			case batch.ErrCodeServerException:
-				fmt.Println(batch.ErrCodeServerException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
 		return
 	}
 
-	fmt.Println(result)
+	// Pretty-print the response data.
+	fmt.Println(resp)
 }
 
-// To update a compute environment
-//
-// This example disables the P2OnDemand compute environment so it can be deleted.
-func ExampleBatch_UpdateComputeEnvironment_shared00() {
-	svc := batch.New(session.New())
-	input := &batch.UpdateComputeEnvironmentInput{
-		ComputeEnvironment: aws.String("P2OnDemand"),
-		State:              aws.String("DISABLED"),
-	}
+func ExampleBatch_UpdateJobQueue() {
+	sess := session.Must(session.NewSession())
 
-	result, err := svc.UpdateComputeEnvironment(input)
+	svc := batch.New(sess)
+
+	params := &batch.UpdateJobQueueInput{
+		JobQueue: aws.String("String"), // Required
+		ComputeEnvironmentOrder: []*batch.ComputeEnvironmentOrder{
+			{ // Required
+				ComputeEnvironment: aws.String("String"), // Required
+				Order:              aws.Int64(1),         // Required
+			},
+			// More values...
+		},
+		Priority: aws.Int64(1),
+		State:    aws.String("JQState"),
+	}
+	resp, err := svc.UpdateJobQueue(params)
+
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case batch.ErrCodeClientException:
-				fmt.Println(batch.ErrCodeClientException, aerr.Error())
-			case batch.ErrCodeServerException:
-				fmt.Println(batch.ErrCodeServerException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
 		return
 	}
 
-	fmt.Println(result)
-}
-
-// To update a job queue
-//
-// This example disables a job queue so that it can be deleted.
-func ExampleBatch_UpdateJobQueue_shared00() {
-	svc := batch.New(session.New())
-	input := &batch.UpdateJobQueueInput{
-		JobQueue: aws.String("GPGPU"),
-		State:    aws.String("DISABLED"),
-	}
-
-	result, err := svc.UpdateJobQueue(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case batch.ErrCodeClientException:
-				fmt.Println(batch.ErrCodeClientException, aerr.Error())
-			case batch.ErrCodeServerException:
-				fmt.Println(batch.ErrCodeServerException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
-		return
-	}
-
-	fmt.Println(result)
+	// Pretty-print the response data.
+	fmt.Println(resp)
 }

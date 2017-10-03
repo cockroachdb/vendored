@@ -14,18 +14,19 @@ const opBatchGetTraces = "BatchGetTraces"
 
 // BatchGetTracesRequest generates a "aws/request.Request" representing the
 // client's request for the BatchGetTraces operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See BatchGetTraces for usage and error information.
 //
-// See BatchGetTraces for more information on using the BatchGetTraces
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the BatchGetTraces method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the BatchGetTracesRequest method.
 //    req, resp := client.BatchGetTracesRequest(params)
@@ -98,18 +99,19 @@ const opGetServiceGraph = "GetServiceGraph"
 
 // GetServiceGraphRequest generates a "aws/request.Request" representing the
 // client's request for the GetServiceGraph operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See GetServiceGraph for usage and error information.
 //
-// See GetServiceGraph for more information on using the GetServiceGraph
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the GetServiceGraph method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the GetServiceGraphRequest method.
 //    req, resp := client.GetServiceGraphRequest(params)
@@ -184,18 +186,19 @@ const opGetTraceGraph = "GetTraceGraph"
 
 // GetTraceGraphRequest generates a "aws/request.Request" representing the
 // client's request for the GetTraceGraph operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See GetTraceGraph for usage and error information.
 //
-// See GetTraceGraph for more information on using the GetTraceGraph
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the GetTraceGraph method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the GetTraceGraphRequest method.
 //    req, resp := client.GetTraceGraphRequest(params)
@@ -266,18 +269,19 @@ const opGetTraceSummaries = "GetTraceSummaries"
 
 // GetTraceSummariesRequest generates a "aws/request.Request" representing the
 // client's request for the GetTraceSummaries operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See GetTraceSummaries for usage and error information.
 //
-// See GetTraceSummaries for more information on using the GetTraceSummaries
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the GetTraceSummaries method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the GetTraceSummariesRequest method.
 //    req, resp := client.GetTraceSummariesRequest(params)
@@ -308,21 +312,6 @@ func (c *XRay) GetTraceSummariesRequest(input *GetTraceSummariesInput) (req *req
 //
 // Retrieves IDs and metadata for traces available for a specified time frame
 // using an optional filter. To get the full traces, pass the trace IDs to BatchGetTraces.
-//
-// A filter expression can target traced requests that hit specific service
-// nodes or edges, have errors, or come from a known user. For example, the
-// following filter expression targets traces that pass through api.example.com:
-//
-// service("api.example.com")
-//
-// This filter expression finds traces that have an annotation named account
-// with the value 12345:
-//
-// annotation.account = "12345"
-//
-// For a full list of indexed fields and keywords that you can use in filter
-// expressions, see Using Filter Expressions (http://docs.aws.amazon.com/xray/latest/devguide/xray-console-filters.html)
-// in the AWS X-Ray Developer Guide.
 //
 // Returns awserr.Error for service API and SDK errors. Use runtime type assertions
 // with awserr.Error's Code and Message methods to get detailed information about
@@ -364,18 +353,19 @@ const opPutTelemetryRecords = "PutTelemetryRecords"
 
 // PutTelemetryRecordsRequest generates a "aws/request.Request" representing the
 // client's request for the PutTelemetryRecords operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See PutTelemetryRecords for usage and error information.
 //
-// See PutTelemetryRecords for more information on using the PutTelemetryRecords
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the PutTelemetryRecords method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the PutTelemetryRecordsRequest method.
 //    req, resp := client.PutTelemetryRecordsRequest(params)
@@ -446,18 +436,19 @@ const opPutTraceSegments = "PutTraceSegments"
 
 // PutTraceSegmentsRequest generates a "aws/request.Request" representing the
 // client's request for the PutTraceSegments operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See PutTraceSegments for usage and error information.
 //
-// See PutTraceSegments for more information on using the PutTraceSegments
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the PutTraceSegments method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the PutTraceSegmentsRequest method.
 //    req, resp := client.PutTraceSegmentsRequest(params)
@@ -490,48 +481,6 @@ func (c *XRay) PutTraceSegmentsRequest(input *PutTraceSegmentsInput) (req *reque
 // and sends them to the X-Ray daemon, which uploads them in batches. A segment
 // document can be a completed segment, an in-progress segment, or an array
 // of subsegments.
-//
-// Segments must include the following fields. For the full segment document
-// schema, see AWS X-Ray Segment Documents (http://docs.aws.amazon.com/xray/latest/devguide/xray-api-segmentdocuments.html)
-// in the AWS X-Ray Developer Guide.
-//
-// Required Segment Document Fields
-//
-//    * name - The name of the service that handled the request.
-//
-//    * id - A 64-bit identifier for the segment, unique among segments in the
-//    same trace, in 16 hexadecimal digits.
-//
-//    * trace_id - A unique identifier that connects all segments and subsegments
-//    originating from a single client request.
-//
-//    * start_time - Time the segment or subsegment was created, in floating
-//    point seconds in epoch time, accurate to milliseconds. For example, 1480615200.010
-//    or 1.480615200010E9.
-//
-//    * end_time - Time the segment or subsegment was closed. For example, 1480615200.090
-//    or 1.480615200090E9. Specify either an end_time or in_progress.
-//
-//    * in_progress - Set to true instead of specifying an end_time to record
-//    that a segment has been started, but is not complete. Send an in progress
-//    segment when your application receives a request that will take a long
-//    time to serve, to trace the fact that the request was received. When the
-//    response is sent, send the complete segment to overwrite the in-progress
-//    segment.
-//
-// A trace_id consists of three numbers separated by hyphens. For example, 1-58406520-a006649127e371903a2de979.
-// This includes:
-//
-// Trace ID Format
-//
-//    * The version number, i.e. 1.
-//
-//    * The time of the original request, in Unix epoch time, in 8 hexadecimal
-//    digits. For example, 10:00AM December 2nd, 2016 PST in epoch time is 1480615200
-//    seconds, or 58406520 in hexadecimal.
-//
-//    * A 96-bit identifier for the trace, globally unique, in 24 hexadecimal
-//    digits.
 //
 // Returns awserr.Error for service API and SDK errors. Use runtime type assertions
 // with awserr.Error's Code and Message methods to get detailed information about
@@ -823,7 +772,7 @@ type Edge struct {
 	// Identifier of the edge. Unique within a service map.
 	ReferenceId *int64 `type:"integer"`
 
-	// A histogram that maps the spread of client response times on an edge.
+	// Histogram describing the prominence of response times on the edge.
 	ResponseTimeHistogram []*HistogramEntry `type:"list"`
 
 	// The start time of the first segment on the edge.
@@ -1525,7 +1474,46 @@ func (s PutTelemetryRecordsOutput) GoString() string {
 type PutTraceSegmentsInput struct {
 	_ struct{} `type:"structure"`
 
-	// A string containing a JSON document defining one or more segments or subsegments.
+	// A JSON document defining one or more segments or subsegments. Segments must
+	// include the following fields.
+	//
+	// Required Segment Document Fields
+	//
+	//    * name - The name of the service that handled the request.
+	//
+	//    * id - A 64-bit identifier for the segment, unique among segments in the
+	//    same trace, in 16 hexadecimal digits.
+	//
+	//    * trace_id - A unique identifier that connects all segments and subsegments
+	//    originating from a single client request.
+	//
+	//    * start_time - Time the segment or subsegment was created, in floating
+	//    point seconds in epoch time, accurate to milliseconds. For example, 1480615200.010
+	//    or 1.480615200010E9.
+	//
+	//    * end_time - Time the segment or subsegment was closed. For example, 1480615200.090
+	//    or 1.480615200090E9. Specify either an end_time or in_progress.
+	//
+	//    * in_progress - Set to true instead of specifying an end_time to record
+	//    that a segment has been started, but is not complete. Send an in progress
+	//    segment when your application receives a request that will take a long
+	//    time to serve, to trace the fact that the request was received. When the
+	//    response is sent, send the complete segment to overwrite the in-progress
+	//    segment.
+	//
+	// A trace_id consists of three numbers separated by hyphens. For example, 1-58406520-a006649127e371903a2de979.
+	// This includes:
+	//
+	// Trace ID Format
+	//
+	//    * The version number, i.e. 1.
+	//
+	//    * The time of the original request, in Unix epoch time, in 8 hexadecimal
+	//    digits. For example, 10:00AM December 2nd, 2016 PST in epoch time is 1480615200
+	//    seconds, or 58406520 in hexadecimal.
+	//
+	//    * A 96-bit identifier for the trace, globally unique, in 24 hexadecimal
+	//    digits.
 	//
 	// TraceSegmentDocuments is a required field
 	TraceSegmentDocuments []*string `type:"list" required:"true"`
@@ -1584,15 +1572,12 @@ func (s *PutTraceSegmentsOutput) SetUnprocessedTraceSegments(v []*UnprocessedTra
 	return s
 }
 
-// A segment from a trace that has been ingested by the X-Ray service. The segment
-// can be compiled from documents uploaded with PutTraceSegments, or an inferred
-// segment for a downstream service, generated from a subsegment sent by the
-// service that called it.
+// Information about a segment
 // Please also see https://docs.aws.amazon.com/goto/WebAPI/xray-2016-04-12/Segment
 type Segment struct {
 	_ struct{} `type:"structure"`
 
-	// The segment document
+	// The segment document.
 	Document *string `min:"1" type:"string"`
 
 	// The segment's ID.
@@ -1631,7 +1616,7 @@ type Service struct {
 	// Identifier of the AWS account in which the service runs.
 	AccountId *string `type:"string"`
 
-	// A histogram that maps the spread of service durations.
+	// Histogram mapping the spread of trace durations
 	DurationHistogram []*HistogramEntry `type:"list"`
 
 	// Connections to downstream services.
@@ -1648,9 +1633,6 @@ type Service struct {
 
 	// Identifier for the service. Unique within the service map.
 	ReferenceId *int64 `type:"integer"`
-
-	// A histogram that maps the spread of service response times.
-	ResponseTimeHistogram []*HistogramEntry `type:"list"`
 
 	// Indicates that the service was the first service to process a request.
 	Root *bool `type:"boolean"`
@@ -1729,12 +1711,6 @@ func (s *Service) SetNames(v []*string) *Service {
 // SetReferenceId sets the ReferenceId field's value.
 func (s *Service) SetReferenceId(v int64) *Service {
 	s.ReferenceId = &v
-	return s
-}
-
-// SetResponseTimeHistogram sets the ResponseTimeHistogram field's value.
-func (s *Service) SetResponseTimeHistogram(v []*HistogramEntry) *Service {
-	s.ResponseTimeHistogram = v
 	return s
 }
 

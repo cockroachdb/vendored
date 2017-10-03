@@ -97,12 +97,6 @@ func logResponse(r *request.Request) {
 		}
 	}
 
-	const handlerName = "awsdk.client.LogResponse.ResponseBody"
-
-	r.Handlers.Unmarshal.SetBackNamed(request.NamedHandler{
-		Name: handlerName, Fn: handlerFn,
-	})
-	r.Handlers.UnmarshalError.SetBackNamed(request.NamedHandler{
-		Name: handlerName, Fn: handlerFn,
-	})
+	r.Handlers.Unmarshal.PushBack(handlerFn)
+	r.Handlers.UnmarshalError.PushBack(handlerFn)
 }

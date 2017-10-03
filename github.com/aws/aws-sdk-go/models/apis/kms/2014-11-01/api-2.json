@@ -1122,13 +1122,6 @@
         "KeyArn":{"shape":"ArnType"}
       }
     },
-    "KeyManagerType":{
-      "type":"string",
-      "enum":[
-        "AWS",
-        "CUSTOMER"
-      ]
-    },
     "KeyMetadata":{
       "type":"structure",
       "required":["KeyId"],
@@ -1144,8 +1137,7 @@
         "DeletionDate":{"shape":"DateType"},
         "ValidTo":{"shape":"DateType"},
         "Origin":{"shape":"OriginType"},
-        "ExpirationModel":{"shape":"ExpirationModelType"},
-        "KeyManager":{"shape":"KeyManagerType"}
+        "ExpirationModel":{"shape":"ExpirationModelType"}
       }
     },
     "KeyState":{

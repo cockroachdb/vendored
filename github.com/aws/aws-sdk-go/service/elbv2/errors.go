@@ -4,18 +4,6 @@ package elbv2
 
 const (
 
-	// ErrCodeAllocationIdNotFoundException for service response error code
-	// "AllocationIdNotFound".
-	//
-	// The specified allocation ID does not exist.
-	ErrCodeAllocationIdNotFoundException = "AllocationIdNotFound"
-
-	// ErrCodeAvailabilityZoneNotSupportedException for service response error code
-	// "AvailabilityZoneNotSupported".
-	//
-	// The specified Availability Zone is not supported.
-	ErrCodeAvailabilityZoneNotSupportedException = "AvailabilityZoneNotSupported"
-
 	// ErrCodeCertificateNotFoundException for service response error code
 	// "CertificateNotFound".
 	//

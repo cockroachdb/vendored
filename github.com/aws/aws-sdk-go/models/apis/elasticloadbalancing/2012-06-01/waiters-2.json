@@ -39,11 +39,6 @@
                     "expected":"InService",
                     "matcher":"pathAll",
                     "state":"success"
-                },
-                {
-                    "matcher": "error",
-                    "expected": "InvalidInstance",
-                    "state": "retry"
                 }
             ],
             "delay":15,

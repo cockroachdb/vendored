@@ -17,18 +17,19 @@ const opAcceptCertificateTransfer = "AcceptCertificateTransfer"
 
 // AcceptCertificateTransferRequest generates a "aws/request.Request" representing the
 // client's request for the AcceptCertificateTransfer operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See AcceptCertificateTransfer for usage and error information.
 //
-// See AcceptCertificateTransfer for more information on using the AcceptCertificateTransfer
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the AcceptCertificateTransfer method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the AcceptCertificateTransferRequest method.
 //    req, resp := client.AcceptCertificateTransferRequest(params)
@@ -118,18 +119,19 @@ const opAttachPrincipalPolicy = "AttachPrincipalPolicy"
 
 // AttachPrincipalPolicyRequest generates a "aws/request.Request" representing the
 // client's request for the AttachPrincipalPolicy operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See AttachPrincipalPolicy for usage and error information.
 //
-// See AttachPrincipalPolicy for more information on using the AttachPrincipalPolicy
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the AttachPrincipalPolicy method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the AttachPrincipalPolicyRequest method.
 //    req, resp := client.AttachPrincipalPolicyRequest(params)
@@ -215,18 +217,19 @@ const opAttachThingPrincipal = "AttachThingPrincipal"
 
 // AttachThingPrincipalRequest generates a "aws/request.Request" representing the
 // client's request for the AttachThingPrincipal operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See AttachThingPrincipal for usage and error information.
 //
-// See AttachThingPrincipal for more information on using the AttachThingPrincipal
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the AttachThingPrincipal method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the AttachThingPrincipalRequest method.
 //    req, resp := client.AttachThingPrincipalRequest(params)
@@ -306,18 +309,19 @@ const opCancelCertificateTransfer = "CancelCertificateTransfer"
 
 // CancelCertificateTransferRequest generates a "aws/request.Request" representing the
 // client's request for the CancelCertificateTransfer operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See CancelCertificateTransfer for usage and error information.
 //
-// See CancelCertificateTransfer for more information on using the CancelCertificateTransfer
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the CancelCertificateTransfer method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the CancelCertificateTransferRequest method.
 //    req, resp := client.CancelCertificateTransferRequest(params)
@@ -412,18 +416,19 @@ const opCreateCertificateFromCsr = "CreateCertificateFromCsr"
 
 // CreateCertificateFromCsrRequest generates a "aws/request.Request" representing the
 // client's request for the CreateCertificateFromCsr operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See CreateCertificateFromCsr for usage and error information.
 //
-// See CreateCertificateFromCsr for more information on using the CreateCertificateFromCsr
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the CreateCertificateFromCsr method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the CreateCertificateFromCsrRequest method.
 //    req, resp := client.CreateCertificateFromCsrRequest(params)
@@ -452,11 +457,7 @@ func (c *IoT) CreateCertificateFromCsrRequest(input *CreateCertificateFromCsrInp
 //
 // Creates an X.509 certificate using the specified certificate signing request.
 //
-// Note: The CSR must include a public key that is either an RSA key with a
-// length of at least 2048 bits or an ECC key from NIST P-256 or NIST P-384
-// curves.
-//
-// Note: Reusing the same certificate signing request (CSR) results in a distinct
+// Note Reusing the same certificate signing request (CSR) results in a distinct
 // certificate.
 //
 // You can create multiple certificates in a batch by creating a directory,
@@ -541,18 +542,19 @@ const opCreateKeysAndCertificate = "CreateKeysAndCertificate"
 
 // CreateKeysAndCertificateRequest generates a "aws/request.Request" representing the
 // client's request for the CreateKeysAndCertificate operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See CreateKeysAndCertificate for usage and error information.
 //
-// See CreateKeysAndCertificate for more information on using the CreateKeysAndCertificate
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the CreateKeysAndCertificate method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the CreateKeysAndCertificateRequest method.
 //    req, resp := client.CreateKeysAndCertificateRequest(params)
@@ -633,18 +635,19 @@ const opCreatePolicy = "CreatePolicy"
 
 // CreatePolicyRequest generates a "aws/request.Request" representing the
 // client's request for the CreatePolicy operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See CreatePolicy for usage and error information.
 //
-// See CreatePolicy for more information on using the CreatePolicy
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the CreatePolicy method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the CreatePolicyRequest method.
 //    req, resp := client.CreatePolicyRequest(params)
@@ -731,18 +734,19 @@ const opCreatePolicyVersion = "CreatePolicyVersion"
 
 // CreatePolicyVersionRequest generates a "aws/request.Request" representing the
 // client's request for the CreatePolicyVersion operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See CreatePolicyVersion for usage and error information.
 //
-// See CreatePolicyVersion for more information on using the CreatePolicyVersion
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the CreatePolicyVersion method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the CreatePolicyVersionRequest method.
 //    req, resp := client.CreatePolicyVersionRequest(params)
@@ -835,18 +839,19 @@ const opCreateThing = "CreateThing"
 
 // CreateThingRequest generates a "aws/request.Request" representing the
 // client's request for the CreateThing operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See CreateThing for usage and error information.
 //
-// See CreateThing for more information on using the CreateThing
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the CreateThing method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the CreateThingRequest method.
 //    req, resp := client.CreateThingRequest(params)
@@ -929,18 +934,19 @@ const opCreateThingType = "CreateThingType"
 
 // CreateThingTypeRequest generates a "aws/request.Request" representing the
 // client's request for the CreateThingType operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See CreateThingType for usage and error information.
 //
-// See CreateThingType for more information on using the CreateThingType
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the CreateThingType method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the CreateThingTypeRequest method.
 //    req, resp := client.CreateThingTypeRequest(params)
@@ -1020,18 +1026,19 @@ const opCreateTopicRule = "CreateTopicRule"
 
 // CreateTopicRuleRequest generates a "aws/request.Request" representing the
 // client's request for the CreateTopicRule operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See CreateTopicRule for usage and error information.
 //
-// See CreateTopicRule for more information on using the CreateTopicRule
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the CreateTopicRule method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the CreateTopicRuleRequest method.
 //    req, resp := client.CreateTopicRuleRequest(params)
@@ -1112,18 +1119,19 @@ const opDeleteCACertificate = "DeleteCACertificate"
 
 // DeleteCACertificateRequest generates a "aws/request.Request" representing the
 // client's request for the DeleteCACertificate operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See DeleteCACertificate for usage and error information.
 //
-// See DeleteCACertificate for more information on using the DeleteCACertificate
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the DeleteCACertificate method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the DeleteCACertificateRequest method.
 //    req, resp := client.DeleteCACertificateRequest(params)
@@ -1206,18 +1214,19 @@ const opDeleteCertificate = "DeleteCertificate"
 
 // DeleteCertificateRequest generates a "aws/request.Request" representing the
 // client's request for the DeleteCertificate operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See DeleteCertificate for usage and error information.
 //
-// See DeleteCertificate for more information on using the DeleteCertificate
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the DeleteCertificate method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the DeleteCertificateRequest method.
 //    req, resp := client.DeleteCertificateRequest(params)
@@ -1310,18 +1319,19 @@ const opDeletePolicy = "DeletePolicy"
 
 // DeletePolicyRequest generates a "aws/request.Request" representing the
 // client's request for the DeletePolicy operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See DeletePolicy for usage and error information.
 //
-// See DeletePolicy for more information on using the DeletePolicy
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the DeletePolicy method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the DeletePolicyRequest method.
 //    req, resp := client.DeletePolicyRequest(params)
@@ -1416,18 +1426,19 @@ const opDeletePolicyVersion = "DeletePolicyVersion"
 
 // DeletePolicyVersionRequest generates a "aws/request.Request" representing the
 // client's request for the DeletePolicyVersion operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See DeletePolicyVersion for usage and error information.
 //
-// See DeletePolicyVersion for more information on using the DeletePolicyVersion
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the DeletePolicyVersion method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the DeletePolicyVersionRequest method.
 //    req, resp := client.DeletePolicyVersionRequest(params)
@@ -1515,18 +1526,19 @@ const opDeleteRegistrationCode = "DeleteRegistrationCode"
 
 // DeleteRegistrationCodeRequest generates a "aws/request.Request" representing the
 // client's request for the DeleteRegistrationCode operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See DeleteRegistrationCode for usage and error information.
 //
-// See DeleteRegistrationCode for more information on using the DeleteRegistrationCode
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the DeleteRegistrationCode method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the DeleteRegistrationCodeRequest method.
 //    req, resp := client.DeleteRegistrationCodeRequest(params)
@@ -1603,18 +1615,19 @@ const opDeleteThing = "DeleteThing"
 
 // DeleteThingRequest generates a "aws/request.Request" representing the
 // client's request for the DeleteThing operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See DeleteThing for usage and error information.
 //
-// See DeleteThing for more information on using the DeleteThing
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the DeleteThing method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the DeleteThingRequest method.
 //    req, resp := client.DeleteThingRequest(params)
@@ -1698,18 +1711,19 @@ const opDeleteThingType = "DeleteThingType"
 
 // DeleteThingTypeRequest generates a "aws/request.Request" representing the
 // client's request for the DeleteThingType operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See DeleteThingType for usage and error information.
 //
-// See DeleteThingType for more information on using the DeleteThingType
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the DeleteThingType method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the DeleteThingTypeRequest method.
 //    req, resp := client.DeleteThingTypeRequest(params)
@@ -1793,18 +1807,19 @@ const opDeleteTopicRule = "DeleteTopicRule"
 
 // DeleteTopicRuleRequest generates a "aws/request.Request" representing the
 // client's request for the DeleteTopicRule operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See DeleteTopicRule for usage and error information.
 //
-// See DeleteTopicRule for more information on using the DeleteTopicRule
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the DeleteTopicRule method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the DeleteTopicRuleRequest method.
 //    req, resp := client.DeleteTopicRuleRequest(params)
@@ -1880,18 +1895,19 @@ const opDeprecateThingType = "DeprecateThingType"
 
 // DeprecateThingTypeRequest generates a "aws/request.Request" representing the
 // client's request for the DeprecateThingType operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See DeprecateThingType for usage and error information.
 //
-// See DeprecateThingType for more information on using the DeprecateThingType
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the DeprecateThingType method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the DeprecateThingTypeRequest method.
 //    req, resp := client.DeprecateThingTypeRequest(params)
@@ -1972,18 +1988,19 @@ const opDescribeCACertificate = "DescribeCACertificate"
 
 // DescribeCACertificateRequest generates a "aws/request.Request" representing the
 // client's request for the DescribeCACertificate operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See DescribeCACertificate for usage and error information.
 //
-// See DescribeCACertificate for more information on using the DescribeCACertificate
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the DescribeCACertificate method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the DescribeCACertificateRequest method.
 //    req, resp := client.DescribeCACertificateRequest(params)
@@ -2063,18 +2080,19 @@ const opDescribeCertificate = "DescribeCertificate"
 
 // DescribeCertificateRequest generates a "aws/request.Request" representing the
 // client's request for the DescribeCertificate operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See DescribeCertificate for usage and error information.
 //
-// See DescribeCertificate for more information on using the DescribeCertificate
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the DescribeCertificate method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the DescribeCertificateRequest method.
 //    req, resp := client.DescribeCertificateRequest(params)
@@ -2154,18 +2172,19 @@ const opDescribeEndpoint = "DescribeEndpoint"
 
 // DescribeEndpointRequest generates a "aws/request.Request" representing the
 // client's request for the DescribeEndpoint operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See DescribeEndpoint for usage and error information.
 //
-// See DescribeEndpoint for more information on using the DescribeEndpoint
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the DescribeEndpoint method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the DescribeEndpointRequest method.
 //    req, resp := client.DescribeEndpointRequest(params)
@@ -2236,18 +2255,19 @@ const opDescribeThing = "DescribeThing"
 
 // DescribeThingRequest generates a "aws/request.Request" representing the
 // client's request for the DescribeThing operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See DescribeThing for usage and error information.
 //
-// See DescribeThing for more information on using the DescribeThing
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the DescribeThing method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the DescribeThingRequest method.
 //    req, resp := client.DescribeThingRequest(params)
@@ -2327,18 +2347,19 @@ const opDescribeThingType = "DescribeThingType"
 
 // DescribeThingTypeRequest generates a "aws/request.Request" representing the
 // client's request for the DescribeThingType operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See DescribeThingType for usage and error information.
 //
-// See DescribeThingType for more information on using the DescribeThingType
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the DescribeThingType method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the DescribeThingTypeRequest method.
 //    req, resp := client.DescribeThingTypeRequest(params)
@@ -2418,18 +2439,19 @@ const opDetachPrincipalPolicy = "DetachPrincipalPolicy"
 
 // DetachPrincipalPolicyRequest generates a "aws/request.Request" representing the
 // client's request for the DetachPrincipalPolicy operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See DetachPrincipalPolicy for usage and error information.
 //
-// See DetachPrincipalPolicy for more information on using the DetachPrincipalPolicy
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the DetachPrincipalPolicy method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the DetachPrincipalPolicyRequest method.
 //    req, resp := client.DetachPrincipalPolicyRequest(params)
@@ -2511,18 +2533,19 @@ const opDetachThingPrincipal = "DetachThingPrincipal"
 
 // DetachThingPrincipalRequest generates a "aws/request.Request" representing the
 // client's request for the DetachThingPrincipal operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See DetachThingPrincipal for usage and error information.
 //
-// See DetachThingPrincipal for more information on using the DetachThingPrincipal
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the DetachThingPrincipal method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the DetachThingPrincipalRequest method.
 //    req, resp := client.DetachThingPrincipalRequest(params)
@@ -2602,18 +2625,19 @@ const opDisableTopicRule = "DisableTopicRule"
 
 // DisableTopicRuleRequest generates a "aws/request.Request" representing the
 // client's request for the DisableTopicRule operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See DisableTopicRule for usage and error information.
 //
-// See DisableTopicRule for more information on using the DisableTopicRule
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the DisableTopicRule method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the DisableTopicRuleRequest method.
 //    req, resp := client.DisableTopicRuleRequest(params)
@@ -2689,18 +2713,19 @@ const opEnableTopicRule = "EnableTopicRule"
 
 // EnableTopicRuleRequest generates a "aws/request.Request" representing the
 // client's request for the EnableTopicRule operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See EnableTopicRule for usage and error information.
 //
-// See EnableTopicRule for more information on using the EnableTopicRule
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the EnableTopicRule method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the EnableTopicRuleRequest method.
 //    req, resp := client.EnableTopicRuleRequest(params)
@@ -2776,18 +2801,19 @@ const opGetLoggingOptions = "GetLoggingOptions"
 
 // GetLoggingOptionsRequest generates a "aws/request.Request" representing the
 // client's request for the GetLoggingOptions operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See GetLoggingOptions for usage and error information.
 //
-// See GetLoggingOptions for more information on using the GetLoggingOptions
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the GetLoggingOptions method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the GetLoggingOptionsRequest method.
 //    req, resp := client.GetLoggingOptionsRequest(params)
@@ -2858,18 +2884,19 @@ const opGetPolicy = "GetPolicy"
 
 // GetPolicyRequest generates a "aws/request.Request" representing the
 // client's request for the GetPolicy operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See GetPolicy for usage and error information.
 //
-// See GetPolicy for more information on using the GetPolicy
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the GetPolicy method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the GetPolicyRequest method.
 //    req, resp := client.GetPolicyRequest(params)
@@ -2950,18 +2977,19 @@ const opGetPolicyVersion = "GetPolicyVersion"
 
 // GetPolicyVersionRequest generates a "aws/request.Request" representing the
 // client's request for the GetPolicyVersion operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See GetPolicyVersion for usage and error information.
 //
-// See GetPolicyVersion for more information on using the GetPolicyVersion
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the GetPolicyVersion method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the GetPolicyVersionRequest method.
 //    req, resp := client.GetPolicyVersionRequest(params)
@@ -3041,18 +3069,19 @@ const opGetRegistrationCode = "GetRegistrationCode"
 
 // GetRegistrationCodeRequest generates a "aws/request.Request" representing the
 // client's request for the GetRegistrationCode operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See GetRegistrationCode for usage and error information.
 //
-// See GetRegistrationCode for more information on using the GetRegistrationCode
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the GetRegistrationCode method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the GetRegistrationCodeRequest method.
 //    req, resp := client.GetRegistrationCodeRequest(params)
@@ -3129,18 +3158,19 @@ const opGetTopicRule = "GetTopicRule"
 
 // GetTopicRuleRequest generates a "aws/request.Request" representing the
 // client's request for the GetTopicRule operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See GetTopicRule for usage and error information.
 //
-// See GetTopicRule for more information on using the GetTopicRule
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the GetTopicRule method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the GetTopicRuleRequest method.
 //    req, resp := client.GetTopicRuleRequest(params)
@@ -3214,18 +3244,19 @@ const opListCACertificates = "ListCACertificates"
 
 // ListCACertificatesRequest generates a "aws/request.Request" representing the
 // client's request for the ListCACertificates operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See ListCACertificates for usage and error information.
 //
-// See ListCACertificates for more information on using the ListCACertificates
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the ListCACertificates method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the ListCACertificatesRequest method.
 //    req, resp := client.ListCACertificatesRequest(params)
@@ -3305,18 +3336,19 @@ const opListCertificates = "ListCertificates"
 
 // ListCertificatesRequest generates a "aws/request.Request" representing the
 // client's request for the ListCertificates operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See ListCertificates for usage and error information.
 //
-// See ListCertificates for more information on using the ListCertificates
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the ListCertificates method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the ListCertificatesRequest method.
 //    req, resp := client.ListCertificatesRequest(params)
@@ -3396,18 +3428,19 @@ const opListCertificatesByCA = "ListCertificatesByCA"
 
 // ListCertificatesByCARequest generates a "aws/request.Request" representing the
 // client's request for the ListCertificatesByCA operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See ListCertificatesByCA for usage and error information.
 //
-// See ListCertificatesByCA for more information on using the ListCertificatesByCA
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the ListCertificatesByCA method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the ListCertificatesByCARequest method.
 //    req, resp := client.ListCertificatesByCARequest(params)
@@ -3484,18 +3517,19 @@ const opListOutgoingCertificates = "ListOutgoingCertificates"
 
 // ListOutgoingCertificatesRequest generates a "aws/request.Request" representing the
 // client's request for the ListOutgoingCertificates operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See ListOutgoingCertificates for usage and error information.
 //
-// See ListOutgoingCertificates for more information on using the ListOutgoingCertificates
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the ListOutgoingCertificates method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the ListOutgoingCertificatesRequest method.
 //    req, resp := client.ListOutgoingCertificatesRequest(params)
@@ -3572,18 +3606,19 @@ const opListPolicies = "ListPolicies"
 
 // ListPoliciesRequest generates a "aws/request.Request" representing the
 // client's request for the ListPolicies operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See ListPolicies for usage and error information.
 //
-// See ListPolicies for more information on using the ListPolicies
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the ListPolicies method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the ListPoliciesRequest method.
 //    req, resp := client.ListPoliciesRequest(params)
@@ -3660,18 +3695,19 @@ const opListPolicyPrincipals = "ListPolicyPrincipals"
 
 // ListPolicyPrincipalsRequest generates a "aws/request.Request" representing the
 // client's request for the ListPolicyPrincipals operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See ListPolicyPrincipals for usage and error information.
 //
-// See ListPolicyPrincipals for more information on using the ListPolicyPrincipals
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the ListPolicyPrincipals method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the ListPolicyPrincipalsRequest method.
 //    req, resp := client.ListPolicyPrincipalsRequest(params)
@@ -3751,18 +3787,19 @@ const opListPolicyVersions = "ListPolicyVersions"
 
 // ListPolicyVersionsRequest generates a "aws/request.Request" representing the
 // client's request for the ListPolicyVersions operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See ListPolicyVersions for usage and error information.
 //
-// See ListPolicyVersions for more information on using the ListPolicyVersions
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the ListPolicyVersions method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the ListPolicyVersionsRequest method.
 //    req, resp := client.ListPolicyVersionsRequest(params)
@@ -3842,18 +3879,19 @@ const opListPrincipalPolicies = "ListPrincipalPolicies"
 
 // ListPrincipalPoliciesRequest generates a "aws/request.Request" representing the
 // client's request for the ListPrincipalPolicies operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See ListPrincipalPolicies for usage and error information.
 //
-// See ListPrincipalPolicies for more information on using the ListPrincipalPolicies
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the ListPrincipalPolicies method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the ListPrincipalPoliciesRequest method.
 //    req, resp := client.ListPrincipalPoliciesRequest(params)
@@ -3934,18 +3972,19 @@ const opListPrincipalThings = "ListPrincipalThings"
 
 // ListPrincipalThingsRequest generates a "aws/request.Request" representing the
 // client's request for the ListPrincipalThings operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See ListPrincipalThings for usage and error information.
 //
-// See ListPrincipalThings for more information on using the ListPrincipalThings
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the ListPrincipalThings method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the ListPrincipalThingsRequest method.
 //    req, resp := client.ListPrincipalThingsRequest(params)
@@ -4025,18 +4064,19 @@ const opListThingPrincipals = "ListThingPrincipals"
 
 // ListThingPrincipalsRequest generates a "aws/request.Request" representing the
 // client's request for the ListThingPrincipals operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See ListThingPrincipals for usage and error information.
 //
-// See ListThingPrincipals for more information on using the ListThingPrincipals
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the ListThingPrincipals method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the ListThingPrincipalsRequest method.
 //    req, resp := client.ListThingPrincipalsRequest(params)
@@ -4116,18 +4156,19 @@ const opListThingTypes = "ListThingTypes"
 
 // ListThingTypesRequest generates a "aws/request.Request" representing the
 // client's request for the ListThingTypes operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See ListThingTypes for usage and error information.
 //
-// See ListThingTypes for more information on using the ListThingTypes
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the ListThingTypes method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the ListThingTypesRequest method.
 //    req, resp := client.ListThingTypesRequest(params)
@@ -4204,18 +4245,19 @@ const opListThings = "ListThings"
 
 // ListThingsRequest generates a "aws/request.Request" representing the
 // client's request for the ListThings operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See ListThings for usage and error information.
 //
-// See ListThings for more information on using the ListThings
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the ListThings method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the ListThingsRequest method.
 //    req, resp := client.ListThingsRequest(params)
@@ -4295,18 +4337,19 @@ const opListTopicRules = "ListTopicRules"
 
 // ListTopicRulesRequest generates a "aws/request.Request" representing the
 // client's request for the ListTopicRules operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See ListTopicRules for usage and error information.
 //
-// See ListTopicRules for more information on using the ListTopicRules
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the ListTopicRules method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the ListTopicRulesRequest method.
 //    req, resp := client.ListTopicRulesRequest(params)
@@ -4377,18 +4420,19 @@ const opRegisterCACertificate = "RegisterCACertificate"
 
 // RegisterCACertificateRequest generates a "aws/request.Request" representing the
 // client's request for the RegisterCACertificate operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See RegisterCACertificate for usage and error information.
 //
-// See RegisterCACertificate for more information on using the RegisterCACertificate
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the RegisterCACertificate method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the RegisterCACertificateRequest method.
 //    req, resp := client.RegisterCACertificateRequest(params)
@@ -4418,10 +4462,10 @@ func (c *IoT) RegisterCACertificateRequest(input *RegisterCACertificateInput) (r
 // Registers a CA certificate with AWS IoT. This CA certificate can then be
 // used to sign device certificates, which can be then registered with AWS IoT.
 // You can register up to 10 CA certificates per AWS account that have the same
-// subject field. This enables you to have up to 10 certificate authorities
-// sign your device certificates. If you have more than one CA certificate registered,
-// make sure you pass the CA certificate when you register your device certificates
-// with the RegisterCertificate API.
+// subject field and public key. This enables you to have up to 10 certificate
+// authorities sign your device certificates. If you have more than one CA certificate
+// registered, make sure you pass the CA certificate when you register your
+// device certificates with the RegisterCertificate API.
 //
 // Returns awserr.Error for service API and SDK errors. Use runtime type assertions
 // with awserr.Error's Code and Message methods to get detailed information about
@@ -4483,18 +4527,19 @@ const opRegisterCertificate = "RegisterCertificate"
 
 // RegisterCertificateRequest generates a "aws/request.Request" representing the
 // client's request for the RegisterCertificate operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See RegisterCertificate for usage and error information.
 //
-// See RegisterCertificate for more information on using the RegisterCertificate
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the RegisterCertificate method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the RegisterCertificateRequest method.
 //    req, resp := client.RegisterCertificateRequest(params)
@@ -4587,18 +4632,19 @@ const opRejectCertificateTransfer = "RejectCertificateTransfer"
 
 // RejectCertificateTransferRequest generates a "aws/request.Request" representing the
 // client's request for the RejectCertificateTransfer operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See RejectCertificateTransfer for usage and error information.
 //
-// See RejectCertificateTransfer for more information on using the RejectCertificateTransfer
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the RejectCertificateTransfer method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the RejectCertificateTransferRequest method.
 //    req, resp := client.RejectCertificateTransferRequest(params)
@@ -4692,18 +4738,19 @@ const opReplaceTopicRule = "ReplaceTopicRule"
 
 // ReplaceTopicRuleRequest generates a "aws/request.Request" representing the
 // client's request for the ReplaceTopicRule operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See ReplaceTopicRule for usage and error information.
 //
-// See ReplaceTopicRule for more information on using the ReplaceTopicRule
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the ReplaceTopicRule method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the ReplaceTopicRuleRequest method.
 //    req, resp := client.ReplaceTopicRuleRequest(params)
@@ -4784,18 +4831,19 @@ const opSetDefaultPolicyVersion = "SetDefaultPolicyVersion"
 
 // SetDefaultPolicyVersionRequest generates a "aws/request.Request" representing the
 // client's request for the SetDefaultPolicyVersion operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See SetDefaultPolicyVersion for usage and error information.
 //
-// See SetDefaultPolicyVersion for more information on using the SetDefaultPolicyVersion
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the SetDefaultPolicyVersion method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the SetDefaultPolicyVersionRequest method.
 //    req, resp := client.SetDefaultPolicyVersionRequest(params)
@@ -4880,18 +4928,19 @@ const opSetLoggingOptions = "SetLoggingOptions"
 
 // SetLoggingOptionsRequest generates a "aws/request.Request" representing the
 // client's request for the SetLoggingOptions operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See SetLoggingOptions for usage and error information.
 //
-// See SetLoggingOptions for more information on using the SetLoggingOptions
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the SetLoggingOptions method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the SetLoggingOptionsRequest method.
 //    req, resp := client.SetLoggingOptionsRequest(params)
@@ -4964,18 +5013,19 @@ const opTransferCertificate = "TransferCertificate"
 
 // TransferCertificateRequest generates a "aws/request.Request" representing the
 // client's request for the TransferCertificate operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See TransferCertificate for usage and error information.
 //
-// See TransferCertificate for more information on using the TransferCertificate
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the TransferCertificate method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the TransferCertificateRequest method.
 //    req, resp := client.TransferCertificateRequest(params)
@@ -5073,18 +5123,19 @@ const opUpdateCACertificate = "UpdateCACertificate"
 
 // UpdateCACertificateRequest generates a "aws/request.Request" representing the
 // client's request for the UpdateCACertificate operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See UpdateCACertificate for usage and error information.
 //
-// See UpdateCACertificate for more information on using the UpdateCACertificate
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the UpdateCACertificate method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the UpdateCACertificateRequest method.
 //    req, resp := client.UpdateCACertificateRequest(params)
@@ -5166,18 +5217,19 @@ const opUpdateCertificate = "UpdateCertificate"
 
 // UpdateCertificateRequest generates a "aws/request.Request" representing the
 // client's request for the UpdateCertificate operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See UpdateCertificate for usage and error information.
 //
-// See UpdateCertificate for more information on using the UpdateCertificate
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the UpdateCertificate method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the UpdateCertificateRequest method.
 //    req, resp := client.UpdateCertificateRequest(params)
@@ -5268,18 +5320,19 @@ const opUpdateThing = "UpdateThing"
 
 // UpdateThingRequest generates a "aws/request.Request" representing the
 // client's request for the UpdateThing operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See UpdateThing for usage and error information.
 //
-// See UpdateThing for more information on using the UpdateThing
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the UpdateThing method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the UpdateThingRequest method.
 //    req, resp := client.UpdateThingRequest(params)
@@ -5460,9 +5513,6 @@ type Action struct {
 	// Write to an Amazon S3 bucket.
 	S3 *S3Action `locationName:"s3" type:"structure"`
 
-	// Send a message to a Salesforce IoT Cloud Input Stream.
-	Salesforce *SalesforceAction `locationName:"salesforce" type:"structure"`
-
 	// Publish to an Amazon SNS topic.
 	Sns *SnsAction `locationName:"sns" type:"structure"`
 
@@ -5531,11 +5581,6 @@ func (s *Action) Validate() error {
 	if s.S3 != nil {
 		if err := s.S3.Validate(); err != nil {
 			invalidParams.AddNested("S3", err.(request.ErrInvalidParams))
-		}
-	}
-	if s.Salesforce != nil {
-		if err := s.Salesforce.Validate(); err != nil {
-			invalidParams.AddNested("Salesforce", err.(request.ErrInvalidParams))
 		}
 	}
 	if s.Sns != nil {
@@ -5612,12 +5657,6 @@ func (s *Action) SetRepublish(v *RepublishAction) *Action {
 // SetS3 sets the S3 field's value.
 func (s *Action) SetS3(v *S3Action) *Action {
 	s.S3 = v
-	return s
-}
-
-// SetSalesforce sets the Salesforce field's value.
-func (s *Action) SetSalesforce(v *SalesforceAction) *Action {
-	s.Salesforce = v
 	return s
 }
 
@@ -5781,7 +5820,7 @@ type AttributePayload struct {
 
 	// A JSON string containing up to three key-value pair in JSON format. For example:
 	//
-	// {\"attributes\":{\"string1\":\"string2\"}}
+	// {\"attributes\":{\"string1\":\"string2\"}})
 	Attributes map[string]*string `locationName:"attributes" type:"map"`
 
 	// Specifies whether the list of attributes provided in the AttributePayload
@@ -6753,7 +6792,7 @@ type CreateThingInput struct {
 	// The attribute payload, which consists of up to three name/value pairs in
 	// a JSON document. For example:
 	//
-	// {\"attributes\":{\"string1\":\"string2\"}}
+	// {\"attributes\":{\"string1\":\"string2\"}})
 	AttributePayload *AttributePayload `locationName:"attributePayload" type:"structure"`
 
 	// The name of the thing to create.
@@ -7848,7 +7887,7 @@ type DescribeThingTypeOutput struct {
 
 	// The ThingTypeMetadata contains additional information about the thing type
 	// including: creation date and time, a value indicating whether the thing type
-	// is deprecated, and a date and time when it was deprecated.
+	// is deprecated, and a date and time when time was deprecated.
 	ThingTypeMetadata *ThingTypeMetadata `locationName:"thingTypeMetadata" type:"structure"`
 
 	// The name of the thing type.
@@ -10581,7 +10620,6 @@ type RegisterCertificateInput struct {
 	// A boolean value that specifies if the CA certificate is set to active.
 	SetAsActive *bool `location:"querystring" locationName:"setAsActive" deprecated:"true" type:"boolean"`
 
-	// The status of the register certificate request.
 	Status *string `locationName:"status" type:"string" enum:"CertificateStatus"`
 }
 
@@ -10941,65 +10979,6 @@ func (s *S3Action) SetRoleArn(v string) *S3Action {
 	return s
 }
 
-// Describes an action to write a message to a Salesforce IoT Cloud Input Stream.
-type SalesforceAction struct {
-	_ struct{} `type:"structure"`
-
-	// The token used to authenticate access to the Salesforce IoT Cloud Input Stream.
-	// The token is available from the Salesforce IoT Cloud platform after creation
-	// of the Input Stream.
-	//
-	// Token is a required field
-	Token *string `locationName:"token" min:"40" type:"string" required:"true"`
-
-	// The URL exposed by the Salesforce IoT Cloud Input Stream. The URL is available
-	// from the Salesforce IoT Cloud platform after creation of the Input Stream.
-	//
-	// Url is a required field
-	Url *string `locationName:"url" type:"string" required:"true"`
-}
-
-// String returns the string representation
-func (s SalesforceAction) String() string {
-	return awsutil.Prettify(s)
-}
-
-// GoString returns the string representation
-func (s SalesforceAction) GoString() string {
-	return s.String()
-}
-
-// Validate inspects the fields of the type to determine if they are valid.
-func (s *SalesforceAction) Validate() error {
-	invalidParams := request.ErrInvalidParams{Context: "SalesforceAction"}
-	if s.Token == nil {
-		invalidParams.Add(request.NewErrParamRequired("Token"))
-	}
-	if s.Token != nil && len(*s.Token) < 40 {
-		invalidParams.Add(request.NewErrParamMinLen("Token", 40))
-	}
-	if s.Url == nil {
-		invalidParams.Add(request.NewErrParamRequired("Url"))
-	}
-
-	if invalidParams.Len() > 0 {
-		return invalidParams
-	}
-	return nil
-}
-
-// SetToken sets the Token field's value.
-func (s *SalesforceAction) SetToken(v string) *SalesforceAction {
-	s.Token = &v
-	return s
-}
-
-// SetUrl sets the Url field's value.
-func (s *SalesforceAction) SetUrl(v string) *SalesforceAction {
-	s.Url = &v
-	return s
-}
-
 // The input for the SetDefaultPolicyVersion operation.
 type SetDefaultPolicyVersionInput struct {
 	_ struct{} `type:"structure"`
@@ -11136,8 +11115,7 @@ type SnsAction struct {
 	// "JSON" and "RAW". The default value of the attribute is "RAW". SNS uses this
 	// setting to determine if the payload should be parsed and relevant platform-specific
 	// bits of the payload should be extracted. To read more about SNS message formats,
-	// see http://docs.aws.amazon.com/sns/latest/dg/json-formats.html (http://docs.aws.amazon.com/sns/latest/dg/json-formats.html)
-	// refer to their official documentation.
+	// see  refer to their official documentation. (http://docs.aws.amazon.com/sns/latest/dg/json-formats.html)
 	MessageFormat *string `locationName:"messageFormat" type:"string" enum:"MessageFormat"`
 
 	// The ARN of the IAM role that grants access.
@@ -11315,7 +11293,7 @@ type ThingTypeDefinition struct {
 
 	// The ThingTypeMetadata contains additional information about the thing type
 	// including: creation date and time, a value indicating whether the thing type
-	// is deprecated, and a date and time when it was deprecated.
+	// is deprecated, and a date and time when time was deprecated.
 	ThingTypeMetadata *ThingTypeMetadata `locationName:"thingTypeMetadata" type:"structure"`
 
 	// The name of the thing type.
@@ -11974,7 +11952,7 @@ type UpdateThingInput struct {
 	// A list of thing attributes, a JSON string containing name-value pairs. For
 	// example:
 	//
-	// {\"attributes\":{\"name1\":\"value2\"}}
+	// {\"attributes\":{\"name1\":\"value2\"}})
 	//
 	// This data is used to add new attributes or update existing attributes.
 	AttributePayload *AttributePayload `locationName:"attributePayload" type:"structure"`

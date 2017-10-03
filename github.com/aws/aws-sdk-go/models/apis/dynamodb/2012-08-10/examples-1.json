@@ -548,16 +548,13 @@
         "output": {
           "Attributes": {
             "AlbumTitle": {
-              "S": "Louder Than Ever"
+              "S": "Songs About Life"
             },
             "Artist": {
               "S": "Acme Band"
             },
             "SongTitle": {
               "S": "Happy Day"
-            },
-            "Year": {
-              "N": "2015"
             }
           }
         },

@@ -585,19 +585,6 @@
         {"shape":"ResourceNotFoundException"}
       ]
     },
-    "ListTags":{
-      "name":"ListTags",
-      "http":{
-        "method":"POST",
-        "requestUri":"/"
-      },
-      "input":{"shape":"ListTagsRequest"},
-      "output":{"shape":"ListTagsResult"},
-      "errors":[
-        {"shape":"ValidationException"},
-        {"shape":"ResourceNotFoundException"}
-      ]
-    },
     "RebootInstance":{
       "name":"RebootInstance",
       "http":{
@@ -758,18 +745,6 @@
         {"shape":"ResourceNotFoundException"}
       ]
     },
-    "TagResource":{
-      "name":"TagResource",
-      "http":{
-        "method":"POST",
-        "requestUri":"/"
-      },
-      "input":{"shape":"TagResourceRequest"},
-      "errors":[
-        {"shape":"ValidationException"},
-        {"shape":"ResourceNotFoundException"}
-      ]
-    },
     "UnassignInstance":{
       "name":"UnassignInstance",
       "http":{
@@ -789,18 +764,6 @@
         "requestUri":"/"
       },
       "input":{"shape":"UnassignVolumeRequest"},
-      "errors":[
-        {"shape":"ValidationException"},
-        {"shape":"ResourceNotFoundException"}
-      ]
-    },
-    "UntagResource":{
-      "name":"UntagResource",
-      "http":{
-        "method":"POST",
-        "requestUri":"/"
-      },
-      "input":{"shape":"UntagResourceRequest"},
       "errors":[
         {"shape":"ValidationException"},
         {"shape":"ResourceNotFoundException"}
@@ -1974,7 +1937,6 @@
         "AgentVersion":{"shape":"String"},
         "AmiId":{"shape":"String"},
         "Architecture":{"shape":"Architecture"},
-        "Arn":{"shape":"String"},
         "AutoScalingType":{"shape":"AutoScalingType"},
         "AvailabilityZone":{"shape":"String"},
         "BlockDeviceMappings":{"shape":"BlockDeviceMappings"},
@@ -2056,7 +2018,6 @@
     "Layer":{
       "type":"structure",
       "members":{
-        "Arn":{"shape":"String"},
         "StackId":{"shape":"String"},
         "LayerId":{"shape":"String"},
         "Type":{"shape":"LayerType"},
@@ -2143,22 +2104,6 @@
         "Shutdown":{"shape":"ShutdownEventConfiguration"}
       }
     },
-    "ListTagsRequest":{
-      "type":"structure",
-      "required":["ResourceArn"],
-      "members":{
-        "ResourceArn":{"shape":"ResourceArn"},
-        "MaxResults":{"shape":"MaxResults"},
-        "NextToken":{"shape":"NextToken"}
-      }
-    },
-    "ListTagsResult":{
-      "type":"structure",
-      "members":{
-        "Tags":{"shape":"Tags"},
-        "NextToken":{"shape":"NextToken"}
-      }
-    },
     "LoadBasedAutoScalingConfiguration":{
       "type":"structure",
       "members":{
@@ -2172,14 +2117,12 @@
       "type":"list",
       "member":{"shape":"LoadBasedAutoScalingConfiguration"}
     },
-    "MaxResults":{"type":"integer"},
     "Minute":{
       "type":"integer",
       "box":true,
       "max":100,
       "min":1
     },
-    "NextToken":{"type":"string"},
     "Parameters":{
       "type":"map",
       "key":{"shape":"String"},
@@ -2346,7 +2289,6 @@
         "Version":{"shape":"String"}
       }
     },
-    "ResourceArn":{"type":"string"},
     "ResourceNotFoundException":{
       "type":"structure",
       "members":{
@@ -2548,28 +2490,6 @@
       "member":{"shape":"String"}
     },
     "Switch":{"type":"string"},
-    "TagKey":{"type":"string"},
-    "TagKeys":{
-      "type":"list",
-      "member":{"shape":"TagKey"}
-    },
-    "TagResourceRequest":{
-      "type":"structure",
-      "required":[
-        "ResourceArn",
-        "Tags"
-      ],
-      "members":{
-        "ResourceArn":{"shape":"ResourceArn"},
-        "Tags":{"shape":"Tags"}
-      }
-    },
-    "TagValue":{"type":"string"},
-    "Tags":{
-      "type":"map",
-      "key":{"shape":"TagKey"},
-      "value":{"shape":"TagValue"}
-    },
     "TemporaryCredential":{
       "type":"structure",
       "members":{
@@ -2602,17 +2522,6 @@
       "required":["VolumeId"],
       "members":{
         "VolumeId":{"shape":"String"}
-      }
-    },
-    "UntagResourceRequest":{
-      "type":"structure",
-      "required":[
-        "ResourceArn",
-        "TagKeys"
-      ],
-      "members":{
-        "ResourceArn":{"shape":"ResourceArn"},
-        "TagKeys":{"shape":"TagKeys"}
       }
     },
     "UpdateAppRequest":{

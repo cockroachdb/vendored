@@ -3,238 +3,154 @@
 package polly_test
 
 import (
+	"bytes"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/polly"
 )
 
 var _ time.Duration
-var _ strings.Reader
-var _ aws.Config
+var _ bytes.Buffer
 
-func parseTime(layout, value string) *time.Time {
-	t, err := time.Parse(layout, value)
-	if err != nil {
-		panic(err)
+func ExamplePolly_DeleteLexicon() {
+	sess := session.Must(session.NewSession())
+
+	svc := polly.New(sess)
+
+	params := &polly.DeleteLexiconInput{
+		Name: aws.String("LexiconName"), // Required
 	}
-	return &t
-}
+	resp, err := svc.DeleteLexicon(params)
 
-// To delete a lexicon
-//
-// Deletes a specified pronunciation lexicon stored in an AWS Region.
-func ExamplePolly_DeleteLexicon_shared00() {
-	svc := polly.New(session.New())
-	input := &polly.DeleteLexiconInput{
-		Name: aws.String("example"),
-	}
-
-	result, err := svc.DeleteLexicon(input)
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case polly.ErrCodeLexiconNotFoundException:
-				fmt.Println(polly.ErrCodeLexiconNotFoundException, aerr.Error())
-			case polly.ErrCodeServiceFailureException:
-				fmt.Println(polly.ErrCodeServiceFailureException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
 		return
 	}
 
-	fmt.Println(result)
+	// Pretty-print the response data.
+	fmt.Println(resp)
 }
 
-// To describe available voices
-//
-// Returns the list of voices that are available for use when requesting speech synthesis.
-// Displayed languages are those within the specified language code. If no language
-// code is specified, voices for all available languages are displayed.
-func ExamplePolly_DescribeVoices_shared00() {
-	svc := polly.New(session.New())
-	input := &polly.DescribeVoicesInput{
-		LanguageCode: aws.String("en-GB"),
-	}
+func ExamplePolly_DescribeVoices() {
+	sess := session.Must(session.NewSession())
 
-	result, err := svc.DescribeVoices(input)
+	svc := polly.New(sess)
+
+	params := &polly.DescribeVoicesInput{
+		LanguageCode: aws.String("LanguageCode"),
+		NextToken:    aws.String("NextToken"),
+	}
+	resp, err := svc.DescribeVoices(params)
+
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case polly.ErrCodeInvalidNextTokenException:
-				fmt.Println(polly.ErrCodeInvalidNextTokenException, aerr.Error())
-			case polly.ErrCodeServiceFailureException:
-				fmt.Println(polly.ErrCodeServiceFailureException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
 		return
 	}
 
-	fmt.Println(result)
+	// Pretty-print the response data.
+	fmt.Println(resp)
 }
 
-// To retrieve a lexicon
-//
-// Returns the content of the specified pronunciation lexicon stored in an AWS Region.
-func ExamplePolly_GetLexicon_shared00() {
-	svc := polly.New(session.New())
-	input := &polly.GetLexiconInput{
-		Name: aws.String(""),
-	}
+func ExamplePolly_GetLexicon() {
+	sess := session.Must(session.NewSession())
 
-	result, err := svc.GetLexicon(input)
+	svc := polly.New(sess)
+
+	params := &polly.GetLexiconInput{
+		Name: aws.String("LexiconName"), // Required
+	}
+	resp, err := svc.GetLexicon(params)
+
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case polly.ErrCodeLexiconNotFoundException:
-				fmt.Println(polly.ErrCodeLexiconNotFoundException, aerr.Error())
-			case polly.ErrCodeServiceFailureException:
-				fmt.Println(polly.ErrCodeServiceFailureException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
 		return
 	}
 
-	fmt.Println(result)
+	// Pretty-print the response data.
+	fmt.Println(resp)
 }
 
-// To list all lexicons in a region
-//
-// Returns a list of pronunciation lexicons stored in an AWS Region.
-func ExamplePolly_ListLexicons_shared00() {
-	svc := polly.New(session.New())
-	input := &polly.ListLexiconsInput{}
+func ExamplePolly_ListLexicons() {
+	sess := session.Must(session.NewSession())
 
-	result, err := svc.ListLexicons(input)
+	svc := polly.New(sess)
+
+	params := &polly.ListLexiconsInput{
+		NextToken: aws.String("NextToken"),
+	}
+	resp, err := svc.ListLexicons(params)
+
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case polly.ErrCodeInvalidNextTokenException:
-				fmt.Println(polly.ErrCodeInvalidNextTokenException, aerr.Error())
-			case polly.ErrCodeServiceFailureException:
-				fmt.Println(polly.ErrCodeServiceFailureException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
 		return
 	}
 
-	fmt.Println(result)
+	// Pretty-print the response data.
+	fmt.Println(resp)
 }
 
-// To save a lexicon
-//
-// Stores a pronunciation lexicon in an AWS Region.
-func ExamplePolly_PutLexicon_shared00() {
-	svc := polly.New(session.New())
-	input := &polly.PutLexiconInput{
-		Content: aws.String("file://example.pls"),
-		Name:    aws.String("W3C"),
-	}
+func ExamplePolly_PutLexicon() {
+	sess := session.Must(session.NewSession())
 
-	result, err := svc.PutLexicon(input)
+	svc := polly.New(sess)
+
+	params := &polly.PutLexiconInput{
+		Content: aws.String("LexiconContent"), // Required
+		Name:    aws.String("LexiconName"),    // Required
+	}
+	resp, err := svc.PutLexicon(params)
+
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case polly.ErrCodeInvalidLexiconException:
-				fmt.Println(polly.ErrCodeInvalidLexiconException, aerr.Error())
-			case polly.ErrCodeUnsupportedPlsAlphabetException:
-				fmt.Println(polly.ErrCodeUnsupportedPlsAlphabetException, aerr.Error())
-			case polly.ErrCodeUnsupportedPlsLanguageException:
-				fmt.Println(polly.ErrCodeUnsupportedPlsLanguageException, aerr.Error())
-			case polly.ErrCodeLexiconSizeExceededException:
-				fmt.Println(polly.ErrCodeLexiconSizeExceededException, aerr.Error())
-			case polly.ErrCodeMaxLexemeLengthExceededException:
-				fmt.Println(polly.ErrCodeMaxLexemeLengthExceededException, aerr.Error())
-			case polly.ErrCodeMaxLexiconsNumberExceededException:
-				fmt.Println(polly.ErrCodeMaxLexiconsNumberExceededException, aerr.Error())
-			case polly.ErrCodeServiceFailureException:
-				fmt.Println(polly.ErrCodeServiceFailureException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
 		return
 	}
 
-	fmt.Println(result)
+	// Pretty-print the response data.
+	fmt.Println(resp)
 }
 
-// To synthesize speech
-//
-// Synthesizes plain text or SSML into a file of human-like speech.
-func ExamplePolly_SynthesizeSpeech_shared00() {
-	svc := polly.New(session.New())
-	input := &polly.SynthesizeSpeechInput{
+func ExamplePolly_SynthesizeSpeech() {
+	sess := session.Must(session.NewSession())
+
+	svc := polly.New(sess)
+
+	params := &polly.SynthesizeSpeechInput{
+		OutputFormat: aws.String("OutputFormat"), // Required
+		Text:         aws.String("Text"),         // Required
+		VoiceId:      aws.String("VoiceId"),      // Required
 		LexiconNames: []*string{
-			aws.String("example"),
+			aws.String("LexiconName"), // Required
+			// More values...
 		},
-		OutputFormat: aws.String("mp3"),
-		SampleRate:   aws.String("8000"),
-		Text:         aws.String("All Gaul is divided into three parts"),
-		TextType:     aws.String("text"),
-		VoiceId:      aws.String("Joanna"),
+		SampleRate: aws.String("SampleRate"),
+		SpeechMarkTypes: []*string{
+			aws.String("SpeechMarkType"), // Required
+			// More values...
+		},
+		TextType: aws.String("TextType"),
 	}
+	resp, err := svc.SynthesizeSpeech(params)
 
-	result, err := svc.SynthesizeSpeech(input)
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case polly.ErrCodeTextLengthExceededException:
-				fmt.Println(polly.ErrCodeTextLengthExceededException, aerr.Error())
-			case polly.ErrCodeInvalidSampleRateException:
-				fmt.Println(polly.ErrCodeInvalidSampleRateException, aerr.Error())
-			case polly.ErrCodeInvalidSsmlException:
-				fmt.Println(polly.ErrCodeInvalidSsmlException, aerr.Error())
-			case polly.ErrCodeLexiconNotFoundException:
-				fmt.Println(polly.ErrCodeLexiconNotFoundException, aerr.Error())
-			case polly.ErrCodeServiceFailureException:
-				fmt.Println(polly.ErrCodeServiceFailureException, aerr.Error())
-			case polly.ErrCodeMarksNotSupportedForFormatException:
-				fmt.Println(polly.ErrCodeMarksNotSupportedForFormatException, aerr.Error())
-			case polly.ErrCodeSsmlMarksNotSupportedForTextTypeException:
-				fmt.Println(polly.ErrCodeSsmlMarksNotSupportedForTextTypeException, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			fmt.Println(err.Error())
-		}
+		// Print the error, cast err to awserr.Error to get the Code and
+		// Message from an error.
+		fmt.Println(err.Error())
 		return
 	}
 
-	fmt.Println(result)
+	// Pretty-print the response data.
+	fmt.Println(resp)
 }

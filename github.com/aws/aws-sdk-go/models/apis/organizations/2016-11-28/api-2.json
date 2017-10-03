@@ -65,7 +65,6 @@
       "output":{"shape":"CancelHandshakeResponse"},
       "errors":[
         {"shape":"AccessDeniedException"},
-        {"shape":"ConcurrentModificationException"},
         {"shape":"HandshakeNotFoundException"},
         {"shape":"InvalidHandshakeTransitionException"},
         {"shape":"HandshakeAlreadyInStateException"},
@@ -85,7 +84,6 @@
       "errors":[
         {"shape":"AccessDeniedException"},
         {"shape":"AWSOrganizationsNotInUseException"},
-        {"shape":"ConcurrentModificationException"},
         {"shape":"ConstraintViolationException"},
         {"shape":"InvalidInputException"},
         {"shape":"FinalizingOrganizationException"},
@@ -122,7 +120,6 @@
       "errors":[
         {"shape":"AccessDeniedException"},
         {"shape":"AWSOrganizationsNotInUseException"},
-        {"shape":"ConcurrentModificationException"},
         {"shape":"ConstraintViolationException"},
         {"shape":"DuplicateOrganizationalUnitException"},
         {"shape":"InvalidInputException"},
@@ -162,7 +159,6 @@
       "output":{"shape":"DeclineHandshakeResponse"},
       "errors":[
         {"shape":"AccessDeniedException"},
-        {"shape":"ConcurrentModificationException"},
         {"shape":"HandshakeNotFoundException"},
         {"shape":"InvalidHandshakeTransitionException"},
         {"shape":"HandshakeAlreadyInStateException"},
@@ -267,7 +263,6 @@
       "output":{"shape":"DescribeHandshakeResponse"},
       "errors":[
         {"shape":"AccessDeniedException"},
-        {"shape":"ConcurrentModificationException"},
         {"shape":"HandshakeNotFoundException"},
         {"shape":"InvalidInputException"},
         {"shape":"ServiceException"},
@@ -284,7 +279,6 @@
       "errors":[
         {"shape":"AccessDeniedException"},
         {"shape":"AWSOrganizationsNotInUseException"},
-        {"shape":"ConcurrentModificationException"},
         {"shape":"ServiceException"},
         {"shape":"TooManyRequestsException"}
       ]
@@ -374,7 +368,6 @@
       "errors":[
         {"shape":"AccessDeniedException"},
         {"shape":"AWSOrganizationsNotInUseException"},
-        {"shape":"ConcurrentModificationException"},
         {"shape":"HandshakeConstraintViolationException"},
         {"shape":"InvalidInputException"},
         {"shape":"ServiceException"},
@@ -413,7 +406,6 @@
       "errors":[
         {"shape":"AccessDeniedException"},
         {"shape":"AWSOrganizationsNotInUseException"},
-        {"shape":"ConcurrentModificationException"},
         {"shape":"HandshakeConstraintViolationException"},
         {"shape":"DuplicateHandshakeException"},
         {"shape":"InvalidInputException"},
@@ -516,7 +508,6 @@
       "output":{"shape":"ListHandshakesForAccountResponse"},
       "errors":[
         {"shape":"AccessDeniedException"},
-        {"shape":"ConcurrentModificationException"},
         {"shape":"InvalidInputException"},
         {"shape":"ServiceException"},
         {"shape":"TooManyRequestsException"}
@@ -533,7 +524,6 @@
       "errors":[
         {"shape":"AccessDeniedException"},
         {"shape":"AWSOrganizationsNotInUseException"},
-        {"shape":"ConcurrentModificationException"},
         {"shape":"InvalidInputException"},
         {"shape":"ServiceException"},
         {"shape":"TooManyRequestsException"}
@@ -893,13 +883,10 @@
         "MAX_POLICY_TYPE_ATTACHMENT_LIMIT_EXCEEDED",
         "MIN_POLICY_TYPE_ATTACHMENT_LIMIT_EXCEEDED",
         "ACCOUNT_CANNOT_LEAVE_ORGANIZATION",
-        "ACCOUNT_CANNOT_LEAVE_WITHOUT_EULA",
-        "ACCOUNT_CANNOT_LEAVE_WITHOUT_PHONE_VERIFICATION",
         "MASTER_ACCOUNT_PAYMENT_INSTRUMENT_REQUIRED",
         "MEMBER_ACCOUNT_PAYMENT_INSTRUMENT_REQUIRED",
         "ACCOUNT_CREATION_RATE_LIMIT_EXCEEDED",
-        "MASTER_ACCOUNT_ADDRESS_DOES_NOT_MATCH_MARKETPLACE",
-        "MASTER_ACCOUNT_MISSING_CONTACT_INFO"
+        "MASTER_ACCOUNT_ADDRESS_DOES_NOT_MATCH_MARKETPLACE"
       ]
     },
     "CreateAccountFailureReason":{
@@ -1413,8 +1400,7 @@
         "INPUT_REQUIRED",
         "INVALID_NEXT_TOKEN",
         "MAX_LIMIT_EXCEEDED_FILTER",
-        "MOVING_ACCOUNT_BETWEEN_DIFFERENT_ROOTS",
-        "INVALID_FULL_NAME_TARGET"
+        "MOVING_ACCOUNT_BETWEEN_DIFFERENT_ROOTS"
       ]
     },
     "InviteAccountToOrganizationRequest":{

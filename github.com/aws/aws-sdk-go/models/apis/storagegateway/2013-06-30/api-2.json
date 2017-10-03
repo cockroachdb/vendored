@@ -1211,8 +1211,7 @@
       "type":"structure",
       "required":["FileShareARN"],
       "members":{
-        "FileShareARN":{"shape":"FileShareARN"},
-        "ForceDelete":{"shape":"boolean"}
+        "FileShareARN":{"shape":"FileShareARN"}
       }
     },
     "DeleteFileShareOutput":{
@@ -2251,8 +2250,7 @@
         "TapeSizeInBytes":{"shape":"TapeSize"},
         "TapeStatus":{"shape":"TapeStatus"},
         "VTLDevice":{"shape":"VTLDeviceARN"},
-        "Progress":{"shape":"DoubleObject"},
-        "TapeUsedInBytes":{"shape":"TapeUsage"}
+        "Progress":{"shape":"DoubleObject"}
       }
     },
     "TapeARN":{
@@ -2274,8 +2272,7 @@
         "TapeSizeInBytes":{"shape":"TapeSize"},
         "CompletionTime":{"shape":"Time"},
         "RetrievedTo":{"shape":"GatewayARN"},
-        "TapeStatus":{"shape":"TapeArchiveStatus"},
-        "TapeUsedInBytes":{"shape":"TapeUsage"}
+        "TapeStatus":{"shape":"TapeArchiveStatus"}
       }
     },
     "TapeArchiveStatus":{"type":"string"},
@@ -2330,7 +2327,6 @@
     "TapeRecoveryPointStatus":{"type":"string"},
     "TapeSize":{"type":"long"},
     "TapeStatus":{"type":"string"},
-    "TapeUsage":{"type":"long"},
     "Tapes":{
       "type":"list",
       "member":{"shape":"Tape"}

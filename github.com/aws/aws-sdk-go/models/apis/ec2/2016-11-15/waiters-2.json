@@ -413,11 +413,6 @@
           "matcher": "pathAny",
           "argument": "SpotInstanceRequests[].Status.Code",
           "expected": "system-error"
-        },
-        {
-          "state": "retry",
-          "matcher": "error",
-          "expected": "InvalidSpotInstanceRequestID.NotFound"
         }
       ]
     },

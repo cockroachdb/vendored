@@ -12,18 +12,19 @@ const opDeleteReportDefinition = "DeleteReportDefinition"
 
 // DeleteReportDefinitionRequest generates a "aws/request.Request" representing the
 // client's request for the DeleteReportDefinition operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See DeleteReportDefinition for usage and error information.
 //
-// See DeleteReportDefinition for more information on using the DeleteReportDefinition
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the DeleteReportDefinition method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the DeleteReportDefinitionRequest method.
 //    req, resp := client.DeleteReportDefinitionRequest(params)
@@ -96,18 +97,19 @@ const opDescribeReportDefinitions = "DescribeReportDefinitions"
 
 // DescribeReportDefinitionsRequest generates a "aws/request.Request" representing the
 // client's request for the DescribeReportDefinitions operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See DescribeReportDefinitions for usage and error information.
 //
-// See DescribeReportDefinitions for more information on using the DescribeReportDefinitions
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the DescribeReportDefinitions method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the DescribeReportDefinitionsRequest method.
 //    req, resp := client.DescribeReportDefinitionsRequest(params)
@@ -231,18 +233,19 @@ const opPutReportDefinition = "PutReportDefinition"
 
 // PutReportDefinitionRequest generates a "aws/request.Request" representing the
 // client's request for the PutReportDefinition operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See PutReportDefinition for usage and error information.
 //
-// See PutReportDefinition for more information on using the PutReportDefinition
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the PutReportDefinition method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the PutReportDefinitionRequest method.
 //    req, resp := client.PutReportDefinitionRequest(params)

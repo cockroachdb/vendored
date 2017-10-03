@@ -17,18 +17,19 @@ const opCreateIdentityPool = "CreateIdentityPool"
 
 // CreateIdentityPoolRequest generates a "aws/request.Request" representing the
 // client's request for the CreateIdentityPool operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See CreateIdentityPool for usage and error information.
 //
-// See CreateIdentityPool for more information on using the CreateIdentityPool
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the CreateIdentityPool method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the CreateIdentityPoolRequest method.
 //    req, resp := client.CreateIdentityPoolRequest(params)
@@ -126,18 +127,19 @@ const opDeleteIdentities = "DeleteIdentities"
 
 // DeleteIdentitiesRequest generates a "aws/request.Request" representing the
 // client's request for the DeleteIdentities operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See DeleteIdentities for usage and error information.
 //
-// See DeleteIdentities for more information on using the DeleteIdentities
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the DeleteIdentities method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the DeleteIdentitiesRequest method.
 //    req, resp := client.DeleteIdentitiesRequest(params)
@@ -214,18 +216,19 @@ const opDeleteIdentityPool = "DeleteIdentityPool"
 
 // DeleteIdentityPoolRequest generates a "aws/request.Request" representing the
 // client's request for the DeleteIdentityPool operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See DeleteIdentityPool for usage and error information.
 //
-// See DeleteIdentityPool for more information on using the DeleteIdentityPool
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the DeleteIdentityPool method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the DeleteIdentityPoolRequest method.
 //    req, resp := client.DeleteIdentityPoolRequest(params)
@@ -311,18 +314,19 @@ const opDescribeIdentity = "DescribeIdentity"
 
 // DescribeIdentityRequest generates a "aws/request.Request" representing the
 // client's request for the DescribeIdentity operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See DescribeIdentity for usage and error information.
 //
-// See DescribeIdentity for more information on using the DescribeIdentity
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the DescribeIdentity method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the DescribeIdentityRequest method.
 //    req, resp := client.DescribeIdentityRequest(params)
@@ -406,18 +410,19 @@ const opDescribeIdentityPool = "DescribeIdentityPool"
 
 // DescribeIdentityPoolRequest generates a "aws/request.Request" representing the
 // client's request for the DescribeIdentityPool operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See DescribeIdentityPool for usage and error information.
 //
-// See DescribeIdentityPool for more information on using the DescribeIdentityPool
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the DescribeIdentityPool method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the DescribeIdentityPoolRequest method.
 //    req, resp := client.DescribeIdentityPoolRequest(params)
@@ -501,18 +506,19 @@ const opGetCredentialsForIdentity = "GetCredentialsForIdentity"
 
 // GetCredentialsForIdentityRequest generates a "aws/request.Request" representing the
 // client's request for the GetCredentialsForIdentity operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See GetCredentialsForIdentity for usage and error information.
 //
-// See GetCredentialsForIdentity for more information on using the GetCredentialsForIdentity
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the GetCredentialsForIdentity method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the GetCredentialsForIdentityRequest method.
 //    req, resp := client.GetCredentialsForIdentityRequest(params)
@@ -610,18 +616,19 @@ const opGetId = "GetId"
 
 // GetIdRequest generates a "aws/request.Request" representing the
 // client's request for the GetId operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See GetId for usage and error information.
 //
-// See GetId for more information on using the GetId
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the GetId method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the GetIdRequest method.
 //    req, resp := client.GetIdRequest(params)
@@ -716,18 +723,19 @@ const opGetIdentityPoolRoles = "GetIdentityPoolRoles"
 
 // GetIdentityPoolRolesRequest generates a "aws/request.Request" representing the
 // client's request for the GetIdentityPoolRoles operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See GetIdentityPoolRoles for usage and error information.
 //
-// See GetIdentityPoolRoles for more information on using the GetIdentityPoolRoles
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the GetIdentityPoolRoles method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the GetIdentityPoolRolesRequest method.
 //    req, resp := client.GetIdentityPoolRolesRequest(params)
@@ -814,18 +822,19 @@ const opGetOpenIdToken = "GetOpenIdToken"
 
 // GetOpenIdTokenRequest generates a "aws/request.Request" representing the
 // client's request for the GetOpenIdToken operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See GetOpenIdToken for usage and error information.
 //
-// See GetOpenIdToken for more information on using the GetOpenIdToken
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the GetOpenIdToken method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the GetOpenIdTokenRequest method.
 //    req, resp := client.GetOpenIdTokenRequest(params)
@@ -920,18 +929,19 @@ const opGetOpenIdTokenForDeveloperIdentity = "GetOpenIdTokenForDeveloperIdentity
 
 // GetOpenIdTokenForDeveloperIdentityRequest generates a "aws/request.Request" representing the
 // client's request for the GetOpenIdTokenForDeveloperIdentity operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See GetOpenIdTokenForDeveloperIdentity for usage and error information.
 //
-// See GetOpenIdTokenForDeveloperIdentity for more information on using the GetOpenIdTokenForDeveloperIdentity
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the GetOpenIdTokenForDeveloperIdentity method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the GetOpenIdTokenForDeveloperIdentityRequest method.
 //    req, resp := client.GetOpenIdTokenForDeveloperIdentityRequest(params)
@@ -1035,18 +1045,19 @@ const opListIdentities = "ListIdentities"
 
 // ListIdentitiesRequest generates a "aws/request.Request" representing the
 // client's request for the ListIdentities operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See ListIdentities for usage and error information.
 //
-// See ListIdentities for more information on using the ListIdentities
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the ListIdentities method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the ListIdentitiesRequest method.
 //    req, resp := client.ListIdentitiesRequest(params)
@@ -1129,18 +1140,19 @@ const opListIdentityPools = "ListIdentityPools"
 
 // ListIdentityPoolsRequest generates a "aws/request.Request" representing the
 // client's request for the ListIdentityPools operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See ListIdentityPools for usage and error information.
 //
-// See ListIdentityPools for more information on using the ListIdentityPools
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the ListIdentityPools method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the ListIdentityPoolsRequest method.
 //    req, resp := client.ListIdentityPoolsRequest(params)
@@ -1219,18 +1231,19 @@ const opLookupDeveloperIdentity = "LookupDeveloperIdentity"
 
 // LookupDeveloperIdentityRequest generates a "aws/request.Request" representing the
 // client's request for the LookupDeveloperIdentity operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See LookupDeveloperIdentity for usage and error information.
 //
-// See LookupDeveloperIdentity for more information on using the LookupDeveloperIdentity
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the LookupDeveloperIdentity method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the LookupDeveloperIdentityRequest method.
 //    req, resp := client.LookupDeveloperIdentityRequest(params)
@@ -1324,18 +1337,19 @@ const opMergeDeveloperIdentities = "MergeDeveloperIdentities"
 
 // MergeDeveloperIdentitiesRequest generates a "aws/request.Request" representing the
 // client's request for the MergeDeveloperIdentities operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See MergeDeveloperIdentities for usage and error information.
 //
-// See MergeDeveloperIdentities for more information on using the MergeDeveloperIdentities
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the MergeDeveloperIdentities method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the MergeDeveloperIdentitiesRequest method.
 //    req, resp := client.MergeDeveloperIdentitiesRequest(params)
@@ -1428,18 +1442,19 @@ const opSetIdentityPoolRoles = "SetIdentityPoolRoles"
 
 // SetIdentityPoolRolesRequest generates a "aws/request.Request" representing the
 // client's request for the SetIdentityPoolRoles operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See SetIdentityPoolRoles for usage and error information.
 //
-// See SetIdentityPoolRoles for more information on using the SetIdentityPoolRoles
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the SetIdentityPoolRoles method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the SetIdentityPoolRolesRequest method.
 //    req, resp := client.SetIdentityPoolRolesRequest(params)
@@ -1532,18 +1547,19 @@ const opUnlinkDeveloperIdentity = "UnlinkDeveloperIdentity"
 
 // UnlinkDeveloperIdentityRequest generates a "aws/request.Request" representing the
 // client's request for the UnlinkDeveloperIdentity operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See UnlinkDeveloperIdentity for usage and error information.
 //
-// See UnlinkDeveloperIdentity for more information on using the UnlinkDeveloperIdentity
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the UnlinkDeveloperIdentity method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the UnlinkDeveloperIdentityRequest method.
 //    req, resp := client.UnlinkDeveloperIdentityRequest(params)
@@ -1635,18 +1651,19 @@ const opUnlinkIdentity = "UnlinkIdentity"
 
 // UnlinkIdentityRequest generates a "aws/request.Request" representing the
 // client's request for the UnlinkIdentity operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See UnlinkIdentity for usage and error information.
 //
-// See UnlinkIdentity for more information on using the UnlinkIdentity
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the UnlinkIdentity method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the UnlinkIdentityRequest method.
 //    req, resp := client.UnlinkIdentityRequest(params)
@@ -1741,18 +1758,19 @@ const opUpdateIdentityPool = "UpdateIdentityPool"
 
 // UpdateIdentityPoolRequest generates a "aws/request.Request" representing the
 // client's request for the UpdateIdentityPool operation. The "output" return
-// value will be populated with the request's response once the request complets
-// successfuly.
+// value can be used to capture response data after the request's "Send" method
+// is called.
 //
-// Use "Send" method on the returned Request to send the API call to the service.
-// the "output" return value is not valid until after Send returns without error.
+// See UpdateIdentityPool for usage and error information.
 //
-// See UpdateIdentityPool for more information on using the UpdateIdentityPool
-// API call, and error handling.
+// Creating a request object using this method should be used when you want to inject
+// custom logic into the request's lifecycle using a custom handler, or if you want to
+// access properties on the request object before or after sending the request. If
+// you just want the service response, call the UpdateIdentityPool method directly
+// instead.
 //
-// This method is useful when you want to inject custom logic or configuration
-// into the SDK's request lifecycle. Such as custom headers, or retry logic.
-//
+// Note: You must call the "Send" method on the returned request object in order
+// to execute the request.
 //
 //    // Example sending a request using the UpdateIdentityPoolRequest method.
 //    req, resp := client.UpdateIdentityPoolRequest(params)

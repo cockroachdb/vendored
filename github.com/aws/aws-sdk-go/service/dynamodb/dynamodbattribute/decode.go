@@ -16,7 +16,7 @@ import (
 // 			Value int
 // 		}
 //
-// 		func (u *exampleUnmarshaler) UnmarshalDynamoDBAttributeValue(av *dynamodb.AttributeValue) error {
+// 		type (u *exampleUnmarshaler) UnmarshalDynamoDBAttributeValue(av *dynamodb.AttributeValue) error {
 // 			if av.N == nil {
 // 				return nil
 // 			}
@@ -153,7 +153,6 @@ var stringInterfaceMapType = reflect.TypeOf(map[string]interface{}(nil))
 var byteSliceType = reflect.TypeOf([]byte(nil))
 var byteSliceSlicetype = reflect.TypeOf([][]byte(nil))
 var numberType = reflect.TypeOf(Number(""))
-var timeType = reflect.TypeOf(time.Time{})
 
 func (d *Decoder) decode(av *dynamodb.AttributeValue, v reflect.Value, fieldTag tag) error {
 	var u Unmarshaler
@@ -339,12 +338,12 @@ func (d *Decoder) decodeNumber(n *string, v reflect.Value, fieldTag tag) error {
 		}
 		v.SetFloat(i)
 	default:
-		if v.Type().ConvertibleTo(timeType) && fieldTag.AsUnixTime {
+		if _, ok := v.Interface().(time.Time); ok && fieldTag.AsUnixTime {
 			t, err := decodeUnixTime(*n)
 			if err != nil {
 				return err
 			}
-			v.Set(reflect.ValueOf(t).Convert(v.Type()))
+			v.Set(reflect.ValueOf(t))
 			return nil
 		}
 		return &UnmarshalTypeError{Value: "number", Type: v.Type()}
@@ -503,12 +502,12 @@ func (d *Decoder) decodeString(s *string, v reflect.Value, fieldTag tag) error {
 
 	// To maintain backwards compatibility with ConvertFrom family of methods which
 	// converted strings to time.Time structs
-	if v.Type().ConvertibleTo(timeType) {
+	if _, ok := v.Interface().(time.Time); ok {
 		t, err := time.Parse(time.RFC3339, *s)
 		if err != nil {
 			return err
 		}
-		v.Set(reflect.ValueOf(t).Convert(v.Type()))
+		v.Set(reflect.ValueOf(t))
 		return nil
 	}
 
@@ -565,7 +564,7 @@ func decodeUnixTime(n string) (time.Time, error) {
 	v, err := strconv.ParseInt(n, 10, 64)
 	if err != nil {
 		return time.Time{}, &UnmarshalError{
-			Err: err, Value: n, Type: timeType,
+			Err: err, Value: n, Type: reflect.TypeOf(time.Time{}),
 		}
 	}
 
