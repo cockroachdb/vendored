@@ -1,0 +1,13 @@
+diff --git a/src/c-libedit/sig.c b/src/c-libedit/sig.c
+index 83742a3..13b3ee2 100644
+--- a/c-libedit/sig.c
++++ b/c-libedit/sig.c
+@@ -167,7 +167,7 @@ sig_set(EditLine *el)
+ 	struct sigaction osa, nsa;
+ 
+ 	nsa.sa_handler = sig_handler;
+-	nsa.sa_flags = 0;
++	nsa.sa_flags = SA_RESTART;
+ 	sigemptyset(&nsa.sa_mask);
+ 
+ 	(void) sigprocmask(SIG_BLOCK, &el->el_signal->sig_set, &oset);
