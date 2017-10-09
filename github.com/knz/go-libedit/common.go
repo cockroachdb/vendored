@@ -9,3 +9,4 @@ type RightPromptGenerator = common.RightPromptGenerator
 type CompletionGenerator = common.CompletionGenerator
 
 var ErrInterrupted = common.ErrInterrupted
+var ErrWidecharNotSupported = common.ErrWidecharNotSupported

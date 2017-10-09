@@ -14,11 +14,14 @@ extern char *go_libedit_emptycstring;
 extern const char* go_libedit_mode_read;
 extern const char* go_libedit_mode_write;
 extern const char* go_libedit_mode_append;
+extern const char *go_libedit_locale1;
+extern const char *go_libedit_locale2;
+
 int go_libedit_get_clientdata(EditLine *el);
 void go_libedit_set_clientdata(EditLine *el, int v);
 void go_libedit_set_string_array(char **ar, int p, char *s);
 
-char *go_libedit_gets(EditLine *el, int *count, int *interrupted);
+void *go_libedit_gets(EditLine *el, int *count, int *interrupted, int wc);
 
 typedef char *(*go_libedit_promptgen)(EditLine*);
 void go_libedit_set_prompt(EditLine *el, int p, go_libedit_promptgen f);

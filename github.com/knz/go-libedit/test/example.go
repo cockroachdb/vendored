@@ -27,7 +27,7 @@ func (_ example) GetCompletions(word string) []string {
 }
 
 func main() {
-	el, err := libedit.Init("example")
+	el, err := libedit.Init("example", true)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -39,6 +39,8 @@ func main() {
 	el.RebindControlKeys()
 
 	el.UseHistory(-1, true)
+	el.LoadHistory("hist")
+	el.SetAutoSaveHistory("hist", true)
 	el.SetCompleter(example{})
 	el.SetLeftPrompt(example{})
 	el.SetRightPrompt(example{})

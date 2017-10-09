@@ -10,7 +10,7 @@ import (
 
 type EditLine = edit.EditLine
 
-func Init(x string) (EditLine, error) { return edit.Init(x) }
-func InitFiles(a string, stdin, stdout, stderr *os.File) (EditLine, error) {
-	return edit.InitFiles(a, stdin, stdout, stderr)
+func Init(x string, w bool) (EditLine, error) { return edit.Init(x, w) }
+func InitFiles(a string, w bool, stdin, stdout, stderr *os.File) (EditLine, error) {
+	return edit.InitFiles(a, w, stdin, stdout, stderr)
 }

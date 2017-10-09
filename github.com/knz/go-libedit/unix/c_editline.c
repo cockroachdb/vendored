@@ -12,6 +12,8 @@ char *go_libedit_emptycstring = (char*)"";
 const char* go_libedit_mode_read = "r";
 const char* go_libedit_mode_write = "w";
 const char* go_libedit_mode_append = "a";
+const char* go_libedit_locale1 = "en_US.UTF-8";
+const char* go_libedit_locale2 = "C.UTF-8";
 
 go_libedit_promptgen go_libedit_prompt_left_ptr = go_libedit_prompt_left;
 go_libedit_promptgen go_libedit_prompt_right_ptr = go_libedit_prompt_right;
@@ -235,9 +237,8 @@ static unsigned char _el_rl_complete(EditLine *el, int ch) {
 
 /*************** el_gets *************/
 
-
-char *go_libedit_gets(EditLine *el, int *count, int *interrupted) {
-    char *ret = NULL;
+void *go_libedit_gets(EditLine *el, int *count, int *interrupted, int widechar) {
+    void *ret = NULL;
     int saveerr = 0;
 
     // Disable conversion of Ctrl+C to signal.
@@ -269,7 +270,11 @@ char *go_libedit_gets(EditLine *el, int *count, int *interrupted) {
     }
 
     // Read the line.
-    ret = (char *)el_gets(el, count);
+    if (widechar) {
+	ret = (void *)el_wgets(el, count);
+    } else {
+	ret = (void *)el_gets(el, count);
+    }
     saveerr = errno;
 
 restore:

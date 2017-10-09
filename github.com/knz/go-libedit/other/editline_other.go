@@ -21,11 +21,11 @@ type state struct {
 
 var editors []state
 
-func Init(x string) (EditLine, error) {
-	return InitFiles(x, os.Stdin, os.Stdout, os.Stderr)
+func Init(x string, w bool) (EditLine, error) {
+	return InitFiles(x, w, os.Stdin, os.Stdout, os.Stderr)
 }
 
-func InitFiles(_ string, stdin, stdout, stderr *os.File) (EditLine, error) {
+func InitFiles(_ string, _ bool, stdin, stdout, stderr *os.File) (EditLine, error) {
 	st := state{
 		reader: bufio.NewReader(stdin),
 		stdin:  stdin, stdout: stdout, stderr: stderr,

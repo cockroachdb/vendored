@@ -15,3 +15,4 @@ type CompletionGenerator interface {
 }
 
 var ErrInterrupted = errors.New("interrupted")
+var ErrWidecharNotSupported = errors.New("cannot enable wide character support")

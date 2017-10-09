@@ -21,6 +21,7 @@ import (
 // #include <stdio.h>
 // #include <unistd.h>
 // #include <limits.h>
+// #include <locale.h>
 //
 // #include <histedit.h>
 // #include "c_editline.h"
@@ -43,17 +44,21 @@ type state struct {
 	completer       CompletionGenerator
 	histFile        *C.char
 	autoSaveHistory bool
+	wideChars       int
 }
 
 var editors []state
 
 var errUnknown = errors.New("unknown error")
 
-func Init(appName string) (EditLine, error) {
-	return InitFiles(appName, os.Stdin, os.Stdout, os.Stderr)
+func Init(appName string, wideChars bool) (EditLine, error) {
+	return InitFiles(appName, wideChars, os.Stdin, os.Stdout, os.Stderr)
 }
 
-func InitFiles(appName string, inf, outf, errf *os.File) (e EditLine, err error) {
+func InitFiles(appName string, wideChars bool, inf, outf, errf *os.File) (e EditLine, err error) {
+	if err := setWideChars(wideChars); err != nil {
+		return -1, err
+	}
 	var inFile, outFile, errFile *C.FILE
 	defer func() {
 		if err == nil {
@@ -96,13 +101,32 @@ func InitFiles(appName string, inf, outf, errf *os.File) (e EditLine, err error)
 		return -1, fmt.Errorf("el_init: %v", err)
 	}
 
+	wc := 0
+	if wideChars {
+		wc = 1
+	}
 	st := state{
 		el:  el,
 		inf: inf, outf: outf, errf: errf,
 		cIn: inFile, cOut: outFile, cErr: errFile,
+		wideChars: wc,
 	}
 	editors = append(editors, st)
 	return EditLine(len(editors) - 1), nil
+}
+
+func setWideChars(set bool) error {
+	if set {
+		// We need to set the locale to something UTF-8 to enable wide char support.
+		l := C.setlocale(C.LC_CTYPE, C.go_libedit_locale1)
+		if l == nil {
+			l = C.setlocale(C.LC_CTYPE, C.go_libedit_locale2)
+		}
+		if l == nil {
+			return common.ErrWidecharNotSupported
+		}
+	}
+	return nil
 }
 
 func (el EditLine) RebindControlKeys() {
@@ -237,7 +261,7 @@ func (el EditLine) GetLine() (string, error) {
 
 	var count C.int
 	var interrupted C.int
-	s, err := C.go_libedit_gets(st.el, &count, &interrupted)
+	s, err := C.go_libedit_gets(st.el, &count, &interrupted, C.int(st.wideChars))
 	if interrupted > 0 {
 		// Reveal the partial line.
 		line, _ := el.GetLineInfo()
@@ -250,7 +274,25 @@ func (el EditLine) GetLine() (string, error) {
 	if s == nil {
 		return "", io.EOF
 	}
-	return C.GoStringN(s, count), nil
+	return convertRunes(st.wideChars != 0, s, count), nil
+}
+
+func convertRunes(wideChars bool, s unsafe.Pointer, count C.int) string {
+	if wideChars {
+		var buf [C.MB_LEN_MAX]C.char
+		sbuf := make([]byte, 0, int(count))
+		for i := 0; i < int(count); i++ {
+			wc := *(*C.wchar_t)(unsafe.Pointer(uintptr(unsafe.Pointer(s)) + uintptr(i)*C.sizeof_wchar_t))
+			sz := C.wctomb(&buf[0], wc)
+			for j := 0; j < int(sz); j++ {
+				sbuf = append(sbuf, byte(buf[j]))
+			}
+		}
+		return string(sbuf)
+	} else {
+		cs := (*C.char)(s)
+		return C.GoStringN(cs, count)
+	}
 }
 
 func (el EditLine) Stdin() *os.File {
@@ -291,10 +333,21 @@ func (el EditLine) SetRightPrompt(gen RightPromptGenerator) {
 
 func (el EditLine) GetLineInfo() (string, int) {
 	st := &editors[el]
-	li := C.el_line(st.el)
-	return C.GoStringN(li.buffer,
-		C.int(uintptr(unsafe.Pointer(li.lastchar))-uintptr(unsafe.Pointer(li.buffer))),
-	), int(uintptr(unsafe.Pointer(li.cursor)) - uintptr(unsafe.Pointer(li.buffer)))
+	var cursor int
+	var count C.int
+	var buf unsafe.Pointer
+	if st.wideChars != 0 {
+		li := C.el_wline(st.el)
+		buf = unsafe.Pointer(li.buffer)
+		count = C.int(uintptr(unsafe.Pointer(li.lastchar))-uintptr(buf)) / C.sizeof_wchar_t
+		cursor = int(uintptr(unsafe.Pointer(li.cursor))-uintptr(buf)) / C.sizeof_wchar_t
+	} else {
+		li := C.el_line(st.el)
+		buf = unsafe.Pointer(li.buffer)
+		count = C.int(uintptr(unsafe.Pointer(li.lastchar)) - uintptr(buf))
+		cursor = int(uintptr(unsafe.Pointer(li.cursor)) - uintptr(buf))
+	}
+	return convertRunes(st.wideChars != 0, buf, count), cursor
 }
 
 //export go_libedit_getcompletions
