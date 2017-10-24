@@ -28,17 +28,14 @@ import (
 import "C"
 
 type EditLine int
-type LeftPromptGenerator = common.LeftPromptGenerator
-type RightPromptGenerator = common.RightPromptGenerator
 type CompletionGenerator = common.CompletionGenerator
 
 type state struct {
 	el              *C.EditLine
+	sigcfg          unsafe.Pointer
 	h               *C.History
 	cIn, cOut, cErr *C.FILE
 	inf, outf, errf *os.File
-	promptGenLeft   LeftPromptGenerator
-	promptGenRight  RightPromptGenerator
 	cPromptLeft     *C.char
 	cPromptRight    *C.char
 	completer       CompletionGenerator
@@ -89,7 +86,8 @@ func InitFiles(appName string, wideChars bool, inf, outf, errf *os.File) (e Edit
 	}
 	cAppName := C.CString(appName)
 	defer C.free(unsafe.Pointer(cAppName))
-	el, err := C.go_libedit_init(cAppName, inFile, outFile, errFile)
+	var sigcfg unsafe.Pointer
+	el, err := C.go_libedit_init(cAppName, &sigcfg, inFile, outFile, errFile)
 	// If the settings file did not exist, ignore the error.
 	if err == syscall.ENOENT {
 		err = nil
@@ -106,8 +104,9 @@ func InitFiles(appName string, wideChars bool, inf, outf, errf *os.File) (e Edit
 		wc = 1
 	}
 	st := state{
-		el:  el,
-		inf: inf, outf: outf, errf: errf,
+		el:     el,
+		sigcfg: sigcfg,
+		inf:    inf, outf: outf, errf: errf,
 		cIn: inFile, cOut: outFile, cErr: errFile,
 		wideChars: wc,
 	}
@@ -140,7 +139,7 @@ func (el EditLine) Close() {
 		// Already closed.
 		return
 	}
-	C.el_end(st.el)
+	C.go_libedit_close(st.el, st.sigcfg)
 	if st.h != nil {
 		C.history_end(st.h)
 	}
@@ -256,20 +255,26 @@ func (el EditLine) UseHistory(maxEntries int, dedup bool) error {
 	return nil
 }
 
+var errUnknownError = errors.New("unknown error")
+
 func (el EditLine) GetLine() (string, error) {
 	st := &editors[el]
 
 	var count C.int
 	var interrupted C.int
-	s, err := C.go_libedit_gets(st.el, &count, &interrupted, C.int(st.wideChars))
+	s, err := C.go_libedit_gets(st.el, st.cPromptLeft, st.cPromptRight,
+		st.sigcfg, &count, &interrupted, C.int(st.wideChars))
 	if interrupted > 0 {
 		// Reveal the partial line.
 		line, _ := el.GetLineInfo()
 		C.el_reset(st.el)
 		return line, common.ErrInterrupted
 	}
-	if err != nil {
-		return "", err
+	if count == -1 {
+		if err != nil {
+			return "", err
+		}
+		return "", errUnknownError
 	}
 	if s == nil {
 		return "", io.EOF
@@ -311,24 +316,20 @@ func (el EditLine) SetCompleter(gen CompletionGenerator) {
 	editors[el].completer = gen
 }
 
-func (el EditLine) SetLeftPrompt(gen LeftPromptGenerator) {
+func (el EditLine) SetLeftPrompt(prompt string) {
 	st := &editors[el]
-	st.promptGenLeft = gen
-	if gen != nil {
-		C.go_libedit_set_prompt(st.el, C.EL_PROMPT, C.go_libedit_prompt_left_ptr)
-	} else {
-		C.go_libedit_set_prompt(st.el, C.EL_PROMPT, nil)
+	if st.cPromptLeft != nil {
+		C.free(unsafe.Pointer(st.cPromptLeft))
 	}
+	st.cPromptLeft = C.CString(prompt)
 }
 
-func (el EditLine) SetRightPrompt(gen RightPromptGenerator) {
+func (el EditLine) SetRightPrompt(prompt string) {
 	st := &editors[el]
-	st.promptGenRight = gen
-	if gen != nil {
-		C.go_libedit_set_prompt(st.el, C.EL_RPROMPT, C.go_libedit_prompt_right_ptr)
-	} else {
-		C.go_libedit_set_prompt(st.el, C.EL_RPROMPT, nil)
+	if st.cPromptRight != nil {
+		C.free(unsafe.Pointer(st.cPromptRight))
 	}
+	st.cPromptRight = C.CString(prompt)
 }
 
 func (el EditLine) GetLineInfo() (string, int) {
@@ -372,42 +373,4 @@ func go_libedit_getcompletions(cI C.int, cWord *C.char) **C.char {
 	}
 	C.go_libedit_set_string_array(array, C.int(len(matches)), nil)
 	return array
-}
-
-//export go_libedit_prompt_left
-func go_libedit_prompt_left(el *C.EditLine) *C.char {
-	i := C.go_libedit_get_clientdata(el)
-	e := int(i)
-	if e < 0 || e >= len(editors) {
-		return C.go_libedit_emptycstring
-	}
-	st := &editors[e]
-	if st.cPromptLeft != nil {
-		C.free(unsafe.Pointer(st.cPromptLeft))
-		st.cPromptLeft = nil
-	}
-	if st.promptGenLeft == nil {
-		return C.go_libedit_emptycstring
-	}
-	st.cPromptLeft = C.CString(st.promptGenLeft.GetLeftPrompt())
-	return st.cPromptLeft
-}
-
-//export go_libedit_prompt_right
-func go_libedit_prompt_right(el *C.EditLine) *C.char {
-	i := C.go_libedit_get_clientdata(el)
-	e := int(i)
-	if e < 0 || e >= len(editors) {
-		return C.go_libedit_emptycstring
-	}
-	st := &editors[e]
-	if st.cPromptRight != nil {
-		C.free(unsafe.Pointer(st.cPromptRight))
-		st.cPromptRight = nil
-	}
-	if st.promptGenRight == nil {
-		return C.go_libedit_emptycstring
-	}
-	st.cPromptRight = C.CString(st.promptGenRight.GetRightPrompt())
-	return st.cPromptRight
 }

@@ -27,9 +27,6 @@ cp -a libedit-*/src/editline c-libedit/
 cp -a libedit-*/src/*.[ch] c-libedit/
 cp -a build/config.h build/src/*.h c-libedit/linux-build/
 
-# Linux needs SA_RESTART explicitly, otherwise double signal will kill
-# readline. (It's default on BSD.)
-patch -p1 <sa-restart.patch
 # This Linux readline is out of sync with the main BSD repo. The Newer
 # BSD readlines have 3 extra arguments on fn_complete().  Make them
 # exist so that the C calls don't crash.

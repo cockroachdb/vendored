@@ -5,19 +5,12 @@ import (
 	"io"
 	"log"
 	"strings"
+	"time"
 
 	libedit "github.com/knz/go-libedit"
 )
 
 type example struct{}
-
-func (_ example) GetLeftPrompt() string {
-	return "hello> "
-}
-
-func (_ example) GetRightPrompt() string {
-	return "(-:"
-}
 
 func (_ example) GetCompletions(word string) []string {
 	if strings.HasPrefix(word, "he") {
@@ -42,8 +35,8 @@ func main() {
 	el.LoadHistory("hist")
 	el.SetAutoSaveHistory("hist", true)
 	el.SetCompleter(example{})
-	el.SetLeftPrompt(example{})
-	el.SetRightPrompt(example{})
+	el.SetLeftPrompt("hello> ")
+	el.SetRightPrompt("(-:")
 	for {
 		s, err := el.GetLine()
 		if err != nil {
@@ -57,6 +50,8 @@ func main() {
 			log.Fatal(err)
 		}
 		fmt.Printf("echo %q\n", s)
+		time.Sleep(2 * time.Second)
+		fmt.Println("ok")
 		if err := el.AddHistory(s); err != nil {
 			log.Fatal(err)
 		}

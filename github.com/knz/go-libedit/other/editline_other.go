@@ -8,13 +8,11 @@ import (
 )
 
 type EditLine int
-type LeftPromptGenerator = common.LeftPromptGenerator
-type RightPromptGenerator = common.RightPromptGenerator
 type CompletionGenerator = common.CompletionGenerator
 
 type state struct {
 	reader                *bufio.Reader
-	promptGenLeft         LeftPromptGenerator
+	promptLeft            string
 	line                  string
 	stdin, stdout, stderr *os.File
 }
@@ -34,15 +32,15 @@ func InitFiles(_ string, _ bool, stdin, stdout, stderr *os.File) (EditLine, erro
 	return EditLine(len(editors) - 1), nil
 }
 
-func (el EditLine) RebindControlKeys()                    {}
-func (el EditLine) Close()                                {}
-func (el EditLine) SaveHistory() error                    { return nil }
-func (el EditLine) AddHistory(_ string) error             { return nil }
-func (el EditLine) LoadHistory(_ string) error            { return nil }
-func (el EditLine) SetAutoSaveHistory(_ string, _ bool)   {}
-func (el EditLine) UseHistory(_ int, _ bool) error        { return nil }
-func (el EditLine) SetCompleter(_ CompletionGenerator)    {}
-func (el EditLine) SetRightPrompt(_ RightPromptGenerator) {}
+func (el EditLine) RebindControlKeys()                  {}
+func (el EditLine) Close()                              {}
+func (el EditLine) SaveHistory() error                  { return nil }
+func (el EditLine) AddHistory(_ string) error           { return nil }
+func (el EditLine) LoadHistory(_ string) error          { return nil }
+func (el EditLine) SetAutoSaveHistory(_ string, _ bool) {}
+func (el EditLine) UseHistory(_ int, _ bool) error      { return nil }
+func (el EditLine) SetCompleter(_ CompletionGenerator)  {}
+func (el EditLine) SetRightPrompt(_ string)             {}
 
 func (el EditLine) Stdin() *os.File {
 	return editors[el].stdin
@@ -56,9 +54,9 @@ func (el EditLine) Stderr() *os.File {
 	return editors[el].stderr
 }
 
-func (el EditLine) SetLeftPrompt(l LeftPromptGenerator) {
+func (el EditLine) SetLeftPrompt(l string) {
 	st := &editors[el]
-	st.promptGenLeft = l
+	st.promptLeft = l
 }
 
 func (el EditLine) GetLineInfo() (string, int) {
@@ -68,10 +66,8 @@ func (el EditLine) GetLineInfo() (string, int) {
 
 func (el EditLine) GetLine() (string, error) {
 	st := &editors[el]
-	if st.promptGenLeft != nil {
-		st.stdout.WriteString(st.promptGenLeft.GetLeftPrompt())
-		st.stdout.Sync()
-	}
+	st.stdout.WriteString(st.promptLeft)
+	st.stdout.Sync()
 	line, err := st.reader.ReadString('\n')
 	if err != nil {
 		return "", err
