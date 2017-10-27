@@ -18,49 +18,58 @@ package integration
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/coreos/etcd/clientv3"
+	"github.com/coreos/etcd/etcdserver/api/v3rpc/rpctypes"
 	"github.com/coreos/etcd/integration"
 	"github.com/coreos/etcd/pkg/testutil"
 )
 
-// TestNetworkPartitionBalancerPut tests when one member becomes isolated,
+var errExpected = errors.New("expected error")
+
+// TestBalancerUnderNetworkPartitionPut tests when one member becomes isolated,
 // first Put request fails, and following retry succeeds with client balancer
 // switching to others.
-func TestNetworkPartitionBalancerPut(t *testing.T) {
-	testNetworkPartitionBalancer(t, func(cli *clientv3.Client, ctx context.Context) error {
+func TestBalancerUnderNetworkPartitionPut(t *testing.T) {
+	testBalancerUnderNetworkPartition(t, func(cli *clientv3.Client, ctx context.Context) error {
 		_, err := cli.Put(ctx, "a", "b")
+		if err == context.DeadlineExceeded || err == rpctypes.ErrTimeout {
+			return errExpected
+		}
 		return err
 	})
 }
 
-// TestNetworkPartitionBalancerGet tests when one member becomes isolated,
+// TestBalancerUnderNetworkPartitionGet tests when one member becomes isolated,
 // first Get request fails, and following retry succeeds with client balancer
 // switching to others.
-func TestNetworkPartitionBalancerGet(t *testing.T) {
-	testNetworkPartitionBalancer(t, func(cli *clientv3.Client, ctx context.Context) error {
+func TestBalancerUnderNetworkPartitionGet(t *testing.T) {
+	testBalancerUnderNetworkPartition(t, func(cli *clientv3.Client, ctx context.Context) error {
 		_, err := cli.Get(ctx, "a")
+		if err == context.DeadlineExceeded {
+			return errExpected
+		}
 		return err
 	})
 }
 
-func testNetworkPartitionBalancer(t *testing.T, op func(*clientv3.Client, context.Context) error) {
+func testBalancerUnderNetworkPartition(t *testing.T, op func(*clientv3.Client, context.Context) error) {
 	defer testutil.AfterTest(t)
 
 	clus := integration.NewClusterV3(t, &integration.ClusterConfig{
 		Size:                 3,
 		GRPCKeepAliveMinTime: time.Millisecond, // avoid too_many_pings
+		SkipCreatingClient:   true,
 	})
 	defer clus.Terminate(t)
 
 	// expect pin ep[0]
 	ccfg := clientv3.Config{
-		Endpoints:            []string{clus.Members[0].GRPCAddr()},
-		DialTimeout:          3 * time.Second,
-		DialKeepAliveTime:    2 * time.Second,
-		DialKeepAliveTimeout: 2 * time.Second,
+		Endpoints:   []string{clus.Members[0].GRPCAddr()},
+		DialTimeout: 3 * time.Second,
 	}
 	cli, err := clientv3.New(ccfg)
 	if err != nil {
@@ -68,12 +77,12 @@ func testNetworkPartitionBalancer(t *testing.T, op func(*clientv3.Client, contex
 	}
 	defer cli.Close()
 
+	// wait for ep[0] to be pinned
+	mustWaitPinReady(t, cli)
+
 	// add other endpoints for later endpoint switch
 	cli.SetEndpoints(clus.Members[0].GRPCAddr(), clus.Members[1].GRPCAddr(), clus.Members[2].GRPCAddr())
-
-	time.Sleep(3 * time.Second)
-	clus.Members[0].InjectPartition(t, clus.Members[1:])
-	defer clus.Members[0].RecoverPartition(t, clus.Members[1:])
+	clus.Members[0].InjectPartition(t, clus.Members[1:]...)
 
 	for i := 0; i < 2; i++ {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -82,8 +91,8 @@ func testNetworkPartitionBalancer(t *testing.T, op func(*clientv3.Client, contex
 		if err == nil {
 			break
 		}
-		if err != context.DeadlineExceeded {
-			t.Fatalf("#%d: expected %v, got %v", i, context.DeadlineExceeded, err)
+		if err != errExpected {
+			t.Errorf("#%d: expected %v, got %v", i, errExpected, err)
 		}
 		// give enough time for endpoint switch
 		// TODO: remove random sleep by syncing directly with balancer
@@ -92,6 +101,72 @@ func testNetworkPartitionBalancer(t *testing.T, op func(*clientv3.Client, contex
 		}
 	}
 	if err != nil {
-		t.Fatalf("balancer did not switch in time (%v)", err)
+		t.Errorf("balancer did not switch in time (%v)", err)
+	}
+}
+
+func TestBalancerUnderNetworkPartitionWatchLeader(t *testing.T) {
+	testBalancerUnderNetworkPartitionWatch(t, true)
+}
+
+func TestBalancerUnderNetworkPartitionWatchFollower(t *testing.T) {
+	testBalancerUnderNetworkPartitionWatch(t, false)
+}
+
+// testBalancerUnderNetworkPartitionWatch ensures watch stream
+// to a partitioned node be closed when context requires leader.
+func testBalancerUnderNetworkPartitionWatch(t *testing.T, isolateLeader bool) {
+	defer testutil.AfterTest(t)
+
+	clus := integration.NewClusterV3(t, &integration.ClusterConfig{
+		Size:               3,
+		SkipCreatingClient: true,
+	})
+	defer clus.Terminate(t)
+
+	eps := []string{clus.Members[0].GRPCAddr(), clus.Members[1].GRPCAddr(), clus.Members[2].GRPCAddr()}
+
+	target := clus.WaitLeader(t)
+	if !isolateLeader {
+		target = (target + 1) % 3
+	}
+
+	// pin eps[target]
+	watchCli, err := clientv3.New(clientv3.Config{Endpoints: []string{eps[target]}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer watchCli.Close()
+
+	// wait for eps[target] to be pinned
+	mustWaitPinReady(t, watchCli)
+
+	// add all eps to list, so that when the original pined one fails
+	// the client can switch to other available eps
+	watchCli.SetEndpoints(eps...)
+
+	wch := watchCli.Watch(clientv3.WithRequireLeader(context.Background()), "foo", clientv3.WithCreatedNotify())
+	select {
+	case <-wch:
+	case <-time.After(3 * time.Second):
+		t.Fatal("took too long to create watch")
+	}
+
+	// isolate eps[target]
+	clus.Members[target].InjectPartition(t,
+		clus.Members[(target+1)%3],
+		clus.Members[(target+2)%3],
+	)
+
+	select {
+	case ev := <-wch:
+		if len(ev.Events) != 0 {
+			t.Fatal("expected no event")
+		}
+		if err = ev.Err(); err != rpctypes.ErrNoLeader {
+			t.Fatalf("expected %v, got %v", rpctypes.ErrNoLeader, err)
+		}
+	case <-time.After(3 * time.Second): // enough time to detect leader lost
+		t.Fatal("took too long to detect leader lost")
 	}
 }

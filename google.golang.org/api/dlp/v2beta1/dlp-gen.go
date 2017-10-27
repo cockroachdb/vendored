@@ -1125,16 +1125,16 @@ func (s *GooglePrivacyDlpV2beta1CryptoKey) MarshalJSON() ([]byte, error) {
 }
 
 // GooglePrivacyDlpV2beta1CryptoReplaceFfxFpeConfig: Replaces an
-// identifier with an surrogate using FPE with the FFX
+// identifier with a surrogate using FPE with the FFX
 // mode of operation.
 // The identifier must be representable by the US-ASCII character
 // set.
 // For a given crypto key and context, the same identifier will
 // be
 // replaced with the same surrogate.
-// Note that a given identifier must be either the empty string or be
-// at
-// least two characters long.
+// Identifiers must be at least two characters long.
+// In the case that the identifier is the empty string, it will be
+// skipped.
 type GooglePrivacyDlpV2beta1CryptoReplaceFfxFpeConfig struct {
 	// Possible values:
 	//   "FFX_COMMON_NATIVE_ALPHABET_UNSPECIFIED"
@@ -1482,6 +1482,34 @@ func (s *GooglePrivacyDlpV2beta1DeidentifyContentResponse) MarshalJSON() ([]byte
 // be used to match sensitive information specific to the data, such as
 // a list
 // of employee IDs or job titles.
+//
+// Dictionary words are case-insensitive and all characters other than
+// letters
+// and digits in the unicode [Basic
+// Multilingual
+// Plane](https://en.wikipedia.org/wiki/Plane_%28Unicode%29#
+// Basic_Multilingual_Plane)
+// will be replaced with whitespace when scanning for matches, so
+// the
+// dictionary phrase "Sam Johnson" will match all three phrases "sam
+// johnson",
+// "Sam, Johnson", and "Sam (Johnson)". Additionally, the
+// characters
+// surrounding any match must be of a different type than the
+// adjacent
+// characters within the word, so letters must be next to non-letters
+// and
+// digits next to non-digits. For example, the dictionary word "jen"
+// will
+// match the first three letters of the text "jen123" but will return
+// no
+// matches for "jennifer".
+//
+// Dictionary words containing a large number of characters that are
+// not
+// letters or digits may result in unexpected findings because such
+// characters
+// are treated as whitespace.
 type GooglePrivacyDlpV2beta1Dictionary struct {
 	// WordList: List of words or phrases to search for.
 	WordList *GooglePrivacyDlpV2beta1WordList `json:"wordList,omitempty"`
@@ -1862,7 +1890,7 @@ func (s *GooglePrivacyDlpV2beta1ImageLocation) MarshalJSON() ([]byte, error) {
 }
 
 // GooglePrivacyDlpV2beta1ImageRedactionConfig: Configuration for
-// determing how redaction of images should occur.
+// determining how redaction of images should occur.
 type GooglePrivacyDlpV2beta1ImageRedactionConfig struct {
 	// InfoType: Only one per info_type should be provided per request. If
 	// not
@@ -2382,6 +2410,20 @@ type GooglePrivacyDlpV2beta1KAnonymityConfig struct {
 	// should not
 	// contribute to the k-anonymity count more than once per equivalence
 	// class.
+	// If an entity_id appears on several rows with different
+	// quasi-identifier
+	// tuples, it will contribute to each count exactly once. This can lead
+	// to
+	// unexpected results, consider for example the following table:
+	//   entity_id | quasi_id
+	//   --------------------
+	//           1 |    "foo"
+	//           2 |    "bar"
+	//           3 |    "foo"
+	//           3 |    "bar"
+	// The anonymity value associated to entity_id 3 will be 2, even if it
+	// is
+	// the only entity_id to be associated to both values "foo" and "bar".
 	EntityId *GooglePrivacyDlpV2beta1EntityId `json:"entityId,omitempty"`
 
 	// QuasiIds: Set of fields to compute k-anonymity over. When multiple
@@ -3389,7 +3431,7 @@ func (s *GooglePrivacyDlpV2beta1Range) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields, s.NullFields)
 }
 
-// GooglePrivacyDlpV2beta1RecordCondition: A condition for determing
+// GooglePrivacyDlpV2beta1RecordCondition: A condition for determining
 // whether a transformation should be applied to
 // a field.
 type GooglePrivacyDlpV2beta1RecordCondition struct {
@@ -4153,11 +4195,11 @@ func (s *GooglePrivacyDlpV2beta1ValueFrequency) MarshalJSON() ([]byte, error) {
 // GooglePrivacyDlpV2beta1WordList: Message defining a list of words or
 // phrases to search for in the data.
 type GooglePrivacyDlpV2beta1WordList struct {
-	// Words: Words or phrases defining the dictionary. No word can be
-	// shorter than 3
-	// characters in length. To match, there must be whitespace or
-	// punctuation
-	// around the targeted string. [required]
+	// Words: Words or phrases defining the dictionary. The dictionary must
+	// contain
+	// at least one phrase and every phrase must contain at least 2
+	// characters
+	// that are letters or digits. [required]
 	Words []string `json:"words,omitempty"`
 
 	// ForceSendFields is a list of field names (e.g. "Words") to

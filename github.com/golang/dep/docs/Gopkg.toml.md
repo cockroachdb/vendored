@@ -36,6 +36,12 @@ You might also try [virtualgo](https://github.com/GetStream/vg), which installs 
 ignored = ["github.com/user/project/badpkg"]
 ```
 
+Use wildcard character (*) to define a package prefix to be ignored. Use this
+to ignore any package and their subpackages.
+```toml
+ignored = ["github.com/user/project/badpkg*"]
+```
+
 **Use this for:** preventing a package and any of that package's unique
 dependencies from being installed.
 
@@ -81,7 +87,7 @@ use a specific branch, version range, revision, or alternate source (such as a
 fork).
 
 ## `override`
-An `override` has the same structure as a `constraint` declaration, but supersede all `constraint` declarations from all projects. Only `override` declarations from the current project's are applied.
+An `override` has the same structure as a `constraint` declaration, but supersede all `constraint` declarations from all projects. Only `override` declarations from the current project's `Gopkg.toml` are applied.
 
 ```toml
 [[override]]

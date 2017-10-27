@@ -33,7 +33,7 @@ type healthCheckFunc func(ep string) (bool, error)
 // healthBalancer wraps a balancer so that it uses health checking
 // to choose its endpoints.
 type healthBalancer struct {
-	balancer
+	*simpleBalancer
 
 	// healthCheck checks an endpoint's health.
 	healthCheck        healthCheckFunc
@@ -54,20 +54,20 @@ type healthBalancer struct {
 	stopc    chan struct{}
 	stopOnce sync.Once
 
-	host2ep map[string]string
+	hostPort2ep map[string]string
 
 	wg sync.WaitGroup
 }
 
-func newHealthBalancer(b balancer, timeout time.Duration, hc healthCheckFunc) *healthBalancer {
+func newHealthBalancer(b *simpleBalancer, timeout time.Duration, hc healthCheckFunc) *healthBalancer {
 	hb := &healthBalancer{
-		balancer:    b,
-		healthCheck: hc,
-		eps:         b.endpoints(),
-		addrs:       eps2addrs(b.endpoints()),
-		host2ep:     getHost2ep(b.endpoints()),
-		unhealthy:   make(map[string]time.Time),
-		stopc:       make(chan struct{}),
+		simpleBalancer: b,
+		healthCheck:    hc,
+		eps:            b.endpoints(),
+		addrs:          eps2addrs(b.endpoints()),
+		hostPort2ep:    getHostPort2ep(b.endpoints()),
+		unhealthy:      make(map[string]time.Time),
+		stopc:          make(chan struct{}),
 	}
 	if timeout < minHealthRetryDuration {
 		timeout = minHealthRetryDuration
@@ -93,13 +93,8 @@ func (hb *healthBalancer) Up(addr grpc.Address) func(error) {
 		// timeout will induce a network I/O error, and retrying until success;
 		// finding healthy endpoint on retry could take several timeouts and redials.
 		// To avoid wasting retries, gray-list unhealthy endpoints.
-		hb.mu.Lock()
-		hb.unhealthy[addr.Addr] = time.Now()
-		hb.mu.Unlock()
+		hb.hostPortError(addr.Addr, err)
 		f(err)
-		if logger.V(4) {
-			logger.Infof("clientv3/health-balancer: %s becomes unhealthy (%v)", addr.Addr, err)
-		}
 	}
 }
 
@@ -107,28 +102,28 @@ func (hb *healthBalancer) up(addr grpc.Address) (func(error), bool) {
 	if !hb.mayPin(addr) {
 		return func(err error) {}, false
 	}
-	return hb.balancer.up(addr)
+	return hb.simpleBalancer.up(addr)
 }
 
 func (hb *healthBalancer) Close() error {
 	hb.stopOnce.Do(func() { close(hb.stopc) })
 	hb.wg.Wait()
-	return hb.balancer.Close()
+	return hb.simpleBalancer.Close()
 }
 
 func (hb *healthBalancer) updateAddrs(eps ...string) {
-	addrs, host2ep := eps2addrs(eps), getHost2ep(eps)
+	addrs, hostPort2ep := eps2addrs(eps), getHostPort2ep(eps)
 	hb.mu.Lock()
-	hb.addrs, hb.eps, hb.host2ep = addrs, eps, host2ep
+	hb.addrs, hb.eps, hb.hostPort2ep = addrs, eps, hostPort2ep
 	hb.unhealthy = make(map[string]time.Time)
 	hb.mu.Unlock()
-	hb.balancer.updateAddrs(eps...)
+	hb.simpleBalancer.updateAddrs(eps...)
 }
 
 func (hb *healthBalancer) endpoint(host string) string {
 	hb.mu.RLock()
 	defer hb.mu.RUnlock()
-	return hb.host2ep[host]
+	return hb.hostPort2ep[host]
 }
 
 func (hb *healthBalancer) endpoints() []string {
@@ -146,7 +141,7 @@ func (hb *healthBalancer) updateUnhealthy(timeout time.Duration) {
 				if time.Since(v) > timeout {
 					delete(hb.unhealthy, k)
 					if logger.V(4) {
-						logger.Infof("clientv3/health-balancer: removes %s from unhealthy after %v", k, timeout)
+						logger.Infof("clientv3/health-balancer: removes %q from unhealthy after %v", k, timeout)
 					}
 				}
 			}
@@ -155,7 +150,7 @@ func (hb *healthBalancer) updateUnhealthy(timeout time.Duration) {
 			for _, addr := range hb.liveAddrs() {
 				eps = append(eps, hb.endpoint(addr.Addr))
 			}
-			hb.balancer.updateAddrs(eps...)
+			hb.simpleBalancer.updateAddrs(eps...)
 		case <-hb.stopc:
 			return
 		}
@@ -178,17 +173,23 @@ func (hb *healthBalancer) liveAddrs() []grpc.Address {
 	return addrs
 }
 
-func (hb *healthBalancer) endpointError(addr string, err error) {
+func (hb *healthBalancer) hostPortError(hostPort string, err error) {
 	hb.mu.Lock()
-	hb.unhealthy[addr] = time.Now()
-	hb.mu.Unlock()
-	if logger.V(4) {
-		logger.Infof("clientv3/health-balancer: marking %s as unhealthy (%v)", addr, err)
+	if _, ok := hb.hostPort2ep[hostPort]; ok {
+		hb.unhealthy[hostPort] = time.Now()
+		if logger.V(4) {
+			logger.Infof("clientv3/health-balancer: marking %q as unhealthy (%q)", hostPort, err.Error())
+		}
 	}
+	hb.mu.Unlock()
 }
 
 func (hb *healthBalancer) mayPin(addr grpc.Address) bool {
 	hb.mu.RLock()
+	if _, ok := hb.hostPort2ep[addr.Addr]; !ok { // stale host:port
+		hb.mu.RUnlock()
+		return false
+	}
 	skip := len(hb.addrs) == 1 || len(hb.unhealthy) == 0 || len(hb.addrs) == len(hb.unhealthy)
 	failedTime, bad := hb.unhealthy[addr.Addr]
 	dur := hb.healthCheckTimeout
@@ -203,7 +204,7 @@ func (hb *healthBalancer) mayPin(addr grpc.Address) bool {
 	// instead, return before grpc-healthcheck if failed within healthcheck timeout
 	if elapsed := time.Since(failedTime); elapsed < dur {
 		if logger.V(4) {
-			logger.Infof("clientv3/health-balancer: %s is up but not pinned (failed %v ago, require minimum %v after failure)", addr.Addr, elapsed, dur)
+			logger.Infof("clientv3/health-balancer: %q is up but not pinned (failed %v ago, require minimum %v after failure)", addr.Addr, elapsed, dur)
 		}
 		return false
 	}
@@ -212,7 +213,7 @@ func (hb *healthBalancer) mayPin(addr grpc.Address) bool {
 		delete(hb.unhealthy, addr.Addr)
 		hb.mu.Unlock()
 		if logger.V(4) {
-			logger.Infof("clientv3/health-balancer: %s is healthy (health check success)", addr.Addr)
+			logger.Infof("clientv3/health-balancer: %q is healthy (health check success)", addr.Addr)
 		}
 		return true
 	}
@@ -220,7 +221,7 @@ func (hb *healthBalancer) mayPin(addr grpc.Address) bool {
 	hb.unhealthy[addr.Addr] = time.Now()
 	hb.mu.Unlock()
 	if logger.V(4) {
-		logger.Infof("clientv3/health-balancer: %s becomes unhealthy (health check failed)", addr.Addr)
+		logger.Infof("clientv3/health-balancer: %q becomes unhealthy (health check failed)", addr.Addr)
 	}
 	return false
 }

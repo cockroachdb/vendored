@@ -11,26 +11,6 @@ import (
 	"honnef.co/go/tools/unused"
 )
 
-type Checker struct {
-	Checkers []lint.Checker
-}
-
-func (c *Checker) Init(prog *lint.Program) {
-	for _, cc := range c.Checkers {
-		cc.Init(prog)
-	}
-}
-
-func (c *Checker) Funcs() map[string]lint.Func {
-	fns := map[string]lint.Func{}
-	for _, cc := range c.Checkers {
-		for k, v := range cc.Funcs() {
-			fns[k] = v
-		}
-	}
-	return fns
-}
-
 func main() {
 	var flags struct {
 		staticcheck struct {
@@ -82,18 +62,18 @@ func main() {
 
 	fs.Parse(os.Args[1:])
 
-	c := &Checker{}
+	var checkers []lint.Checker
 
 	if flags.staticcheck.enabled {
 		sac := staticcheck.NewChecker()
 		sac.CheckGenerated = flags.staticcheck.generated
-		c.Checkers = append(c.Checkers, sac)
+		checkers = append(checkers, sac)
 	}
 
 	if flags.gosimple.enabled {
 		sc := simple.NewChecker()
 		sc.CheckGenerated = flags.gosimple.generated
-		c.Checkers = append(c.Checkers, sc)
+		checkers = append(checkers, sc)
 	}
 
 	if flags.unused.enabled {
@@ -116,8 +96,8 @@ func main() {
 		uc := unused.NewChecker(mode)
 		uc.WholeProgram = flags.unused.wholeProgram
 		uc.ConsiderReflection = flags.unused.reflection
-		c.Checkers = append(c.Checkers, unused.NewLintChecker(uc))
+		checkers = append(checkers, unused.NewLintChecker(uc))
 	}
 
-	lintutil.ProcessFlagSet(c, fs)
+	lintutil.ProcessFlagSet(checkers, fs)
 }

@@ -20,6 +20,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"unicode"
 
 	"golang.org/x/tools/go/ast/astutil"
 	"golang.org/x/tools/go/loader"
@@ -30,13 +31,66 @@ import (
 type Job struct {
 	Program *Program
 
+	checker  string
 	check    string
 	problems []Problem
 }
 
-type Ignore struct {
+type Ignore interface {
+	Match(p Problem) bool
+}
+
+type LineIgnore struct {
+	File    string
+	Line    int
+	Checks  []string
+	matched bool
+	pos     token.Pos
+}
+
+func (li *LineIgnore) Match(p Problem) bool {
+	if p.Position.Filename != li.File || p.Position.Line != li.Line {
+		return false
+	}
+	for _, c := range li.Checks {
+		if m, _ := filepath.Match(c, p.Check); m {
+			li.matched = true
+			return true
+		}
+	}
+	return false
+}
+
+func (li *LineIgnore) String() string {
+	matched := "not matched"
+	if li.matched {
+		matched = "matched"
+	}
+	return fmt.Sprintf("%s:%d %s (%s)", li.File, li.Line, strings.Join(li.Checks, ", "), matched)
+}
+
+type GlobIgnore struct {
 	Pattern string
 	Checks  []string
+}
+
+func (gi *GlobIgnore) Match(p Problem) bool {
+	if gi.Pattern != "*" {
+		pkgpath := p.Package.Path()
+		if strings.HasSuffix(pkgpath, "_test") {
+			pkgpath = pkgpath[:len(pkgpath)-len("_test")]
+		}
+		name := filepath.Join(pkgpath, filepath.Base(p.Position.Filename))
+		if m, _ := filepath.Match(gi.Pattern, name); !m {
+			return false
+		}
+	}
+	for _, c := range gi.Checks {
+		if m, _ := filepath.Match(c, p.Check); m {
+			return true
+		}
+	}
+	return false
 }
 
 type Program struct {
@@ -58,46 +112,61 @@ type Func func(*Job)
 
 // Problem represents a problem in some source code.
 type Problem struct {
-	Position token.Pos // position in source file
-	Text     string    // the prose that describes the problem
+	pos      token.Pos
+	Position token.Position // position in source file
+	Text     string         // the prose that describes the problem
+	Check    string
+	Checker  string
+	Package  *types.Package
+	Ignored  bool
 }
 
 func (p *Problem) String() string {
-	return p.Text
+	if p.Check == "" {
+		return p.Text
+	}
+	return fmt.Sprintf("%s (%s)", p.Text, p.Check)
 }
 
 type Checker interface {
+	Name() string
+	Prefix() string
 	Init(*Program)
 	Funcs() map[string]Func
 }
 
 // A Linter lints Go source code.
 type Linter struct {
-	Checker   Checker
-	Ignores   []Ignore
-	GoVersion int
+	Checker       Checker
+	Ignores       []Ignore
+	GoVersion     int
+	ReturnIgnored bool
+
+	automaticIgnores []*LineIgnore
 }
 
-func (l *Linter) ignore(j *Job, p Problem) bool {
-	tf := j.Program.SSA.Fset.File(p.Position)
-	f := j.Program.tokenFileMap[tf]
-	pkg := j.Program.astFileMap[f].Pkg
-
-	for _, ig := range l.Ignores {
-		pkgpath := pkg.Path()
-		if strings.HasSuffix(pkgpath, "_test") {
-			pkgpath = pkgpath[:len(pkgpath)-len("_test")]
-		}
-		name := filepath.Join(pkgpath, filepath.Base(tf.Name()))
-		if m, _ := filepath.Match(ig.Pattern, name); !m {
-			continue
-		}
-		for _, c := range ig.Checks {
-			if m, _ := filepath.Match(c, j.check); m {
-				return true
-			}
+func (l *Linter) ignore(p Problem) bool {
+	ignored := false
+	for _, ig := range l.automaticIgnores {
+		// We cannot short-circuit these, as we want to record, for
+		// each ignore, whether it matched or not.
+		if ig.Match(p) {
+			ignored = true
 		}
 	}
+	if ignored {
+		// no need to execute other ignores if we've already had a
+		// match.
+		return true
+	}
+	for _, ig := range l.Ignores {
+		// We can short-circuit here, as we aren't tracking any
+		// information.
+		if ig.Match(p) {
+			return true
+		}
+	}
+
 	return false
 }
 
@@ -116,7 +185,7 @@ func (ps byPosition) Len() int {
 }
 
 func (ps byPosition) Less(i int, j int) bool {
-	pi, pj := ps.fset.Position(ps.ps[i].Position), ps.fset.Position(ps.ps[j].Position)
+	pi, pj := ps.ps[i].Position, ps.ps[j].Position
 
 	if pi.Filename != pj.Filename {
 		return pi.Filename < pj.Filename
@@ -136,6 +205,46 @@ func (ps byPosition) Swap(i int, j int) {
 }
 
 func (l *Linter) Lint(lprog *loader.Program) []Problem {
+	var out []Problem
+
+	l.automaticIgnores = nil
+	for _, pkginfo := range lprog.InitialPackages() {
+		for _, f := range pkginfo.Files {
+			cm := ast.NewCommentMap(lprog.Fset, f, f.Comments)
+			for node, cgs := range cm {
+				for _, cg := range cgs {
+					for _, c := range cg.List {
+						if strings.HasPrefix(c.Text, "//lint:ignore") {
+							fields := strings.Fields(c.Text)
+							if len(fields) < 3 {
+								// FIXME(dh): this causes duplicated warnings when using megacheck
+								p := Problem{
+									pos:      c.Pos(),
+									Position: lprog.Fset.Position(c.Pos()),
+									Text:     "malformed linter directive; missing the required reason field?",
+									Check:    "",
+									Checker:  l.Checker.Name(),
+									Package:  nil,
+								}
+								out = append(out, p)
+								continue
+							}
+							checks := strings.Split(fields[1], ",")
+							pos := lprog.Fset.Position(node.Pos())
+							ig := &LineIgnore{
+								File:   pos.Filename,
+								Line:   pos.Line,
+								Checks: checks,
+								pos:    c.Pos(),
+							}
+							l.automaticIgnores = append(l.automaticIgnores, ig)
+						}
+					}
+				}
+			}
+		}
+	}
+
 	ssaprog := ssautil.CreateProgram(lprog, ssa.GlobalDebug)
 	ssaprog.Build()
 	pkgMap := map[*ssa.Package]*Pkg{}
@@ -237,6 +346,7 @@ func (l *Linter) Lint(lprog *loader.Program) []Problem {
 	for _, k := range keys {
 		j := &Job{
 			Program: prog,
+			checker: l.Checker.Name(),
 			check:   k,
 		}
 		jobs = append(jobs, j)
@@ -255,12 +365,40 @@ func (l *Linter) Lint(lprog *loader.Program) []Problem {
 	}
 	wg.Wait()
 
-	var out []Problem
 	for _, j := range jobs {
 		for _, p := range j.problems {
-			if !l.ignore(j, p) {
+			p.Ignored = l.ignore(p)
+			if l.ReturnIgnored || !p.Ignored {
 				out = append(out, p)
 			}
+		}
+	}
+
+	for _, ig := range l.automaticIgnores {
+		if ig.matched {
+			continue
+		}
+		for _, c := range ig.Checks {
+			idx := strings.IndexFunc(c, func(r rune) bool {
+				return unicode.IsNumber(r)
+			})
+			if idx == -1 {
+				// malformed check name, backing out
+				continue
+			}
+			if c[:idx] != l.Checker.Prefix() {
+				// not for this checker
+				continue
+			}
+			p := Problem{
+				pos:      ig.pos,
+				Position: lprog.Fset.Position(ig.pos),
+				Text:     "this linter directive didn't match anything; should it be removed?",
+				Check:    "",
+				Checker:  l.Checker.Name(),
+				Package:  nil,
+			}
+			out = append(out, p)
 		}
 	}
 
@@ -310,9 +448,18 @@ type Positioner interface {
 }
 
 func (j *Job) Errorf(n Positioner, format string, args ...interface{}) *Problem {
+	tf := j.Program.SSA.Fset.File(n.Pos())
+	f := j.Program.tokenFileMap[tf]
+	pkg := j.Program.astFileMap[f].Pkg
+
+	pos := j.Program.SSA.Fset.Position(n.Pos())
 	problem := Problem{
-		Position: n.Pos(),
-		Text:     fmt.Sprintf(format, args...) + fmt.Sprintf(" (%s)", j.check),
+		pos:      n.Pos(),
+		Position: pos,
+		Text:     fmt.Sprintf(format, args...),
+		Check:    j.check,
+		Checker:  j.checker,
+		Package:  pkg,
 	}
 	j.problems = append(j.problems, problem)
 	return &j.problems[len(j.problems)-1]
