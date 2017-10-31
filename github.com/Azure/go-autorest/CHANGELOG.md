@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## v9.2.0
+
+### New Features
+
+- Added support for custom Azure Stack endpoints.
+- Added type azure.Future used to track the status of long-running operations.
+
+### Bug Fixes
+
+- Preserve the original error in DoRetryWithRegistration when registration fails.
 
 ## v9.1.1
 
