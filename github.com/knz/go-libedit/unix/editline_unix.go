@@ -9,6 +9,7 @@ import (
 	"unsafe"
 
 	common "github.com/knz/go-libedit/common"
+	"github.com/knz/go-libedit/unix/sigtramp"
 )
 
 // #cgo openbsd netbsd freebsd dragonfly darwin LDFLAGS: -ledit
@@ -16,6 +17,7 @@ import (
 // #cgo linux LDFLAGS: -ltinfo
 // #cgo linux CFLAGS: -Wno-unused-result
 // #cgo linux CPPFLAGS: -Isrc -Isrc/c-libedit -Isrc/c-libedit/editline -Isrc/c-libedit/linux-build
+// #cgo darwin CPPFLAGS: -D__darwin__=1
 //
 // #include <stdlib.h>
 // #include <stdio.h>
@@ -87,7 +89,7 @@ func InitFiles(appName string, wideChars bool, inf, outf, errf *os.File) (e Edit
 	cAppName := C.CString(appName)
 	defer C.free(unsafe.Pointer(cAppName))
 	var sigcfg unsafe.Pointer
-	el, err := C.go_libedit_init(cAppName, &sigcfg, inFile, outFile, errFile)
+	el, err := C.go_libedit_init(cAppName, &sigcfg, inFile, outFile, errFile, sigtramp.Get())
 	// If the settings file did not exist, ignore the error.
 	if err == syscall.ENOENT {
 		err = nil
