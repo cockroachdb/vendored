@@ -452,7 +452,7 @@ void *go_libedit_gets(EditLine *el, char *lprompt, char *rprompt,
 	    newact[i].sa_handler = osa[i].sa_handler;
 	    newact[i].sa_mask = osa[i].sa_mask;
 	    // We need to restore the trampoline manually.
-	    newact[0].sa_tramp = (void (*)(void*, int, int, siginfo_t*, void*))g_sigtramp;
+	    newact[i].sa_tramp = (void (*)(void*, int, int, siginfo_t*, void*))g_sigtramp;
 	}
 #else
 #define newact osa
