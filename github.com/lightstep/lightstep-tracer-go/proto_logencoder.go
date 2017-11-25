@@ -13,23 +13,26 @@ const (
 
 // An implementation of the log.Encoder interface
 type grpcLogFieldEncoder struct {
-	recorder        *grpcCollectorClient
+	converter       *protoConverter
 	buffer          *reportBuffer
 	currentKeyValue *cpb.KeyValue
 }
 
 func marshalFields(
-	recorder *grpcCollectorClient,
+	converter *protoConverter,
 	protoLog *cpb.Log,
 	fields []log.Field,
 	buffer *reportBuffer,
 ) {
-	lfe := grpcLogFieldEncoder{recorder, buffer, nil}
-	protoLog.Keyvalues = make([]*cpb.KeyValue, len(fields))
-	for i, f := range fields {
-		lfe.currentKeyValue = &cpb.KeyValue{}
-		f.Marshal(&lfe)
-		protoLog.Keyvalues[i] = lfe.currentKeyValue
+	logFieldEncoder := grpcLogFieldEncoder{
+		converter: converter,
+		buffer:    buffer,
+	}
+	protoLog.Fields = make([]*cpb.KeyValue, len(fields))
+	for i, field := range fields {
+		logFieldEncoder.currentKeyValue = &cpb.KeyValue{}
+		field.Marshal(&logFieldEncoder)
+		protoLog.Fields[i] = logFieldEncoder.currentKeyValue
 	}
 }
 
@@ -73,6 +76,7 @@ func (lfe *grpcLogFieldEncoder) EmitObject(key string, value interface{}) {
 	lfe.emitSafeKey(key)
 	jsonBytes, err := json.Marshal(value)
 	if err != nil {
+		emitEvent(newEventUnsupportedValue(key, value, err))
 		lfe.buffer.logEncoderErrorCount++
 		lfe.emitSafeString("<json.Marshal error>")
 		return
@@ -85,20 +89,20 @@ func (lfe *grpcLogFieldEncoder) EmitLazyLogger(value log.LazyLogger) {
 }
 
 func (lfe *grpcLogFieldEncoder) emitSafeKey(key string) {
-	if len(key) > lfe.recorder.maxLogKeyLen {
-		key = key[:(lfe.recorder.maxLogKeyLen-1)] + ellipsis
+	if len(key) > lfe.converter.maxLogKeyLen {
+		key = key[:(lfe.converter.maxLogKeyLen-1)] + ellipsis
 	}
 	lfe.currentKeyValue.Key = key
 }
 func (lfe *grpcLogFieldEncoder) emitSafeString(str string) {
-	if len(str) > lfe.recorder.maxLogValueLen {
-		str = str[:(lfe.recorder.maxLogValueLen-1)] + ellipsis
+	if len(str) > lfe.converter.maxLogValueLen {
+		str = str[:(lfe.converter.maxLogValueLen-1)] + ellipsis
 	}
 	lfe.currentKeyValue.Value = &cpb.KeyValue_StringValue{str}
 }
 func (lfe *grpcLogFieldEncoder) emitSafeJSON(json string) {
-	if len(json) > lfe.recorder.maxLogValueLen {
-		str := json[:(lfe.recorder.maxLogValueLen-1)] + ellipsis
+	if len(json) > lfe.converter.maxLogValueLen {
+		str := json[:(lfe.converter.maxLogValueLen-1)] + ellipsis
 		lfe.currentKeyValue.Value = &cpb.KeyValue_StringValue{str}
 		return
 	}

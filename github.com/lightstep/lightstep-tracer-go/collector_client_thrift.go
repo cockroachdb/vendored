@@ -91,13 +91,14 @@ func (client *thriftCollectorClient) ConnectClient() (Connection, error) {
 	} else {
 		transport, err := thrift.NewTHttpPostClient(client.collectorURL, client.reportTimeout)
 		if err != nil {
-			maybeLogError(err, client.verbose)
 			return nil, err
 		}
 
 		conn = transport
 		client.thriftClient = lightstep_thrift.NewReportingServiceClientFactory(
-			transport, thrift.NewTBinaryProtocolFactoryDefault())
+			transport,
+			thrift.NewTBinaryProtocolFactoryDefault(),
+		)
 	}
 	return conn, nil
 }
@@ -106,7 +107,19 @@ func (*thriftCollectorClient) ShouldReconnect() bool {
 	return false
 }
 
-func (client *thriftCollectorClient) Report(_ context.Context, buffer *reportBuffer) (collectorResponse, error) {
+func (client *thriftCollectorClient) Report(_ context.Context, req reportRequest) (collectorResponse, error) {
+	if req.thriftRequest == nil {
+		return nil, fmt.Errorf("thriftRequest cannot be null")
+	}
+	resp, err := client.thriftClient.Report(client.auth, req.thriftRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp, err
+}
+
+func (client *thriftCollectorClient) Translate(_ context.Context, buffer *reportBuffer) (reportRequest, error) {
 	rawSpans := buffer.rawSpans
 	// Convert them to thrift.
 	recs := make([]*lightstep_thrift.SpanRecord, len(rawSpans))
@@ -115,6 +128,8 @@ func (client *thriftCollectorClient) Report(_ context.Context, buffer *reportBuf
 		var joinIds []*lightstep_thrift.TraceJoinId
 		var attributes []*lightstep_thrift.KeyValue
 		for key, value := range raw.Tags {
+			// Note: the gRPC tracer uses Sprintf("%#v") for non-scalar non-string
+			// values, differs from the treatment here:
 			if strings.HasPrefix(key, "join:") {
 				joinIds = append(joinIds, &lightstep_thrift.TraceJoinId{key, fmt.Sprint(value)})
 			} else {
@@ -169,13 +184,9 @@ func (client *thriftCollectorClient) Report(_ context.Context, buffer *reportBuf
 		SpanRecords:     recs,
 		InternalMetrics: &metrics,
 	}
-
-	resp, err := client.thriftClient.Report(client.auth, req)
-	if err != nil {
-		return nil, err
-	}
-
-	return resp, err
+	return reportRequest{
+		thriftRequest: req,
+	}, nil
 }
 
 // caller must hold r.lock
