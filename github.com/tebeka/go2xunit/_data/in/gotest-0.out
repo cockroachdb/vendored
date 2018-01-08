@@ -1,6 +1,0 @@
-=== RUN ExampleA
---- PASS: ExampleA (4.0003ms)
-=== RUN: ExampleOp
---- PASS: ExampleOp (0)
-PASS
-ok      package 0.194s

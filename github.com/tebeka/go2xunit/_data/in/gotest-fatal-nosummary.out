@@ -1,3 +1,0 @@
-=== RUN TestPanic
-fatal error: all goroutines are asleep - deadlock!
-...

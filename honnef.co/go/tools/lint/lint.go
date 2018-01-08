@@ -70,6 +70,23 @@ func (li *LineIgnore) String() string {
 	return fmt.Sprintf("%s:%d %s (%s)", li.File, li.Line, strings.Join(li.Checks, ", "), matched)
 }
 
+type FileIgnore struct {
+	File   string
+	Checks []string
+}
+
+func (fi *FileIgnore) Match(p Problem) bool {
+	if p.Position.Filename != fi.File {
+		return false
+	}
+	for _, c := range fi.Checks {
+		if m, _ := filepath.Match(c, p.Check); m {
+			return true
+		}
+	}
+	return false
+}
+
 type GlobIgnore struct {
 	Pattern string
 	Checks  []string
@@ -143,7 +160,7 @@ type Linter struct {
 	GoVersion     int
 	ReturnIgnored bool
 
-	automaticIgnores []*LineIgnore
+	automaticIgnores []Ignore
 }
 
 func (l *Linter) ignore(p Problem) bool {
@@ -171,8 +188,12 @@ func (l *Linter) ignore(p Problem) bool {
 	return false
 }
 
+func (prog *Program) File(node Positioner) *ast.File {
+	return prog.tokenFileMap[prog.SSA.Fset.File(node.Pos())]
+}
+
 func (j *Job) File(node Positioner) *ast.File {
-	return j.Program.tokenFileMap[j.Program.SSA.Fset.File(node.Pos())]
+	return j.Program.File(node)
 }
 
 // TODO(dh): switch to sort.Slice when Go 1.9 lands.
@@ -205,16 +226,40 @@ func (ps byPosition) Swap(i int, j int) {
 	ps.ps[i], ps.ps[j] = ps.ps[j], ps.ps[i]
 }
 
-func (l *Linter) Lint(lprog *loader.Program) []Problem {
+func parseDirective(s string) (cmd string, args []string) {
+	if !strings.HasPrefix(s, "//lint:") {
+		return "", nil
+	}
+	s = strings.TrimPrefix(s, "//lint:")
+	fields := strings.Split(s, " ")
+	return fields[0], fields[1:]
+}
+
+func (l *Linter) Lint(lprog *loader.Program, conf *loader.Config) []Problem {
 	ssaprog := ssautil.CreateProgram(lprog, ssa.GlobalDebug)
 	ssaprog.Build()
 	pkgMap := map[*ssa.Package]*Pkg{}
 	var pkgs []*Pkg
 	for _, pkginfo := range lprog.InitialPackages() {
 		ssapkg := ssaprog.Package(pkginfo.Pkg)
+		var bp *build.Package
+		if len(pkginfo.Files) != 0 {
+			path := lprog.Fset.Position(pkginfo.Files[0].Pos()).Filename
+			dir := filepath.Dir(path)
+			var err error
+			ctx := conf.Build
+			if ctx == nil {
+				ctx = &build.Default
+			}
+			bp, err = ctx.ImportDir(dir, 0)
+			if err != nil {
+				// shouldn't happen
+			}
+		}
 		pkg := &Pkg{
-			Package: ssapkg,
-			Info:    pkginfo,
+			Package:  ssapkg,
+			Info:     pkginfo,
+			BuildPkg: bp,
 		}
 		pkgMap[ssapkg] = pkg
 		pkgs = append(pkgs, pkg)
@@ -227,46 +272,6 @@ func (l *Linter) Lint(lprog *loader.Program) []Problem {
 		GoVersion:    l.GoVersion,
 		tokenFileMap: map[*token.File]*ast.File{},
 		astFileMap:   map[*ast.File]*Pkg{},
-	}
-
-	var out []Problem
-
-	l.automaticIgnores = nil
-	for _, pkginfo := range lprog.InitialPackages() {
-		for _, f := range pkginfo.Files {
-			cm := ast.NewCommentMap(lprog.Fset, f, f.Comments)
-			for node, cgs := range cm {
-				for _, cg := range cgs {
-					for _, c := range cg.List {
-						if strings.HasPrefix(c.Text, "//lint:ignore") {
-							fields := strings.Fields(c.Text)
-							if len(fields) < 3 {
-								// FIXME(dh): this causes duplicated warnings when using megacheck
-								p := Problem{
-									pos:      c.Pos(),
-									Position: prog.DisplayPosition(c.Pos()),
-									Text:     "malformed linter directive; missing the required reason field?",
-									Check:    "",
-									Checker:  l.Checker.Name(),
-									Package:  nil,
-								}
-								out = append(out, p)
-								continue
-							}
-							checks := strings.Split(fields[1], ",")
-							pos := prog.DisplayPosition(node.Pos())
-							ig := &LineIgnore{
-								File:   pos.Filename,
-								Line:   pos.Line,
-								Checks: checks,
-								pos:    c.Pos(),
-							}
-							l.automaticIgnores = append(l.automaticIgnores, ig)
-						}
-					}
-				}
-			}
-		}
 	}
 
 	initial := map[*types.Package]struct{}{}
@@ -287,9 +292,69 @@ func (l *Linter) Lint(lprog *loader.Program) []Problem {
 
 		ssapkg := ssaprog.Package(pkg.Info.Pkg)
 		for _, f := range pkg.Info.Files {
+			prog.astFileMap[f] = pkgMap[ssapkg]
+		}
+	}
+
+	for _, pkginfo := range lprog.AllPackages {
+		for _, f := range pkginfo.Files {
 			tf := lprog.Fset.File(f.Pos())
 			prog.tokenFileMap[tf] = f
-			prog.astFileMap[f] = pkgMap[ssapkg]
+		}
+	}
+
+	var out []Problem
+	l.automaticIgnores = nil
+	for _, pkginfo := range lprog.InitialPackages() {
+		for _, f := range pkginfo.Files {
+			cm := ast.NewCommentMap(lprog.Fset, f, f.Comments)
+			for node, cgs := range cm {
+				for _, cg := range cgs {
+					for _, c := range cg.List {
+						if !strings.HasPrefix(c.Text, "//lint:") {
+							continue
+						}
+						cmd, args := parseDirective(c.Text)
+						switch cmd {
+						case "ignore", "file-ignore":
+							if len(args) < 2 {
+								// FIXME(dh): this causes duplicated warnings when using megacheck
+								p := Problem{
+									pos:      c.Pos(),
+									Position: prog.DisplayPosition(c.Pos()),
+									Text:     "malformed linter directive; missing the required reason field?",
+									Check:    "",
+									Checker:  l.Checker.Name(),
+									Package:  nil,
+								}
+								out = append(out, p)
+								continue
+							}
+						default:
+							// unknown directive, ignore
+							continue
+						}
+						checks := strings.Split(args[0], ",")
+						pos := prog.DisplayPosition(node.Pos())
+						var ig Ignore
+						switch cmd {
+						case "ignore":
+							ig = &LineIgnore{
+								File:   pos.Filename,
+								Line:   pos.Line,
+								Checks: checks,
+								pos:    c.Pos(),
+							}
+						case "file-ignore":
+							ig = &FileIgnore{
+								File:   pos.Filename,
+								Checks: checks,
+							}
+						}
+						l.automaticIgnores = append(l.automaticIgnores, ig)
+					}
+				}
+			}
 		}
 	}
 
@@ -377,6 +442,10 @@ func (l *Linter) Lint(lprog *loader.Program) []Problem {
 	}
 
 	for _, ig := range l.automaticIgnores {
+		ig, ok := ig.(*LineIgnore)
+		if !ok {
+			continue
+		}
 		if ig.matched {
 			continue
 		}
@@ -411,7 +480,8 @@ func (l *Linter) Lint(lprog *loader.Program) []Problem {
 // Pkg represents a package being linted.
 type Pkg struct {
 	*ssa.Package
-	Info *loader.PackageInfo
+	Info     *loader.PackageInfo
+	BuildPkg *build.Package
 }
 
 type packager interface {
@@ -466,10 +536,10 @@ func (prog *Program) DisplayPosition(p token.Pos) token.Position {
 	// information stored within problems. With this implementation, a
 	// user will ignore foo.go, not foo.y
 
-	// OPT(dh): don't look up package repeatedly
+	pkg := prog.astFileMap[prog.tokenFileMap[prog.Prog.Fset.File(p)]]
+	bp := pkg.BuildPkg
 	adjPos := prog.Prog.Fset.Position(p)
-	bp, err := build.ImportDir(filepath.Dir(adjPos.Filename), 0)
-	if err != nil {
+	if bp == nil {
 		// couldn't find the package for some reason (deleted? faulty
 		// file system?)
 		return adjPos
@@ -623,9 +693,11 @@ func Preamble(f *ast.File) string {
 }
 
 func IsPointerLike(T types.Type) bool {
-	switch T.Underlying().(type) {
+	switch T := T.Underlying().(type) {
 	case *types.Interface, *types.Chan, *types.Map, *types.Pointer:
 		return true
+	case *types.Basic:
+		return T.Kind() == types.UnsafePointer
 	}
 	return false
 }
