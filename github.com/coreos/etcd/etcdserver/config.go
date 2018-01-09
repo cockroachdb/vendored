@@ -66,7 +66,12 @@ type ServerConfig struct {
 
 	AuthToken string
 
-	CorruptCheckTime time.Duration
+	// InitialCorruptCheck is true to check data corruption on boot
+	// before serving any peer/client traffic.
+	InitialCorruptCheck bool
+	CorruptCheckTime    time.Duration
+
+	Debug bool
 }
 
 // VerifyBootstrap sanity-checks the initial config for bootstrap case

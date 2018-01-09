@@ -83,7 +83,7 @@ Insert '--' for workaround:
 
 ### GET [options] \<key\> [range_end]
 
-GET gets the key or a range of keys [key, range_end) if `range-end` is given.
+GET gets the key or a range of keys [key, range_end) if range_end is given.
 
 RPC: Range
 
@@ -178,7 +178,7 @@ If any key or value contains non-printable characters or control characters, sim
 
 ### DEL [options] \<key\> [range_end]
 
-Removes the specified key or range of keys [key, range_end) if `range-end` is given.
+Removes the specified key or range of keys [key, range_end) if range_end is given.
 
 RPC: DeleteRange
 
@@ -337,9 +337,9 @@ Prints the compacted revision.
 # compacted revision 1234
 ```
 
-### WATCH [options] [key or prefix] [range_end]
+### WATCH [options] [key or prefix] [range_end] [--] [exec-command arg1 arg2 ...]
 
-Watch watches events stream on keys or prefixes, [key or prefix, range_end) if `range-end` is given. The watch command runs until it encounters an error or is terminated by the user.  If range_end is given, it must be lexicographically greater than key or "\x00".
+Watch watches events stream on keys or prefixes, [key or prefix, range_end) if range_end is given. The watch command runs until it encounters an error or is terminated by the user.  If range_end is given, it must be lexicographically greater than key or "\x00".
 
 RPC: Watch
 
@@ -378,6 +378,16 @@ watch [options] <key or prefix>\n
 # bar
 ```
 
+Receive events and execute `echo watch event received`:
+
+```bash
+./etcdctl watch foo -- echo watch event received
+# PUT
+# foo
+# bar
+# watch event received
+```
+
 ##### Interactive
 
 ```bash
@@ -390,6 +400,17 @@ watch foo
 # PUT
 # foo
 # bar
+```
+
+Receive events and execute `echo watch event received`:
+
+```bash
+./etcdctl watch -i
+watch foo -- echo watch event received
+# PUT
+# foo
+# bar
+# watch event received
 ```
 
 ### LEASE \<subcommand\>
@@ -468,6 +489,9 @@ Prints lease information.
 
 ./etcdctl lease timetolive 2d8257079fa1bc0c --write-out=json --keys
 # {"cluster_id":17186838941855831277,"member_id":4845372305070271874,"revision":3,"raft_term":2,"id":3279279168933706764,"ttl":459,"granted-ttl":500,"keys":["Zm9vMQ==","Zm9vMg=="]}
+
+./etcdctl lease timetolive 2d8257079fa1bc0c
+# lease 2d8257079fa1bc0c already expired
 ```
 
 ### LEASE LIST
@@ -849,6 +873,8 @@ SNAPSHOT RESTORE creates an etcd data directory for an etcd cluster member from 
 The snapshot restore options closely resemble to those used in the `etcd` command for defining a cluster.
 
 - data-dir -- Path to the data directory. Uses \<name\>.etcd if none given.
+
+- wal-dir -- Path to the WAL directory. Uses data directory if none given.
 
 - initial-cluster -- The initial cluster configuration for the restored etcd cluster.
 
@@ -1414,6 +1440,45 @@ Prints etcd version and API version.
 ./etcdctl version
 # etcdctl version: 3.1.0-alpha.0+git
 # API version: 3.1
+```
+
+### CHECK \<subcommand\>
+
+CHECK provides commands for checking properties of the etcd cluster.
+
+### CHECK PERF [options]
+
+CHECK PERF checks the performance of the etcd cluster for 60 seconds.
+
+RPC: CheckPerf
+
+#### Options
+
+- load -- the performance check's workload model. Accepted workloads: s(small), m(medium), l(large), xl(xLarge)
+
+- prefix -- the prefix for writing the performance check's keys.
+
+#### Output
+
+Prints the result of performance check on different criteria like throughput. Also prints an overall status of the check as pass or fail.
+
+#### Examples
+
+Shows examples of both, pass and fail, status. The failure is due to the fact that a large workload was tried on a single node etcd cluster running on a laptop environment created for development and testing purpose.
+
+```bash
+./etcdctl check perf --load="s"
+# 60 / 60 Booooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo! 100.00%1m0s
+# PASS: Throughput is 150 writes/s
+# PASS: Slowest request took 0.087509s
+# PASS: Stddev is 0.011084s
+# PASS
+./etcdctl check perf --load="l"
+# 60 / 60 Booooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo! 100.00%1m0s
+# FAIL: Throughput too low: 6808 writes/s
+# PASS: Slowest request took 0.228191s
+# PASS: Stddev is 0.033547s
+# FAIL
 ```
 
 ## Exit codes

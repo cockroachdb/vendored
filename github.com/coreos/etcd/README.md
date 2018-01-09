@@ -1,10 +1,12 @@
 # etcd
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/coreos/etcd)](https://goreportcard.com/report/github.com/coreos/etcd)
+[![Go Report Card](https://goreportcard.com/badge/github.com/coreos/etcd?style=flat-square)](https://goreportcard.com/report/github.com/coreos/etcd)
 [![Coverage](https://codecov.io/gh/coreos/etcd/branch/master/graph/badge.svg)](https://codecov.io/gh/coreos/etcd)
-[![Build Status](https://travis-ci.org/coreos/etcd.svg?branch=master)](https://travis-ci.org/coreos/etcd)
-[![Build Status](https://semaphoreci.com/api/v1/coreos/etcd/branches/master/shields_badge.svg)](https://semaphoreci.com/coreos/etcd)
-[![Docker Repository on Quay.io](https://quay.io/repository/coreos/etcd-git/status "Docker Repository on Quay.io")](https://quay.io/repository/coreos/etcd-git)
+[![Build Status Travis](https://img.shields.io/travis/coreos/etcdlabs.svg?style=flat-square&&branch=master)](https://travis-ci.org/coreos/etcd)
+[![Build Status Semaphore](https://semaphoreci.com/api/v1/coreos/etcd/branches/master/shields_badge.svg)](https://semaphoreci.com/coreos/etcd)
+[![Godoc](http://img.shields.io/badge/go-documentation-blue.svg?style=flat-square)](https://godoc.org/github.com/coreos/etcd)
+[![Releases](https://img.shields.io/github/release/coreos/etcd/all.svg?style=flat-square)](https://github.com/coreos/etcd/releases)
+[![LICENSE](https://img.shields.io/github/license/coreos/etcd.svg?style=flat-square)](https://github.com/coreos/etcd/blob/master/LICENSE)
 
 **Note**: The `master` branch may be in an *unstable or even broken state* during development. Please use [releases][github-release] instead of the `master` branch in order to get stable binaries.
 
@@ -34,6 +36,14 @@ See [etcdctl][etcdctl] for a simple command line client.
 [etcdctl]: https://github.com/coreos/etcd/tree/master/etcdctl
 [etcd-tests]: http://dash.etcd.io
 
+## Community meetings
+
+etcd contributors and maintainers have bi-weekly meetings at 11:00 AM (USA Pacific) on Tuesdays. There is an [iCalendar][rfc5545] format for the meetings [here](meeting.ics). Anyone is welcome to join via [Zoom][zoom] or audio-only: +1 669 900 6833. An initial agenda will be posted to the [shared Google docs][shared-meeting-notes] a day before each meeting, and everyone is welcome to suggest additional topics or other agendas.
+
+[rfc5545]: https://tools.ietf.org/html/rfc5545
+[zoom]: https://coreos.zoom.us/j/854793406
+[shared-meeting-notes]: https://docs.google.com/document/d/1DbVXOHvd9scFsSmL2oNg4YGOHJdXqtx583DmeVWrB_M/edit#
+
 ## Getting started
 
 ### Getting etcd
@@ -49,7 +59,22 @@ For those wanting to try the very latest version, [build the latest version of e
 
 ### Running etcd
 
-First start a single-member cluster of etcd:
+First start a single-member cluster of etcd.
+
+If etcd is installed using the [pre-built release binaries][github-release], run it from the installation location as below:
+
+```sh
+/tmp/etcd-download-test/etcd
+```
+The etcd command can be simply run as such if it is moved to the system path as below:
+
+```sh
+mv /tmp/etcd-download-test/etcd /usr/locale/bin/
+
+etcd
+```
+
+If etcd is [build from the master branch][dl-build], run it as below:
 
 ```sh
 ./bin/etcd

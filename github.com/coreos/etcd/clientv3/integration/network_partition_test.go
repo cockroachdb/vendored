@@ -36,7 +36,7 @@ var errExpected = errors.New("expected error")
 func TestBalancerUnderNetworkPartitionPut(t *testing.T) {
 	testBalancerUnderNetworkPartition(t, func(cli *clientv3.Client, ctx context.Context) error {
 		_, err := cli.Put(ctx, "a", "b")
-		if err == context.DeadlineExceeded || err == rpctypes.ErrTimeout {
+		if err == context.DeadlineExceeded || isServerCtxTimeout(err) || err == rpctypes.ErrTimeout {
 			return errExpected
 		}
 		return err
@@ -46,7 +46,7 @@ func TestBalancerUnderNetworkPartitionPut(t *testing.T) {
 func TestBalancerUnderNetworkPartitionDelete(t *testing.T) {
 	testBalancerUnderNetworkPartition(t, func(cli *clientv3.Client, ctx context.Context) error {
 		_, err := cli.Delete(ctx, "a")
-		if err == context.DeadlineExceeded || err == rpctypes.ErrTimeout {
+		if err == context.DeadlineExceeded || isServerCtxTimeout(err) || err == rpctypes.ErrTimeout {
 			return errExpected
 		}
 		return err
@@ -59,7 +59,7 @@ func TestBalancerUnderNetworkPartitionTxn(t *testing.T) {
 			If(clientv3.Compare(clientv3.Version("foo"), "=", 0)).
 			Then(clientv3.OpPut("foo", "bar")).
 			Else(clientv3.OpPut("foo", "baz")).Commit()
-		if err == context.DeadlineExceeded || err == rpctypes.ErrTimeout {
+		if err == context.DeadlineExceeded || isServerCtxTimeout(err) || err == rpctypes.ErrTimeout {
 			return errExpected
 		}
 		return err
@@ -82,7 +82,7 @@ func TestBalancerUnderNetworkPartitionLinearizableGetWithLongTimeout(t *testing.
 func TestBalancerUnderNetworkPartitionLinearizableGetWithShortTimeout(t *testing.T) {
 	testBalancerUnderNetworkPartition(t, func(cli *clientv3.Client, ctx context.Context) error {
 		_, err := cli.Get(ctx, "a")
-		if err == context.DeadlineExceeded {
+		if err == context.DeadlineExceeded || isServerCtxTimeout(err) {
 			return errExpected
 		}
 		return err
@@ -146,6 +146,51 @@ func testBalancerUnderNetworkPartition(t *testing.T, op func(*clientv3.Client, c
 	}
 }
 
+// TestBalancerUnderNetworkPartitionLinearizableGetLeaderElection ensures balancer
+// switches endpoint when leader fails and linearizable get requests returns
+// "etcdserver: request timed out".
+func TestBalancerUnderNetworkPartitionLinearizableGetLeaderElection(t *testing.T) {
+	defer testutil.AfterTest(t)
+
+	clus := integration.NewClusterV3(t, &integration.ClusterConfig{
+		Size:               3,
+		SkipCreatingClient: true,
+	})
+	defer clus.Terminate(t)
+	eps := []string{clus.Members[0].GRPCAddr(), clus.Members[1].GRPCAddr(), clus.Members[2].GRPCAddr()}
+
+	lead := clus.WaitLeader(t)
+
+	timeout := 3 * clus.Members[(lead+1)%2].ServerConfig.ReqTimeout()
+
+	cli, err := clientv3.New(clientv3.Config{
+		Endpoints:   []string{eps[(lead+1)%2]},
+		DialTimeout: 1 * time.Second,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cli.Close()
+
+	// wait for non-leader to be pinned
+	mustWaitPinReady(t, cli)
+
+	// add all eps to list, so that when the original pined one fails
+	// the client can switch to other available eps
+	cli.SetEndpoints(eps[lead], eps[(lead+1)%2])
+
+	// isolate leader
+	clus.Members[lead].InjectPartition(t, clus.Members[(lead+1)%3], clus.Members[(lead+2)%3])
+
+	// expects balancer endpoint switch while ongoing leader election
+	ctx, cancel := context.WithTimeout(context.TODO(), timeout)
+	_, err = cli.Get(ctx, "a")
+	cancel()
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestBalancerUnderNetworkPartitionWatchLeader(t *testing.T) {
 	testBalancerUnderNetworkPartitionWatch(t, true)
 }
@@ -189,7 +234,7 @@ func testBalancerUnderNetworkPartitionWatch(t *testing.T, isolateLeader bool) {
 	wch := watchCli.Watch(clientv3.WithRequireLeader(context.Background()), "foo", clientv3.WithCreatedNotify())
 	select {
 	case <-wch:
-	case <-time.After(3 * time.Second):
+	case <-time.After(integration.RequestWaitTimeout):
 		t.Fatal("took too long to create watch")
 	}
 
@@ -207,7 +252,7 @@ func testBalancerUnderNetworkPartitionWatch(t *testing.T, isolateLeader bool) {
 		if err = ev.Err(); err != rpctypes.ErrNoLeader {
 			t.Fatalf("expected %v, got %v", rpctypes.ErrNoLeader, err)
 		}
-	case <-time.After(3 * time.Second): // enough time to detect leader lost
+	case <-time.After(integration.RequestWaitTimeout): // enough time to detect leader lost
 		t.Fatal("took too long to detect leader lost")
 	}
 }

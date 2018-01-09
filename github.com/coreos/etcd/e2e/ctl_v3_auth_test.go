@@ -41,6 +41,9 @@ func TestCtlV3AuthInvalidMgmt(t *testing.T)      { testCtl(t, authTestInvalidMgm
 func TestCtlV3AuthFromKeyPerm(t *testing.T)      { testCtl(t, authTestFromKeyPerm) }
 func TestCtlV3AuthAndWatch(t *testing.T)         { testCtl(t, authTestWatch) }
 
+func TestCtlV3AuthLeaseTestKeepAlive(t *testing.T)         { testCtl(t, authLeaseTestKeepAlive) }
+func TestCtlV3AuthLeaseTestTimeToLiveExpired(t *testing.T) { testCtl(t, authLeaseTestTimeToLiveExpired) }
+
 func TestCtlV3AuthRoleGet(t *testing.T)  { testCtl(t, authTestRoleGet) }
 func TestCtlV3AuthUserGet(t *testing.T)  { testCtl(t, authTestUserGet) }
 func TestCtlV3AuthRoleList(t *testing.T) { testCtl(t, authTestRoleList) }
@@ -723,6 +726,43 @@ func authTestFromKeyPerm(cx ctlCtx) {
 	}
 }
 
+func authLeaseTestKeepAlive(cx ctlCtx) {
+	if err := authEnable(cx); err != nil {
+		cx.t.Fatal(err)
+	}
+
+	cx.user, cx.pass = "root", "root"
+	authSetupTestUser(cx)
+	// put with TTL 10 seconds and keep-alive
+	leaseID, err := ctlV3LeaseGrant(cx, 10)
+	if err != nil {
+		cx.t.Fatalf("leaseTestKeepAlive: ctlV3LeaseGrant error (%v)", err)
+	}
+	if err := ctlV3Put(cx, "key", "val", leaseID); err != nil {
+		cx.t.Fatalf("leaseTestKeepAlive: ctlV3Put error (%v)", err)
+	}
+	if err := ctlV3LeaseKeepAlive(cx, leaseID); err != nil {
+		cx.t.Fatalf("leaseTestKeepAlive: ctlV3LeaseKeepAlive error (%v)", err)
+	}
+	if err := ctlV3Get(cx, []string{"key"}, kv{"key", "val"}); err != nil {
+		cx.t.Fatalf("leaseTestKeepAlive: ctlV3Get error (%v)", err)
+	}
+}
+
+func authLeaseTestTimeToLiveExpired(cx ctlCtx) {
+	if err := authEnable(cx); err != nil {
+		cx.t.Fatal(err)
+	}
+
+	cx.user, cx.pass = "root", "root"
+	authSetupTestUser(cx)
+
+	ttl := 3
+	if err := leaseTestTimeToLiveExpire(cx, ttl); err != nil {
+		cx.t.Fatal(err)
+	}
+}
+
 func authTestWatch(cx ctlCtx) {
 	if err := authEnable(cx); err != nil {
 		cx.t.Fatal(err)
@@ -740,32 +780,32 @@ func authTestWatch(cx ctlCtx) {
 		puts []kv
 		args []string
 
-		wkv  []kv
+		wkv  []kvExec
 		want bool
 	}{
 		{ // watch 1 key, should be successful
 			[]kv{{"key", "value"}},
 			[]string{"key", "--rev", "1"},
-			[]kv{{"key", "value"}},
+			[]kvExec{{key: "key", val: "value"}},
 			true,
 		},
 		{ // watch 3 keys by range, should be successful
 			[]kv{{"key1", "val1"}, {"key3", "val3"}, {"key2", "val2"}},
 			[]string{"key", "key3", "--rev", "1"},
-			[]kv{{"key1", "val1"}, {"key2", "val2"}},
+			[]kvExec{{key: "key1", val: "val1"}, {key: "key2", val: "val2"}},
 			true,
 		},
 
 		{ // watch 1 key, should not be successful
 			[]kv{},
 			[]string{"key5", "--rev", "1"},
-			[]kv{},
+			[]kvExec{},
 			false,
 		},
 		{ // watch 3 keys by range, should not be successful
 			[]kv{},
 			[]string{"key", "key6", "--rev", "1"},
-			[]kv{},
+			[]kvExec{},
 			false,
 		},
 	}

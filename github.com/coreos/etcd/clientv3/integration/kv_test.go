@@ -17,7 +17,6 @@ package integration
 import (
 	"bytes"
 	"context"
-	"math/rand"
 	"os"
 	"reflect"
 	"strings"
@@ -31,6 +30,7 @@ import (
 	"github.com/coreos/etcd/pkg/testutil"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 )
 
 func TestKVPutError(t *testing.T) {
@@ -40,7 +40,7 @@ func TestKVPutError(t *testing.T) {
 		maxReqBytes = 1.5 * 1024 * 1024 // hard coded max in v3_server.go
 		quota       = int64(int(maxReqBytes) + 8*os.Getpagesize())
 	)
-	clus := integration.NewClusterV3(t, &integration.ClusterConfig{Size: 1, QuotaBackendBytes: quota})
+	clus := integration.NewClusterV3(t, &integration.ClusterConfig{Size: 1, QuotaBackendBytes: quota, ClientMaxCallSendMsgSize: 100 * 1024 * 1024})
 	defer clus.Terminate(t)
 
 	kv := clus.RandClient()
@@ -453,7 +453,7 @@ func TestKVGetErrConnClosed(t *testing.T) {
 	clus.TakeClient(0)
 
 	select {
-	case <-time.After(3 * time.Second):
+	case <-time.After(integration.RequestWaitTimeout):
 		t.Fatal("kv.Get took too long")
 	case <-donec:
 	}
@@ -473,13 +473,14 @@ func TestKVNewAfterClose(t *testing.T) {
 
 	donec := make(chan struct{})
 	go func() {
-		if _, err := cli.Get(context.TODO(), "foo"); err != context.Canceled {
-			t.Fatalf("expected %v, got %v", context.Canceled, err)
+		_, err := cli.Get(context.TODO(), "foo")
+		if err != context.Canceled && err != grpc.ErrClientConnClosing {
+			t.Fatalf("expected %v or %v, got %v", context.Canceled, grpc.ErrClientConnClosing, err)
 		}
 		close(donec)
 	}()
 	select {
-	case <-time.After(3 * time.Second):
+	case <-time.After(integration.RequestWaitTimeout):
 		t.Fatal("kv.Get took too long")
 	case <-donec:
 	}
@@ -825,78 +826,6 @@ func TestKVPutStoppedServerAndClose(t *testing.T) {
 	}
 }
 
-// TestKVGetOneEndpointDown ensures a client can connect and get if one endpoint is down.
-func TestKVGetOneEndpointDown(t *testing.T) {
-	defer testutil.AfterTest(t)
-	clus := integration.NewClusterV3(t, &integration.ClusterConfig{Size: 3, SkipCreatingClient: true})
-	defer clus.Terminate(t)
-
-	// get endpoint list
-	eps := make([]string, 3)
-	for i := range eps {
-		eps[i] = clus.Members[i].GRPCAddr()
-	}
-
-	// make a dead node
-	clus.Members[rand.Intn(len(eps))].Stop(t)
-
-	// try to connect with dead node in the endpoint list
-	cfg := clientv3.Config{Endpoints: eps, DialTimeout: 1 * time.Second}
-	cli, err := clientv3.New(cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cli.Close()
-	ctx, cancel := context.WithTimeout(context.TODO(), 3*time.Second)
-	if _, err := cli.Get(ctx, "abc", clientv3.WithSerializable()); err != nil {
-		t.Fatal(err)
-	}
-	cancel()
-}
-
-// TestKVGetResetLoneEndpoint ensures that if an endpoint resets and all other
-// endpoints are down, then it will reconnect.
-func TestKVGetResetLoneEndpoint(t *testing.T) {
-	defer testutil.AfterTest(t)
-	clus := integration.NewClusterV3(t, &integration.ClusterConfig{Size: 2, SkipCreatingClient: true})
-	defer clus.Terminate(t)
-
-	// get endpoint list
-	eps := make([]string, 2)
-	for i := range eps {
-		eps[i] = clus.Members[i].GRPCAddr()
-	}
-
-	cfg := clientv3.Config{Endpoints: eps, DialTimeout: 500 * time.Millisecond}
-	cli, err := clientv3.New(cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cli.Close()
-
-	// disconnect everything
-	clus.Members[0].Stop(t)
-	clus.Members[1].Stop(t)
-
-	// have Get try to reconnect
-	donec := make(chan struct{})
-	go func() {
-		ctx, cancel := context.WithTimeout(context.TODO(), 5*time.Second)
-		if _, err := cli.Get(ctx, "abc", clientv3.WithSerializable()); err != nil {
-			t.Fatal(err)
-		}
-		cancel()
-		close(donec)
-	}()
-	time.Sleep(500 * time.Millisecond)
-	clus.Members[0].Restart(t)
-	select {
-	case <-time.After(10 * time.Second):
-		t.Fatalf("timed out waiting for Get")
-	case <-donec:
-	}
-}
-
 // TestKVPutAtMostOnce ensures that a Put will only occur at most once
 // in the presence of network errors.
 func TestKVPutAtMostOnce(t *testing.T) {
@@ -934,28 +863,94 @@ func TestKVPutAtMostOnce(t *testing.T) {
 	}
 }
 
-func TestKVSwitchUnavailable(t *testing.T) {
+// TestKVLargeRequests tests various client/server side request limits.
+func TestKVLargeRequests(t *testing.T) {
 	defer testutil.AfterTest(t)
-	clus := integration.NewClusterV3(t, &integration.ClusterConfig{Size: 3, SkipCreatingClient: true})
-	defer clus.Terminate(t)
+	tests := []struct {
+		// make sure that "MaxCallSendMsgSize" < server-side default send/recv limit
+		maxRequestBytesServer  uint
+		maxCallSendBytesClient int
+		maxCallRecvBytesClient int
 
-	clus.Members[0].InjectPartition(t, clus.Members[1:]...)
-	// try to connect with dead node in the endpoint list
-	cfg := clientv3.Config{
-		Endpoints: []string{
-			clus.Members[0].GRPCAddr(),
-			clus.Members[1].GRPCAddr(),
+		valueSize   int
+		expectError error
+	}{
+		{
+			maxRequestBytesServer:  1,
+			maxCallSendBytesClient: 0,
+			maxCallRecvBytesClient: 0,
+			valueSize:              1024,
+			expectError:            rpctypes.ErrRequestTooLarge,
 		},
-		DialTimeout: 1 * time.Second}
-	cli, err := clientv3.New(cfg)
-	if err != nil {
-		t.Fatal(err)
+
+		// without proper client-side receive size limit
+		// "code = ResourceExhausted desc = grpc: received message larger than max (5242929 vs. 4194304)"
+		{
+
+			maxRequestBytesServer:  7*1024*1024 + 512*1024,
+			maxCallSendBytesClient: 7 * 1024 * 1024,
+			maxCallRecvBytesClient: 0,
+			valueSize:              5 * 1024 * 1024,
+			expectError:            nil,
+		},
+
+		{
+			maxRequestBytesServer:  10 * 1024 * 1024,
+			maxCallSendBytesClient: 100 * 1024 * 1024,
+			maxCallRecvBytesClient: 0,
+			valueSize:              10 * 1024 * 1024,
+			expectError:            rpctypes.ErrRequestTooLarge,
+		},
+		{
+			maxRequestBytesServer:  10 * 1024 * 1024,
+			maxCallSendBytesClient: 10 * 1024 * 1024,
+			maxCallRecvBytesClient: 0,
+			valueSize:              10 * 1024 * 1024,
+			expectError:            grpc.Errorf(codes.ResourceExhausted, "grpc: trying to send message larger than max "),
+		},
+		{
+			maxRequestBytesServer:  10 * 1024 * 1024,
+			maxCallSendBytesClient: 100 * 1024 * 1024,
+			maxCallRecvBytesClient: 0,
+			valueSize:              10*1024*1024 + 5,
+			expectError:            rpctypes.ErrRequestTooLarge,
+		},
+		{
+			maxRequestBytesServer:  10 * 1024 * 1024,
+			maxCallSendBytesClient: 10 * 1024 * 1024,
+			maxCallRecvBytesClient: 0,
+			valueSize:              10*1024*1024 + 5,
+			expectError:            grpc.Errorf(codes.ResourceExhausted, "grpc: trying to send message larger than max "),
+		},
 	}
-	defer cli.Close()
-	timeout := 3 * clus.Members[0].ServerConfig.ReqTimeout()
-	ctx, cancel := context.WithTimeout(context.TODO(), timeout)
-	if _, err := cli.Get(ctx, "abc"); err != nil {
-		t.Fatal(err)
+	for i, test := range tests {
+		clus := integration.NewClusterV3(t,
+			&integration.ClusterConfig{
+				Size:                     1,
+				MaxRequestBytes:          test.maxRequestBytesServer,
+				ClientMaxCallSendMsgSize: test.maxCallSendBytesClient,
+				ClientMaxCallRecvMsgSize: test.maxCallRecvBytesClient,
+			},
+		)
+		cli := clus.Client(0)
+		_, err := cli.Put(context.TODO(), "foo", strings.Repeat("a", test.valueSize))
+
+		if _, ok := err.(rpctypes.EtcdError); ok {
+			if err != test.expectError {
+				t.Errorf("#%d: expected %v, got %v", i, test.expectError, err)
+			}
+		} else if err != nil && !strings.HasPrefix(err.Error(), test.expectError.Error()) {
+			t.Errorf("#%d: expected %v, got %v", i, test.expectError, err)
+		}
+
+		// put request went through, now expects large response back
+		if err == nil {
+			_, err = cli.Get(context.TODO(), "foo")
+			if err != nil {
+				t.Errorf("#%d: get expected no error, got %v", i, err)
+			}
+		}
+
+		clus.Terminate(t)
 	}
-	cancel()
 }

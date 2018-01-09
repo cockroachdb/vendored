@@ -38,6 +38,11 @@
 - [maciej/etcd-client](https://github.com/maciej/etcd-client) - Supports v2. Akka HTTP-based fully async client
 - [eiipii/etcdhttpclient](https://bitbucket.org/eiipii/etcdhttpclient) - Supports v2. Async HTTP client based on Netty and Scala Futures.
 
+**Perl libraries**
+
+- [hexfusion/perl-net-etcd](https://github.com/hexfusion/perl-net-etcd) - Supports v3 grpc gateway HTTP API
+- [robn/p5-etcd](https://github.com/robn/p5-etcd) - Supports v2
+
 **Python libraries**
 
 - [kragniz/python-etcd3](https://github.com/kragniz/python-etcd3) - Client for v3
@@ -47,6 +52,7 @@
 - [lisael/aioetcd](https://github.com/lisael/aioetcd) - (Python 3.4+) Asyncio coroutines client (Supports v2)
 - [txaio-etcd](https://github.com/crossbario/txaio-etcd) - Asynchronous etcd v3-only client library for Twisted (today) and asyncio (future)
 - [dims/etcd3-gateway](https://github.com/dims/etcd3-gateway) - etcd v3 API library using the HTTP grpc gateway
+- [aioetcd3](https://github.com/gaopeiliang/aioetcd3) - (Python 3.6+) etcd v3 API for asyncio
 
 **Node libraries**
 

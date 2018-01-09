@@ -16,12 +16,15 @@ package v3rpc
 
 import (
 	"crypto/tls"
+	"io/ioutil"
 	"math"
 	"os"
+	"sync"
 
 	"github.com/coreos/etcd/etcdserver"
 	pb "github.com/coreos/etcd/etcdserver/etcdserverpb"
 
+	"github.com/grpc-ecosystem/go-grpc-prometheus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
@@ -35,9 +38,8 @@ const (
 	maxSendBytes      = math.MaxInt32
 )
 
-func init() {
-	grpclog.SetLoggerV2(grpclog.NewLoggerV2(os.Stderr, os.Stderr, os.Stderr))
-}
+// integration tests call this multiple times, which is racey in gRPC side
+var grpclogOnce sync.Once
 
 func Server(s *etcdserver.EtcdServer, tls *tls.Config, gopts ...grpc.ServerOption) *grpc.Server {
 	var opts []grpc.ServerOption
@@ -65,6 +67,20 @@ func Server(s *etcdserver.EtcdServer, tls *tls.Config, gopts ...grpc.ServerOptio
 	hsrv := health.NewServer()
 	hsrv.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
 	healthpb.RegisterHealthServer(grpcServer, hsrv)
+
+	// set zero values for metrics registered for this grpc server
+	grpc_prometheus.Register(grpcServer)
+
+	grpclogOnce.Do(func() {
+		if s.Cfg.Debug {
+			grpc.EnableTracing = true
+			// enable info, warning, error
+			grpclog.SetLoggerV2(grpclog.NewLoggerV2(os.Stderr, os.Stderr, os.Stderr))
+		} else {
+			// only discard info
+			grpclog.SetLoggerV2(grpclog.NewLoggerV2(ioutil.Discard, os.Stderr, os.Stderr))
+		}
+	})
 
 	return grpcServer
 }

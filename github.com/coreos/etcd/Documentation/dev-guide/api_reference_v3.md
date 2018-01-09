@@ -480,7 +480,7 @@ Empty field.
 
 | Field | Description | Type |
 | ----- | ----------- | ---- |
-| TTL | TTL is the advisory time-to-live in seconds. | int64 |
+| TTL | TTL is the advisory time-to-live in seconds. Expired lease will return -1. | int64 |
 | ID | ID is the requested ID for the lease. If ID is set to 0, the lessor chooses an ID. | int64 |
 
 
@@ -832,6 +832,7 @@ From google paxosdb paper: Our implementation hinges around a powerful primitive
 | progress_notify | progress_notify is set so that the etcd server will periodically send a WatchResponse with no events to the new watcher if there are no recent events. It is useful when clients wish to recover a disconnected watcher starting from a recent known revision. The etcd server may decide how often it will send notifications based on current load. | bool |
 | filters | filters filter the events at server side before it sends back to the watcher. | (slice of) FilterType |
 | prev_kv | If prev_kv is set, created watcher gets the previous KV before the event happens. If the previous KV is already compacted, nothing will be returned. | bool |
+| watch_id | If watch_id is provided and non-zero, it will be assigned to this watcher. Since creating a watcher in etcd is not a synchronous operation, this can be used ensure that ordering is correct when creating multiple watchers on the same stream. Creating a watcher with an ID already in use on the stream will cause an error to be returned. | int64 |
 
 
 

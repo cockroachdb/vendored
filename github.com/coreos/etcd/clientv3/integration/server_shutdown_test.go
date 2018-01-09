@@ -17,12 +17,17 @@ package integration
 import (
 	"bytes"
 	"context"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/coreos/etcd/clientv3"
+	"github.com/coreos/etcd/etcdserver/api/v3rpc/rpctypes"
 	"github.com/coreos/etcd/integration"
 	"github.com/coreos/etcd/pkg/testutil"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // TestBalancerUnderServerShutdownWatch expects that watch client
@@ -58,7 +63,7 @@ func TestBalancerUnderServerShutdownWatch(t *testing.T) {
 	wch := watchCli.Watch(context.Background(), key, clientv3.WithCreatedNotify())
 	select {
 	case <-wch:
-	case <-time.After(3 * time.Second):
+	case <-time.After(integration.RequestWaitTimeout):
 		t.Fatal("took too long to create watch")
 	}
 
@@ -99,7 +104,7 @@ func TestBalancerUnderServerShutdownWatch(t *testing.T) {
 		if err == nil {
 			break
 		}
-		if err == context.DeadlineExceeded {
+		if err == context.DeadlineExceeded || isServerCtxTimeout(err) || err == rpctypes.ErrTimeout || err == rpctypes.ErrTimeoutDueToLeaderFail {
 			continue
 		}
 		t.Fatal(err)
@@ -233,4 +238,130 @@ func testBalancerUnderServerShutdownImmutable(t *testing.T, op func(*clientv3.Cl
 	if err != nil {
 		t.Errorf("failed to finish range request in time %v (timeout %v)", err, timeout)
 	}
+}
+
+func TestBalancerUnderServerStopInflightLinearizableGetOnRestart(t *testing.T) {
+	tt := []pinTestOpt{
+		{pinLeader: true, stopPinFirst: true},
+		{pinLeader: true, stopPinFirst: false},
+		{pinLeader: false, stopPinFirst: true},
+		{pinLeader: false, stopPinFirst: false},
+	}
+	for i := range tt {
+		testBalancerUnderServerStopInflightRangeOnRestart(t, true, tt[i])
+	}
+}
+
+func TestBalancerUnderServerStopInflightSerializableGetOnRestart(t *testing.T) {
+	tt := []pinTestOpt{
+		{pinLeader: true, stopPinFirst: true},
+		{pinLeader: true, stopPinFirst: false},
+		{pinLeader: false, stopPinFirst: true},
+		{pinLeader: false, stopPinFirst: false},
+	}
+	for i := range tt {
+		testBalancerUnderServerStopInflightRangeOnRestart(t, false, tt[i])
+	}
+}
+
+type pinTestOpt struct {
+	pinLeader    bool
+	stopPinFirst bool
+}
+
+// testBalancerUnderServerStopInflightRangeOnRestart expects
+// inflight range request reconnects on server restart.
+func testBalancerUnderServerStopInflightRangeOnRestart(t *testing.T, linearizable bool, opt pinTestOpt) {
+	defer testutil.AfterTest(t)
+
+	cfg := &integration.ClusterConfig{
+		Size:               2,
+		SkipCreatingClient: true,
+	}
+	if linearizable {
+		cfg.Size = 3
+	}
+
+	clus := integration.NewClusterV3(t, cfg)
+	defer clus.Terminate(t)
+	eps := []string{clus.Members[0].GRPCAddr(), clus.Members[1].GRPCAddr()}
+	if linearizable {
+		eps = append(eps, clus.Members[2].GRPCAddr())
+	}
+
+	lead := clus.WaitLeader(t)
+
+	target := lead
+	if !opt.pinLeader {
+		target = (target + 1) % 2
+	}
+
+	// pin eps[target]
+	cli, err := clientv3.New(clientv3.Config{Endpoints: []string{eps[target]}})
+	if err != nil {
+		t.Errorf("failed to create client: %v", err)
+	}
+	defer cli.Close()
+
+	// wait for eps[target] to be pinned
+	mustWaitPinReady(t, cli)
+
+	// add all eps to list, so that when the original pined one fails
+	// the client can switch to other available eps
+	cli.SetEndpoints(eps...)
+
+	if opt.stopPinFirst {
+		clus.Members[target].Stop(t)
+		// give some time for balancer switch before stopping the other
+		time.Sleep(time.Second)
+		clus.Members[(target+1)%2].Stop(t)
+	} else {
+		clus.Members[(target+1)%2].Stop(t)
+		// balancer cannot pin other member since it's already stopped
+		clus.Members[target].Stop(t)
+	}
+
+	// 3-second is the minimum interval between endpoint being marked
+	// as unhealthy and being removed from unhealthy, so possibly
+	// takes >5-second to unpin and repin an endpoint
+	// TODO: decrease timeout when balancer switch rewrite
+	clientTimeout := 7 * time.Second
+
+	var gops []clientv3.OpOption
+	if !linearizable {
+		gops = append(gops, clientv3.WithSerializable())
+	}
+
+	donec, readyc := make(chan struct{}), make(chan struct{}, 1)
+	go func() {
+		defer close(donec)
+		ctx, cancel := context.WithTimeout(context.TODO(), clientTimeout)
+		readyc <- struct{}{}
+		_, err := cli.Get(ctx, "abc", gops...)
+		cancel()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	<-readyc
+	clus.Members[target].Restart(t)
+
+	select {
+	case <-time.After(clientTimeout + integration.RequestWaitTimeout):
+		t.Fatalf("timed out waiting for Get [linearizable: %v, opt: %+v]", linearizable, opt)
+	case <-donec:
+	}
+}
+
+// e.g. due to clock drifts in server-side,
+// client context times out first in server-side
+// while original client-side context is not timed out yet
+func isServerCtxTimeout(err error) bool {
+	if err == nil {
+		return false
+	}
+	ev, _ := status.FromError(err)
+	code := ev.Code()
+	return code == codes.DeadlineExceeded && strings.Contains(err.Error(), "context deadline exceeded")
 }
