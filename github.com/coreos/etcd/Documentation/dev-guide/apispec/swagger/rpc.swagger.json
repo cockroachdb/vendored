@@ -2168,11 +2168,23 @@
           "type": "string",
           "format": "int64"
         },
+        "errors": {
+          "description": "errors contains alarm/health information and status.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "header": {
           "$ref": "#/definitions/etcdserverpbResponseHeader"
         },
         "leader": {
           "description": "leader is the member ID which the responding member believes is the current leader.",
+          "type": "string",
+          "format": "uint64"
+        },
+        "raftAppliedIndex": {
+          "description": "raftAppliedIndex is the current raft applied index of the responding member.",
           "type": "string",
           "format": "uint64"
         },

@@ -2,7 +2,7 @@ syntax = "proto3";
 package etcdserverpb;
 
 import "gogoproto/gogo.proto";
-import "etcd/mvcc/mvccpb/kv.proto";
+import "etcd/internal/mvcc/mvccpb/kv.proto";
 import "etcd/auth/authpb/auth.proto";
 
 // for grpc-gateway
@@ -907,6 +907,10 @@ message StatusResponse {
   uint64 raftIndex = 5;
   // raftTerm is the current raft term of the responding member.
   uint64 raftTerm = 6;
+  // raftAppliedIndex is the current raft applied index of the responding member.
+  uint64 raftAppliedIndex = 7;
+  // errors contains alarm/health information and status.
+  repeated string errors = 8;
 }
 
 message AuthEnableRequest {
