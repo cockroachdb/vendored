@@ -319,14 +319,15 @@ func (n *node) run(r *raft) {
 			r.Step(m)
 		case m := <-n.recvc:
 			// filter out response message from unknown From.
-			if _, ok := r.prs[m.From]; ok || !IsResponseMsg(m.Type) {
+			if pr := r.getProgress(m.From); pr != nil || !IsResponseMsg(m.Type) {
 				r.Step(m) // raft never returns an error
 			}
 		case cc := <-n.confc:
 			if cc.NodeID == None {
-				r.resetPendingConf()
 				select {
-				case n.confstatec <- pb.ConfState{Nodes: r.nodes()}:
+				case n.confstatec <- pb.ConfState{
+					Nodes:    r.nodes(),
+					Learners: r.learnerNodes()}:
 				case <-n.done:
 				}
 				break
@@ -334,6 +335,8 @@ func (n *node) run(r *raft) {
 			switch cc.Type {
 			case pb.ConfChangeAddNode:
 				r.addNode(cc.NodeID)
+			case pb.ConfChangeAddLearnerNode:
+				r.addLearner(cc.NodeID)
 			case pb.ConfChangeRemoveNode:
 				// block incoming proposal when local node is
 				// removed
@@ -342,12 +345,13 @@ func (n *node) run(r *raft) {
 				}
 				r.removeNode(cc.NodeID)
 			case pb.ConfChangeUpdateNode:
-				r.resetPendingConf()
 			default:
 				panic("unexpected conf type")
 			}
 			select {
-			case n.confstatec <- pb.ConfState{Nodes: r.nodes()}:
+			case n.confstatec <- pb.ConfState{
+				Nodes:    r.nodes(),
+				Learners: r.learnerNodes()}:
 			case <-n.done:
 			}
 		case <-n.tickc:

@@ -1,5 +1,0 @@
-=== RUN TestPanic
-fatal error: all goroutines are asleep - deadlock!
-...
-exit status 2
-FAIL		go2xunit/demo	0.020s
