@@ -98,7 +98,10 @@ func Process(filename string, src []byte, opt *Options) ([]byte, error) {
 		out = adjust(src, out)
 	}
 	if len(spacesBefore) > 0 {
-		out = addImportSpaces(bytes.NewReader(out), spacesBefore)
+		out, err = addImportSpaces(bytes.NewReader(out), spacesBefore)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	out, err = format.Source(out)
@@ -256,13 +259,18 @@ func matchSpace(orig []byte, src []byte) []byte {
 
 var impLine = regexp.MustCompile(`^\s+(?:[\w\.]+\s+)?"(.+)"`)
 
-func addImportSpaces(r io.Reader, breaks []string) []byte {
+func addImportSpaces(r io.Reader, breaks []string) ([]byte, error) {
 	var out bytes.Buffer
-	sc := bufio.NewScanner(r)
+	in := bufio.NewReader(r)
 	inImports := false
 	done := false
-	for sc.Scan() {
-		s := sc.Text()
+	for {
+		s, err := in.ReadString('\n')
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return nil, err
+		}
 
 		if !inImports && !done && strings.HasPrefix(s, "import") {
 			inImports = true
@@ -283,7 +291,7 @@ func addImportSpaces(r io.Reader, breaks []string) []byte {
 			}
 		}
 
-		fmt.Fprintln(&out, s)
+		fmt.Fprint(&out, s)
 	}
-	return out.Bytes()
+	return out.Bytes(), nil
 }
