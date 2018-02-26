@@ -604,8 +604,10 @@ cv_csearch(EditLine *el, int direction, wint_t ch, int count, int tflag)
 		return CC_ERROR;
 
 	if (ch == (wint_t)-1) {
-		if (el_wgetc(el, &ch) != 1)
+		wchar_t c;
+		if (el_wgetc(el, &c) != 1)
 			return ed_end_of_file(el, 0);
+		ch = c;
 	}
 
 	/* Save for ';' and ',' commands */

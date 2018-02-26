@@ -89,7 +89,8 @@ func InitFiles(appName string, wideChars bool, inf, outf, errf *os.File) (e Edit
 	cAppName := C.CString(appName)
 	defer C.free(unsafe.Pointer(cAppName))
 	var sigcfg unsafe.Pointer
-	el, err := C.go_libedit_init(cAppName, &sigcfg, inFile, outFile, errFile, sigtramp.Get())
+	id := C.int(len(editors))
+	el, err := C.go_libedit_init(id, cAppName, &sigcfg, inFile, outFile, errFile, sigtramp.Get())
 	// If the settings file did not exist, ignore the error.
 	if err == syscall.ENOENT {
 		err = nil

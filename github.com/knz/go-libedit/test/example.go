@@ -20,7 +20,15 @@ func (_ example) GetCompletions(word string) []string {
 }
 
 func main() {
+	// Open and immediately close a libedit instance to test that nonzero editor
+	// IDs are tracked correctly.
 	el, err := libedit.Init("example", true)
+	if err != nil {
+		log.Fatal(err)
+	}
+	el.Close()
+
+	el, err = libedit.Init("example", true)
 	if err != nil {
 		log.Fatal(err)
 	}
