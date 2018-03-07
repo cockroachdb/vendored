@@ -363,15 +363,17 @@ ed_prev_char(EditLine *el, wint_t c __attribute__((__unused__)))
  *	[^V] [^V]
  */
 libedit_private el_action_t
-ed_quoted_insert(EditLine *el, wint_t c)
+/*ARGSUSED*/
+ed_quoted_insert(EditLine *el, wint_t c __attribute__((__unused__)))
 {
 	int num;
+	wchar_t ch;
 
 	tty_quotemode(el);
-	num = el_wgetc(el, &c);
+	num = el_wgetc(el, &ch);
 	tty_noquotemode(el);
 	if (num == 1)
-		return ed_insert(el, c);
+		return ed_insert(el, ch);
 	else
 		return ed_end_of_file(el, 0);
 }

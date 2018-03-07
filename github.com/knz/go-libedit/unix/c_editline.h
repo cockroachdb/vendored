@@ -6,7 +6,7 @@
 
 typedef char* pchar;
 
-EditLine* go_libedit_init(char *appName, void **sigcfg,
+EditLine* go_libedit_init(int id, char *appName, void **sigcfg,
 			  FILE* fin, FILE* fout, FILE *ferr,
 			  void *sigtramp);
 void go_libedit_close(EditLine *el, void *sigcfg);
@@ -19,8 +19,8 @@ extern const char* go_libedit_mode_append;
 extern const char *go_libedit_locale1;
 extern const char *go_libedit_locale2;
 
-int go_libedit_get_clientdata(EditLine *el);
-void go_libedit_set_clientdata(EditLine *el, int v);
+struct clientdata* go_libedit_get_clientdata(EditLine *el);
+int go_libedit_set_clientdata(EditLine *el, struct clientdata cd);
 void go_libedit_set_string_array(char **ar, int p, char *s);
 
 void *go_libedit_gets(EditLine *el, char *lprompt, char *rprompt,

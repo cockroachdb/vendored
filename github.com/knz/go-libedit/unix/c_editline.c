@@ -22,16 +22,90 @@ void go_libedit_set_string_array(char **ar, int p, char *s) {
     ar[p] = s;
 }
 
-int go_libedit_get_clientdata(EditLine *el) {
-    void* p;
-    el_get(el, EL_CLIENTDATA, &p);
-    return (int)(intptr_t)p;
+struct clientdata {
+    int id;
+    int bracketed_paste;
+};
+
+struct clientdata* go_libedit_get_clientdata(EditLine *el) {
+    struct clientdata* cd;
+    el_get(el, EL_CLIENTDATA, &cd);
+    return cd;
 }
 
-void go_libedit_set_clientdata(EditLine *el, int v) {
-    void *p = (void*)(intptr_t) v;
-    el_set(el, EL_CLIENTDATA, p);
+int go_libedit_set_clientdata(EditLine *el, struct clientdata cd) {
+    struct clientdata* pcd = malloc(sizeof(struct clientdata));
+    if (pcd == NULL) {
+	return -1;
+    }
+    *pcd = cd;
+    return el_set(el, EL_CLIENTDATA, pcd);
 }
+
+/************* terminals ************/
+
+const char term_bp_off[] = "\033[?2004l";
+const char term_bp_on[] = "\033[?2004h";
+const char term_bp_start[] = "\033[200~";
+const char term_bp_end[] = "\033[201~";
+
+int go_libedit_term_supports_bracketed_paste(EditLine* el) {
+    // terminfo does not track support for bracketed paste, so we manually
+    // whitelist known-good TERM values:
+    //
+    //     - "screen*" matches tmux without italics support and screen.
+    //     - "xterm*" matches Terminal.app, iTerm2, GNOME terminal, and probably
+    //       others.
+    //     - "tmux*" matches tmux with italics support.
+    //     - "ansi*" matches a generic ANSI-compatible terminal.
+    //     - "st*" matches suckless's "simple terminal".
+    //
+    // Modern versions of all the programs listed above support bracketed paste;
+    // older versions harmlessly ignore the control codes.
+    char* term = getenv("TERM");
+    return strncmp(term, "screen", 6) == 0
+	|| strncmp(term, "xterm", 5) == 0
+	|| strncmp(term, "tmux", 4) == 0
+	|| strncmp(term, "ansi", 4) == 0
+	|| strncmp(term, "st", 2) == 0;
+}
+
+static unsigned char _el_bracketed_paste(EditLine *el, int ch) {
+    int endsz = sizeof(term_bp_end) - 1;
+    char* buf = NULL;
+    size_t bufsz = 0;
+    size_t i = 0;
+    do {
+	if (i >= bufsz) {
+	    // Out of space. Reallocate.
+	    bufsz = (bufsz == 0 ? 1024 : bufsz * 2);
+	    char* newbuf = realloc(buf, bufsz);
+	    if (newbuf == NULL) {
+		free(buf);
+		return CC_ERROR;
+	    } else {
+		buf = newbuf;
+	    }
+	}
+	// Read one character.
+	if (el_getc(el, &buf[i++]) == -1) {
+	    free(buf);
+	    return CC_EOF;
+	}
+	// Continue until the buffer ends with term_bp_end.
+    } while (i < endsz || strncmp(&buf[i-endsz], term_bp_end, endsz) != 0);
+    buf[i-endsz] = '\0';
+    if (i > endsz && el_insertstr(el, buf) == -1) {
+	FILE *ferr;
+	el_get(el, EL_GETFP, 2, &ferr);
+	fputs("\nerror: pasted text too large for buffer\n", ferr);
+	free(buf);
+	return CC_REDISPLAY;
+    }
+    free(buf);
+    return CC_REFRESH;
+}
+
 
 /************** prompts **************/
 
@@ -90,7 +164,7 @@ void go_libedit_rebind_ctrls(EditLine *e) {
 // See the explanation above go_libedit_gets below.
 static void* g_sigtramp;
 
-EditLine* go_libedit_init(char *appName, void** el_signal,
+EditLine* go_libedit_init(int id, char *appName, void** el_signal,
 			  FILE* fin, FILE* fout, FILE *ferr,
 			  void *sigtramp) {
     // Prepare signal handling.
@@ -114,6 +188,13 @@ EditLine* go_libedit_init(char *appName, void** el_signal,
     if (!e) {
 	return NULL;
     }
+
+    struct clientdata cd = {
+	.id = id,
+	.bracketed_paste = go_libedit_term_supports_bracketed_paste(e),
+    };
+    if (go_libedit_set_clientdata(e, cd) != 0)
+        return NULL;
 
     if (!editmode)
 	el_set(e, EL_EDITMODE, 0);
@@ -149,6 +230,14 @@ EditLine* go_libedit_init(char *appName, void** el_signal,
     el_set(e, EL_BIND, "\\e[5D", "ed-prev-word", NULL);
     el_set(e, EL_BIND, "\\e\\e[C", "em-next-word", NULL);
     el_set(e, EL_BIND, "\\e\\e[D", "ed-prev-word", NULL);
+
+    // Bracketed paste.
+    if (cd.bracketed_paste) {
+	el_set(e, EL_ADDFN, "ed-bracketed-paste",
+	       "Begin bracketed paste",
+	       _el_bracketed_paste);
+	el_set(e, EL_BIND, term_bp_start, "ed-bracketed-paste", NULL);
+    }
 
     // Read the settings from the configuration file.
     el_source(e, NULL);
@@ -231,10 +320,10 @@ static const wchar_t break_chars[] = L" \t\n\"\\'`@$><=;|&{(";
 // So we'll pass it as a hidden argument via a global variable.
 // This effectively makes the entire library thread-unsafe. :'-(
 
-static int global_instance;
+static struct clientdata* global_instance;
 
 static char **wrap_autocomplete(const char *word, int unused1, int unused2) {
-    return go_libedit_getcompletions(global_instance, (char*)word);
+    return go_libedit_getcompletions(global_instance->id, (char*)word);
 }
 
 static const char *_rl_completion_append_character_function(const char *_) {
@@ -419,6 +508,11 @@ void *go_libedit_gets(EditLine *el, char *lprompt, char *rprompt,
     el_set(el, EL_SETTY, "-q", "susp=", NULL);
     el_reset(el);
 
+    // Request bracketed paste mode if supported by the terminal.
+    struct clientdata* cd = go_libedit_get_clientdata(el);
+    if (cd->bracketed_paste)
+	fputs(term_bp_on, fout);
+
     // Install the prompts.
     go_libedit_lprompt_str = lprompt;
     go_libedit_rprompt_str = rprompt;
@@ -463,6 +557,10 @@ void *go_libedit_gets(EditLine *el, char *lprompt, char *rprompt,
 #ifdef __darwin__
     }
 #endif
+
+    // Turn off bracketed paste mode if we turned it on.
+    if (cd->bracketed_paste)
+	fputs(term_bp_off, fout);
 
     // If libedit got interrupted it may not have restored the
     // terminal settings properly. Restore them.
