@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<assembly name="_/go/src/github.com/tebeka/go2xunit/data"
+          run-date="2017-03-20" run-time="23:37:45"
+          configFile="none"
+          time="0.005"
+          total="4"
+          passed="4"
+          failed="0"
+          skipped="0"
+          environment="n/a"
+          test-framework="golang">
+
+    <class time="0.005" name="_/go/src/github.com/tebeka/go2xunit/data"
+  	     total="4"
+  	     passed="4"
+  	     failed="0"
+  	     skipped="0">
+
+        <test name="TestEscapedChars"
+          type="test"
+          method="TestEscapedChars"
+          result="Pass"
+          time="0.00">
+        </test>
+
+        <test name="TestEscapedChars/no_special_chars"
+          type="test"
+          method="TestEscapedChars/no_special_chars"
+          result="Pass"
+          time="0.00">
+        </test>
+
+        <test name="TestEscapedChars/&#34;needs_escape&#34;"
+          type="test"
+          method="TestEscapedChars/&#34;needs_escape&#34;"
+          result="Pass"
+          time="0.00">
+        </test>
+
+        <test name="TestEscapedChars/reserved_&lt;chars&gt;"
+          type="test"
+          method="TestEscapedChars/reserved_&lt;chars&gt;"
+          result="Pass"
+          time="0.00">
+        </test>
+
+    </class>
+
+</assembly>
