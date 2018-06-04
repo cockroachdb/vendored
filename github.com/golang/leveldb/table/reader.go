@@ -52,7 +52,7 @@ func (b block) seek(c db.Comparer, key []byte) (*blockIter, error) {
 		return nil, errors.New("leveldb/table: invalid table (block has no restart points)")
 	}
 	n := len(b) - 4*(1+numRestarts)
-	var offset int
+	var offset uint64
 	if len(key) > 0 {
 		// Find the index of the smallest restart point whose key is > the key
 		// sought; index will be numRestarts if there is no such restart point.
@@ -73,13 +73,14 @@ func (b block) seek(c db.Comparer, key []byte) (*blockIter, error) {
 		// If index == 0, then all keys in this block are larger than the key
 		// sought, and offset remains at zero.
 		if index > 0 {
-			offset = int(binary.LittleEndian.Uint32(b[n+4*(index-1):]))
+			offset = uint64(binary.LittleEndian.Uint32(b[n+4*(index-1):]))
 		}
 	}
 	// Initialize the blockIter to the restart point.
 	i := &blockIter{
-		data: b[offset:n],
-		key:  make([]byte, 0, 256),
+		data:   b[offset:n],
+		offset: offset,
+		key:    make([]byte, 0, 256),
 	}
 	// Iterate from that restart point to somewhere >= the key sought.
 	for i.Next() && c.Compare(i.key, key) < 0 {
@@ -95,6 +96,7 @@ func (b block) seek(c db.Comparer, key []byte) (*blockIter, error) {
 type blockIter struct {
 	data     []byte
 	key, val []byte
+	offset   uint64
 	err      error
 	// soi and eoi mark the start and end of iteration.
 	// Both cannot simultaneously be true.
@@ -124,6 +126,7 @@ func (i *blockIter) Next() bool {
 	i.key = append(i.key[:v0], i.data[n:n+int(v1)]...)
 	i.val = i.data[n+int(v1) : n+int(v1+v2)]
 	i.data = i.data[n+int(v1+v2):]
+	i.offset += uint64(n) + v1 + v2
 	return true
 }
 
@@ -299,6 +302,8 @@ type Reader struct {
 	filter          filterReader
 	verifyChecksums bool
 	// TODO: add a (goroutine-safe) LRU block cache.
+
+	Properties map[string]Property
 }
 
 // Reader implements the db.DB interface.
@@ -404,16 +409,38 @@ func (r *Reader) readBlock(bh blockHandle) (block, error) {
 	return nil, fmt.Errorf("leveldb/table: unknown block compression: %d", b[bh.length])
 }
 
+func (r *Reader) readProperties(propsBH blockHandle) error {
+	b, err := r.readBlock(propsBH)
+	if err != nil {
+		return err
+	}
+	i, err := b.seek(db.DefaultComparer, nil)
+	if err != nil {
+		return err
+	}
+	r.Properties = map[string]Property{}
+	for i.Next() {
+		r.Properties[string(i.Key())] = Property{
+			Offset: propsBH.offset + i.offset - uint64(len(i.Value())),
+			Value:  i.Value(),
+		}
+	}
+	return i.Close()
+}
+
+func (r *Reader) readFilter(filterBH blockHandle, fp db.FilterPolicy) error {
+	b, err := r.readBlock(filterBH)
+	if err != nil {
+		return err
+	}
+	if !r.filter.init(b, fp) {
+		return errors.New("leveldb/table: invalid table (bad filter block)")
+	}
+	return nil
+}
+
 func (r *Reader) readMetaindex(metaindexBH blockHandle, o *db.Options) error {
 	fp := o.GetFilterPolicy()
-	if fp == nil {
-		// The only metaindex entry we care about is the filter. If o doesn't
-		// specify a filter policy, we can ignore the entire metaindex block.
-		//
-		// TODO: also return early if metaindexBH.length indicates an empty
-		// block.
-		return nil
-	}
 
 	b, err := r.readBlock(metaindexBH)
 	if err != nil {
@@ -423,33 +450,27 @@ func (r *Reader) readMetaindex(metaindexBH blockHandle, o *db.Options) error {
 	if err != nil {
 		return err
 	}
-	filterName := "filter." + fp.Name()
-	filterBH := blockHandle{}
 	for i.Next() {
-		if filterName != string(i.Key()) {
-			continue
-		}
-		var n int
-		filterBH, n = decodeBlockHandle(i.Value())
-		if n == 0 {
-			return errors.New("leveldb/table: invalid table (bad filter block handle)")
-		}
-		break
-	}
-	if err := i.Close(); err != nil {
-		return err
-	}
-
-	if filterBH != (blockHandle{}) {
-		b, err = r.readBlock(filterBH)
-		if err != nil {
-			return err
-		}
-		if !r.filter.init(b, fp) {
-			return errors.New("leveldb/table: invalid table (bad filter block)")
+		key := string(i.Key())
+		if fp != nil && key == ("filter."+fp.Name()) {
+			filterBH, n := decodeBlockHandle(i.Value())
+			if n == 0 {
+				return errors.New("leveldb/table: invalid table (bad filter block handle)")
+			}
+			if err := r.readFilter(filterBH, fp); err != nil {
+				return err
+			}
+		} else if key == "rocksdb.properties" {
+			propsBH, n := decodeBlockHandle(i.Value())
+			if n == 0 {
+				return errors.New("leveldb/table: invalid table (bad properties block handle)")
+			}
+			if err := r.readProperties(propsBH); err != nil {
+				return err
+			}
 		}
 	}
-	return nil
+	return i.Close()
 }
 
 // NewReader returns a new table reader for the file. Closing the reader will
@@ -503,4 +524,9 @@ func NewReader(f db.File, o *db.Options) *Reader {
 	}
 	r.index, r.err = r.readBlock(indexBH)
 	return r
+}
+
+type Property struct {
+	Offset uint64
+	Value  []byte
 }
