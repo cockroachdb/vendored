@@ -72,8 +72,8 @@ const (
 var ErrProposalDropped = errors.New("raft proposal dropped")
 
 // lockedRand is a small wrapper around rand.Rand to provide
-// synchronization. Only the methods needed by the code are exposed
-// (e.g. Intn).
+// synchronization among multiple raft groups. Only the methods needed
+// by the code are exposed (e.g. Intn).
 type lockedRand struct {
 	mu   sync.Mutex
 	rand *rand.Rand
@@ -192,7 +192,7 @@ type Config struct {
 	// this feature would be in a situation where the Raft leader is used to
 	// compute the data of a proposal, for example, adding a timestamp from a
 	// hybrid logical clock to data in a monotonically increasing way. Forwarding
-	// should be disabled to prevent a follower with an innaccurate hybrid
+	// should be disabled to prevent a follower with an inaccurate hybrid
 	// logical clock from assigning the timestamp and then forwarding the data
 	// to the leader.
 	DisableProposalForwarding bool
@@ -604,8 +604,9 @@ func (r *raft) appendEntry(es ...pb.Entry) {
 		es[i].Term = r.Term
 		es[i].Index = li + 1 + uint64(i)
 	}
-	r.raftLog.append(es...)
-	r.getProgress(r.id).maybeUpdate(r.raftLog.lastIndex())
+	// use latest "last" index after truncate/append
+	li = r.raftLog.append(es...)
+	r.getProgress(r.id).maybeUpdate(li)
 	// Regardless of maybeCommit's return, our caller will call bcastAppend.
 	r.maybeCommit()
 }
@@ -693,19 +694,13 @@ func (r *raft) becomeLeader() {
 	r.tick = r.tickHeartbeat
 	r.lead = r.id
 	r.state = StateLeader
-	ents, err := r.raftLog.entries(r.raftLog.committed+1, noLimit)
-	if err != nil {
-		r.logger.Panicf("unexpected error getting uncommitted entries (%v)", err)
-	}
 
 	// Conservatively set the pendingConfIndex to the last index in the
 	// log. There may or may not be a pending config change, but it's
 	// safe to delay any future proposals until we commit all our
 	// pending log entries, and scanning the entire tail of the log
 	// could be expensive.
-	if len(ents) > 0 {
-		r.pendingConfIndex = ents[len(ents)-1].Index
-	}
+	r.pendingConfIndex = r.raftLog.lastIndex()
 
 	r.appendEntry(pb.Entry{Data: nil})
 	r.logger.Infof("%x became leader at term %d", r.id, r.Term)
@@ -816,8 +811,15 @@ func (r *raft) Step(m pb.Message) error {
 			// nodes that have been removed from the cluster's configuration: a
 			// removed node will send MsgVotes (or MsgPreVotes) which will be ignored,
 			// but it will not receive MsgApp or MsgHeartbeat, so it will not create
-			// disruptive term increases
+			// disruptive term increases, by notifying leader of this node's activeness.
 			// The above comments also true for Pre-Vote
+			//
+			// When follower gets isolated, it soon starts an election ending
+			// up with a higher term than leader, although it won't receive enough
+			// votes to win the election. When it regains connectivity, this response
+			// with "pb.MsgAppResp" of higher term would force leader to step down.
+			// However, this disruption is inevitable to free this stuck node with
+			// fresh election. This can be prevented with Pre-Vote phase.
 			r.send(pb.Message{To: m.From, Type: pb.MsgAppResp})
 		} else if m.Type == pb.MsgPreVote {
 			// Before Pre-Vote enable, there may have candidate with higher term,
@@ -1127,13 +1129,13 @@ func stepCandidate(r *raft, m pb.Message) error {
 		r.logger.Infof("%x no leader at term %d; dropping proposal", r.id, r.Term)
 		return ErrProposalDropped
 	case pb.MsgApp:
-		r.becomeFollower(r.Term, m.From)
+		r.becomeFollower(m.Term, m.From) // always m.Term == r.Term
 		r.handleAppendEntries(m)
 	case pb.MsgHeartbeat:
-		r.becomeFollower(r.Term, m.From)
+		r.becomeFollower(m.Term, m.From) // always m.Term == r.Term
 		r.handleHeartbeat(m)
 	case pb.MsgSnap:
-		r.becomeFollower(m.Term, m.From)
+		r.becomeFollower(m.Term, m.From) // always m.Term == r.Term
 		r.handleSnapshot(m)
 	case myVoteRespType:
 		gr := r.poll(m.From, m.Type, !m.Reject)
@@ -1147,6 +1149,8 @@ func stepCandidate(r *raft, m pb.Message) error {
 				r.bcastAppend()
 			}
 		case len(r.votes) - gr:
+			// pb.MsgPreVoteResp contains future term of pre-candidate
+			// m.Term > r.Term; reuse r.Term
 			r.becomeFollower(r.Term, None)
 		}
 	case pb.MsgTimeoutNow:
