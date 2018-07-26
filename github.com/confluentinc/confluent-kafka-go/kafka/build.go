@@ -1,4 +1,4 @@
 package kafka
 
-// #cgo LDFLAGS: -lrdkafka -static
+// #cgo LDFLAGS: -lrdkafka
 import "C"
