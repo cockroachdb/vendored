@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <wchar.h>
 
 #include "c_editline.h"
 
@@ -47,7 +48,7 @@ int go_libedit_set_clientdata(EditLine *el, struct clientdata cd) {
 const char term_bp_off[] = "\033[?2004l";
 const char term_bp_on[] = "\033[?2004h";
 const char term_bp_start[] = "\033[200~";
-const char term_bp_end[] = "\033[201~";
+const wchar_t term_bp_end[] = L"\033[201~";
 
 int go_libedit_term_supports_bracketed_paste(EditLine* el) {
     // terminfo does not track support for bracketed paste, so we manually
@@ -71,15 +72,15 @@ int go_libedit_term_supports_bracketed_paste(EditLine* el) {
 }
 
 static unsigned char _el_bracketed_paste(EditLine *el, int ch) {
-    int endsz = sizeof(term_bp_end) - 1;
-    char* buf = NULL;
+    size_t endsz = (sizeof(term_bp_end) / sizeof(term_bp_end[0]))- 1;
+    wchar_t* buf = NULL;
     size_t bufsz = 0;
     size_t i = 0;
     do {
 	if (i >= bufsz) {
 	    // Out of space. Reallocate.
 	    bufsz = (bufsz == 0 ? 1024 : bufsz * 2);
-	    char* newbuf = realloc(buf, bufsz);
+	    wchar_t* newbuf = realloc(buf, bufsz * sizeof(buf[0]));
 	    if (newbuf == NULL) {
 		free(buf);
 		return CC_ERROR;
@@ -88,14 +89,14 @@ static unsigned char _el_bracketed_paste(EditLine *el, int ch) {
 	    }
 	}
 	// Read one character.
-	if (el_getc(el, &buf[i++]) == -1) {
+	if (el_wgetc(el, &buf[i++]) == -1) {
 	    free(buf);
 	    return CC_EOF;
 	}
 	// Continue until the buffer ends with term_bp_end.
-    } while (i < endsz || strncmp(&buf[i-endsz], term_bp_end, endsz) != 0);
-    buf[i-endsz] = '\0';
-    if (i > endsz && el_insertstr(el, buf) == -1) {
+    } while (i < endsz || wcsncmp(&buf[i-endsz], term_bp_end, endsz) != 0);
+    buf[i-endsz] = L'\0';
+    if (i > endsz && el_winsertstr(el, buf) == -1) {
 	FILE *ferr;
 	el_get(el, EL_GETFP, 2, &ferr);
 	fputs("\nerror: pasted text too large for buffer\n", ferr);

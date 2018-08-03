@@ -32,6 +32,11 @@ cp -a build/config.h build/src/*.h c-libedit/linux-build/
 # exist so that the C calls don't crash.
 patch -p1 <fncomplete.patch
 
+# This ensures that the GNU libc secure_getenv is used when available.
+patch -p1 <secure_getenv.patch
+
+rm -f c-libedit/*.orig
+
 (cd c-libedit &&
      for i in *.c; do
 	 echo "#include \"$i\"">../libedit-$i
