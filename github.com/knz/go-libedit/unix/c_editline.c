@@ -64,6 +64,8 @@ int go_libedit_term_supports_bracketed_paste(EditLine* el) {
     // Modern versions of all the programs listed above support bracketed paste;
     // older versions harmlessly ignore the control codes.
     char* term = getenv("TERM");
+    if (!term)
+	return 0;
     return strncmp(term, "screen", 6) == 0
 	|| strncmp(term, "xterm", 5) == 0
 	|| strncmp(term, "tmux", 4) == 0
