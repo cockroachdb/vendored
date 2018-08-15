@@ -16,7 +16,7 @@ How to use:
 By default, the **go-libedit** package uses the bundled `libedit`
 sources on GNU/Linux, so that `go get` works out of the box.
 
-To force the package to use a system-wide libedit instead, edit `edit.go` as follows:
+To force the package to use a system-wide libedit instead, edit `unix/editline_unix.go` as follows:
 
 - remove the line containing `#cgo linux CFLAGS`
 - change the line containing `#cgo linux CPPFLAGS` to read: `#cgo linux CPPFLAGS: -I/usr/include/editline -Ishim`
