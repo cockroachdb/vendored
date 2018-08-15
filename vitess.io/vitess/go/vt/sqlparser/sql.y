@@ -106,12 +106,14 @@ func forceEOF(yylex interface{}) {
   indexColumns  []*IndexColumn
   constraintDefinition *ConstraintDefinition
   constraintInfo ConstraintInfo
+  ReferenceAction ReferenceAction
   partDefs      []*PartitionDefinition
   partDef       *PartitionDefinition
   partSpec      *PartitionSpec
   vindexParam   VindexParam
   vindexParams  []VindexParam
   showFilter    *ShowFilter
+  optLike       *OptLike
 }
 
 %token LEX_ERROR
@@ -155,7 +157,8 @@ func forceEOF(yylex interface{}) {
 
 // DDL Tokens
 %token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD
-%token <bytes> SCHEMA TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN CONSTRAINT SPATIAL FULLTEXT FOREIGN REFERENCES KEY_BLOCK_SIZE
+%token <bytes> SCHEMA TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN  SPATIAL FULLTEXT KEY_BLOCK_SIZE
+%token <bytes> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 %token <bytes> VINDEX VINDEXES
@@ -177,7 +180,7 @@ func forceEOF(yylex interface{}) {
 %token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
 
 // Supported SHOW tokens
-%token <bytes> COLLATION DATABASES TABLES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS VSCHEMA_TABLES FULL PROCESSLIST COLUMNS
+%token <bytes> COLLATION DATABASES TABLES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS VSCHEMA_TABLES VITESS_TARGET FULL PROCESSLIST COLUMNS
 
 // SET tokens
 %token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
@@ -251,7 +254,8 @@ func forceEOF(yylex interface{}) {
 %type <setExprs> set_list transaction_chars
 %type <bytes> charset_or_character_set
 %type <updateExpr> update_expression
-%type <setExpr> set_expression transaction_char isolation_level
+%type <setExpr> set_expression transaction_char
+%type <str> isolation_level
 %type <bytes> for_from
 %type <str> ignore_opt default_opt
 %type <str> full_opt from_database_opt tables_or_processlist
@@ -282,6 +286,7 @@ func forceEOF(yylex interface{}) {
 %type <str> index_or_key
 %type <str> equal_opt
 %type <TableSpec> table_spec table_column_list
+%type <optLike> create_like
 %type <str> table_option_list table_option table_opt_value
 %type <indexInfo> index_info
 %type <indexColumn> index_column
@@ -296,6 +301,7 @@ func forceEOF(yylex interface{}) {
 %type <vindexParams> vindex_param_list vindex_params_opt
 %type <colIdent> vindex_type vindex_type_opt
 %type <bytes> alter_object_type
+%type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
 
 %start any_command
 
@@ -498,33 +504,33 @@ transaction_chars:
 transaction_char:
   ISOLATION LEVEL isolation_level
   {
-    $$ = $3
+    $$ = &SetExpr{Name: NewColIdent(TransactionStr), Expr: NewStrVal([]byte($3))}
   }
 | READ WRITE
   {
-    $$ = &SetExpr{Name: NewColIdent("tx_read_only"), Expr: NewIntVal([]byte("0"))}
+    $$ = &SetExpr{Name: NewColIdent(TransactionStr), Expr: NewStrVal([]byte(TxReadWrite))}
   }
 | READ ONLY
   {
-    $$ = &SetExpr{Name: NewColIdent("tx_read_only"), Expr: NewIntVal([]byte("1"))}
+    $$ = &SetExpr{Name: NewColIdent(TransactionStr), Expr: NewStrVal([]byte(TxReadOnly))}
   }
 
 isolation_level:
   REPEATABLE READ
   {
-    $$ = &SetExpr{Name: NewColIdent("tx_isolation"), Expr: NewStrVal([]byte("repeatable read"))}
+    $$ = IsolationLevelRepeatableRead
   }
 | READ COMMITTED
   {
-    $$ = &SetExpr{Name: NewColIdent("tx_isolation"), Expr: NewStrVal([]byte("read committed"))}
+    $$ = IsolationLevelReadCommitted
   }
 | READ UNCOMMITTED
   {
-    $$ = &SetExpr{Name: NewColIdent("tx_isolation"), Expr: NewStrVal([]byte("read uncommitted"))}
+    $$ = IsolationLevelReadUncommitted
   }
 | SERIALIZABLE
   {
-    $$ = &SetExpr{Name: NewColIdent("tx_isolation"), Expr: NewStrVal([]byte("serializable"))}
+    $$ = IsolationLevelSerializable
   }
 
 set_session_or_global:
@@ -541,6 +547,12 @@ create_statement:
   create_table_prefix table_spec
   {
     $1.TableSpec = $2
+    $$ = $1
+  }
+| create_table_prefix create_like
+  {
+    // Create table [name] like [name]
+    $1.OptLike = $2
     $$ = $1
   }
 | CREATE constraint_opt INDEX ID using_opt ON table_name ddl_force_eof
@@ -627,6 +639,16 @@ table_spec:
   {
     $$ = $2
     $$.Options = $4
+  }
+
+create_like:
+  LIKE table_name
+  {
+    $$ = &OptLike{LikeTable: $2}
+  }
+| '(' LIKE table_name ')'
+  {
+    $$ = &OptLike{LikeTable: $3}
   }
 
 table_column_list:
@@ -1012,6 +1034,10 @@ collate_opt:
   {
     $$ = string($2)
   }
+| COLLATE STRING
+  {
+    $$ = string($2)
+  }
 
 column_key_opt:
   {
@@ -1151,6 +1177,52 @@ constraint_info:
   FOREIGN KEY '(' column_list ')' REFERENCES table_name '(' column_list ')'
   {
     $$ = &ForeignKeyDefinition{Source: $4, ReferencedTable: $7, ReferencedColumns: $9}
+  }
+| FOREIGN KEY '(' column_list ')' REFERENCES table_name '(' column_list ')' fk_on_delete
+  {
+    $$ = &ForeignKeyDefinition{Source: $4, ReferencedTable: $7, ReferencedColumns: $9, OnDelete: $11}
+  }
+| FOREIGN KEY '(' column_list ')' REFERENCES table_name '(' column_list ')' fk_on_update
+  {
+    $$ = &ForeignKeyDefinition{Source: $4, ReferencedTable: $7, ReferencedColumns: $9, OnUpdate: $11}
+  }
+| FOREIGN KEY '(' column_list ')' REFERENCES table_name '(' column_list ')' fk_on_delete fk_on_update
+  {
+    $$ = &ForeignKeyDefinition{Source: $4, ReferencedTable: $7, ReferencedColumns: $9, OnDelete: $11, OnUpdate: $12}
+  }
+
+fk_on_delete:
+  ON DELETE fk_reference_action
+  {
+    $$ = $3
+  }
+
+fk_on_update:
+  ON UPDATE fk_reference_action
+  {
+    $$ = $3
+  }
+
+fk_reference_action:
+  RESTRICT
+  {
+    $$ = Restrict
+  }
+| CASCADE
+  {
+    $$ = Cascade
+  }
+| NO ACTION
+  {
+    $$ = NoAction
+  }
+| SET DEFAULT
+  {
+    $$ = SetDefault
+  }
+| SET NULL
+  {
+    $$ = SetNull
   }
 
 table_option_list:
@@ -1444,6 +1516,10 @@ show_statement:
     $$ = &Show{Type: string($2)}
   }
 | SHOW VITESS_TABLETS
+  {
+    $$ = &Show{Type: string($2)}
+  }
+| SHOW VITESS_TARGET
   {
     $$ = &Show{Type: string($2)}
   }
@@ -3077,6 +3153,7 @@ non_reserved_keyword:
 | BIT
 | BLOB
 | BOOL
+| CASCADE
 | CHAR
 | CHARACTER
 | CHARSET
@@ -3120,6 +3197,7 @@ non_reserved_keyword:
 | MULTIPOLYGON
 | NAMES
 | NCHAR
+| NO
 | NUMERIC
 | OFFSET
 | ONLY
@@ -3136,6 +3214,7 @@ non_reserved_keyword:
 | REORGANIZE
 | REPAIR
 | REPEATABLE
+| RESTRICT
 | ROLLBACK
 | SESSION
 | SERIALIZABLE
@@ -3168,6 +3247,7 @@ non_reserved_keyword:
 | VITESS_SHARDS
 | VITESS_TABLETS
 | VSCHEMA_TABLES
+| VITESS_TARGET
 | WITH
 | WRITE
 | YEAR

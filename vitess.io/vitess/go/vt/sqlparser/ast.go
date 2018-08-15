@@ -617,8 +617,9 @@ type Set struct {
 
 // Set.Scope or Show.Scope
 const (
-	SessionStr = "session"
-	GlobalStr  = "global"
+	SessionStr  = "session"
+	GlobalStr   = "global"
+	ImplicitStr = ""
 )
 
 // Format formats the node.
@@ -680,6 +681,7 @@ type DDL struct {
 	NewName       TableName
 	IfExists      bool
 	TableSpec     *TableSpec
+	OptLike       *OptLike
 	PartitionSpec *PartitionSpec
 	VindexSpec    *VindexSpec
 	VindexCols    []ColIdent
@@ -704,10 +706,12 @@ const (
 func (node *DDL) Format(buf *TrackedBuffer) {
 	switch node.Action {
 	case CreateStr:
-		if node.TableSpec == nil {
-			buf.Myprintf("%s table %v", node.Action, node.NewName)
-		} else {
+		if node.OptLike != nil {
+			buf.Myprintf("%s table %v %v", node.Action, node.NewName, node.OptLike)
+		} else if node.TableSpec != nil {
 			buf.Myprintf("%s table %v %v", node.Action, node.NewName, node.TableSpec)
+		} else {
+			buf.Myprintf("%s table %v", node.Action, node.NewName)
 		}
 	case DropStr:
 		exists := ""
@@ -760,6 +764,23 @@ func (node *DDL) walkSubtree(visit Visit) error {
 const (
 	ReorganizeStr = "reorganize partition"
 )
+
+// OptLike works for create table xxx like xxx
+type OptLike struct {
+	LikeTable TableName
+}
+
+// Format formats the node.
+func (node *OptLike) Format(buf *TrackedBuffer) {
+	buf.Myprintf("like %v", node.LikeTable)
+}
+
+func (node *OptLike) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(visit, node.LikeTable)
+}
 
 // PartitionSpec describe partition actions (for alter and create)
 type PartitionSpec struct {
@@ -1338,11 +1359,47 @@ func (c *ConstraintDefinition) walkSubtree(visit Visit) error {
 	return Walk(visit, c.Details)
 }
 
+// ReferenceAction indicates the action takes by a referential constraint e.g.
+// the `CASCADE` in a `FOREIGN KEY .. ON DELETE CASCADE` table definition.
+type ReferenceAction int
+
+// These map to the SQL-defined reference actions.
+// See https://dev.mysql.com/doc/refman/8.0/en/create-table-foreign-keys.html#foreign-keys-referential-actions
+const (
+	// DefaultAction indicates no action was explicitly specified.
+	DefaultAction ReferenceAction = iota
+	Restrict
+	Cascade
+	NoAction
+	SetNull
+	SetDefault
+)
+
+func (a ReferenceAction) walkSubtree(visit Visit) error { return nil }
+
+// Format formats the node.
+func (a ReferenceAction) Format(buf *TrackedBuffer) {
+	switch a {
+	case Restrict:
+		buf.WriteString("restrict")
+	case Cascade:
+		buf.WriteString("cascade")
+	case NoAction:
+		buf.WriteString("no action")
+	case SetNull:
+		buf.WriteString("set null")
+	case SetDefault:
+		buf.WriteString("set default")
+	}
+}
+
 // ForeignKeyDefinition describes a foreign key in a CREATE TABLE statement
 type ForeignKeyDefinition struct {
 	Source            Columns
 	ReferencedTable   TableName
 	ReferencedColumns Columns
+	OnDelete          ReferenceAction
+	OnUpdate          ReferenceAction
 }
 
 var _ ConstraintInfo = &ForeignKeyDefinition{}
@@ -1350,6 +1407,12 @@ var _ ConstraintInfo = &ForeignKeyDefinition{}
 // Format formats the node.
 func (f *ForeignKeyDefinition) Format(buf *TrackedBuffer) {
 	buf.Myprintf("foreign key %v references %v %v", f.Source, f.ReferencedTable, f.ReferencedColumns)
+	if f.OnDelete != DefaultAction {
+		buf.Myprintf(" on delete %v", f.OnDelete)
+	}
+	if f.OnUpdate != DefaultAction {
+		buf.Myprintf(" on update %v", f.OnUpdate)
+	}
 }
 
 func (f *ForeignKeyDefinition) constraintInfo() {}
@@ -3307,11 +3370,28 @@ type SetExpr struct {
 	Expr Expr
 }
 
+// SetExpr.Expr, for SET TRANSACTION ... or START TRANSACTION
+const (
+	// TransactionStr is the Name for a SET TRANSACTION statement
+	TransactionStr = "transaction"
+
+	IsolationLevelReadUncommitted = "isolation level read uncommitted"
+	IsolationLevelReadCommitted   = "isolation level read committed"
+	IsolationLevelRepeatableRead  = "isolation level repeatable read"
+	IsolationLevelSerializable    = "isolation level serializable"
+
+	TxReadOnly  = "read only"
+	TxReadWrite = "read write"
+)
+
 // Format formats the node.
 func (node *SetExpr) Format(buf *TrackedBuffer) {
 	// We don't have to backtick set variable names.
 	if node.Name.EqualString("charset") || node.Name.EqualString("names") {
 		buf.Myprintf("%s %v", node.Name.String(), node.Expr)
+	} else if node.Name.EqualString(TransactionStr) {
+		sqlVal := node.Expr.(*SQLVal)
+		buf.Myprintf("%s %s", node.Name.String(), strings.ToLower(string(sqlVal.Val)))
 	} else {
 		buf.Myprintf("%s = %v", node.Name.String(), node.Expr)
 	}
