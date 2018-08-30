@@ -284,6 +284,7 @@ func forceEOF(yylex interface{}) {
 %type <indexDefinition> index_definition
 %type <constraintDefinition> constraint_definition
 %type <str> index_or_key
+%type <str> name_opt
 %type <str> equal_opt
 %type <TableSpec> table_spec table_column_list
 %type <optLike> create_like
@@ -990,6 +991,10 @@ column_default_opt:
   {
     $$ = NewValArg($2)
   }
+| DEFAULT CURRENT_TIMESTAMP '(' ')'
+  {
+    $$ = NewValArg($2)
+  }
 | DEFAULT BIT_LITERAL
   {
     $$ = NewBitVal($2)
@@ -1000,6 +1005,10 @@ on_update_opt:
     $$ = nil
   }
 | ON UPDATE CURRENT_TIMESTAMP
+{
+  $$ = NewValArg($3)
+}
+| ON UPDATE CURRENT_TIMESTAMP '(' ')'
 {
   $$ = NewValArg($3)
 }
@@ -1114,26 +1123,36 @@ equal_opt:
     $$ = string($1)
   }
 
+name_opt:
+  ID
+  {
+    $$ = string($1)
+  }
+| /* empty */
+  {
+    $$ = ""
+  }
+
 index_info:
   PRIMARY KEY
   {
     $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent("PRIMARY"), Primary: true, Unique: true}
   }
-| SPATIAL index_or_key ID
+| SPATIAL index_or_key name_opt
   {
-    $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent(string($3)), Spatial: true, Unique: false}
+    $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent($3), Spatial: true, Unique: false}
   }
-| UNIQUE index_or_key ID
+| UNIQUE index_or_key name_opt
   {
-    $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent(string($3)), Unique: true}
+    $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent($3), Unique: true}
   }
-| UNIQUE ID
+| UNIQUE name_opt
   {
-    $$ = &IndexInfo{Type: string($1), Name: NewColIdent(string($2)), Unique: true}
+    $$ = &IndexInfo{Type: string($1), Name: NewColIdent($2), Unique: true}
   }
-| index_or_key ID
+| index_or_key name_opt
   {
-    $$ = &IndexInfo{Type: string($1), Name: NewColIdent(string($2)), Unique: false}
+    $$ = &IndexInfo{Type: string($1), Name: NewColIdent($2), Unique: false}
   }
 
 index_or_key:
