@@ -17,6 +17,7 @@ package raft
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	pb "github.com/coreos/etcd/raft/raftpb"
 )
@@ -563,6 +564,7 @@ func newReady(r *raft, prevSoftSt *SoftState, prevHardSt pb.HardState) Ready {
 		// our HardState.Commit to what we're actually returning. This is
 		// also used as our cursor to resume for the next Ready batch.
 		if len(rd.CommittedEntries) > 0 {
+			fmt.Println("size limit hit, latest included committed index is ", rd.CommittedEntries[len(rd.CommittedEntries)-1].Index, "for", r.id)
 			lastCommit := rd.CommittedEntries[len(rd.CommittedEntries)-1]
 			if rd.HardState.Commit > lastCommit.Index {
 				rd.HardState.Commit = lastCommit.Index
