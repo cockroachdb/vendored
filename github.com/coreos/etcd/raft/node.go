@@ -566,7 +566,7 @@ func newReady(r *raft, prevSoftSt *SoftState, prevHardSt pb.HardState) Ready {
 		if len(rd.CommittedEntries) > 0 {
 			lastCommit := rd.CommittedEntries[len(rd.CommittedEntries)-1]
 			if rd.HardState.Commit > lastCommit.Index {
-				r.logger.Warning(fmt.Sprintf("size limit hit, latest included committed index is %d", rd.CommittedEntries[len(rd.CommittedEntries)-1].Index))
+				r.logger.Warning(fmt.Sprintf("size limit hit, latest included committed index is %d instead of %d", rd.CommittedEntries[len(rd.CommittedEntries)-1].Index, rd.HardState.Commit))
 				rd.HardState.Commit = lastCommit.Index
 			}
 		}
