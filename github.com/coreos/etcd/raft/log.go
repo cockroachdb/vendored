@@ -161,7 +161,7 @@ func (l *raftLog) nextEnts() (ents []pb.Entry) {
 				overshot++
 			}
 		}
-		if size >= l.maxMsgSize {
+		if len(ents) > 1 && size >= l.maxMsgSize {
 			l.logger.Warningf("entries %d..%d broke max size (overshot by %d) %d: %d", ents[0].Index, ents[len(ents)-1].Index, overshot, l.maxMsgSize, size)
 		}
 		return ents
