@@ -154,11 +154,15 @@ func (l *raftLog) nextEnts() (ents []pb.Entry) {
 			l.logger.Panicf("unexpected error when getting unapplied entries (%v)", err)
 		}
 		var size uint64
+		var overshot int
 		for _, ent := range ents {
 			size += uint64(ent.Size())
+			if size >= l.maxMsgSize {
+				overshot++
+			}
 		}
 		if size >= l.maxMsgSize {
-			l.logger.Warningf("entries %d..%d broke max size %d: %d", ents[0].Index, ents[len(ents)-1], l.maxMsgSize, size)
+			l.logger.Warningf("entries %d..%d broke max size (overshot by %d) %d: %d", ents[0].Index, ents[len(ents)-1].Index, overshot, l.maxMsgSize, size)
 		}
 		return ents
 	}
