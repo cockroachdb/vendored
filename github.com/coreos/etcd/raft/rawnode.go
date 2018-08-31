@@ -44,6 +44,7 @@ func (rn *RawNode) commitReady(rd Ready) {
 	if rd.SoftState != nil {
 		rn.prevSoftSt = rd.SoftState
 	}
+	origPrevHardSt := rn.prevHardSt
 	if !IsEmptyHardState(rd.HardState) {
 		rn.prevHardSt = rd.HardState
 	}
@@ -57,7 +58,36 @@ func (rn *RawNode) commitReady(rd Ready) {
 		// incorporated into the snapshot, even if rd.CommittedEntries is
 		// empty). Therefore we mark all committed entries as applied
 		// whether they were included in rd.HardState or not.
+		oldApplied := rn.raft.raftLog.applied
 		rn.raft.raftLog.appliedTo(rn.prevHardSt.Commit)
+		newApplied := rn.raft.raftLog.applied
+		if newApplied != oldApplied {
+			// The applied index moved forward. This can only happen if
+			// there were corresponding committed entries.
+			var firstE, lastE pb.Entry
+			if n := len(rd.CommittedEntries); n != 0 {
+				firstE = rd.CommittedEntries[0]
+				lastE = rd.CommittedEntries[n-1]
+			}
+			if lastE.Index != newApplied {
+				rn.raft.logger.Warningf(`!! in-mem applied index bumped from %d to %d due to hardstate, but don't have committed log entries for it:
+prevhs: %+v
+hs: %+v
+firstentry: %s
+lastentry: %s
+
+here's some garbage:
+%+v
+`,
+					oldApplied, newApplied,
+					origPrevHardSt,
+					rd.HardState,
+					DescribeEntry(firstE, func([]byte) string { return "" }),
+					DescribeEntry(lastE, func([]byte) string { return "" }),
+					rd,
+				)
+			}
+		}
 	}
 	if len(rd.Entries) > 0 {
 		e := rd.Entries[len(rd.Entries)-1]
