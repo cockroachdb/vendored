@@ -61,7 +61,7 @@ func (rn *RawNode) commitReady(rd Ready) {
 		oldApplied := rn.raft.raftLog.applied
 		rn.raft.raftLog.appliedTo(rn.prevHardSt.Commit)
 		newApplied := rn.raft.raftLog.applied
-		if newApplied != oldApplied {
+		if newApplied != oldApplied && rd.Snapshot.Metadata.Index < newApplied {
 			// The applied index moved forward. This can only happen if
 			// there were corresponding committed entries.
 			var firstE, lastE pb.Entry
