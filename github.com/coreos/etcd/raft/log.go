@@ -162,7 +162,10 @@ func (l *raftLog) nextEnts() (ents []pb.Entry) {
 			}
 		}
 		if len(ents) > 1 && size >= l.maxMsgSize {
-			l.logger.Warningf("entries %d..%d broke max size (overshot by %d) %d: %d", ents[0].Index, ents[len(ents)-1].Index, overshot, l.maxMsgSize, size)
+			l.logger.Warningf("entries %d..%d broke max size %d (overshot by %d): %d; req'd [%d,%d] unstableoffset=%d", ents[0].Index, ents[len(ents)-1].Index, l.maxMsgSize, overshot, size, off, l.committed, l.unstable.offset)
+			if overshot > 1 {
+				l.logger.Panic("see above")
+			}
 		}
 		return ents
 	}
@@ -332,6 +335,7 @@ func (l *raftLog) slice(lo, hi, maxSize uint64) ([]pb.Entry, error) {
 		}
 
 		// check if ents has reached the size limitation
+		// this goes one over
 		if uint64(len(storedEnts)) < min(hi, l.unstable.offset)-lo {
 			return storedEnts, nil
 		}
@@ -347,7 +351,7 @@ func (l *raftLog) slice(lo, hi, maxSize uint64) ([]pb.Entry, error) {
 			ents = unstable
 		}
 	}
-	return limitSize(ents, maxSize), nil
+	return limitSize(ents, maxSize), nil // this cuts so that we're below maxsize
 }
 
 // l.firstIndex <= lo <= hi <= l.firstIndex + len(l.entries)
