@@ -153,6 +153,13 @@ func (l *raftLog) nextEnts() (ents []pb.Entry) {
 		if err != nil {
 			l.logger.Panicf("unexpected error when getting unapplied entries (%v)", err)
 		}
+		var size uint64
+		for _, ent := range ents {
+			size += uint64(ent.Size())
+		}
+		if size >= l.maxMsgSize {
+			l.logger.Warningf("entries %d..%d broke max size %d: %d", ents[0].Index, ents[len(ents)-1], l.maxMsgSize, size)
+		}
 		return ents
 	}
 	return nil
