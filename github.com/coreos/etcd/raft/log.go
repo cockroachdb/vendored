@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"log"
 
-	pb "github.com/coreos/etcd/raft/raftpb"
+	pb "go.etcd.io/etcd/raft/raftpb"
 )
 
 type raftLog struct {
@@ -152,17 +152,6 @@ func (l *raftLog) nextEnts() (ents []pb.Entry) {
 		ents, err := l.slice(off, l.committed+1, l.maxMsgSize)
 		if err != nil {
 			l.logger.Panicf("unexpected error when getting unapplied entries (%v)", err)
-		}
-		var size uint64
-		var overshot int
-		for _, ent := range ents {
-			size += uint64(ent.Size())
-			if size >= l.maxMsgSize {
-				overshot++
-			}
-		}
-		if len(ents) > 1 && size >= l.maxMsgSize {
-			l.logger.Warningf("entries %d..%d broke max size (overshot by %d) %d: %d", ents[0].Index, ents[len(ents)-1].Index, overshot, l.maxMsgSize, size)
 		}
 		return ents
 	}

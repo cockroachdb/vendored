@@ -18,7 +18,7 @@ import (
 	"bytes"
 	"fmt"
 
-	pb "github.com/coreos/etcd/raft/raftpb"
+	pb "go.etcd.io/etcd/raft/raftpb"
 )
 
 func (st StateType) MarshalJSON() ([]byte, error) {
@@ -110,7 +110,17 @@ func DescribeEntry(e pb.Entry, f EntryFormatter) string {
 	} else {
 		formatted = fmt.Sprintf("%q", e.Data)
 	}
-	return fmt.Sprintf("%d/%d %s[%d] %s", e.Term, e.Index, e.Type, e.Size(), formatted)
+	return fmt.Sprintf("%d/%d %s %s", e.Term, e.Index, e.Type, formatted)
+}
+
+// DescribeEntries calls DescribeEntry for each Entry, adding a newline to
+// each.
+func DescribeEntries(ents []pb.Entry, f EntryFormatter) string {
+	var buf bytes.Buffer
+	for _, e := range ents {
+		_, _ = buf.WriteString(DescribeEntry(e, f) + "\n")
+	}
+	return buf.String()
 }
 
 func limitSize(ents []pb.Entry, maxSize uint64) []pb.Entry {
