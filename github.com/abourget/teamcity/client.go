@@ -38,9 +38,7 @@ func (c *Client) QueueBuild(buildTypeID string, branchName string, properties ma
 		BranchName string `json:"branchName,omitempty"`
 	}{}
 	jsonQuery.BuildTypeID = buildTypeID
-	if branchName != "" {
-		jsonQuery.BranchName = fmt.Sprintf("refs/heads/%s", branchName)
-	}
+	jsonQuery.BranchName = branchName
 	for k, v := range properties {
 		jsonQuery.Properties.Property = append(jsonQuery.Properties.Property, oneProperty{k, v})
 	}
