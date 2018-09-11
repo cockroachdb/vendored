@@ -21,7 +21,7 @@ import (
 	"runtime/pprof"
 	"strings"
 
-	"golang.org/x/tools/imports"
+	"github.com/cockroachdb/gostdlib/x/tools/imports"
 )
 
 var (
@@ -47,7 +47,7 @@ var (
 
 func init() {
 	flag.BoolVar(&options.AllErrors, "e", false, "report all errors (not just the first 10 on different lines)")
-	flag.StringVar(&imports.LocalPrefix, "local", "", "put imports beginning with this string after 3rd-party packages")
+	flag.StringVar(&imports.LocalPrefix, "local", "", "put imports beginning with this string after 3rd-party packages; comma-separated list")
 }
 
 func report(err error) {
@@ -58,6 +58,9 @@ func report(err error) {
 func usage() {
 	fmt.Fprintf(os.Stderr, "usage: goimports [flags] [path ...]\n")
 	flag.PrintDefaults()
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "Is this the goimports you're looking for?")
+	fmt.Fprintln(os.Stderr, "This goimports is from github.com/cockroachdb/gostdlib.")
 	os.Exit(2)
 }
 
