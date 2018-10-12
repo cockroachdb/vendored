@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <wchar.h>
+#include <limits.h>
 
 #include "c_editline.h"
 
@@ -304,8 +305,11 @@ int go_libedit_add_history(History *h, char *line) {
 // own. So basically re-implement on top of editline's internal
 // fn_complete function.
 
-int
-fn_complete(EditLine *el,
+// Except that the folk at OSX/Darwin have decided that fn_complete
+// should not be exported so we can't use any of that on that platform.
+
+#if !defined(__APPLE__) || !defined(__MACH__)
+int fn_complete(EditLine *el,
 	    char *(*complet_func)(const char *, int),
 	    char **(*attempted_completion_function)(const char *, int, int),
 	    const wchar_t *word_break, const wchar_t *special_prefixes,
@@ -314,6 +318,10 @@ fn_complete(EditLine *el,
 	    const wchar_t *(*find_word_start_func)(const wchar_t *, const wchar_t *),
 	    wchar_t *(*dequoting_func)(const wchar_t *),
 	    char *(*quoting_func)(const char *));
+#else
+#include "stub_fn_complete.i"
+#endif
+
 static const wchar_t break_chars[] = L" \t\n\"\\'`@$><=;|&{(";
 
 
