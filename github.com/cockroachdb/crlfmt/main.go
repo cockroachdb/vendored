@@ -1,4 +1,4 @@
-// Copyright 2016 The Cockroach Authors.
+// Copyright 2018 The Cockroach Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,16 +11,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
-//
-// Author: Daniel Harrison (daniel.harrison@gmail.com)
+
 package main
 
 import (
 	"bytes"
+	"errors"
 	"flag"
 	"fmt"
-	"go/ast"
-	"go/parser"
 	"go/token"
 	"io/ioutil"
 	"os"
@@ -28,72 +26,75 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/cockroachdb/ttycolor"
+	"github.com/cockroachdb/crlfmt/internal/parser"
+	"github.com/cockroachdb/crlfmt/internal/render"
+	"github.com/cockroachdb/gostdlib/go/format"
 	"github.com/cockroachdb/gostdlib/x/tools/imports"
+	"github.com/cockroachdb/ttycolor"
 )
 
 var (
-	wrap      = flag.Int("wrap", 100, "column to wrap at")
-	tab       = flag.Int("tab", 8, "tab width for column calculations")
-	overwrite = flag.Bool("w", false, "overwrite modified files")
-	fast      = flag.Bool("fast", false, "skip running goimports")
-	printDiff = flag.Bool("diff", true, "print diffs")
-	ignore    = flag.String("ignore", "", "regex matching files to skip")
+	wrap         = flag.Int("wrap", 100, "column to wrap at")
+	tab          = flag.Int("tab", 8, "tab width for column calculations")
+	overwrite    = flag.Bool("w", false, "overwrite modified files")
+	fast         = flag.Bool("fast", false, "skip running goimports")
+	groupImports = flag.Bool("groupimports", true, "group imports by type")
+	printDiff    = flag.Bool("diff", true, "print diffs")
+	ignore       = flag.String("ignore", "", "regex matching files to skip")
+)
+
+var (
+	red   = string(ttycolor.StdoutProfile[ttycolor.Red])
+	green = string(ttycolor.StdoutProfile[ttycolor.Green])
+	reset = string(ttycolor.StdoutProfile[ttycolor.Reset])
 )
 
 func main() {
+	if err := run(); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %s\n", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	flag.Parse()
+
 	if flag.NArg() == 0 {
 		content, err := ioutil.ReadAll(os.Stdin)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
+			return err
 		}
 
 		*overwrite = true
 		*printDiff = false
-		_, out, err := checkBuf("<standard input>", content)
+		out, err := checkBuf("<standard input>", content)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
+			return err
 		}
-		if _, err := out.WriteTo(os.Stdout); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
-		return
+		_, err = os.Stdout.Write(out)
+		return err
 	}
 
 	if flag.NArg() > 1 {
-		fmt.Println("must specify exactly one path argument (or zero for stdin)")
-		os.Exit(1)
+		return errors.New("must specify exactly one path argument (or zero for stdin)")
 	}
 
-	root, err := filepath.Abs(flag.Arg(0))
+	root, err := filepath.EvalSymlinks(flag.Arg(0))
 	if err != nil {
-		fmt.Printf("Error finding absolute path: %s", err)
-		os.Exit(1)
-	}
-	root, err = filepath.EvalSymlinks(root)
-	if err != nil {
-		fmt.Printf("Error following symlinks in input path: %s", err)
-		os.Exit(1)
+		return fmt.Errorf("following symlinks in input path: %s", err)
 	}
 
 	var ignoreRE *regexp.Regexp
 	if len(*ignore) > 0 {
 		ignoreRE, err = regexp.Compile(*ignore)
 		if err != nil {
-			fmt.Printf("Error compiling ignore regexp: %s", err)
-			os.Exit(1)
+			return fmt.Errorf("compiling ignore regexp: %s", err)
 		}
 	}
 
-	var diffs int
 	err = filepath.Walk(root, func(path string, fi os.FileInfo, err error) error {
 		if err != nil {
-			fmt.Printf("Error during filesystem walk: %v\n", err)
-			return nil
+			return err
 		}
 		if ignoreRE != nil && ignoreRE.MatchString(path) {
 			return nil
@@ -104,60 +105,45 @@ func main() {
 		if !strings.HasSuffix(path, ".go") {
 			return nil
 		}
-		pathDiffs, err := checkPath(path)
-		if err != nil {
-			return err
-		}
-		diffs += pathDiffs
-		return nil
+		return checkPath(path)
 	})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error during walk:\n%s\n", err)
-		os.Exit(1)
+		return fmt.Errorf("error during walk: %s", err)
 	}
-	if diffs > 0 {
-		fmt.Printf("Found %d diffs\n", diffs)
-	}
+	return nil
 }
 
-func maybeWrite(output *bytes.Buffer, b []byte) {
-	if *overwrite {
-		output.Write(b)
-	}
-}
-
-func getColors() (string, string, string) {
-	return string(ttycolor.StdoutProfile[ttycolor.Red]),
-		string(ttycolor.StdoutProfile[ttycolor.Green]),
-		string(ttycolor.StdoutProfile[ttycolor.Reset])
-}
-
-func checkPath(path string) (int, error) {
-	var diffs int
-
-	fileBytes, err := ioutil.ReadFile(path)
+func checkPath(path string) error {
+	src, err := ioutil.ReadFile(path)
 	if err != nil {
-		return 0, err
+		return err
 	}
 
-	diffs, output, err := checkBuf(path, fileBytes)
+	output, err := checkBuf(path, src)
 	if err != nil {
-		return 0, err
+		return err
 	}
 
-	if *overwrite && diffs > 0 {
-		err = ioutil.WriteFile(path, output.Bytes(), 0)
+	if !bytes.Equal(src, output) {
+		data, err := diff(src, output, path)
 		if err != nil {
-			return 0, err
+			return fmt.Errorf("computing diff: %s", err)
+		}
+		fmt.Printf("diff -u old/%[1]s new/%[1]s\n", filepath.ToSlash(path))
+		os.Stdout.Write(data)
+
+		if *overwrite {
+			err := ioutil.WriteFile(path, output, 0)
+			if err != nil {
+				return err
+			}
 		}
 	}
-
-	return diffs, nil
+	return nil
 }
 
-func checkBuf(path string, fileBytes []byte) (int, *bytes.Buffer, error) {
+func checkBuf(path string, src []byte) ([]byte, error) {
 	output := new(bytes.Buffer)
-	var diffs int
 	if !*fast {
 		// Run goimports, which also runs gofmt.
 		importOpts := imports.Options{
@@ -167,149 +153,132 @@ func checkBuf(path string, fileBytes []byte) (int, *bytes.Buffer, error) {
 			TabWidth:   *tab,
 			FormatOnly: false,
 		}
-		newFileBytes, err := imports.Process(path, fileBytes, &importOpts)
+		newSrc, err := imports.Process(path, src, &importOpts)
 		if err != nil {
-			return 0, output, err
+			return nil, err
 		}
-		// If goimports made any change, count that as a diff so the file
-		// can be overwritten at the end.
-		if *printDiff && bytes.Compare(fileBytes, newFileBytes) != 0 {
-			fmt.Printf("%s: import list mismatch\n", path)
-			diffs = 1
-		}
-		fileBytes = newFileBytes
+		src = newSrc
 	}
 
-	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, path, fileBytes, parser.AllErrors)
+	file, err := parser.ParseFile(path, src)
 	if err != nil {
-		return 0, output, err
+		return nil, err
 	}
 
-	fileSlice := func(beg token.Pos, end token.Pos) []byte {
-		return fileBytes[fset.Position(beg).Offset:fset.Position(end).Offset]
+	var importMapping map[*parser.ImportDecl][]render.ImportBlock
+	if *groupImports {
+		importMapping = remapImports(file)
 	}
-
-	var curFunc bytes.Buffer
-
-	red, green, reset := getColors()
 
 	lastPos := token.NoPos
-	for _, d := range f.Decls {
-		if f, ok := d.(*ast.FuncDecl); ok {
-			params := f.Type.Params
-			results := f.Type.Results
-
-			opening := params.Pos() + 1
-			closing := f.Type.End()
-			// f.Body is nil if the FuncDecl is a forward declaration.
-			if f.Body != nil {
-				closing = f.Body.Pos() + 1
-			}
-
-			maybeWrite(output, fileBytes[fset.Position(lastPos).Offset:fset.Position(opening).Offset])
-			lastPos = closing
-
-			var paramsBuf bytes.Buffer
-			if params != nil {
-				paramsPrefix := ""
-				for _, f := range params.List {
-					paramsBuf.WriteString(paramsPrefix)
-					paramsBuf.Write(fileSlice(f.Pos(), f.End()))
-					paramsPrefix = ", "
+	for _, d := range file.Decls {
+		if imp, ok := d.(*parser.ImportDecl); ok && *groupImports {
+			blocks := importMapping[imp]
+			if blocks == nil {
+				// This import declaration is meant to be removed. If it's
+				// surrounded by blank lines, remove those too.
+				//
+				// If the import block is surrounded by blank lines, remove the
+				// blank lines too.
+				startPos, endPos := imp.Pos, imp.End
+				if off := file.Offset(startPos); off-2 >= 0 && src[off-1] == '\n' && src[off-2] == '\n' {
+					startPos = file.Pos(off - 1)
 				}
-			}
-			paramsJoined := paramsBuf.Bytes()
-
-			// Final comma needed if params are written out onto their own single line.
-			const paramsLineEndComma = `,`
-
-			var resultsBuf bytes.Buffer
-			if results != nil {
-				resultsPrefix := ""
-				for _, f := range results.List {
-					resultsBuf.WriteString(resultsPrefix)
-					resultsBuf.Write(fileSlice(f.Pos(), f.End()))
-					resultsPrefix = ", "
+				if off := file.Offset(endPos); off+1 < len(src) && src[off] == '\n' && src[off+1] == '\n' {
+					endPos = file.Pos(off + 1)
 				}
-			}
-			resultsJoined := resultsBuf.Bytes()
-
-			funcMid := `) (`
-			funcEnd := `)`
-			if results == nil || len(results.List) == 0 {
-				funcMid = `)`
-				funcEnd = ``
-			} else if len(results.List) == 1 && len(results.List[0].Names) == 0 {
-				funcMid = `) `
-				funcEnd = ``
+				output.Write(file.Slice(lastPos, startPos))
+				lastPos = endPos
+				continue
 			}
 
-			brace := 0
-			if f.Body != nil {
-				brace = len(` {`)
+			var importBuf bytes.Buffer
+			if imp.Doc != nil && blocks[0].Size() > 1 {
+				importBuf.Write(file.Slice(imp.Doc.Pos(), imp.Doc.End()))
+				importBuf.WriteByte('\n')
 			}
-
-			curFunc.Reset()
-			// colOffset - 1 accounts for `func (r *foo) bar(`
-			colOffset := fset.Position(opening).Column - 1
-			singleLineLen := colOffset + len(paramsJoined) + len(funcMid) + len(resultsJoined) + len(funcEnd) + brace
-			if singleLineLen <= *wrap {
-				curFunc.Write(paramsJoined)
-				curFunc.WriteString(funcMid)
-				curFunc.Write(resultsJoined)
-				curFunc.WriteString(funcEnd)
-			} else {
-				// we're into wrapping, so the return types block usually starts on own
-				// line intended by `tab`.
-				resTypeStartingCol := *tab
-				if len(params.List) == 0 {
-					// special case: if we have no params, the res type starts on the same
-					// line rather than on its own.
-					resTypeStartingCol = colOffset
-				} else if *tab+len(paramsJoined)+len(paramsLineEndComma) <= *wrap {
-					fmt.Fprintf(&curFunc, "\n\t%s,\n", paramsJoined)
-				} else {
-					for _, param := range params.List {
-						fmt.Fprintf(&curFunc, "\n\t%s,", fileSlice(param.Pos(), param.End()))
-					}
-					curFunc.WriteByte('\n')
+			for i, block := range blocks {
+				if i > 0 {
+					importBuf.WriteString("\n\n")
 				}
-				curFunc.WriteString(funcMid)
-				singleLineRetunsLen := resTypeStartingCol + len(funcMid) + len(resultsJoined) + len(funcEnd) + brace
-				if singleLineRetunsLen <= *wrap {
-					curFunc.Write(resultsJoined)
-					curFunc.WriteString(funcEnd)
-				} else {
-					for _, result := range results.List {
-						fmt.Fprintf(&curFunc, "\n\t%s,", fileSlice(result.Pos(), result.End()))
-					}
-					curFunc.WriteByte('\n')
-					curFunc.WriteString(funcEnd)
-				}
+				render.Imports(&importBuf, file, block)
 			}
-			curFunc.Write(fileBytes[fset.Position(f.Type.End()).Offset:fset.Position(closing).Offset])
-
-			oldFunc := fileSlice(opening, closing)
-			if !bytes.Equal(oldFunc, curFunc.Bytes()) {
-				if *printDiff {
-					prefix := string(fileBytes[fset.Position(d.Pos()).Offset:fset.Position(opening).Offset])
-					fmt.Printf("%s:%d\n", path, fset.Position(d.Pos()).Line)
-					for _, line := range strings.Split(prefix+string(oldFunc), "\n") {
-						fmt.Printf("%s-%s%s\n", red, line, reset)
-					}
-					for _, line := range strings.Split(prefix+curFunc.String(), "\n") {
-						fmt.Printf("%s+%s%s\n", green, line, reset)
-					}
-					fmt.Print("\n")
-				}
-				diffs++
-				maybeWrite(output, curFunc.Bytes())
-			} else {
-				maybeWrite(output, oldFunc)
+			newBytes, err := format.Source(importBuf.Bytes())
+			if err != nil {
+				return nil, fmt.Errorf("grouping imports for %s: %s", path, err)
 			}
+			output.Write(file.Slice(lastPos, imp.Pos))
+			output.Write(newBytes)
+			lastPos = imp.End
+		}
+		if fn, ok := d.(*parser.FuncDecl); ok {
+			output.Write(file.Slice(lastPos, fn.Pos()))
+			lastPos = fn.BodyEnd()
+			var curFunc bytes.Buffer
+			render.Func(&curFunc, file, fn, *tab, *wrap)
+			output.Write(curFunc.Bytes())
 		}
 	}
-	maybeWrite(output, fileBytes[fset.Position(lastPos).Offset:])
-	return diffs, output, nil
+	output.Write(src[file.Offset(lastPos):])
+	return output.Bytes(), nil
+}
+
+// remapImports maps each existing import declaration in the file to an import
+// block that should replace it. An import block can contain multiple import
+// declarations, to indicate that the existing single import declaration should
+// be replaced with multiple separate import declarations, or nil, to indicate
+// that the import declaration should be removed entirely.
+//
+// The goal is to have just one import declaration, within which imports are
+// grouped standard library imports and non-standard library imports. An
+// exception is made for cgo, whose "C" psuedo-imports are extracted into
+// separate import declarations.
+func remapImports(file *parser.File) map[*parser.ImportDecl][]render.ImportBlock {
+	var (
+		stdlibImports []parser.ImportSpec
+		otherImports  []parser.ImportSpec
+	)
+
+	for _, imp := range file.ImportSpecs() {
+		switch impPath := imp.Path(); {
+		case impPath == "C":
+			continue
+		case strings.Contains(impPath, "."):
+			otherImports = append(otherImports, imp)
+		default:
+			stdlibImports = append(stdlibImports, imp)
+		}
+	}
+
+	mainBlock := render.ImportBlock{stdlibImports, otherImports}
+	needMainBlock := mainBlock.Size() > 0
+
+	mapping := map[*parser.ImportDecl][]render.ImportBlock{}
+	impDecls := file.ImportDecls()
+	for _, imp := range impDecls {
+		var blocks []render.ImportBlock
+		var cImports []parser.ImportSpec
+		for _, spec := range imp.Specs {
+			if spec.Path() == "C" {
+				cImports = append(cImports, spec)
+			}
+		}
+		if needMainBlock && len(cImports) != len(imp.Specs) {
+			// The first import declaration we see that contains something other
+			// than "C" psuedo-imports will be our main import block.
+			blocks = append(blocks, mainBlock)
+			needMainBlock = false
+		}
+		// If there were any "C" psuedo-imports in this declaration, split them
+		// out into their own import declarations.
+		for _, imp := range cImports {
+			if imp.Doc == nil {
+				// A cgo import without a doc comment has no effect. Remove it.
+				continue
+			}
+			blocks = append(blocks, render.ImportBlock{{imp}})
+		}
+		mapping[imp] = blocks
+	}
+	return mapping
 }
