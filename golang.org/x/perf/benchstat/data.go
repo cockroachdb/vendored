@@ -44,6 +44,11 @@ type Collection struct {
 	// SplitBy specifies the labels to split results by.
 	// By default, results will only be split by full name.
 	SplitBy []string
+
+	// Order specifies the row display order for this table.
+	// If Order is nil, the table rows are printed in order of
+	// first appearance in the input.
+	Order Order
 }
 
 // A Key identifies one metric (e.g., "ns/op", "B/op") from one
@@ -152,7 +157,7 @@ func (c *Collection) addMetrics(key Key) *Metrics {
 	return m
 }
 
-// AddFile adds the benchmark results in the formatted data
+// AddConfig adds the benchmark results in the formatted data
 // to the named configuration.
 func (c *Collection) AddConfig(config string, data []byte) {
 	c.Configs = append(c.Configs, config)

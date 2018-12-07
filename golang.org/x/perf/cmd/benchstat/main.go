@@ -6,7 +6,7 @@
 //
 // Usage:
 //
-//	benchstat [-delta-test name] [-geomean] [-html] old.txt [new.txt] [more.txt ...]
+//	benchstat [-delta-test name] [-geomean] [-html] [-sort order] old.txt [new.txt] [more.txt ...]
 //
 // Each input file should contain the concatenated output of a number
 // of runs of ``go test -bench.'' For each different benchmark listed in an input file,
@@ -36,6 +36,10 @@
 // with no column for percent change or statistical significance.
 //
 // The -html option causes benchstat to print the results as an HTML table.
+//
+// The -sort option specifies an order in which to list the results:
+// none (input order), delta (percent improvement), or name (benchmark name).
+// A leading “-” prefix, as in “-delta”, reverses the order.
 //
 // Example
 //
@@ -102,11 +106,13 @@ import (
 	"golang.org/x/perf/benchstat"
 )
 
+var exit = os.Exit // replaced during testing
+
 func usage() {
 	fmt.Fprintf(os.Stderr, "usage: benchstat [options] old.txt [new.txt] [more.txt ...]\n")
 	fmt.Fprintf(os.Stderr, "options:\n")
 	flag.PrintDefaults()
-	os.Exit(2)
+	exit(2)
 }
 
 var (
@@ -115,6 +121,7 @@ var (
 	flagGeomean   = flag.Bool("geomean", false, "print the geometric mean of each file")
 	flagHTML      = flag.Bool("html", false, "print results as an HTML table")
 	flagSplit     = flag.String("split", "pkg,goos,goarch", "split benchmarks by `labels`")
+	flagSort      = flag.String("sort", "none", "sort by `order`: [-]delta, [-]name, none")
 )
 
 var deltaTestNames = map[string]benchstat.DeltaTest{
@@ -127,13 +134,26 @@ var deltaTestNames = map[string]benchstat.DeltaTest{
 	"ttest":  benchstat.TTest,
 }
 
+var sortNames = map[string]benchstat.Order{
+	"none":  nil,
+	"name":  benchstat.ByName,
+	"delta": benchstat.ByDelta,
+}
+
 func main() {
 	log.SetPrefix("benchstat: ")
 	log.SetFlags(0)
 	flag.Usage = usage
 	flag.Parse()
 	deltaTest := deltaTestNames[strings.ToLower(*flagDeltaTest)]
-	if flag.NArg() < 1 || deltaTest == nil {
+	sortName := *flagSort
+	reverse := false
+	if strings.HasPrefix(sortName, "-") {
+		reverse = true
+		sortName = sortName[1:]
+	}
+	order, ok := sortNames[sortName]
+	if flag.NArg() < 1 || deltaTest == nil || !ok {
 		flag.Usage()
 	}
 
@@ -145,6 +165,12 @@ func main() {
 	if *flagSplit != "" {
 		c.SplitBy = strings.Split(*flagSplit, ",")
 	}
+	if order != nil {
+		if reverse {
+			order = benchstat.Reverse(order)
+		}
+		c.Order = order
+	}
 	for _, file := range flag.Args() {
 		data, err := ioutil.ReadFile(file)
 		if err != nil {
@@ -154,18 +180,23 @@ func main() {
 	}
 
 	tables := c.Tables()
-
 	var buf bytes.Buffer
 	if *flagHTML {
-		buf.WriteString(htmlStyle)
+		buf.WriteString(htmlHeader)
 		benchstat.FormatHTML(&buf, tables)
+		buf.WriteString(htmlFooter)
 	} else {
 		benchstat.FormatText(&buf, tables)
 	}
 	os.Stdout.Write(buf.Bytes())
 }
 
-var htmlStyle = `<style>
+var htmlHeader = `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Performance Result Comparison</title>
+<style>
 .benchstat { border-collapse: collapse; }
 .benchstat th:nth-child(1) { text-align: left; }
 .benchstat tbody td:nth-child(1n+2):not(.note) { text-align: right; padding: 0em 1em; }
@@ -174,4 +205,9 @@ var htmlStyle = `<style>
 .benchstat .better td.delta { font-weight: bold; }
 .benchstat .worse td.delta { font-weight: bold; color: #c00; }
 </style>
+</head>
+<body>
+`
+var htmlFooter = `</body>
+</html>
 `
