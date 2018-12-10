@@ -4,14 +4,23 @@
 
 package markdown
 
-import "unicode/utf8"
+import (
+	"fmt"
+	"unicode/utf8"
+)
 
 type ParserInline struct {
 }
 
-type InlineRule func(*StateInline, bool) bool
+type (
+	InlineRule      func(*StateInline, bool) bool
+	PostprocessRule func(*StateInline)
+)
 
-var inlineRules []InlineRule
+var (
+	inlineRules      []InlineRule
+	postprocessRules []PostprocessRule
+)
 
 func (i ParserInline) Parse(src string, md *Markdown, env *Environment) []Token {
 	if src == "" {
@@ -23,29 +32,38 @@ func (i ParserInline) Parse(src string, md *Markdown, env *Environment) []Token 
 	s.Md = md
 	s.Env = env
 	s.PosMax = len(src)
-	s.Tokens = s.TokArr[:0]
+	s.Tokens = s.bootstrap[:0]
 
 	i.Tokenize(&s)
+
+	for _, r := range postprocessRules {
+		r(&s)
+	}
 
 	return s.Tokens
 }
 
 func (ParserInline) Tokenize(s *StateInline) {
-	max := s.PosMax
+	end := s.PosMax
 	src := s.Src
 	maxNesting := s.Md.MaxNesting
+	ok := false
 
-outer:
-	for s.Pos < max {
+	for s.Pos < end {
 		if s.Level < maxNesting {
 			for _, rule := range inlineRules {
-				if rule(s, false) {
-					if s.Pos >= max {
-						break outer
-					}
-					continue outer
+				ok = rule(s, false)
+				if ok {
+					break
 				}
 			}
+		}
+
+		if ok {
+			if s.Pos >= end {
+				break
+			}
+			continue
 		}
 
 		r, size := utf8.DecodeRuneInString(src[s.Pos:])
@@ -61,23 +79,38 @@ outer:
 func (ParserInline) SkipToken(s *StateInline) {
 	pos := s.Pos
 	if s.Cache != nil {
-		if pos, ok := s.Cache[pos]; ok {
-			s.Pos = pos
+		if newPos, ok := s.Cache[pos]; ok {
+			if newPos < s.Pos {
+				panic(fmt.Sprintf("oops! was %d, got %d", s.Pos, newPos))
+			}
+			s.Pos = newPos
 			return
 		}
 	} else {
 		s.Cache = make(map[int]int)
 	}
 
+	ok := false
 	if s.Level < s.Md.MaxNesting {
-		for _, r := range inlineRules {
-			if r(s, true) {
-				s.Cache[pos] = s.Pos
-				return
+		for i, r := range inlineRules {
+			s.Level++
+			origPos := s.Pos
+			ok = r(s, true)
+			if s.Pos < origPos {
+				panic(fmt.Sprintf("%d:%d:%d", i, origPos, s.Pos))
+			}
+			s.Level--
+			if ok {
+				break
 			}
 		}
+	} else {
+		s.Pos = s.PosMax
 	}
 
-	s.Pos++
+	if !ok {
+		_, size := utf8.DecodeRuneInString(s.Src[s.Pos:])
+		s.Pos += size
+	}
 	s.Cache[pos] = s.Pos
 }

@@ -7,17 +7,12 @@ package markdown
 import (
 	"strings"
 
-	"github.com/golang-commonmark/markdown/byteutil"
-	"github.com/golang-commonmark/markdown/linkify"
+	"github.com/golang-commonmark/linkify"
 )
 
-func isLinkOpen(s string) bool {
-	return byteutil.IsLetter(s[1])
-}
+func isLinkOpen(s string) bool { return isLetter(s[1]) }
 
-func isLinkClose(s string) bool {
-	return s[1] == '/'
-}
+func isLinkClose(s string) bool { return s[1] == '/' }
 
 func ruleLinkify(s *StateCore) {
 	blockTokens := s.Tokens
@@ -82,7 +77,13 @@ func ruleLinkify(s *StateCore) {
 							continue
 						}
 
-						urlText = normalizeLinkText(urlText)
+						if ln.Scheme == "" {
+							urlText = strings.TrimPrefix(normalizeLinkText("http://"+urlText), "http://")
+						} else if ln.Scheme == "mailto:" && !strings.HasPrefix(urlText, "mailto:") {
+							urlText = strings.TrimPrefix(normalizeLinkText("mailto:"+urlText), "mailto:")
+						} else {
+							urlText = normalizeLinkText(urlText)
+						}
 
 						pos := ln.Start
 

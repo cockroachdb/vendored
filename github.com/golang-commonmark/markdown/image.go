@@ -4,39 +4,43 @@
 
 package markdown
 
-func ruleImage(s *StateInline, silent bool) (_ bool) {
+func ruleImage(s *StateInline, silent bool) bool {
 	pos := s.Pos
 	max := s.PosMax
 
 	if pos+2 >= max {
-		return
+		return false
 	}
 
 	src := s.Src
-	if src[pos] != '!' {
-		return
-	}
-
-	if src[pos+1] != '[' {
-		return
+	if src[pos] != '!' || src[pos+1] != '[' {
+		return false
 	}
 
 	labelStart := pos + 2
 	labelEnd := parseLinkLabel(s, pos+1, false)
 	if labelEnd < 0 {
-		return
+		return false
 	}
 
 	var href, title, label string
 	oldPos := pos
 	pos = labelEnd + 1
 	if pos < max && src[pos] == '(' {
-		pos = skipws(src, pos+1, max)
+		pos++
+		for pos < max {
+			b := src[pos]
+			if !byteIsSpace(b) && b != '\n' {
+				break
+			}
+			pos++
+		}
 		if pos >= max {
-			return
+			return false
 		}
 
-		url, endpos, ok := parseLinkDestination(src, pos, s.PosMax)
+		start := pos
+		url, _, endpos, ok := parseLinkDestination(src, pos, s.PosMax)
 		if ok {
 			url = normalizeLink(url)
 			if validateLink(url) {
@@ -45,30 +49,41 @@ func ruleImage(s *StateInline, silent bool) (_ bool) {
 			}
 		}
 
-		start := pos
-		pos = skipws(src, pos, max)
+		start = pos
+		for pos < max {
+			b := src[pos]
+			if !byteIsSpace(b) && b != '\n' {
+				break
+			}
+			pos++
+		}
 		if pos >= max {
-			return
+			return false
 		}
 
 		title, _, endpos, ok = parseLinkTitle(src, pos, s.PosMax)
 		if pos < max && start != pos && ok {
-			pos = skipws(src, endpos, max)
+			pos = endpos
+			for pos < max {
+				b := src[pos]
+				if !byteIsSpace(b) && b != '\n' {
+					break
+				}
+				pos++
+			}
 		}
 
 		if pos >= max || src[pos] != ')' {
 			s.Pos = oldPos
-			return
+			return false
 		}
 
 		pos++
 
 	} else {
 		if s.Env.References == nil {
-			return
+			return false
 		}
-
-		pos = skipws(src, pos, max)
 
 		if pos < max && src[pos] == '[' {
 			start := pos + 1
@@ -90,7 +105,7 @@ func ruleImage(s *StateInline, silent bool) (_ bool) {
 		ref, ok := s.Env.References[normalizeReference(label)]
 		if !ok {
 			s.Pos = oldPos
-			return
+			return false
 		}
 
 		href = ref["href"]
@@ -98,23 +113,14 @@ func ruleImage(s *StateInline, silent bool) (_ bool) {
 	}
 
 	if !silent {
-		s.Pos = labelStart
-		s.PosMax = labelEnd
+		content := src[labelStart:labelEnd]
 
-		src := src[labelStart:labelEnd]
-
-		var newState StateInline
-		newState.Src = src
-		newState.Md = s.Md
-		newState.Env = s.Env
-		newState.PosMax = len(src)
-		newState.Tokens = newState.TokArr[:0]
-		newState.Md.Inline.Tokenize(&newState)
+		tokens := s.Md.Inline.Parse(content, s.Md, s.Env)
 
 		s.PushToken(&Image{
 			Src:    href,
 			Title:  title,
-			Tokens: newState.Tokens,
+			Tokens: tokens,
 		})
 	}
 

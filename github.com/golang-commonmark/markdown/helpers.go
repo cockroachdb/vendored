@@ -48,13 +48,13 @@ func parseLinkLabel(s *StateInline, start int, disableNested bool) int {
 	return labelEnd
 }
 
-func parseLinkDestination(s string, pos, max int) (url string, endpos int, ok bool) {
+func parseLinkDestination(s string, pos, max int) (url string, lines, endpos int, ok bool) {
 	start := pos
 	if pos < max && s[pos] == '<' {
 		pos++
 		for pos < max {
 			b := s[pos]
-			if b == '\n' {
+			if b == '\n' || byteIsSpace(b) {
 				return
 			}
 			if b == '>' {
@@ -93,16 +93,13 @@ func parseLinkDestination(s string, pos, max int) (url string, endpos int, ok bo
 
 		if b == '(' {
 			level++
-			if level > 1 {
-				break
-			}
 		}
 
 		if b == ')' {
-			level--
-			if level < 0 {
+			if level == 0 {
 				break
 			}
+			level--
 		}
 
 		pos++
@@ -111,18 +108,15 @@ func parseLinkDestination(s string, pos, max int) (url string, endpos int, ok bo
 	if start == pos {
 		return
 	}
+	if level != 0 {
+		return
+	}
 
 	url = unescapeAll(s[start:pos])
 	endpos = pos
 	ok = true
 
 	return
-}
-
-var tmark [256]bool
-
-func init() {
-	tmark['"'], tmark['\''], tmark['('] = true, true, true
 }
 
 func parseLinkTitle(s string, pos, max int) (title string, nlines, endpos int, ok bool) {
@@ -135,7 +129,7 @@ func parseLinkTitle(s string, pos, max int) (title string, nlines, endpos int, o
 
 	marker := s[pos]
 
-	if !tmark[marker] {
+	if marker != '"' && marker != '\'' && marker != '(' {
 		return
 	}
 

@@ -4,9 +4,9 @@
 
 package markdown
 
-func ruleCode(s *StateBlock, startLine, endLine int, _ bool) (_ bool) {
-	if s.TShift[startLine]-s.BlkIndent < 4 {
-		return
+func ruleCode(s *StateBlock, startLine, endLine int, _ bool) bool {
+	if s.SCount[startLine]-s.BlkIndent < 4 {
+		return false
 	}
 
 	nextLine := startLine + 1
@@ -18,7 +18,7 @@ func ruleCode(s *StateBlock, startLine, endLine int, _ bool) (_ bool) {
 			continue
 		}
 
-		if s.TShift[nextLine]-s.BlkIndent > 3 {
+		if s.SCount[nextLine]-s.BlkIndent >= 4 {
 			nextLine++
 			last = nextLine
 			continue
@@ -27,7 +27,7 @@ func ruleCode(s *StateBlock, startLine, endLine int, _ bool) (_ bool) {
 		break
 	}
 
-	s.Line = nextLine
+	s.Line = last
 	s.PushToken(&CodeBlock{
 		Content: s.Lines(startLine, last, 4+s.BlkIndent, true),
 		Map:     [2]int{startLine, s.Line},

@@ -4,24 +4,42 @@
 
 package markdown
 
-var term [256]bool
-
-func init() {
-	for _, b := range "\n!#$%&*+-:<=>@[\\]^_`{}~" {
-		term[b] = true
-	}
+var terminatorCharTable = [256]bool{
+	'\n': true,
+	'!':  true,
+	'#':  true,
+	'$':  true,
+	'%':  true,
+	'&':  true,
+	'*':  true,
+	'+':  true,
+	'-':  true,
+	':':  true,
+	'<':  true,
+	'=':  true,
+	'>':  true,
+	'@':  true,
+	'[':  true,
+	'\\': true,
+	']':  true,
+	'^':  true,
+	'_':  true,
+	'`':  true,
+	'{':  true,
+	'}':  true,
+	'~':  true,
 }
 
-func ruleText(s *StateInline, silent bool) (_ bool) {
+func ruleText(s *StateInline, silent bool) bool {
 	pos := s.Pos
 	max := s.PosMax
 	src := s.Src
 
-	for pos < max && !term[src[pos]] {
+	for pos < max && !terminatorCharTable[src[pos]] {
 		pos++
 	}
 	if pos == s.Pos {
-		return
+		return false
 	}
 
 	if !silent {

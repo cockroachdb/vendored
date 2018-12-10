@@ -12,10 +12,16 @@ func ruleParagraph(s *StateBlock, startLine, _ int, _ bool) bool {
 	nextLine := startLine + 1
 	endLine := s.LineMax
 
+	oldParentType := s.ParentType
+	s.ParentType = ptParagraph
+
 outer:
 	for ; nextLine < endLine && !s.IsLineEmpty(nextLine); nextLine++ {
-		shift := s.TShift[nextLine]
-		if shift < 0 || shift-s.BlkIndent > 3 {
+		if s.SCount[nextLine]-s.BlkIndent > 3 {
+			continue
+		}
+
+		if s.SCount[nextLine] < 0 {
 			continue
 		}
 
@@ -38,6 +44,8 @@ outer:
 		Map:     [2]int{startLine, s.Line},
 	})
 	s.PushClosingToken(&ParagraphClose{})
+
+	s.ParentType = oldParentType
 
 	return true
 }

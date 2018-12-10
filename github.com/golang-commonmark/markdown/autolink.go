@@ -4,27 +4,36 @@
 
 package markdown
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
 
-func ruleAutolink(s *StateInline, silent bool) (_ bool) {
+var (
+	rAutolink = regexp.MustCompile(`^<([a-zA-Z][a-zA-Z0-9+.\-]{1,31}):([^<>\x00-\x20]*)>`)
+	rEmail    = regexp.MustCompile(`^<([a-zA-Z0-9.!#$%&'*+/=?^_{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)>`)
+)
+
+func ruleAutolink(s *StateInline, silent bool) bool {
 	pos := s.Pos
 	src := s.Src
 
 	if src[pos] != '<' {
-		return
+		return false
 	}
 
 	tail := src[pos:]
 
 	if strings.IndexByte(tail, '>') < 0 {
-		return
+		return false
 	}
 
-	link := matchAutolink(tail)
+	link := rAutolink.FindString(tail)
 	if link != "" {
+		link = link[1 : len(link)-1]
 		href := normalizeLink(link)
 		if !validateLink(href) {
-			return
+			return false
 		}
 
 		if !silent {
@@ -38,16 +47,17 @@ func ruleAutolink(s *StateInline, silent bool) (_ bool) {
 		return true
 	}
 
-	email := matchEmail(tail)
+	email := rEmail.FindString(tail)
 	if email != "" {
+		email = email[1 : len(email)-1]
 		href := normalizeLink("mailto:" + email)
 		if !validateLink(href) {
-			return
+			return false
 		}
 
 		if !silent {
 			s.PushOpeningToken(&LinkOpen{Href: href})
-			s.PushToken(&Text{Content: email})
+			s.PushToken(&Text{Content: normalizeLinkText(email)})
 			s.PushClosingToken(&LinkClose{})
 		}
 
@@ -56,5 +66,5 @@ func ruleAutolink(s *StateInline, silent bool) (_ bool) {
 		return true
 	}
 
-	return
+	return false
 }

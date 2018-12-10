@@ -6,26 +6,18 @@ package markdown
 
 import (
 	"bytes"
-
-	"github.com/golang-commonmark/markdown/byteutil"
+	"strings"
 )
 
-var (
-	trg       [256]bool
-	sym       [256]bool
-	exclquest [256]bool
-)
+func exclquest(b byte) bool {
+	return b == '!' || b == '?'
+}
 
-func init() {
-	for _, b := range "(!+,-.?" {
-		trg[b] = true
+func byteToLower(b byte) byte {
+	if b >= 'A' && b <= 'Z' {
+		return b - 'A' + 'a'
 	}
-	for _, b := range "cprtCPRT" {
-		sym[b] = true
-	}
-	for _, b := range "?!" {
-		exclquest[b] = true
-	}
+	return b
 }
 
 func performReplacements(s string) string {
@@ -34,7 +26,7 @@ func performReplacements(s string) string {
 	for i := 0; i < len(s); i++ {
 		b := s[i]
 
-		if trg[b] {
+		if strings.IndexByte("(!+,-.?", b) != -1 {
 
 		outer:
 			switch b {
@@ -44,11 +36,8 @@ func performReplacements(s string) string {
 				}
 
 				b2 := s[i+1]
-				if !sym[b2] {
-					break
-				}
 
-				b2 = byteutil.ByteToLower(b2)
+				b2 = byteToLower(b2)
 				switch b2 {
 				case 'c', 'r', 'p':
 					if s[i+2] != ')' {
@@ -69,12 +58,14 @@ func performReplacements(s string) string {
 					if i+3 >= len(s) {
 						break outer
 					}
-					if s[i+3] != ')' || byteutil.ByteToLower(s[i+2]) != 'm' {
+					if s[i+3] != ')' || byteToLower(s[i+2]) != 'm' {
 						break outer
 					}
 					buf.WriteString("™")
 					i += 3
 					continue
+				default:
+					break outer
 				}
 
 			case '+':
@@ -106,12 +97,12 @@ func performReplacements(s string) string {
 				if i+3 >= len(s) {
 					break
 				}
-				if !(exclquest[s[i+1]] && exclquest[s[i+2]] && exclquest[s[i+3]]) {
+				if !(exclquest(s[i+1]) && exclquest(s[i+2]) && exclquest(s[i+3])) {
 					break
 				}
 				buf.WriteString(s[i : i+3])
 				j := i + 3
-				for j < len(s) && exclquest[s[j]] {
+				for j < len(s) && exclquest(s[j]) {
 					j++
 				}
 				i = j - 1
@@ -164,12 +155,19 @@ func ruleReplacements(s *StateCore) {
 		return
 	}
 
+	insideLink := false
 	for _, tok := range s.Tokens {
 		if tok, ok := tok.(*Inline); ok {
 			for _, itok := range tok.Children {
 				switch itok := itok.(type) {
+				case *LinkOpen:
+					insideLink = true
+				case *LinkClose:
+					insideLink = false
 				case *Text:
-					itok.Content = performReplacements(itok.Content)
+					if !insideLink {
+						itok.Content = performReplacements(itok.Content)
+					}
 				}
 			}
 		}

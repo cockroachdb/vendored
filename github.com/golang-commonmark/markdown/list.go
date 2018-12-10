@@ -4,36 +4,26 @@
 
 package markdown
 
-import (
-	"strconv"
-
-	"github.com/golang-commonmark/markdown/byteutil"
-)
-
-var (
-	bullet     [256]bool
-	afterdigit [256]bool
-)
-
-func init() {
-	bullet['*'], bullet['+'], bullet['-'] = true, true, true
-	afterdigit[')'], afterdigit['.'] = true, true
-}
+import "strconv"
 
 var listTerminatedBy []BlockRule
 
 func skipBulletListMarker(s *StateBlock, startLine int) int {
 	pos := s.BMarks[startLine] + s.TShift[startLine]
+	max := s.EMarks[startLine]
 	src := s.Src
 
-	if !bullet[src[pos]] {
+	if pos >= max {
 		return -1
 	}
 
+	marker := src[pos]
+	if marker != '*' && marker != '-' && marker != '+' {
+		return -1
+	}
 	pos++
-	max := s.EMarks[startLine]
 
-	if pos < max && src[pos] != ' ' {
+	if pos < max && !byteIsSpace(src[pos]) {
 		return -1
 	}
 
@@ -41,7 +31,8 @@ func skipBulletListMarker(s *StateBlock, startLine int) int {
 }
 
 func skipOrderedListMarker(s *StateBlock, startLine int) int {
-	pos := s.BMarks[startLine] + s.TShift[startLine]
+	start := s.BMarks[startLine] + s.TShift[startLine]
+	pos := start
 	max := s.EMarks[startLine]
 
 	if pos+1 >= max {
@@ -49,37 +40,35 @@ func skipOrderedListMarker(s *StateBlock, startLine int) int {
 	}
 
 	src := s.Src
-	b := src[pos]
-
-	if !byteutil.IsDigit(b) {
+	ch := src[pos]
+	if ch < '0' || ch > '9' {
 		return -1
 	}
-
-	start := pos
+	pos++
 
 	for {
 		if pos >= max {
 			return -1
 		}
 
-		b = src[pos]
+		ch = src[pos]
 		pos++
 
-		if byteutil.IsDigit(b) {
-			if pos-start > 9 {
+		if ch >= '0' && ch <= '9' {
+			if pos-start >= 10 {
 				return -1
 			}
 			continue
 		}
 
-		if afterdigit[b] {
+		if ch == ')' || ch == '.' {
 			break
 		}
 
 		return -1
 	}
 
-	if pos < max && src[pos] != ' ' {
+	if pos < max && !byteIsSpace(src[pos]) {
 		return -1
 	}
 
@@ -93,32 +82,55 @@ func markParagraphsTight(s *StateBlock, idx int) {
 	for i := idx + 2; i < len(tokens)-2; i++ {
 		if tokens[i].Level() == level {
 			if tok, ok := tokens[i].(*ParagraphOpen); ok {
-				tok.Tight = true
+				tok.Hidden = true
 				i += 2
-				tokens[i].(*ParagraphClose).Tight = true
+				tokens[i].(*ParagraphClose).Hidden = true
 			}
 		}
 	}
 }
 
-func ruleList(s *StateBlock, startLine, endLine int, silent bool) (_ bool) {
-	shift := s.TShift[startLine]
-	if shift < 0 {
-		return
+func ruleList(s *StateBlock, startLine, endLine int, silent bool) bool {
+	isTerminatingParagraph := false
+	tight := true
+
+	if s.SCount[startLine]-s.BlkIndent >= 4 {
+		return false
 	}
+	src := s.Src
+
+	if silent && s.ParentType == ptParagraph {
+		if s.TShift[startLine] >= s.BlkIndent {
+			isTerminatingParagraph = true
+		}
+	}
+
+	var start int
+	var markerValue int
 
 	isOrdered := false
 	posAfterMarker := skipOrderedListMarker(s, startLine)
 	if posAfterMarker > 0 {
 		isOrdered = true
+		start = s.BMarks[startLine] + s.TShift[startLine]
+		markerValue, _ = strconv.Atoi(src[start : posAfterMarker-1])
+
+		if isTerminatingParagraph && markerValue != 1 {
+			return false
+		}
 	} else {
 		posAfterMarker = skipBulletListMarker(s, startLine)
 		if posAfterMarker < 0 {
-			return
+			return false
 		}
 	}
 
-	src := s.Src
+	if isTerminatingParagraph {
+		if s.SkipSpaces(posAfterMarker) >= s.EMarks[startLine] {
+			return false
+		}
+	}
+
 	markerChar := src[posAfterMarker-1]
 
 	if silent {
@@ -129,9 +141,6 @@ func ruleList(s *StateBlock, startLine, endLine int, silent bool) (_ bool) {
 
 	var listMap *[2]int
 	if isOrdered {
-		start := s.BMarks[startLine] + shift
-		markerValue, _ := strconv.Atoi(src[start : posAfterMarker-1])
-
 		tok := &OrderedListOpen{
 			Order: markerValue,
 			Map:   [2]int{startLine, 0},
@@ -149,24 +158,43 @@ func ruleList(s *StateBlock, startLine, endLine int, silent bool) (_ bool) {
 	nextLine := startLine
 	prevEmptyEnd := false
 
-	tight := true
+	oldParentType := s.ParentType
+	s.ParentType = ptList
+
+	var pos int
+	var contentStart int
+
 outer:
 	for nextLine < endLine {
-		contentStart := s.SkipSpaces(posAfterMarker)
+		pos = posAfterMarker
 		max := s.EMarks[nextLine]
 
-		var indentAfterMarker int
-		if contentStart >= max {
-			indentAfterMarker = 1
-		} else {
-			indentAfterMarker = contentStart - posAfterMarker
+		initial := s.SCount[nextLine] + posAfterMarker - (s.BMarks[startLine] + s.TShift[startLine])
+		offset := initial
+
+	loop:
+		for pos < max {
+			switch src[pos] {
+			case '\t':
+				offset += 4 - (offset+s.BSCount[nextLine])%4
+			case ' ':
+				offset++
+			default:
+				break loop
+			}
+			pos++
 		}
 
-		if indentAfterMarker > 4 {
-			indentAfterMarker = 1
+		contentStart = pos
+
+		indentAfterMarker := 1
+		if contentStart < max {
+			if iam := offset - initial; iam <= 4 {
+				indentAfterMarker = iam
+			}
 		}
 
-		indent := posAfterMarker - s.BMarks[nextLine] + indentAfterMarker
+		indent := initial + indentAfterMarker
 
 		tok := &ListItemOpen{
 			Map: [2]int{startLine, 0},
@@ -177,29 +205,28 @@ outer:
 		oldIndent := s.BlkIndent
 		oldTight := s.Tight
 		oldTShift := s.TShift[startLine]
-		oldParentType := s.ParentType
-		s.TShift[startLine] = contentStart - s.BMarks[startLine]
+		oldLIndent := s.SCount[startLine]
 		s.BlkIndent = indent
 		s.Tight = true
-		s.ParentType = ptList
+		s.TShift[startLine] = contentStart - s.BMarks[startLine]
+		s.SCount[startLine] = offset
 
-		s.Md.Block.Tokenize(s, startLine, endLine)
+		if contentStart >= max && s.IsLineEmpty(startLine+1) {
+			s.Line = min(s.Line+2, endLine)
+		} else {
+			s.Md.Block.Tokenize(s, startLine, endLine)
+		}
 
 		if !s.Tight || prevEmptyEnd {
 			tight = false
 		}
+
 		prevEmptyEnd = s.Line-startLine > 1 && s.IsLineEmpty(s.Line-1)
-		if prevEmptyEnd {
-			lastToken := s.Tokens[len(s.Tokens)-1]
-			if _, ok := lastToken.(*BlockquoteClose); ok {
-				prevEmptyEnd = false
-			}
-		}
 
 		s.BlkIndent = oldIndent
 		s.TShift[startLine] = oldTShift
+		s.SCount[startLine] = oldLIndent
 		s.Tight = oldTight
-		s.ParentType = oldParentType
 
 		s.PushClosingToken(&ListItemClose{})
 
@@ -212,11 +239,7 @@ outer:
 			break
 		}
 
-		if s.IsLineEmpty(nextLine) {
-			break
-		}
-
-		if s.TShift[nextLine] < s.BlkIndent {
+		if s.SCount[nextLine] < s.BlkIndent {
 			break
 		}
 
@@ -248,9 +271,10 @@ outer:
 	} else {
 		s.PushClosingToken(&BulletListClose{})
 	}
-	(*listMap)[1] = nextLine
 
+	(*listMap)[1] = nextLine
 	s.Line = nextLine
+	s.ParentType = oldParentType
 
 	if tight {
 		markParagraphsTight(s, tokenIdx)

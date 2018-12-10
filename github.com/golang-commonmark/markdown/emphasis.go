@@ -4,149 +4,86 @@
 
 package markdown
 
-import (
-	"unicode"
-	"unicode/utf8"
-)
-
-func scanDelims(s *StateInline, start int) (canOpen bool, canClose bool, count int) {
-	pos := start
-	max := s.PosMax
-	src := s.Src
-	marker := src[start]
-
-	lastChar, lastLen := utf8.DecodeLastRuneInString(src[:start])
-
-	for pos < max && src[pos] == marker {
-		pos++
-	}
-	count = pos - start
-
-	nextChar, nextLen := utf8.DecodeRuneInString(src[pos:])
-
-	isLastSpaceOrStart := lastLen == 0 || unicode.IsSpace(lastChar)
-	isNextSpaceOrEnd := nextLen == 0 || unicode.IsSpace(nextChar)
-	isLastPunct := !isLastSpaceOrStart && (isMarkdownPunct(lastChar) || unicode.IsPunct(lastChar))
-	isNextPunct := !isNextSpaceOrEnd && (isMarkdownPunct(nextChar) || unicode.IsPunct(nextChar))
-
-	leftFlanking := !isNextSpaceOrEnd && (!isNextPunct || isLastSpaceOrStart || isLastPunct)
-	rightFlanking := !isLastSpaceOrStart && (!isLastPunct || isNextSpaceOrEnd || isNextPunct)
-
-	if marker == '_' {
-		canOpen = leftFlanking && (!rightFlanking || isLastPunct)
-		canClose = rightFlanking && (!leftFlanking || isNextPunct)
-	} else {
-		canOpen = leftFlanking
-		canClose = rightFlanking
-	}
-
-	return
+type Delimiter struct {
+	Length int
+	Jump   int
+	Token  int
+	Level  int
+	End    int
+	Open   bool
+	Close  bool
+	Marker byte
 }
 
-var em [256]bool
-
-func init() {
-	em['*'], em['_'] = true, true
-}
-
-func ruleEmphasis(s *StateInline, silent bool) (_ bool) {
+func ruleEmphasis(s *StateInline, silent bool) bool {
 	src := s.Src
-	max := s.PosMax
 	start := s.Pos
 	marker := src[start]
 
-	if !em[marker] {
-		return
-	}
-
 	if silent {
-		return
+		return false
 	}
 
-	canOpen, _, startCount := scanDelims(s, start)
-	s.Pos += startCount
-	if !canOpen {
-		s.Pending.WriteString(src[start:s.Pos])
-		return true
+	if marker != '_' && marker != '*' {
+		return false
 	}
 
-	stack := []int{startCount}
-	found := false
+	canOpen, canClose, length := s.scanDelims(s.Pos, marker == '*')
+	for i := 0; i < length; i++ {
+		s.PushToken(&Text{Content: string(marker)})
 
-	for s.Pos < max {
-		if src[s.Pos] == marker {
-			canOpen, canClose, count := scanDelims(s, s.Pos)
+		s.Delimiters = append(s.Delimiters, Delimiter{
+			Marker: marker,
+			Length: length,
+			Jump:   i,
+			Token:  len(s.Tokens) - 1,
+			Level:  s.Level,
+			End:    -1,
+			Open:   canOpen,
+			Close:  canClose,
+		})
+	}
 
-			if canClose {
-				oldCount := stack[len(stack)-1]
-				stack = stack[:len(stack)-1]
-				newCount := count
+	s.Pos += length
 
-				for oldCount != newCount {
-					if newCount < oldCount {
-						stack = append(stack, oldCount-newCount)
-						break
-					}
+	return true
+}
 
-					newCount -= oldCount
-
-					if len(stack) == 0 {
-						break
-					}
-
-					s.Pos += oldCount
-					oldCount = stack[len(stack)-1]
-					stack = stack[:len(stack)-1]
-				}
-
-				if len(stack) == 0 {
-					startCount = oldCount
-					found = true
-					break
-				}
-
-				s.Pos += count
-				continue
-			}
-
-			if canOpen {
-				stack = append(stack, count)
-			}
-
-			s.Pos += count
+func ruleEmphasisPostprocess(s *StateInline) {
+	delimiters := s.Delimiters
+	max := len(delimiters)
+	for i := max - 1; i >= 0; i-- {
+		startDelim := delimiters[i]
+		if startDelim.Marker != '_' && startDelim.Marker != '*' {
 			continue
 		}
 
-		s.Md.Inline.SkipToken(s)
+		if startDelim.End == -1 {
+			continue
+		}
+
+		endDelim := delimiters[startDelim.End]
+
+		isStrong := i > 0 &&
+			delimiters[i-1].End == startDelim.End+1 &&
+			delimiters[i-1].Token == startDelim.Token-1 &&
+			delimiters[startDelim.End+1].Token == endDelim.Token+1 &&
+			delimiters[i-1].Marker == startDelim.Marker
+
+		if isStrong {
+			s.Tokens[startDelim.Token] = &StrongOpen{}
+			s.Tokens[endDelim.Token] = &StrongClose{}
+
+			if text, ok := s.Tokens[delimiters[i-1].Token].(*Text); ok {
+				text.Content = ""
+			}
+			if text, ok := s.Tokens[delimiters[startDelim.End+1].Token].(*Text); ok {
+				text.Content = ""
+			}
+			i--
+		} else {
+			s.Tokens[startDelim.Token] = &EmphasisOpen{}
+			s.Tokens[endDelim.Token] = &EmphasisClose{}
+		}
 	}
-
-	if !found {
-		s.Pos = start
-		return
-	}
-
-	s.PosMax = s.Pos
-	s.Pos = start + startCount
-
-	count := startCount
-	for ; count > 1; count -= 2 {
-		s.PushOpeningToken(&StrongOpen{})
-	}
-	if count > 0 {
-		s.PushOpeningToken(&EmphasisOpen{})
-	}
-
-	s.Md.Inline.Tokenize(s)
-
-	if count%2 != 0 {
-		s.PushClosingToken(&EmphasisClose{})
-	}
-	for count = startCount; count > 1; count -= 2 {
-		s.PushClosingToken(&StrongClose{})
-	}
-
-	s.Pos = s.PosMax + startCount
-	s.PosMax = max
-
-	return true
 }

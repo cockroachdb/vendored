@@ -4,15 +4,10 @@
 
 package markdown
 
-import "strings"
-
-var hdr [256]bool
-
-func init() {
-	for _, b := range "-:| " {
-		hdr[b] = true
-	}
-}
+import (
+	"regexp"
+	"strings"
+)
 
 func getLine(s *StateBlock, line int) string {
 	pos := s.BMarks[line] + s.BlkIndent
@@ -24,87 +19,103 @@ func getLine(s *StateBlock, line int) string {
 }
 
 func escapedSplit(s string) (result []string) {
+	pos := 0
 	escapes := 0
 	lastPos := 0
-	backticked := false
+	backTicked := false
 	lastBackTick := 0
-	pos := 0
-
-	if len(s) > 0 && s[len(s)-1] == '|' {
-		s = s[:len(s)-1]
-	}
-	if len(s) > 0 && s[0] == '|' {
-		pos++
-		lastPos++
-	}
 
 	for pos < len(s) {
-		b := s[pos]
-		switch {
-		case b == '`' && escapes%2 == 0:
-			backticked = !backticked
-			lastBackTick = pos
-		case b == '|' && escapes%2 == 0 && !backticked:
+		ch := s[pos]
+		if ch == '`' {
+			if backTicked {
+				backTicked = false
+				lastBackTick = pos
+			} else if escapes%2 == 0 {
+				backTicked = true
+				lastBackTick = pos
+			}
+		} else if ch == '|' && (escapes%2 == 0) && !backTicked {
 			result = append(result, s[lastPos:pos])
 			lastPos = pos + 1
-		case b == '\\':
+		}
+
+		if ch == '\\' {
 			escapes++
-		default:
+		} else {
 			escapes = 0
 		}
 
 		pos++
 
-		if pos == len(s) && backticked {
-			backticked = false
+		if pos == len(s) && backTicked {
+			backTicked = false
 			pos = lastBackTick + 1
 		}
 	}
 
-	result = append(result, s[lastPos:])
-
-	return
+	return append(result, s[lastPos:])
 }
 
-func ruleTable(s *StateBlock, startLine, endLine int, silent bool) (_ bool) {
+var rColumn = regexp.MustCompile("^:?-+:?$")
+
+func ruleTable(s *StateBlock, startLine, endLine int, silent bool) bool {
 	if !s.Md.Tables {
-		return
+		return false
 	}
 
 	if startLine+2 > endLine {
-		return
+		return false
 	}
 
 	nextLine := startLine + 1
 
-	if s.TShift[nextLine] < s.BlkIndent {
-		return
+	if s.SCount[nextLine] < s.BlkIndent {
+		return false
+	}
+
+	if s.SCount[nextLine]-s.BlkIndent >= 4 {
+		return false
 	}
 
 	pos := s.BMarks[nextLine] + s.TShift[nextLine]
 	if pos >= s.EMarks[nextLine] {
-		return
+		return false
 	}
 
 	src := s.Src
-	if !hdr[src[pos]] {
-		return
+	ch := src[pos]
+	pos++
+
+	if ch != '|' && ch != '-' && ch != ':' {
+		return false
 	}
+
+	for pos < s.EMarks[nextLine] {
+		ch = src[pos]
+		if ch != '|' && ch != '-' && ch != ':' && !byteIsSpace(ch) {
+			return false
+		}
+		pos++
+	}
+
+	//
 
 	lineText := getLine(s, startLine+1)
-	if !isHeaderLine(lineText) {
-		return
-	}
 
-	rows := strings.Split(lineText, "|")
-	if len(rows) < 2 {
-		return
-	}
+	columns := strings.Split(lineText, "|")
 	var aligns []Align
-	for i := 0; i < len(rows); i++ {
-		t := strings.TrimSpace(rows[i])
+	for i := 0; i < len(columns); i++ {
+		t := strings.TrimSpace(columns[i])
 		if t == "" {
-			continue
+			if i == 0 || i == len(columns)-1 {
+				continue
+			}
+			return false
+		}
+
+		if !rColumn.MatchString(t) {
+			return false
 		}
 
 		if t[len(t)-1] == ':' {
@@ -122,12 +133,15 @@ func ruleTable(s *StateBlock, startLine, endLine int, silent bool) (_ bool) {
 
 	lineText = strings.TrimSpace(getLine(s, startLine))
 	if strings.IndexByte(lineText, '|') == -1 {
-		return
+		return false
 	}
-
-	rows = escapedSplit(lineText)
-	if len(aligns) != len(rows) {
-		return
+	if s.SCount[startLine]-s.BlkIndent >= 4 {
+		return false
+	}
+	columns = escapedSplit(strings.TrimSuffix(strings.TrimPrefix(lineText, "|"), "|"))
+	columnCount := len(columns)
+	if columnCount > len(aligns) {
+		return false
 	}
 
 	if silent {
@@ -145,13 +159,13 @@ func ruleTable(s *StateBlock, startLine, endLine int, silent bool) (_ bool) {
 		Map: [2]int{startLine, startLine + 1},
 	})
 
-	for i := 0; i < len(rows); i++ {
+	for i := 0; i < len(columns); i++ {
 		s.PushOpeningToken(&ThOpen{
 			Align: aligns[i],
 			Map:   [2]int{startLine, startLine + 1},
 		})
 		s.PushToken(&Inline{
-			Content: strings.TrimSpace(rows[i]),
+			Content: strings.TrimSpace(columns[i]),
 			Map:     [2]int{startLine, startLine + 1},
 		})
 		s.PushClosingToken(&ThClose{})
@@ -166,8 +180,7 @@ func ruleTable(s *StateBlock, startLine, endLine int, silent bool) (_ bool) {
 	s.PushOpeningToken(tbodyTok)
 
 	for nextLine = startLine + 2; nextLine < endLine; nextLine++ {
-		shift := s.TShift[nextLine]
-		if shift >= 0 && shift < s.BlkIndent {
+		if s.SCount[nextLine] < s.BlkIndent {
 			break
 		}
 
@@ -175,19 +188,31 @@ func ruleTable(s *StateBlock, startLine, endLine int, silent bool) (_ bool) {
 		if strings.IndexByte(lineText, '|') == -1 {
 			break
 		}
-		rows = escapedSplit(lineText)
-		if len(rows) < len(aligns) {
-			rows = append(rows, make([]string, len(aligns)-len(rows))...)
-		} else if len(rows) > len(aligns) {
-			rows = rows[:len(aligns)]
+		if s.SCount[nextLine]-s.BlkIndent >= 4 {
+			break
+		}
+		columns = escapedSplit(strings.TrimPrefix(strings.TrimSuffix(lineText, "|"), "|"))
+
+		if len(columns) < len(aligns) {
+			columns = append(columns, make([]string, len(aligns)-len(columns))...)
+		} else if len(columns) > len(aligns) {
+			columns = columns[:len(aligns)]
 		}
 
 		s.PushOpeningToken(&TrOpen{})
-		for i := 0; i < len(rows); i++ {
-			s.PushOpeningToken(&TdOpen{Align: aligns[i]})
-			s.PushToken(&Inline{
-				Content: strings.TrimSpace(rows[i]),
-			})
+		for i := 0; i < columnCount; i++ {
+			tdOpen := TdOpen{}
+			if i < len(aligns) {
+				tdOpen.Align = aligns[i]
+			}
+			s.PushOpeningToken(&tdOpen)
+
+			inline := Inline{}
+			if i < len(columns) {
+				inline.Content = strings.TrimSpace(columns[i])
+			}
+			s.PushToken(&inline)
+
 			s.PushClosingToken(&TdClose{})
 		}
 		s.PushClosingToken(&TrClose{})

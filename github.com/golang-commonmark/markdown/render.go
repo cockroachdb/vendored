@@ -6,10 +6,11 @@ package markdown
 
 import (
 	"io"
+	"regexp"
 	"strconv"
 	"strings"
 
-	"github.com/golang-commonmark/markdown/html"
+	"github.com/golang-commonmark/html"
 )
 
 type Renderer struct {
@@ -50,8 +51,23 @@ func (r *Renderer) renderInlineAsText(tokens []Token) {
 	}
 }
 
+var rNotSpace = regexp.MustCompile(`^\S+`)
+
 func (r *Renderer) renderToken(tokens []Token, idx int, options RenderOptions) {
 	tok := tokens[idx]
+
+	if idx > 0 && tok.Block() && !tok.Closing() {
+		switch t := tokens[idx-1].(type) {
+		case *ParagraphOpen:
+			if t.Hidden {
+				r.w.WriteByte('\n')
+			}
+		case *ParagraphClose:
+			if t.Hidden {
+				r.w.WriteByte('\n')
+			}
+		}
+	}
 
 	switch tok := tok.(type) {
 	case *BlockquoteClose:
@@ -86,10 +102,13 @@ func (r *Renderer) renderToken(tokens []Token, idx int, options RenderOptions) {
 		r.w.WriteString("<pre><code")
 		if tok.Params != "" {
 			langName := strings.SplitN(unescapeAll(tok.Params), " ", 2)[0]
-			r.w.WriteString(` class="`)
-			r.w.WriteString(options.LangPrefix)
-			html.WriteEscapedString(r.w, langName)
-			r.w.WriteByte('"')
+			langName = rNotSpace.FindString(langName)
+			if langName != "" {
+				r.w.WriteString(` class="`)
+				r.w.WriteString(options.LangPrefix)
+				html.WriteEscapedString(r.w, langName)
+				r.w.WriteByte('"')
+			}
 		}
 		r.w.WriteByte('>')
 		html.WriteEscapedString(r.w, tok.Content)
@@ -135,7 +154,7 @@ func (r *Renderer) renderToken(tokens []Token, idx int, options RenderOptions) {
 
 		if tok.Title != "" {
 			r.w.WriteString(` title="`)
-			html.WriteEscapedString(r.w, html.ReplaceEntities(tok.Title))
+			html.WriteEscapedString(r.w, tok.Title)
 			r.w.WriteByte('"')
 		}
 		if options.XHTML {
@@ -153,7 +172,7 @@ func (r *Renderer) renderToken(tokens []Token, idx int, options RenderOptions) {
 		r.w.WriteByte('"')
 		if tok.Title != "" {
 			r.w.WriteString(` title="`)
-			html.WriteEscapedString(r.w, html.ReplaceEntities(tok.Title))
+			html.WriteEscapedString(r.w, (tok.Title))
 			r.w.WriteByte('"')
 		}
 		if tok.Target != "" {
@@ -185,6 +204,9 @@ func (r *Renderer) renderToken(tokens []Token, idx int, options RenderOptions) {
 		}
 
 	case *ParagraphClose:
+		if tok.Hidden {
+			return
+		}
 		if !tok.Tight {
 			r.w.WriteString("</p>")
 		} else if tokens[idx+1].Closing() {
@@ -192,6 +214,9 @@ func (r *Renderer) renderToken(tokens []Token, idx int, options RenderOptions) {
 		}
 
 	case *ParagraphOpen:
+		if tok.Hidden {
+			return
+		}
 		if !tok.Tight {
 			r.w.WriteString("<p>")
 		}
@@ -281,19 +306,22 @@ func (r *Renderer) renderToken(tokens []Token, idx int, options RenderOptions) {
 
 		if tok.Opening() {
 			nextTok := tokens[idx+1]
+			blockquote := false
 			switch nextTok := nextTok.(type) {
 			case *Inline:
 				needLf = false
 			case *ParagraphOpen:
-				if nextTok.Tight {
+				if nextTok.Tight || nextTok.Hidden {
 					needLf = false
 				}
 			case *ParagraphClose:
-				if nextTok.Tight {
+				if nextTok.Tight || nextTok.Hidden {
 					needLf = false
 				}
+			case *BlockquoteClose:
+				blockquote = true
 			}
-			if needLf && nextTok.Closing() && nextTok.Tag() == tok.Tag() {
+			if !blockquote && needLf && nextTok.Closing() && nextTok.Tag() == tok.Tag() {
 				needLf = false
 			}
 		}

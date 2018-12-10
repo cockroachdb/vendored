@@ -25,7 +25,7 @@ const (
 )
 
 var (
-	modpsapi                 = windows.NewLazyDLL("psapi.dll")
+	modpsapi                 = windows.NewLazySystemDLL("psapi.dll")
 	procGetProcessMemoryInfo = modpsapi.NewProc("GetProcessMemoryInfo")
 )
 
@@ -236,12 +236,12 @@ func (p *Process) Parent() (*Process, error) {
 }
 
 func (p *Process) ParentWithContext(ctx context.Context) (*Process, error) {
-	dst, err := GetWin32Proc(p.Pid)
+	ppid, err := p.PpidWithContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("could not get ParentProcessID: %s", err)
 	}
 
-	return NewProcess(int32(dst[0].ParentProcessID))
+	return NewProcess(ppid)
 }
 func (p *Process) Status() (string, error) {
 	return p.StatusWithContext(context.Background())
@@ -250,6 +250,7 @@ func (p *Process) Status() (string, error) {
 func (p *Process) StatusWithContext(ctx context.Context) (string, error) {
 	return "", common.ErrNotImplementedError
 }
+
 func (p *Process) Username() (string, error) {
 	return p.UsernameWithContext(context.Background())
 }
@@ -303,7 +304,7 @@ func (p *Process) TerminalWithContext(ctx context.Context) (string, error) {
 	return "", common.ErrNotImplementedError
 }
 
-// Nice returnes priority in Windows
+// Nice returns priority in Windows
 func (p *Process) Nice() (int32, error) {
 	return p.NiceWithContext(context.Background())
 }
@@ -456,22 +457,33 @@ func (p *Process) Children() ([]*Process, error) {
 }
 
 func (p *Process) ChildrenWithContext(ctx context.Context) ([]*Process, error) {
-	var dst []Win32_Process
-	query := wmi.CreateQuery(&dst, fmt.Sprintf("Where ParentProcessId = %d", p.Pid))
-	err := common.WMIQueryWithContext(ctx, query, &dst)
-	if err != nil {
-		return nil, err
-	}
-
 	out := []*Process{}
-	for _, proc := range dst {
-		p, err := NewProcess(int32(proc.ProcessID))
-		if err != nil {
-			continue
-		}
-		out = append(out, p)
+	snap := w32.CreateToolhelp32Snapshot(w32.TH32CS_SNAPPROCESS, uint32(0))
+	if snap == 0 {
+		return out, windows.GetLastError()
+	}
+	defer w32.CloseHandle(snap)
+	var pe32 w32.PROCESSENTRY32
+	pe32.DwSize = uint32(unsafe.Sizeof(pe32))
+	if w32.Process32First(snap, &pe32) == false {
+		return out, windows.GetLastError()
 	}
 
+	if pe32.Th32ParentProcessID == uint32(p.Pid) {
+		p, err := NewProcess(int32(pe32.Th32ProcessID))
+		if err == nil {
+			out = append(out, p)
+		}
+	}
+
+	for w32.Process32Next(snap, &pe32) {
+		if pe32.Th32ParentProcessID == uint32(p.Pid) {
+			p, err := NewProcess(int32(pe32.Th32ProcessID))
+			if err == nil {
+				out = append(out, p)
+			}
+		}
+	}
 	return out, nil
 }
 
@@ -603,21 +615,22 @@ func Processes() ([]*Process, error) {
 }
 
 func ProcessesWithContext(ctx context.Context) ([]*Process, error) {
-	pids, err := Pids()
+	out := []*Process{}
+
+	pids, err := PidsWithContext(ctx)
 	if err != nil {
-		return []*Process{}, fmt.Errorf("could not get Processes %s", err)
+		return out, fmt.Errorf("could not get Processes %s", err)
 	}
 
-	results := []*Process{}
 	for _, pid := range pids {
-		p, err := NewProcess(int32(pid))
+		p, err := NewProcess(pid)
 		if err != nil {
 			continue
 		}
-		results = append(results, p)
+		out = append(out, p)
 	}
 
-	return results, nil
+	return out, nil
 }
 
 func getProcInfo(pid int32) (*SystemProcessInformation, error) {

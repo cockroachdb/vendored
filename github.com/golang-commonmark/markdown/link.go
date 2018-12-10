@@ -4,63 +4,85 @@
 
 package markdown
 
-func ruleLink(s *StateInline, silent bool) (_ bool) {
+func ruleLink(s *StateInline, silent bool) bool {
 	pos := s.Pos
+	oldPos := s.Pos
+	max := s.PosMax
+	start := s.Pos
+	parseReference := true
 	src := s.Src
 
 	if src[pos] != '[' {
-		return
+		return false
 	}
 
 	labelStart := pos + 1
 	labelEnd := parseLinkLabel(s, pos, true)
+
 	if labelEnd < 0 {
-		return
+		return false
 	}
 
-	var href, title, label string
-	oldPos := pos
 	pos = labelEnd + 1
-	max := s.PosMax
+
+	var title, href, label string
 	if pos < max && src[pos] == '(' {
-		pos = skipws(src, pos+1, max)
+		parseReference = false
+
+		pos++
+		for pos < max {
+			code := src[pos]
+			if !byteIsSpace(code) && code != '\n' {
+				break
+			}
+			pos++
+		}
 		if pos >= max {
-			return
+			return false
 		}
 
-		url, endpos, ok := parseLinkDestination(src, pos, s.PosMax)
+		start = pos
+		url, _, endpos, ok := parseLinkDestination(src, pos, s.PosMax)
 		if ok {
 			url = normalizeLink(url)
 			if validateLink(url) {
-				href = url
 				pos = endpos
+				href = url
 			}
 		}
 
-		start := pos
-		pos = skipws(src, pos, max)
-		if pos >= max {
-			return
+		start = pos
+		for pos < max {
+			code := src[pos]
+			if !byteIsSpace(code) && code != '\n' {
+				break
+			}
+			pos++
 		}
 
 		title, _, endpos, ok = parseLinkTitle(src, pos, s.PosMax)
 		if pos < max && start != pos && ok {
-			pos = skipws(src, endpos, max)
+			pos = endpos
+			for pos < max {
+				code := src[pos]
+				if !byteIsSpace(code) && code != '\n' {
+					break
+				}
+				pos++
+			}
 		}
 
 		if pos >= max || src[pos] != ')' {
-			s.Pos = oldPos
-			return
+			parseReference = true
 		}
 
 		pos++
+	}
 
-	} else {
+	if parseReference {
 		if s.Env.References == nil {
-			return
+			return false
 		}
-
-		pos = skipws(src, pos, max)
 
 		if pos < max && src[pos] == '[' {
 			start := pos + 1
@@ -82,7 +104,7 @@ func ruleLink(s *StateInline, silent bool) (_ bool) {
 		ref, ok := s.Env.References[normalizeReference(label)]
 		if !ok {
 			s.Pos = oldPos
-			return
+			return false
 		}
 
 		href = ref["href"]

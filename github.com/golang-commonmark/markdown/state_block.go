@@ -4,10 +4,14 @@
 
 package markdown
 
+import "strings"
+
 const (
 	ptRoot = iota
 	ptList
 	ptBlockQuote
+	ptParagraph
+	ptReference
 )
 
 type StateBlock struct {
@@ -16,11 +20,13 @@ type StateBlock struct {
 	BMarks     []int // offsets of the line beginnings
 	EMarks     []int // offsets of the line endings
 	TShift     []int // indents for each line
-	BlkIndent  int   // required block content indent (in a list etc.)
-	Line       int   // line index in the source string
-	LineMax    int   // number of lines
-	Tight      bool  // loose or tight mode for lists
-	ParentType byte  // parent block type
+	SCount     []int
+	BSCount    []int
+	BlkIndent  int  // required block content indent (in a list etc.)
+	Line       int  // line index in the source string
+	LineMax    int  // number of lines
+	Tight      bool // loose or tight mode for lists
+	ParentType byte // parent block type
 	Level      int
 }
 
@@ -37,7 +43,7 @@ func (s *StateBlock) SkipEmptyLines(from int) int {
 
 func (s *StateBlock) SkipSpaces(pos int) int {
 	src := s.Src
-	for pos < len(src) && src[pos] == ' ' {
+	for pos < len(src) && byteIsSpace(src[pos]) {
 		pos++
 	}
 	return pos
@@ -61,6 +67,16 @@ func (s *StateBlock) SkipBytesBack(pos int, b byte, min int) int {
 	return pos
 }
 
+func (s *StateBlock) SkipSpacesBack(pos int, min int) int {
+	for pos > min {
+		pos--
+		if !byteIsSpace(s.Src[pos]) {
+			return pos + 1
+		}
+	}
+	return pos
+}
+
 func (s *StateBlock) Lines(begin, end, indent int, keepLastLf bool) string {
 	if begin == end {
 		return ""
@@ -68,71 +84,43 @@ func (s *StateBlock) Lines(begin, end, indent int, keepLastLf bool) string {
 
 	src := s.Src
 
-	if begin+1 == end {
-		shift := s.TShift[begin]
-		if shift < 0 {
-			shift = 0
-		} else if shift > indent {
-			shift = indent
-		}
-		first := s.BMarks[begin] + shift
+	queue := make([]string, end-begin)
 
-		last := s.EMarks[begin]
-		if keepLastLf && last < len(src) {
-			last++
-		}
-
-		return src[first:last]
-	}
-
-	size := 0
-	var firstFirst int
-	var previousLast int
-	adjoin := true
-	for line := begin; line < end; line++ {
-		shift := s.TShift[line]
-		if shift < 0 {
-			shift = 0
-		} else if shift > indent {
-			shift = indent
-		}
-		first := s.BMarks[line] + shift
+	for i, line := 0, begin; line < end; i, line = i+1, line+1 {
+		lineIndent := 0
+		lineStart := s.BMarks[line]
+		first := lineStart
 		last := s.EMarks[line]
-		if line+1 < end || (keepLastLf && last < len(src)) {
-			last++
-		}
-		size += last - first
-		if line == begin {
-			firstFirst = first
-		} else if previousLast != first {
-			adjoin = false
-		}
-		previousLast = last
-	}
-
-	if adjoin {
-		return src[firstFirst:previousLast]
-	}
-
-	buf := make([]byte, size)
-	i := 0
-	for line := begin; line < end; line++ {
-		shift := s.TShift[line]
-		if shift < 0 {
-			shift = 0
-		} else if shift > indent {
-			shift = indent
-		}
-		first := s.BMarks[line] + shift
-		last := s.EMarks[line]
-		if line+1 < end || (keepLastLf && last < len(src)) {
+		if (line+1 < end || keepLastLf) && last < len(src) {
 			last++
 		}
 
-		i += copy(buf[i:], src[first:last])
+		for first < last && lineIndent < indent {
+			ch := src[first]
+
+			if byteIsSpace(ch) {
+				if ch == '\t' {
+					lineIndent += 4 - (lineIndent+s.BSCount[line])%4
+				} else {
+					lineIndent++
+				}
+			} else if first-lineStart < s.TShift[line] {
+				lineIndent++
+			} else {
+				break
+			}
+
+			first++
+		}
+
+		if lineIndent > indent {
+			queue[i] = strings.Repeat(" ", lineIndent-indent) + src[first:last]
+		} else {
+			queue[i] = src[first:last]
+		}
 	}
 
-	return string(buf)
+	return strings.Join(queue, "")
 }
 
 func (s *StateBlock) PushToken(tok Token) {

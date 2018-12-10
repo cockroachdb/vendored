@@ -28,37 +28,56 @@ type Sketch struct {
 	regs       *registers
 }
 
-//New returns a HyperLogLog Sketch with 2^14 registers (precision 14)
+// New returns a HyperLogLog Sketch with 2^14 registers (precision 14)
 func New() *Sketch {
 	return New14()
 }
 
-//New14 returns a HyperLogLog Sketch with 2^14 registers (precision 14)
+// New14 returns a HyperLogLog Sketch with 2^14 registers (precision 14)
 func New14() *Sketch {
-	sk, _ := new(14)
+	sk, _ := new(14, true)
 	return sk
 }
 
-//New16 returns a HyperLogLog Sketch with 2^16 registers (precision 16)
+// New16 returns a HyperLogLog Sketch with 2^16 registers (precision 16)
 func New16() *Sketch {
-	sk, _ := new(16)
+	sk, _ := new(16, true)
 	return sk
 }
 
-// New returns a HyperLogLog Sketch with 2^precision registers
-func new(precision uint8) (*Sketch, error) {
+// NewNoSparse returns a HyperLogLog Sketch with 2^14 registers (precision 14)
+// that will not use a sparse representation
+func NewNoSparse() *Sketch {
+	sk, _ := new(14, false)
+	return sk
+}
+
+// New16NoSparse returns a HyperLogLog Sketch with 2^16 registers (precision 16)
+// that will not use a sparse representation
+func New16NoSparse() *Sketch {
+	sk, _ := new(16, false)
+	return sk
+}
+
+// new returns a HyperLogLog Sketch with 2^precision registers
+func new(precision uint8, sparse bool) (*Sketch, error) {
 	if precision < 4 || precision > 18 {
 		return nil, fmt.Errorf("p has to be >= 4 and <= 18")
 	}
 	m := uint32(math.Pow(2, float64(precision)))
-	return &Sketch{
-		m:          m,
-		p:          precision,
-		alpha:      alpha(float64(m)),
-		sparse:     true,
-		tmpSet:     set{},
-		sparseList: newCompressedList(int(m)),
-	}, nil
+	s := &Sketch{
+		m:     m,
+		p:     precision,
+		alpha: alpha(float64(m)),
+	}
+	if sparse {
+		s.sparse = true
+		s.tmpSet = set{}
+		s.sparseList = newCompressedList(int(m))
+	} else {
+		s.regs = newRegisters(m)
+	}
+	return s, nil
 }
 
 // Clone returns a deep copy of sk.
@@ -174,7 +193,11 @@ func (sk *Sketch) insert(i uint32, r uint8) {
 		}
 	}
 	if r > sk.b {
-		val := uint8(math.Min(float64(r-sk.b), float64(capacity-1)))
+		val := r - sk.b
+		if c1 := capacity - 1; c1 < val {
+			val = c1
+		}
+
 		if val > sk.regs.get(i) {
 			sk.regs.set(i, val)
 		}
@@ -191,9 +214,9 @@ func (sk *Sketch) Insert(e []byte) {
 func (sk *Sketch) InsertHash(x uint64) {
 	if sk.sparse {
 		sk.tmpSet.add(encodeHash(x, sk.p, pp))
-		if uint32(len(sk.tmpSet))*100 > sk.m {
+		if uint32(len(sk.tmpSet))*100 > sk.m/2 {
 			sk.mergeSparse()
-			if uint32(sk.sparseList.Len()) > sk.m {
+			if uint32(sk.sparseList.Len()) > sk.m/2 {
 				sk.toNormal()
 			}
 		}
@@ -222,9 +245,9 @@ func (sk *Sketch) Estimate() uint64 {
 	}
 
 	if sk.b == 0 {
-		est = (sk.alpha * m * (m - ez) / (sum + beta(ez))) + 0.5
+		est = (sk.alpha * m * (m - ez) / (sum + beta(ez)))
 	} else {
-		est = (sk.alpha * m * m / sum) + 0.5
+		est = (sk.alpha * m * m / sum)
 	}
 
 	return uint64(est + 0.5)
@@ -327,18 +350,24 @@ func (sk *Sketch) UnmarshalBinary(data []byte) error {
 	// Unmarshal p.
 	p := data[1]
 
-	newh, err := new(p)
-	if err != nil {
-		return err
-	}
-	*sk = *newh
-
 	// Unmarshal b.
 	sk.b = data[2]
 
+	// Determine if we need a sparse Sketch
+	sparse := data[3] == byte(1)
+
+	// Make a new Sketch if the precision doesn't match or if the Sketch was used
+	if sk.p != p || sk.regs != nil || len(sk.tmpSet) > 0 || (sk.sparseList != nil && sk.sparseList.Len() > 0) {
+		newh, err := new(p, sparse)
+		if err != nil {
+			return err
+		}
+		*sk = *newh
+	}
+
 	// h is now initialised with the correct p. We just need to fill the
 	// rest of the details out.
-	if data[3] == byte(1) {
+	if sparse {
 		// Using the sparse Sketch.
 		sk.sparse = true
 

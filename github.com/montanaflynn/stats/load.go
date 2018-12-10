@@ -18,10 +18,29 @@ func LoadRawData(raw interface{}) (f Float64Data) {
 			s = append(s, float64(v))
 		}
 		return s
-
+	case []uint8:
+		for _, v := range t {
+			s = append(s, float64(v))
+		}
+		return s
+	case []uint16:
+		for _, v := range t {
+			s = append(s, float64(v))
+		}
+		return s
+	case []uint32:
+		for _, v := range t {
+			s = append(s, float64(v))
+		}
+		return s
+	case []uint64:
+		for _, v := range t {
+			s = append(s, float64(v))
+		}
+		return s
 	case []bool:
 		for _, v := range t {
-			if v == true {
+			if v {
 				s = append(s, 1.0)
 			} else {
 				s = append(s, 0.0)
@@ -31,6 +50,26 @@ func LoadRawData(raw interface{}) (f Float64Data) {
 	case []float64:
 		return Float64Data(t)
 	case []int:
+		for _, v := range t {
+			s = append(s, float64(v))
+		}
+		return s
+	case []int8:
+		for _, v := range t {
+			s = append(s, float64(v))
+		}
+		return s
+	case []int16:
+		for _, v := range t {
+			s = append(s, float64(v))
+		}
+		return s
+	case []int32:
+		for _, v := range t {
+			s = append(s, float64(v))
+		}
+		return s
+	case []int64:
 		for _, v := range t {
 			s = append(s, float64(v))
 		}
@@ -48,6 +87,26 @@ func LoadRawData(raw interface{}) (f Float64Data) {
 			s = append(s, float64(t[i]))
 		}
 		return s
+	case map[int]int8:
+		for i := 0; i < len(t); i++ {
+			s = append(s, float64(t[i]))
+		}
+		return s
+	case map[int]int16:
+		for i := 0; i < len(t); i++ {
+			s = append(s, float64(t[i]))
+		}
+		return s
+	case map[int]int32:
+		for i := 0; i < len(t); i++ {
+			s = append(s, float64(t[i]))
+		}
+		return s
+	case map[int]int64:
+		for i := 0; i < len(t); i++ {
+			s = append(s, float64(t[i]))
+		}
+		return s
 	case map[int]string:
 		for i := 0; i < len(t); i++ {
 			r = append(r, t[i])
@@ -57,9 +116,29 @@ func LoadRawData(raw interface{}) (f Float64Data) {
 			s = append(s, float64(t[i]))
 		}
 		return s
+	case map[int]uint8:
+		for i := 0; i < len(t); i++ {
+			s = append(s, float64(t[i]))
+		}
+		return s
+	case map[int]uint16:
+		for i := 0; i < len(t); i++ {
+			s = append(s, float64(t[i]))
+		}
+		return s
+	case map[int]uint32:
+		for i := 0; i < len(t); i++ {
+			s = append(s, float64(t[i]))
+		}
+		return s
+	case map[int]uint64:
+		for i := 0; i < len(t); i++ {
+			s = append(s, float64(t[i]))
+		}
+		return s
 	case map[int]bool:
 		for i := 0; i < len(t); i++ {
-			if t[i] == true {
+			if t[i] {
 				s = append(s, 1.0)
 			} else {
 				s = append(s, 0.0)
@@ -71,6 +150,10 @@ func LoadRawData(raw interface{}) (f Float64Data) {
 			s = append(s, t[i])
 		}
 		return s
+	case map[int]time.Duration:
+		for i := 0; i < len(t); i++ {
+			r = append(r, t[i])
+		}
 	}
 
 	for _, v := range r {
@@ -88,7 +171,7 @@ func LoadRawData(raw interface{}) (f Float64Data) {
 				f = append(f, fl)
 			}
 		case bool:
-			if t == true {
+			if t {
 				f = append(f, 1.0)
 			} else {
 				f = append(f, 0.0)

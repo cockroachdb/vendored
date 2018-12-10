@@ -4,24 +4,73 @@
 
 package markdown
 
-type ParserBlock struct {
-}
+import "unicode/utf8"
+
+type ParserBlock struct{}
 
 type BlockRule func(*StateBlock, int, int, bool) bool
 
 var blockRules []BlockRule
 
 func (b ParserBlock) Parse(src []byte, md *Markdown, env *Environment) []Token {
-	str, bMarks, eMarks, tShift := normalizeAndIndex(src)
-	bMarks = append(bMarks, len(str))
-	eMarks = append(eMarks, len(str))
+	var bMarks, eMarks, tShift, sCount, bsCount []int
+
+	indentFound := false
+	start := 0
+	pos := 0
+	indent := 0
+	offset := 0
+
+	for pos < len(src) {
+		r, size := utf8.DecodeRune(src[pos:])
+
+		if !indentFound {
+			if runeIsSpace(r) {
+				indent++
+				if r == '\t' {
+					offset += 4 - offset%4
+				} else {
+					offset++
+				}
+				pos += size
+				continue
+			}
+			indentFound = true
+		}
+
+		if r == '\n' || pos == len(src)-1 {
+			if r != '\n' {
+				pos++
+			}
+			bMarks = append(bMarks, start)
+			eMarks = append(eMarks, pos)
+			tShift = append(tShift, indent)
+			sCount = append(sCount, offset)
+			bsCount = append(bsCount, 0)
+
+			indentFound = false
+			indent = 0
+			offset = 0
+			start = pos + 1
+		}
+
+		pos += size
+	}
+
+	bMarks = append(bMarks, len(src))
+	eMarks = append(eMarks, len(src))
 	tShift = append(tShift, 0)
+	sCount = append(sCount, 0)
+	bsCount = append(bsCount, 0)
+
 	var s StateBlock
 	s.BMarks = bMarks
 	s.EMarks = eMarks
 	s.TShift = tShift
+	s.SCount = sCount
+	s.BSCount = bsCount
 	s.LineMax = len(bMarks) - 1
-	s.Src = str
+	s.Src = string(src)
 	s.Md = md
 	s.Env = env
 
@@ -42,7 +91,7 @@ func (ParserBlock) Tokenize(s *StateBlock, startLine, endLine int) {
 			break
 		}
 
-		if s.TShift[line] < s.BlkIndent {
+		if s.SCount[line] < s.BlkIndent {
 			break
 		}
 
@@ -68,10 +117,6 @@ func (ParserBlock) Tokenize(s *StateBlock, startLine, endLine int) {
 		if line < endLine && s.IsLineEmpty(line) {
 			hasEmptyLines = true
 			line++
-
-			if line < endLine && s.ParentType == ptList && s.IsLineEmpty(line) {
-				break
-			}
 			s.Line = line
 		}
 	}

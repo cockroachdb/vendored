@@ -4,24 +4,47 @@
 
 package markdown
 
-func ruleHTMLInline(s *StateInline, silent bool) (_ bool) {
+import "regexp"
+
+var (
+	attrName     = `[a-zA-Z_:][a-zA-Z0-9:._-]*`
+	unquoted     = "[^\"'=<>`\\x00-\\x20]+"
+	singleQuoted = `'[^']*'`
+	doubleQuoted = `"[^"]*"`
+	attrValue    = `(?:` + unquoted + `|` + singleQuoted + `|` + doubleQuoted + `)`
+	attribute    = `(?:\s+` + attrName + `(?:\s*=\s*` + attrValue + `)?)`
+	openTag      = `<[A-Za-z][A-Za-z0-9-]*` + attribute + `*\s*/?>`
+	closeTag     = `</[A-Za-z][A-Za-z0-9-]*\s*>`
+	comment      = `<!---->|<!--(?:-?[^>-])(?:-?[^-])*-->`
+	processing   = `<[?].*?[?]>`
+	declaration  = `<![A-Z]+\s+[^>]*>`
+	cdata        = `<!\[CDATA\[[\s\S]*?\]\]>`
+	rHTMLTag     = regexp.MustCompile(`^(?:` + openTag + `|` + closeTag + `|` + comment +
+		`|` + processing + `|` + declaration + `|` + cdata + `)`)
+)
+
+func htmlSecond(b byte) bool {
+	return b == '!' || b == '/' || b == '?' || isLetter(b)
+}
+
+func ruleHTMLInline(s *StateInline, silent bool) bool {
 	if !s.Md.HTML {
-		return
+		return false
 	}
 
 	pos := s.Pos
 	src := s.Src
 	if pos+2 >= s.PosMax || src[pos] != '<' {
-		return
+		return false
 	}
 
-	if !htmlSecond[src[pos+1]] {
-		return
+	if !htmlSecond(src[pos+1]) {
+		return false
 	}
 
-	match := matchHTML(src[pos:])
+	match := rHTMLTag.FindString(src[pos:])
 	if match == "" {
-		return
+		return false
 	}
 
 	if !silent {

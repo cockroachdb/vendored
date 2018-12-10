@@ -153,14 +153,16 @@ type LinkClose struct {
 }
 
 type ParagraphOpen struct {
-	Tight bool
-	Map   [2]int
-	Lvl   int
+	Tight  bool
+	Hidden bool
+	Map    [2]int
+	Lvl    int
 }
 
 type ParagraphClose struct {
-	Tight bool
-	Lvl   int
+	Tight  bool
+	Hidden bool
+	Lvl    int
 }
 
 type TableOpen struct {

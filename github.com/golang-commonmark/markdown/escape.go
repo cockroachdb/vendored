@@ -4,20 +4,18 @@
 
 package markdown
 
-var escaped = make([]bool, 256)
+import "strings"
 
-func init() {
-	for _, b := range "\\!\"#$%&'()*+,./:;<=>?@[]^_`{|}~-" {
-		escaped[b] = true
-	}
+func escaped(b byte) bool {
+	return strings.IndexByte("\\!\"#$%&'()*+,./:;<=>?@[]^_`{|}~-", b) != -1
 }
 
-func ruleEscape(s *StateInline, silent bool) (_ bool) {
+func ruleEscape(s *StateInline, silent bool) bool {
 	pos := s.Pos
 	src := s.Src
 
 	if src[pos] != '\\' {
-		return
+		return false
 	}
 
 	pos++
@@ -26,7 +24,7 @@ func ruleEscape(s *StateInline, silent bool) (_ bool) {
 	if pos < max {
 		b := src[pos]
 
-		if b < 0x7f && escaped[b] {
+		if b < 0x7f && escaped(b) {
 			if !silent {
 				s.Pending.WriteByte(b)
 			}
@@ -41,7 +39,11 @@ func ruleEscape(s *StateInline, silent bool) (_ bool) {
 
 			pos++
 
-			for pos < max && src[pos] == ' ' {
+			for pos < max {
+				b := src[pos]
+				if !byteIsSpace(b) {
+					break
+				}
 				pos++
 			}
 
@@ -53,7 +55,6 @@ func ruleEscape(s *StateInline, silent bool) (_ bool) {
 	if !silent {
 		s.Pending.WriteByte('\\')
 	}
-
 	s.Pos++
 
 	return true

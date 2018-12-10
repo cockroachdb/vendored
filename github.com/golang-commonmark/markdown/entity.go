@@ -4,14 +4,14 @@
 
 package markdown
 
-import "github.com/golang-commonmark/markdown/html"
+import "github.com/golang-commonmark/html"
 
-func ruleEntity(s *StateInline, silent bool) (_ bool) {
+func ruleEntity(s *StateInline, silent bool) bool {
 	pos := s.Pos
 	src := s.Src
 
 	if src[pos] != '&' {
-		return
+		return false
 	}
 
 	max := s.PosMax

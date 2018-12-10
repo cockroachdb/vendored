@@ -12,7 +12,8 @@ curl -L -o ./install-misspell.sh https://git.io/misspell
 sh ./install-misspell.sh
 ```
 
-will install as `./bin/misspell`.  You can adjust the download location using the `-b` flag.   File a ticket if you want another platform supported.
+
+Both will install as `./bin/misspell`.  You can adjust the download location using the `-b` flag.   File a ticket if you want another platform supported.
 
 
 If you use [Go](https://golang.org/), the best way to run `misspell` is by using [gometalinter](#gometalinter).  Otherwise, install `misspell` the old-fashioned way:
@@ -22,6 +23,13 @@ go get -u github.com/client9/misspell/cmd/misspell
 ```
 
 and misspell will be in your `GOPATH`
+
+
+Also if you like to live dangerously, one could do
+
+```bash
+curl -L https://git.io/misspell | bash
+```
 
 ### Usage
 
@@ -88,7 +96,7 @@ Just add the `-w` flag!
 $ misspell -w all.html your.txt important.md files.go
 your.txt:9:21:corrected "langauge" to "language"
 
-# ^booyah
+# ^ File is rewritten only if a misspelling is found
 ```
 
 <a name="locale"></a>

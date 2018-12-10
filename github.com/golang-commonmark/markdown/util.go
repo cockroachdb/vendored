@@ -6,46 +6,78 @@ package markdown
 
 import (
 	"bytes"
-	"net/url"
 	"regexp"
 	"strings"
 	"unicode"
-	"unicode/utf8"
 
-	"github.com/golang-commonmark/markdown/html"
-	"github.com/opennota/urlesc"
+	"github.com/golang-commonmark/html"
+	"github.com/golang-commonmark/mdurl"
+	"github.com/golang-commonmark/puny"
 )
 
-var mdpunct [256]bool
-
-func init() {
-	for _, b := range "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~" {
-		mdpunct[b] = true
-	}
+func runeIsSpace(r rune) bool {
+	return r == ' ' || r == '\t'
 }
 
-func isMarkdownPunct(r rune) bool {
+func byteIsSpace(b byte) bool {
+	return b == ' ' || b == '\t'
+}
+
+func isLetter(b byte) bool {
+	return b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z'
+}
+
+func isUppercaseLetter(b byte) bool {
+	return b >= 'A' && b <= 'Z'
+}
+
+func mdpunct(b byte) bool {
+	return strings.IndexByte("!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~", b) != -1
+}
+
+func isMdAsciiPunct(r rune) bool {
 	if r > 0x7e {
 		return false
 	}
-	return mdpunct[r]
+	return mdpunct(byte(r))
 }
 
-func normalizeLink(rawurl string) string {
-	parsed, err := url.Parse(rawurl)
+func recodeHostnameFor(proto string) bool {
+	switch proto {
+	case "http", "https", "mailto":
+		return true
+	}
+	return false
+}
+
+func normalizeLink(url string) string {
+	parsed, err := mdurl.Parse(url)
 	if err != nil {
 		return ""
 	}
 
-	return urlesc.Escape(parsed)
+	if parsed.Host != "" && (parsed.Scheme == "" || recodeHostnameFor(parsed.Scheme)) {
+		parsed.Host = puny.ToASCII(parsed.Host)
+	}
+
+	parsed.Scheme = parsed.RawScheme
+
+	return mdurl.Encode(parsed.String())
 }
 
-func normalizeLinkText(text string) string {
-	unescaped, _ := url.QueryUnescape(text)
-	if unescaped == "" || !utf8.ValidString(unescaped) {
-		return text
+func normalizeLinkText(url string) string {
+	parsed, err := mdurl.Parse(url)
+	if err != nil {
+		return ""
 	}
-	return unescaped
+
+	if parsed.Host != "" && (parsed.Scheme == "" || recodeHostnameFor(parsed.Scheme)) {
+		parsed.Host = puny.ToUnicode(parsed.Host)
+	}
+
+	parsed.Scheme = parsed.RawScheme
+
+	return mdurl.Decode(parsed.String())
 }
 
 var badProtos = []string{"file", "javascript", "vbscript"}
@@ -72,8 +104,7 @@ func removeSpecial(s string) string {
 }
 
 func validateLink(url string) bool {
-	str := html.ReplaceEntities(url)
-	str = strings.TrimSpace(str)
+	str := strings.TrimSpace(url)
 	str = strings.ToLower(str)
 
 	if strings.IndexByte(str, ':') >= 0 {
@@ -98,12 +129,12 @@ func unescapeAll(s string) string {
 	for i < len(s)-1 {
 		b := s[i]
 		if b == '\\' {
-			if mdpunct[s[i+1]] {
+			if mdpunct(s[i+1]) {
 				anyChanges = true
 				break
 			}
 		} else if b == '&' {
-			if _, n := html.ParseEntity(s[i:]); n > 0 {
+			if e, n := html.ParseEntity(s[i:]); n > 0 && e != html.BadEntity {
 				anyChanges = true
 				break
 			}
@@ -123,7 +154,7 @@ func unescapeAll(s string) string {
 		if b == '\\' {
 			if i+1 < len(s) {
 				b = s[i+1]
-				if mdpunct[b] {
+				if mdpunct(b) {
 					buf[j] = b
 					j++
 				} else {
@@ -136,7 +167,7 @@ func unescapeAll(s string) string {
 				continue
 			}
 		} else if b == '&' {
-			if e, n := html.ParseEntity(s[i:]); n > 0 {
+			if e, n := html.ParseEntity(s[i:]); n > 0 && e != html.BadEntity {
 				if len(e) > n && len(buf) == len(s) {
 					newBuf := make([]byte, cap(buf)*2)
 					copy(newBuf[:j], buf)
@@ -230,11 +261,4 @@ func normalizeReference(s string) string {
 	}
 
 	return string(bytes.TrimSpace(buf.Bytes()))
-}
-
-func skipws(s string, pos, max int) int {
-	for pos < max && ws[s[pos]] {
-		pos++
-	}
-	return pos
 }

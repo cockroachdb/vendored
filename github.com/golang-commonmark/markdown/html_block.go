@@ -7,8 +7,6 @@ package markdown
 import (
 	"regexp"
 	"strings"
-
-	"github.com/golang-commonmark/markdown/byteutil"
 )
 
 var (
@@ -39,10 +37,16 @@ var (
 		"frame",
 		"frameset",
 		"h1",
+		"h2",
+		"h3",
+		"h4",
+		"h5",
+		"h6",
 		"head",
 		"header",
 		"hr",
 		"html",
+		"iframe",
 		"legend",
 		"li",
 		"link",
@@ -57,7 +61,6 @@ var (
 		"option",
 		"p",
 		"param",
-		"pre",
 		"section",
 		"source",
 		"summary",
@@ -75,11 +78,9 @@ var (
 
 	htmlBlocksSet = make(map[string]bool)
 
-	htmlSecond [256]bool
-
 	rStartCond1 = regexp.MustCompile(`(?i)^(pre|script|style)([\n\t >]|$)`)
 	rEndCond1   = regexp.MustCompile(`(?i)</(pre|script|style)>`)
-	rStartCond6 *regexp.Regexp
+	rStartCond6 = regexp.MustCompile(`(?i)^/?(` + strings.Join(htmlBlocks, "|") + `)(\s|$|>|/>)`)
 	rStartCond7 = regexp.MustCompile(`(?i)^(/[a-z][a-z0-9-]*|[a-z][a-z0-9-]*(\s+[a-z_:][a-z0-9_.:-]*\s*=\s*("[^"]*"|'[^']*'|[ "'=<>\x60]))*\s*/?)>\s*$`)
 )
 
@@ -87,10 +88,6 @@ func init() {
 	for _, tag := range htmlBlocks {
 		htmlBlocksSet[tag] = true
 	}
-	for _, b := range "!/?abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" {
-		htmlSecond[b] = true
-	}
-	rStartCond6 = regexp.MustCompile(`(?i)^/?(` + strings.Join(htmlBlocks, "|") + `)(\s|$|>|/>)`)
 }
 
 func min(a, b int) int {
@@ -111,7 +108,7 @@ func matchTagName(s string) string {
 	}
 	start := i
 	max := min(15+i, len(s))
-	for i < max && byteutil.IsLetter(s[i]) {
+	for i < max && isLetter(s[i]) {
 		i++
 	}
 	if i >= len(s) {
@@ -120,46 +117,41 @@ func matchTagName(s string) string {
 
 	switch s[i] {
 	case ' ', '\n', '/', '>':
-		return byteutil.ToLower(s[start:i])
+		return strings.ToLower(s[start:i])
 	default:
 		return ""
 	}
 }
 
-func ruleHTMLBlock(s *StateBlock, startLine, endLine int, silent bool) (_ bool) {
+func ruleHTMLBlock(s *StateBlock, startLine, endLine int, silent bool) bool {
 	if !s.Md.HTML {
-		return
+		return false
 	}
 
-	shift := s.TShift[startLine]
-	if shift < 0 {
-		return
-	}
-
-	pos := s.BMarks[startLine] + shift
+	pos := s.BMarks[startLine] + s.TShift[startLine]
 	max := s.EMarks[startLine]
 
 	if pos+1 >= max {
-		return
+		return false
 	}
 
 	src := s.Src
 
 	if src[pos] != '<' {
-		return
+		return false
 	}
 
 	pos++
 	b := src[pos]
-	if !htmlSecond[b] {
-		return
+	if !htmlSecond(b) {
+		return false
 	}
 
 	nextLine := startLine + 1
 
 	var endCond func(string) bool
 
-	if pos+2 < max && byteutil.IsLetter(b) && rStartCond1.MatchString(src[pos:]) {
+	if pos+2 < max && isLetter(b) && rStartCond1.MatchString(src[pos:]) {
 		endCond = func(s string) bool {
 			return rEndCond1.MatchString(s)
 		}
@@ -171,7 +163,7 @@ func ruleHTMLBlock(s *StateBlock, startLine, endLine int, silent bool) (_ bool) 
 		endCond = func(s string) bool {
 			return strings.Contains(s, "?>")
 		}
-	} else if b == '!' && pos+1 < max && byteutil.IsUppercaseLetter(src[pos+1]) {
+	} else if b == '!' && pos+1 < max && isUppercaseLetter(src[pos+1]) {
 		endCond = func(s string) bool {
 			return strings.Contains(s, ">")
 		}
@@ -179,13 +171,13 @@ func ruleHTMLBlock(s *StateBlock, startLine, endLine int, silent bool) (_ bool) 
 		endCond = func(s string) bool {
 			return strings.Contains(s, "]]>")
 		}
-	} else if pos+2 < max && (byteutil.IsLetter(b) || b == '/' && byteutil.IsLetter(src[pos+1])) {
+	} else if pos+2 < max && (isLetter(b) || b == '/' && isLetter(src[pos+1])) {
 		terminator := true
 		if rStartCond6.MatchString(src[pos:max]) {
 		} else if rStartCond7.MatchString(src[pos:max]) {
 			terminator = false
 		} else {
-			return
+			return false
 		}
 		if silent {
 			return terminator
@@ -194,7 +186,7 @@ func ruleHTMLBlock(s *StateBlock, startLine, endLine int, silent bool) (_ bool) 
 			return s == ""
 		}
 	} else {
-		return
+		return false
 	}
 
 	if silent {
@@ -203,16 +195,14 @@ func ruleHTMLBlock(s *StateBlock, startLine, endLine int, silent bool) (_ bool) 
 
 	if !endCond(src[pos:max]) {
 		for nextLine < endLine {
-			shift := s.TShift[nextLine]
-			if shift < s.BlkIndent {
+			if s.SCount[nextLine] < s.BlkIndent {
 				break
 			}
-			pos := s.BMarks[nextLine] + shift
+
+			pos := s.BMarks[nextLine] + s.TShift[nextLine]
 			max := s.EMarks[nextLine]
-			if pos > max {
-				pos = max
-			}
-			if endCond(src[pos:max]) {
+			lineText := src[pos:max]
+			if endCond(lineText) {
 				if pos != max {
 					nextLine++
 				}

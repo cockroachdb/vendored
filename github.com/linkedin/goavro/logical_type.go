@@ -116,7 +116,7 @@ func nativeFromTimeStampMillis(fn toNativeFn) toNativeFn {
 			return l, b, fmt.Errorf("cannot transform native timestamp-millis, expected int64, received %T", l)
 		}
 		secs := i / int64(time.Microsecond)
-		nanosecs := i - (secs * int64(time.Microsecond))
+		nanosecs := (i - secs * int64(time.Microsecond)) * int64(time.Millisecond)
 		return time.Unix(secs, nanosecs).UTC(), b, nil
 	}
 }
@@ -146,7 +146,7 @@ func nativeFromTimeStampMicros(fn toNativeFn) toNativeFn {
 			return l, b, fmt.Errorf("cannot transform native timestamp-micros, expected int64, received %T", l)
 		}
 		secs := i / int64(time.Millisecond)
-		nanosecs := i - (secs * int64(time.Millisecond))
+		nanosecs := (i - secs * int64(time.Millisecond)) * int64(time.Microsecond)
 		return time.Unix(secs, nanosecs).UTC(), b, nil
 	}
 }
@@ -206,7 +206,9 @@ func makeDecimalBytesCodec(st map[string]*Codec, enclosingNamespace string, sche
 	if err != nil {
 		return nil, err
 	}
-	schemaMap["name"] = "bytes.decimal"
+	if _, ok := schemaMap["name"]; !ok {
+		schemaMap["name"] = "bytes.decimal"
+	}
 	c, err := registerNewCodec(st, schemaMap, enclosingNamespace)
 	if err != nil {
 		return nil, fmt.Errorf("Bytes ought to have valid name: %s", err)
@@ -266,7 +268,9 @@ func makeDecimalFixedCodec(st map[string]*Codec, enclosingNamespace string, sche
 	if err != nil {
 		return nil, err
 	}
-	schemaMap["name"] = "fixed.decimal"
+	if _, ok := schemaMap["name"]; !ok {
+		schemaMap["name"] = "fixed.decimal"
+	}
 	c, err := makeFixedCodec(st, enclosingNamespace, schemaMap)
 	if err != nil {
 		return nil, err

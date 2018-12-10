@@ -24,10 +24,18 @@ func Typographer(b bool) option {
 	}
 }
 
-func Quotes(s string) option {
+func Quotes(stringOrArray interface{}) option {
+	if s, ok := stringOrArray.(string); ok {
+		return func(m *Markdown) {
+			for i, r := range []rune(s) {
+				m.Quotes[i] = string(r)
+			}
+		}
+	}
+	a := stringOrArray.([]string)
 	return func(m *Markdown) {
-		for i, r := range []rune(s) {
-			m.Quotes[i] = r
+		for i, s := range a {
+			m.Quotes[i] = s
 		}
 	}
 }

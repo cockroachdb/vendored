@@ -6,43 +6,38 @@ package markdown
 
 import "strings"
 
-var fence [256]bool
+func ruleFence(s *StateBlock, startLine, endLine int, silent bool) bool {
+	haveEndMarker := false
+	pos := s.BMarks[startLine] + s.TShift[startLine]
+	max := s.EMarks[startLine]
 
-func init() {
-	fence['~'], fence['`'] = true, true
-}
-
-func ruleFence(s *StateBlock, startLine, endLine int, silent bool) (_ bool) {
-	shift := s.TShift[startLine]
-	if shift < 0 {
-		return
+	if s.SCount[startLine]-s.BlkIndent >= 4 {
+		return false
+	}
+	if pos+3 > max {
+		return false
 	}
 
-	pos := s.BMarks[startLine] + shift
-	max := s.EMarks[startLine]
 	src := s.Src
 
-	if pos+3 > max {
-		return
-	}
-
 	marker := src[pos]
-
-	if !fence[marker] {
-		return
+	if marker != '~' && marker != '`' {
+		return false
 	}
 
 	mem := pos
 	pos = s.SkipBytes(pos, marker)
+
 	len := pos - mem
+
 	if len < 3 {
-		return
+		return false
 	}
 
 	params := strings.TrimSpace(src[pos:max])
 
-	if strings.IndexByte(params, '`') >= 0 {
-		return
+	if strings.IndexByte(params, marker) >= 0 {
+		return false
 	}
 
 	if silent {
@@ -50,7 +45,6 @@ func ruleFence(s *StateBlock, startLine, endLine int, silent bool) (_ bool) {
 	}
 
 	nextLine := startLine
-	haveEndMarker := false
 
 	for {
 		nextLine++
@@ -62,19 +56,15 @@ func ruleFence(s *StateBlock, startLine, endLine int, silent bool) (_ bool) {
 		pos = mem
 		max = s.EMarks[nextLine]
 
-		if pos >= max {
-			continue
-		}
-
-		if s.TShift[nextLine] < s.BlkIndent {
+		if pos < max && s.SCount[nextLine] < s.BlkIndent {
 			break
 		}
 
-		if src[pos] != marker {
+		if pos >= max || src[pos] != marker {
 			continue
 		}
 
-		if s.TShift[nextLine]-s.BlkIndent > 3 {
+		if s.SCount[nextLine]-s.BlkIndent >= 4 {
 			continue
 		}
 
@@ -85,6 +75,7 @@ func ruleFence(s *StateBlock, startLine, endLine int, silent bool) (_ bool) {
 		}
 
 		pos = s.SkipSpaces(pos)
+
 		if pos < max {
 			continue
 		}
@@ -94,6 +85,8 @@ func ruleFence(s *StateBlock, startLine, endLine int, silent bool) (_ bool) {
 		break
 	}
 
+	len = s.SCount[startLine]
+
 	s.Line = nextLine
 	if haveEndMarker {
 		s.Line++
@@ -101,8 +94,8 @@ func ruleFence(s *StateBlock, startLine, endLine int, silent bool) (_ bool) {
 
 	s.PushToken(&Fence{
 		Params:  params,
-		Content: s.Lines(startLine+1, nextLine, s.TShift[startLine], true),
-		Map:     [2]int{startLine, nextLine},
+		Content: s.Lines(startLine+1, nextLine, len, true),
+		Map:     [2]int{startLine, s.Line},
 	})
 
 	return true

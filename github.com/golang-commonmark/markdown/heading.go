@@ -6,39 +6,37 @@ package markdown
 
 import "strings"
 
-func ruleHeading(s *StateBlock, startLine, _ int, silent bool) (_ bool) {
-	shift := s.TShift[startLine]
-	if shift < 0 {
-		return
-	}
-
-	pos := s.BMarks[startLine] + shift
+func ruleHeading(s *StateBlock, startLine, _ int, silent bool) bool {
+	pos := s.BMarks[startLine] + s.TShift[startLine]
 	max := s.EMarks[startLine]
 	src := s.Src
 
-	if pos >= max || src[pos] != '#' {
-		return
+	if s.SCount[startLine]-s.BlkIndent >= 4 {
+		return false
 	}
 
-	pos++
+	if pos >= max || src[pos] != '#' {
+		return false
+	}
 
 	level := 1
+	pos++
 	for pos < max && src[pos] == '#' && level <= 6 {
 		level++
 		pos++
 	}
 
-	if level > 6 || (pos < max && src[pos] != ' ') {
-		return
+	if level > 6 || (pos < max && !byteIsSpace(src[pos])) {
+		return false
 	}
 
 	if silent {
 		return true
 	}
 
-	max = s.SkipBytesBack(max, ' ', pos)
+	max = s.SkipSpacesBack(max, pos)
 	tmp := s.SkipBytesBack(max, '#', pos)
-	if tmp > pos && src[tmp-1] == ' ' {
+	if tmp > pos && byteIsSpace(src[tmp-1]) {
 		max = tmp
 	}
 

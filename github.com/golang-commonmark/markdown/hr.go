@@ -4,44 +4,40 @@
 
 package markdown
 
-var hr [256]bool
-
-func init() {
-	hr['*'], hr['-'], hr['_'] = true, true, true
-}
-
-func ruleHR(s *StateBlock, startLine, endLine int, silent bool) (_ bool) {
-	shift := s.TShift[startLine]
-	if shift < 0 {
-		return
-	}
-
-	pos := s.BMarks[startLine] + shift
-	src := s.Src
-
-	marker := src[pos]
-
-	if !hr[marker] {
-		return
-	}
-
-	pos++
+func ruleHR(s *StateBlock, startLine, endLine int, silent bool) bool {
+	pos := s.BMarks[startLine] + s.TShift[startLine]
 	max := s.EMarks[startLine]
 
-	count := 1
+	if pos >= max {
+		return false
+	}
+
+	if s.SCount[startLine]-s.BlkIndent >= 4 {
+		return false
+	}
+
+	src := s.Src
+	marker := src[pos]
+	pos++
+
+	if marker != '*' && marker != '-' && marker != '_' {
+		return false
+	}
+
+	cnt := 1
 	for pos < max {
-		c := src[pos]
+		ch := src[pos]
 		pos++
-		if c != marker && c != ' ' {
-			return
+		if ch != marker && !byteIsSpace(ch) {
+			return false
 		}
-		if c == marker {
-			count++
+		if ch == marker {
+			cnt++
 		}
 	}
 
-	if count < 3 {
-		return
+	if cnt < 3 {
+		return false
 	}
 
 	if silent {
@@ -49,6 +45,7 @@ func ruleHR(s *StateBlock, startLine, endLine int, silent bool) (_ bool) {
 	}
 
 	s.Line = startLine + 1
+
 	s.PushToken(&Hr{
 		Map: [2]int{startLine, s.Line},
 	})

@@ -4,28 +4,29 @@
 
 package markdown
 
-func ruleNewline(s *StateInline, silent bool) (_ bool) {
+func ruleNewline(s *StateInline, silent bool) bool {
 	pos := s.Pos
 	src := s.Src
 
 	if src[pos] != '\n' {
-		return
+		return false
 	}
 
 	pending := s.Pending.Bytes()
-	n := len(pending) - 1
+	pmax := len(pending) - 1
+	max := s.PosMax
 
 	if !silent {
-		if n >= 0 && pending[n] == ' ' {
-			if n >= 1 && pending[n-1] == ' ' {
-				n -= 2
-				for n >= 0 && pending[n] == ' ' {
-					n--
+		if pmax >= 0 && pending[pmax] == ' ' {
+			if pmax >= 1 && pending[pmax-1] == ' ' {
+				pmax -= 2
+				for pmax >= 0 && pending[pmax] == ' ' {
+					pmax--
 				}
-				s.Pending.Truncate(n + 1)
+				s.Pending.Truncate(pmax + 1)
 				s.PushToken(&Hardbreak{})
 			} else {
-				s.Pending.Truncate(n)
+				s.Pending.Truncate(pmax)
 				s.PushToken(&Softbreak{})
 			}
 		} else {
@@ -34,9 +35,8 @@ func ruleNewline(s *StateInline, silent bool) (_ bool) {
 	}
 
 	pos++
-	max := s.PosMax
 
-	for pos < max && src[pos] == ' ' {
+	for pos < max && byteIsSpace(src[pos]) {
 		pos++
 	}
 

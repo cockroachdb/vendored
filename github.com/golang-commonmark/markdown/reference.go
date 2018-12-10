@@ -8,35 +8,47 @@ import "strings"
 
 var referenceTerminatedBy []BlockRule
 
-func ruleReference(s *StateBlock, startLine, _ int, silent bool) (_ bool) {
+func ruleReference(s *StateBlock, startLine, _ int, silent bool) bool {
+	lines := 0
 	pos := s.BMarks[startLine] + s.TShift[startLine]
+	max := s.EMarks[startLine]
+	nextLine := startLine + 1
+
+	if s.SCount[startLine]-s.BlkIndent >= 4 {
+		return false
+	}
+
 	src := s.Src
 
 	if src[pos] != '[' {
-		return
+		return false
 	}
 
 	pos++
-	max := s.EMarks[startLine]
-
 	for pos < max {
 		if src[pos] == ']' && src[pos-1] != '\\' {
 			if pos+1 == max {
-				return
+				return false
 			}
 			if src[pos+1] != ':' {
-				return
+				return false
 			}
 			break
 		}
 		pos++
 	}
 
-	nextLine := startLine + 1
 	endLine := s.LineMax
+
+	oldParentType := s.ParentType
+	s.ParentType = ptReference
 outer:
 	for ; nextLine < endLine && !s.IsLineEmpty(nextLine); nextLine++ {
-		if s.TShift[nextLine]-s.BlkIndent > 3 {
+		if s.SCount[nextLine]-s.BlkIndent > 3 {
+			continue
+		}
+
+		if s.SCount[nextLine] < 0 {
 			continue
 		}
 
@@ -49,12 +61,12 @@ outer:
 
 	str := strings.TrimSpace(s.Lines(startLine, nextLine, s.BlkIndent, false))
 	max = len(str)
-	lines := 0
+
 	var labelEnd int
 	for pos = 1; pos < max; pos++ {
 		b := str[pos]
 		if b == '[' {
-			return
+			return false
 		} else if b == ']' {
 			labelEnd = pos
 			break
@@ -69,37 +81,39 @@ outer:
 	}
 
 	if labelEnd <= 0 || labelEnd+1 >= max || str[labelEnd+1] != ':' {
-		return
+		return false
 	}
 
 	for pos = labelEnd + 2; pos < max; pos++ {
 		b := str[pos]
 		if b == '\n' {
 			lines++
-		} else if b != ' ' {
+		} else if !byteIsSpace(b) {
 			break
 		}
 	}
 
-	href, endpos, ok := parseLinkDestination(str, pos, max)
+	href, nlines, endpos, ok := parseLinkDestination(str, pos, max)
 	if !ok {
-		return
+		return false
 	}
 	href = normalizeLink(href)
 	if !validateLink(href) {
-		return
+		return false
 	}
-	pos = endpos
 
-	savedPos := pos
-	savedLineNo := lines
+	pos = endpos
+	lines += nlines
+
+	destEndPos := pos
+	destEndLineNo := lines
 
 	start := pos
 	for ; pos < max; pos++ {
 		b := str[pos]
 		if b == '\n' {
 			lines++
-		} else if b != ' ' {
+		} else if !byteIsSpace(b) {
 			break
 		}
 	}
@@ -109,27 +123,27 @@ outer:
 		pos = endpos
 		lines += nlines
 	} else {
-		pos = savedPos
-		lines = savedLineNo
+		pos = destEndPos
+		lines = destEndLineNo
 	}
 
-	for pos < max && str[pos] == ' ' {
+	for pos < max && byteIsSpace(str[pos]) {
 		pos++
 	}
 
 	if pos < max && str[pos] != '\n' {
 		if title != "" {
 			title = ""
-			pos = savedPos
-			lines = savedLineNo
-			for pos < max && src[pos] == ' ' {
+			pos = destEndPos
+			lines = destEndLineNo
+			for pos < max && byteIsSpace(src[pos]) {
 				pos++
 			}
 		}
 	}
 
 	if pos < max && str[pos] != '\n' {
-		return
+		return false
 	}
 
 	label := normalizeReference(str[1:labelEnd])
@@ -150,6 +164,8 @@ outer:
 			"href":  href,
 		}
 	}
+
+	s.ParentType = oldParentType
 
 	s.Line = startLine + lines + 1
 

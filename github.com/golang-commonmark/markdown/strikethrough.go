@@ -4,76 +4,98 @@
 
 package markdown
 
-func ruleStrikeThrough(s *StateInline, silent bool) (_ bool) {
-	start := s.Pos
-	max := s.PosMax
+func ruleStrikeThrough(s *StateInline, silent bool) bool {
 	src := s.Src
-
-	if src[start] != '~' {
-		return
-	}
+	start := s.Pos
+	marker := src[start]
 
 	if silent {
-		return
+		return false
 	}
 
-	canOpen, canClose, delims := scanDelims(s, start)
-	startCount := delims
-	if !canOpen {
-		s.Pos += startCount
-		s.Pending.WriteString(src[start:s.Pos])
-		return true
+	if src[start] != '~' {
+		return false
 	}
 
-	stack := startCount / 2
-	if stack <= 0 {
-		return
+	canOpen, canClose, length := s.scanDelims(start, true)
+	origLength := length
+	ch := string(marker)
+	if length < 2 {
+		return false
 	}
-	s.Pos = start + startCount
 
-	var found bool
-	for s.Pos < max {
-		if src[s.Pos] == '~' {
-			canOpen, canClose, delims = scanDelims(s, s.Pos)
-			count := delims
-			tagCount := count / 2
-			if canClose {
-				if tagCount >= stack {
-					s.Pos += count - 2
-					found = true
-					break
-				}
-				stack -= tagCount
-				s.Pos += count
-				continue
-			}
+	if length%2 != 0 {
+		s.PushToken(&Text{
+			Content: ch,
+		})
+		length--
+	}
 
-			if canOpen {
-				stack += tagCount
-			}
-			s.Pos += count
+	for i := 0; i < length; i += 2 {
+		s.PushToken(&Text{
+			Content: ch + ch,
+		})
+
+		s.Delimiters = append(s.Delimiters, Delimiter{
+			Marker: marker,
+			Length: -1,
+			Jump:   i,
+			Token:  len(s.Tokens) - 1,
+			Level:  s.Level,
+			End:    -1,
+			Open:   canOpen,
+			Close:  canClose,
+		})
+	}
+
+	s.Pos += origLength
+
+	return true
+
+}
+
+func ruleStrikethroughPostprocess(s *StateInline) {
+	var loneMarkers []int
+	delimiters := s.Delimiters
+	max := len(delimiters)
+
+	for i := 0; i < max; i++ {
+		startDelim := delimiters[i]
+
+		if startDelim.Marker != '~' {
 			continue
 		}
 
-		s.Md.Inline.SkipToken(s)
+		if startDelim.End == -1 {
+			continue
+		}
+
+		endDelim := delimiters[startDelim.End]
+
+		s.Tokens[startDelim.Token] = &StrikethroughOpen{}
+		s.Tokens[endDelim.Token] = &StrikethroughClose{}
+
+		if text, ok := s.Tokens[endDelim.Token-1].(*Text); ok && text.Content == "~" {
+			loneMarkers = append(loneMarkers, endDelim.Token-1)
+		}
 	}
 
-	if !found {
-		s.Pos = start
-		return
+	for len(loneMarkers) > 0 {
+		i := loneMarkers[len(loneMarkers)-1]
+		loneMarkers = loneMarkers[:len(loneMarkers)-1]
+		j := i + 1
+
+		for j < len(s.Tokens) {
+			if _, ok := s.Tokens[j].(*StrikethroughClose); !ok {
+				break
+			}
+			j++
+		}
+
+		j--
+
+		if i != j {
+			s.Tokens[i], s.Tokens[j] = s.Tokens[j], s.Tokens[i]
+		}
 	}
-
-	s.PosMax = s.Pos
-	s.Pos = start + 2
-
-	s.PushOpeningToken(&StrikethroughOpen{})
-
-	s.Md.Inline.Tokenize(s)
-
-	s.PushClosingToken(&StrikethroughClose{})
-
-	s.Pos = s.PosMax + 2
-	s.PosMax = max
-
-	return true
 }

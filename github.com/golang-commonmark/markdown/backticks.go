@@ -4,12 +4,14 @@
 
 package markdown
 
-func ruleBackticks(s *StateInline, silent bool) (_ bool) {
+import "strings"
+
+func ruleBackticks(s *StateInline, silent bool) bool {
 	pos := s.Pos
 	src := s.Src
 
 	if src[pos] != '`' {
-		return
+		return false
 	}
 
 	start := pos
@@ -22,28 +24,28 @@ func ruleBackticks(s *StateInline, silent bool) (_ bool) {
 
 	marker := src[start:pos]
 
-	end := pos
-
+	matchStart := pos
+	matchEnd := pos
 	for {
-		for start = end; start < max && src[start] != '`'; start++ {
-			// do nothing
-		}
-		if start >= max {
+		matchStart = strings.IndexByte(src[matchEnd:], '`')
+		if matchStart == -1 {
 			break
 		}
-		end = start + 1
+		matchStart += matchEnd
 
-		for end < max && src[end] == '`' {
-			end++
+		matchEnd = matchStart + 1
+
+		for matchEnd < max && src[matchEnd] == '`' {
+			matchEnd++
 		}
 
-		if end-start == len(marker) {
+		if matchEnd-matchStart == len(marker) {
 			if !silent {
 				s.PushToken(&CodeInline{
-					Content: normalizeInlineCode(src[pos:start]),
+					Content: normalizeInlineCode(src[pos:matchStart]),
 				})
 			}
-			s.Pos = end
+			s.Pos = matchEnd
 			return true
 		}
 	}

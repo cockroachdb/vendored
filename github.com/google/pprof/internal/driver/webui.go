@@ -179,9 +179,16 @@ func defaultWebServer(args *plugin.HTTPServerArgs) error {
 	// https://github.com/google/pprof/pull/348
 	mux := http.NewServeMux()
 	mux.Handle("/ui/", http.StripPrefix("/ui", handler))
-	mux.Handle("/", http.RedirectHandler("/ui/", http.StatusTemporaryRedirect))
+	mux.Handle("/", redirectWithQuery("/ui"))
 	s := &http.Server{Handler: mux}
 	return s.Serve(ln)
+}
+
+func redirectWithQuery(path string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		pathWithQuery := &gourl.URL{Path: path, RawQuery: r.URL.RawQuery}
+		http.Redirect(w, r, pathWithQuery.String(), http.StatusTemporaryRedirect)
+	}
 }
 
 func isLocalhost(host string) bool {
@@ -200,6 +207,7 @@ func openBrowser(url string, o *plugin.Options) {
 	for _, p := range []struct{ param, key string }{
 		{"f", "focus"},
 		{"s", "show"},
+		{"sf", "show_from"},
 		{"i", "ignore"},
 		{"h", "hide"},
 		{"si", "sample_index"},
@@ -232,6 +240,7 @@ func varsFromURL(u *gourl.URL) variables {
 	vars := pprofVariables.makeCopy()
 	vars["focus"].value = u.Query().Get("f")
 	vars["show"].value = u.Query().Get("s")
+	vars["show_from"].value = u.Query().Get("sf")
 	vars["ignore"].value = u.Query().Get("i")
 	vars["hide"].value = u.Query().Get("h")
 	vars["sample_index"].value = u.Query().Get("si")

@@ -6,68 +6,75 @@ package markdown
 
 import "strings"
 
-var under [256]bool
-
-func init() {
-	under['-'], under['='] = true, true
-}
-
-func ruleLHeading(s *StateBlock, startLine, endLine int, silent bool) (_ bool) {
+func ruleLHeading(s *StateBlock, startLine, endLine int, silent bool) bool {
 	nextLine := startLine + 1
 
-	if nextLine >= endLine {
-		return
+	if s.SCount[startLine]-s.BlkIndent >= 4 {
+		return false
 	}
 
-	shift := s.TShift[nextLine]
-	if shift < s.BlkIndent {
-		return
-	}
-
-	if shift-s.BlkIndent > 3 {
-		return
-	}
-
-	pos := s.BMarks[nextLine] + shift
-	max := s.EMarks[nextLine]
-
-	if pos >= max {
-		return
-	}
-
+	oldParentType := s.ParentType
+	s.ParentType = ptParagraph
 	src := s.Src
-	marker := src[pos]
 
-	if !under[marker] {
-		return
+	var pos int
+	var hLevel int
+outer:
+	for ; nextLine < endLine && !s.IsLineEmpty(nextLine); nextLine++ {
+		if s.SCount[nextLine]-s.BlkIndent > 3 {
+			continue
+		}
+
+		if s.SCount[nextLine] >= s.BlkIndent {
+			pos = s.BMarks[nextLine] + s.TShift[nextLine]
+			max := s.EMarks[nextLine]
+
+			if pos < max {
+				marker := src[pos]
+
+				if marker == '-' || marker == '=' {
+					pos = s.SkipBytes(pos, marker)
+					pos = s.SkipSpaces(pos)
+
+					if pos >= max {
+						hLevel = 1
+						if marker == '-' {
+							hLevel++
+						}
+						break
+					}
+				}
+			}
+		}
+
+		if s.SCount[nextLine] < 0 {
+			continue
+		}
+
+		for _, r := range paragraphTerminatedBy {
+			if r(s, nextLine, endLine, true) {
+				break outer
+			}
+		}
 	}
 
-	pos = s.SkipBytes(pos, marker)
-
-	pos = s.SkipSpaces(pos)
-
-	if pos < max {
-		return
+	if hLevel == 0 {
+		return false
 	}
-
-	pos = s.BMarks[startLine] + s.TShift[startLine]
 
 	s.Line = nextLine + 1
-
-	hLevel := 1
-	if marker == '-' {
-		hLevel++
-	}
 
 	s.PushOpeningToken(&HeadingOpen{
 		HLevel: hLevel,
 		Map:    [2]int{startLine, s.Line},
 	})
 	s.PushToken(&Inline{
-		Content: strings.TrimSpace(src[pos:s.EMarks[startLine]]),
+		Content: strings.TrimSpace(s.Lines(startLine, nextLine, s.BlkIndent, false)),
 		Map:     [2]int{startLine, s.Line - 1},
 	})
 	s.PushClosingToken(&HeadingClose{HLevel: hLevel})
+
+	s.ParentType = oldParentType
 
 	return true
 }

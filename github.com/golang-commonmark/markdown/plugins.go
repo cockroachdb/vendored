@@ -13,12 +13,6 @@ type registeredCoreRule struct {
 
 var registeredCoreRules []registeredCoreRule
 
-type coreRulesById []registeredCoreRule
-
-func (r coreRulesById) Len() int           { return len(r) }
-func (r coreRulesById) Less(i, j int) bool { return r[i].id < r[j].id }
-func (r coreRulesById) Swap(i, j int)      { r[i], r[j] = r[j], r[i] }
-
 type registeredBlockRule struct {
 	id         int
 	rule       BlockRule
@@ -27,12 +21,6 @@ type registeredBlockRule struct {
 
 var registeredBlockRules []registeredBlockRule
 
-type blockRulesById []registeredBlockRule
-
-func (r blockRulesById) Len() int           { return len(r) }
-func (r blockRulesById) Less(i, j int) bool { return r[i].id < r[j].id }
-func (r blockRulesById) Swap(i, j int)      { r[i], r[j] = r[j], r[i] }
-
 type registeredInlineRule struct {
 	id   int
 	rule InlineRule
@@ -40,11 +28,12 @@ type registeredInlineRule struct {
 
 var registeredInlineRules []registeredInlineRule
 
-type inlineRulesById []registeredInlineRule
+type registeredPostprocessRule struct {
+	id   int
+	rule PostprocessRule
+}
 
-func (r inlineRulesById) Len() int           { return len(r) }
-func (r inlineRulesById) Less(i, j int) bool { return r[i].id < r[j].id }
-func (r inlineRulesById) Swap(i, j int)      { r[i], r[j] = r[j], r[i] }
+var registeredPostprocessRules []registeredPostprocessRule
 
 func indexInt(a []int, n int) int {
 	for i, m := range a {
@@ -60,7 +49,9 @@ func RegisterCoreRule(id int, rule CoreRule) {
 		id:   id,
 		rule: rule,
 	})
-	sort.Sort(coreRulesById(registeredCoreRules))
+	sort.Slice(registeredCoreRules, func(i, j int) bool {
+		return registeredCoreRules[i].id < registeredCoreRules[j].id
+	})
 
 	coreRules = coreRules[:0]
 	for _, r := range registeredCoreRules {
@@ -74,7 +65,9 @@ func RegisterBlockRule(id int, rule BlockRule, terminates []int) {
 		rule:       rule,
 		terminates: terminates,
 	})
-	sort.Sort(blockRulesById(registeredBlockRules))
+	sort.Slice(registeredBlockRules, func(i, j int) bool {
+		return registeredBlockRules[i].id < registeredBlockRules[j].id
+	})
 
 	blockRules = blockRules[:0]
 	blockquoteTerminatedBy = blockquoteTerminatedBy[:0]
@@ -83,13 +76,13 @@ func RegisterBlockRule(id int, rule BlockRule, terminates []int) {
 	paragraphTerminatedBy = paragraphTerminatedBy[:0]
 	for _, r := range registeredBlockRules {
 		blockRules = append(blockRules, r.rule)
-		if indexInt(r.terminates, 300) != -1 {
+		if indexInt(r.terminates, 400) != -1 {
 			blockquoteTerminatedBy = append(blockquoteTerminatedBy, r.rule)
 		}
-		if indexInt(r.terminates, 500) != -1 {
+		if indexInt(r.terminates, 600) != -1 {
 			listTerminatedBy = append(listTerminatedBy, r.rule)
 		}
-		if indexInt(r.terminates, 600) != -1 {
+		if indexInt(r.terminates, 700) != -1 {
 			referenceTerminatedBy = append(referenceTerminatedBy, r.rule)
 		}
 		if indexInt(r.terminates, 1100) != -1 {
@@ -103,11 +96,28 @@ func RegisterInlineRule(id int, rule InlineRule) {
 		id:   id,
 		rule: rule,
 	})
-	sort.Sort(inlineRulesById(registeredInlineRules))
+	sort.Slice(registeredInlineRules, func(i, j int) bool {
+		return registeredInlineRules[i].id < registeredInlineRules[j].id
+	})
 
 	inlineRules = inlineRules[:0]
 	for _, r := range registeredInlineRules {
 		inlineRules = append(inlineRules, r.rule)
+	}
+}
+
+func RegisterPostprocessRule(id int, rule PostprocessRule) {
+	registeredPostprocessRules = append(registeredPostprocessRules, registeredPostprocessRule{
+		id:   id,
+		rule: rule,
+	})
+	sort.Slice(registeredPostprocessRules, func(i, j int) bool {
+		return registeredPostprocessRules[i].id < registeredPostprocessRules[j].id
+	})
+
+	postprocessRules = postprocessRules[:0]
+	for _, r := range registeredPostprocessRules {
+		postprocessRules = append(postprocessRules, r.rule)
 	}
 }
 
@@ -117,16 +127,16 @@ func init() {
 	RegisterCoreRule(300, ruleReplacements)
 	RegisterCoreRule(400, ruleSmartQuotes)
 
-	RegisterBlockRule(100, ruleCode, nil)
-	RegisterBlockRule(200, ruleFence, []int{1100, 600, 300, 500})
-	RegisterBlockRule(300, ruleBlockQuote, []int{1100, 600, 500})
-	RegisterBlockRule(400, ruleHR, []int{1100, 600, 300, 500})
-	RegisterBlockRule(500, ruleList, []int{1100, 600, 300})
-	RegisterBlockRule(600, ruleReference, nil)
-	RegisterBlockRule(700, ruleHeading, []int{1100, 600, 300})
-	RegisterBlockRule(800, ruleLHeading, nil)
-	RegisterBlockRule(900, ruleHTMLBlock, []int{1100, 600, 300})
-	RegisterBlockRule(1000, ruleTable, []int{1100, 600})
+	RegisterBlockRule(100, ruleTable, []int{1100, 700})
+	RegisterBlockRule(200, ruleCode, nil)
+	RegisterBlockRule(300, ruleFence, []int{1100, 700, 400, 600})
+	RegisterBlockRule(400, ruleBlockQuote, []int{1100, 700, 400, 600})
+	RegisterBlockRule(500, ruleHR, []int{1100, 700, 400, 600})
+	RegisterBlockRule(600, ruleList, []int{1100, 700, 400})
+	RegisterBlockRule(700, ruleReference, nil)
+	RegisterBlockRule(800, ruleHeading, []int{1100, 700, 400})
+	RegisterBlockRule(900, ruleLHeading, nil)
+	RegisterBlockRule(1000, ruleHTMLBlock, []int{1100, 700, 400})
 	RegisterBlockRule(1100, ruleParagraph, nil)
 
 	RegisterInlineRule(100, ruleText)
@@ -140,4 +150,9 @@ func init() {
 	RegisterInlineRule(900, ruleAutolink)
 	RegisterInlineRule(1000, ruleHTMLInline)
 	RegisterInlineRule(1100, ruleEntity)
+
+	RegisterPostprocessRule(100, ruleBalancePairs)
+	RegisterPostprocessRule(200, ruleStrikethroughPostprocess)
+	RegisterPostprocessRule(300, ruleEmphasisPostprocess)
+	RegisterPostprocessRule(400, ruleTextCollapse)
 }
