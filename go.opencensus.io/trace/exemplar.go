@@ -11,15 +11,33 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
 
-package stats
+package trace
 
-// Units are encoded according to the case-sensitive abbreviations from the
-// Unified Code for Units of Measure: http://unitsofmeasure.org/ucum.html
-const (
-	UnitNone          = "1" // Deprecated: Use UnitDimensionless.
-	UnitDimensionless = "1"
-	UnitBytes         = "By"
-	UnitMilliseconds  = "ms"
+import (
+	"context"
+	"encoding/hex"
+
+	"go.opencensus.io/exemplar"
 )
+
+func init() {
+	exemplar.RegisterAttachmentExtractor(attachSpanContext)
+}
+
+func attachSpanContext(ctx context.Context, a exemplar.Attachments) exemplar.Attachments {
+	span := FromContext(ctx)
+	if span == nil {
+		return a
+	}
+	sc := span.SpanContext()
+	if !sc.IsSampled() {
+		return a
+	}
+	if a == nil {
+		a = make(exemplar.Attachments)
+	}
+	a[exemplar.KeyTraceID] = hex.EncodeToString(sc.TraceID[:])
+	a[exemplar.KeySpanID] = hex.EncodeToString(sc.SpanID[:])
+	return a
+}
