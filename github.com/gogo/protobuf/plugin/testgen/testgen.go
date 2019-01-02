@@ -175,6 +175,18 @@ given to the testgen plugin, will generate the following test code:
 		}
 	}
 
+	func TestAProtoClone(t *testing.T) {
+		// TODO: enable these tests when clone is supported with all extensions.
+		t.Skip("Clone not supported for all extensions")
+		seed := time.Now().UnixNano()
+		popr := math_rand.New(math_rand.NewSource(seed))
+		orig := NewPopulatedA(popr, true)
+		clone := github_com_gogo_protobuf_proto.Clone(orig)
+	  if !orig.Equal(clone) {
+			t.Fatalf("seed = %d, original %v does not equal clone %v", seed, orig, clone)
+		}
+	}
+
 Other registered tests are also generated.
 Tests are registered to this test plugin by calling the following function.
 
@@ -596,6 +608,22 @@ func (p *testText) Generate(imports generator.PluginImports, file *generator.Fil
 			p.P(`}`)
 			p.P()
 
+			p.P(`func Test`, ccTypeName, `ProtoClone(t *`, testingPkg.Use(), `.T) {`)
+			p.In()
+			p.P(`// TODO: enable these tests when clone is supported with all extensions.`)
+			p.P(`t.Skip("Clone not supported for all extensions")`)
+			p.P(`seed := `, timePkg.Use(), `.Now().UnixNano()`)
+			p.P(`popr := `, randPkg.Use(), `.New(`, randPkg.Use(), `.NewSource(seed))`)
+			p.P(`orig := NewPopulated`, ccTypeName, `(popr, true)`)
+			p.P(`clone := `, protoPkg.Use(), `.Clone(orig)`)
+			p.P(`if !orig.Equal(clone) {`)
+			p.In()
+			p.P(`t.Fatalf("seed = %d, original %v does not equal clone %v", seed, orig, clone)`)
+			p.Out()
+			p.P(`}`)
+			p.Out()
+			p.P(`}`)
+			p.P()
 		}
 	}
 	return used
