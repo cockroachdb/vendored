@@ -1,4 +1,4 @@
-// Copyright [2017] LinkedIn Corp. Licensed under the Apache License, Version
+// Copyright [2019] LinkedIn Corp. Licensed under the Apache License, Version
 // 2.0 (the "License"); you may not use this file except in compliance with the
 // License.  You may obtain a copy of the License at
 // http://www.apache.org/licenses/LICENSE-2.0
@@ -92,14 +92,12 @@ func NewCodec(schemaSpecification string) (*Codec, error) {
 
 	c, err := buildCodec(st, nullNamespace, schema)
 	if err == nil {
-		// // compact schema and save it
-		// compact, err := json.Marshal(schema)
-		// if err != nil {
-		// 	return nil, fmt.Errorf("cannot remarshal schema: %s", err)
-		// }
-		// c.schemaOriginal = string(compact)
 		c.schemaOriginal = schemaSpecification
-		c.schemaCanonical = parsingCanonicalForm(schema)
+		c.schemaCanonical, err = parsingCanonicalForm(schema)
+		if err != nil {
+			// Should not get here because schema is already validated above.
+			return nil, err
+		}
 	}
 
 	return c, err
@@ -484,9 +482,11 @@ func buildCodecForTypeDescribedByMap(st map[string]*Codec, enclosingNamespace st
 }
 
 func buildCodecForTypeDescribedByString(st map[string]*Codec, enclosingNamespace string, typeName string, schemaMap map[string]interface{}) (*Codec, error) {
+	isLogicalType := false
 	searchType := typeName
 	// logicalType will be non-nil for those fields without a logicalType property set
 	if lt := schemaMap["logicalType"]; lt != nil {
+		isLogicalType = true
 		searchType = fmt.Sprintf("%s.%s", typeName, lt)
 	}
 	// NOTE: When codec already exists, return it. This includes both primitive and
@@ -520,6 +520,10 @@ func buildCodecForTypeDescribedByString(st map[string]*Codec, enclosingNamespace
 	case "fixed.decimal":
 		return makeDecimalFixedCodec(st, enclosingNamespace, schemaMap)
 	default:
+		if isLogicalType {
+			delete(schemaMap, "logicalType")
+			return buildCodecForTypeDescribedByString(st, enclosingNamespace, typeName, schemaMap)
+		}
 		return nil, fmt.Errorf("unknown type name: %q", searchType)
 	}
 }

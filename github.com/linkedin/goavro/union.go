@@ -1,4 +1,4 @@
-// Copyright [2017] LinkedIn Corp. Licensed under the Apache License, Version
+// Copyright [2019] LinkedIn Corp. Licensed under the Apache License, Version
 // 2.0 (the "License"); you may not use this file except in compliance with the
 // License.  You may obtain a copy of the License at
 // http://www.apache.org/licenses/LICENSE-2.0
@@ -72,7 +72,7 @@ func buildCodecForTypeDescribedBySlice(st map[string]*Codec, enclosingNamespace 
 		// NOTE: To support record field default values, union schema set to the
 		// type name of first member
 		// TODO: add/change to schemaCanonical below
-		schemaOriginal: codecFromIndex[0].typeName.short(),
+		schemaOriginal: codecFromIndex[0].typeName.fullName,
 
 		typeName: &name{"union", nullNamespace},
 		nativeFromBinary: func(buf []byte) (interface{}, []byte, error) {
