@@ -29,7 +29,7 @@ import (
 // #cgo openbsd netbsd freebsd dragonfly darwin LDFLAGS: -ledit
 // #cgo openbsd netbsd freebsd dragonfly darwin CPPFLAGS: -Ishim
 // #cgo linux LDFLAGS: -lncurses
-// #cgo linux CFLAGS: -Wno-unused-result
+// #cgo linux CFLAGS: -Wno-unused-result -Wno-pointer-sign
 // #cgo linux CPPFLAGS: -Isrc -Isrc/c-libedit -Isrc/c-libedit/editline -Isrc/c-libedit/linux-build -D_GNU_SOURCE
 // #cgo darwin CPPFLAGS: -D__darwin__=1
 //
