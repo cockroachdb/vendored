@@ -37,9 +37,20 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/cenk/backoff"
+	"github.com/cenkalti/backoff"
 	"github.com/facebookgo/clock"
 )
+
+// Logger allows clients to receive debugging information from circuit breakers
+// via logs.
+type Logger interface {
+	// Debugf is used to log BreakerFail events
+	Debugf(format string, v ...interface{})
+	// Infof is used to log BreakerTripped, BreakerReset, and BreakerReady events.
+	Infof(format string, v ...interface{})
+}
+
+//go:generate stringer -type BreakerEvent
 
 // BreakerEvent indicates the type of event received over an event channel
 type BreakerEvent int
@@ -115,6 +126,8 @@ type Breaker struct {
 	eventReceivers []chan BreakerEvent
 	listeners      []chan ListenerEvent
 	backoffLock    sync.Mutex
+	logger         Logger
+	name           string
 }
 
 // Options holds breaker configuration options.
@@ -124,6 +137,11 @@ type Options struct {
 	ShouldTrip    TripFunc
 	WindowTime    time.Duration
 	WindowBuckets int
+
+	// Logger is used to log when events occur.
+	Logger Logger
+	// Name is used with Logger if Logger is non-nil.
+	Name string
 }
 
 // NewBreakerWithOptions creates a base breaker with a specified backoff, clock and TripFunc
@@ -159,6 +177,8 @@ func NewBreakerWithOptions(options *Options) *Breaker {
 		ShouldTrip:  options.ShouldTrip,
 		nextBackOff: options.BackOff.NextBackOff(),
 		counts:      newWindow(options.WindowTime, options.WindowBuckets),
+		logger:      options.Logger,
+		name:        options.Name,
 	}
 }
 
@@ -190,17 +210,22 @@ func NewRateBreaker(rate float64, minSamples int64) *Breaker {
 
 // Subscribe returns a channel of BreakerEvents. Whenever the breaker changes state,
 // the state will be sent over the channel. See BreakerEvent for the types of events.
+// Note that events may be dropped or not sent so clients should not rely on
+// events for program correctness.
 func (cb *Breaker) Subscribe() <-chan BreakerEvent {
 	eventReader := make(chan BreakerEvent)
 	output := make(chan BreakerEvent, 100)
-
 	go func() {
 		for v := range eventReader {
+		trySend:
 			select {
 			case output <- v:
 			default:
-				<-output
-				output <- v
+				select {
+				case <-output:
+				default:
+				}
+				goto trySend
 			}
 		}
 	}()
@@ -210,6 +235,8 @@ func (cb *Breaker) Subscribe() <-chan BreakerEvent {
 
 // AddListener adds a channel of ListenerEvents on behalf of a listener.
 // The listener channel must be buffered.
+// Note that events may be dropped or not sent so clients should not rely on
+// events for program correctness.
 func (cb *Breaker) AddListener(listener chan ListenerEvent) {
 	cb.listeners = append(cb.listeners, listener)
 }
@@ -282,14 +309,23 @@ func (cb *Breaker) Successes() int64 {
 // Fail is used to indicate a failure condition the Breaker should record. It will
 // increment the failure counters and store the time of the last failure. If the
 // breaker has a TripFunc it will be called, tripping the breaker if necessary.
-func (cb *Breaker) Fail() {
+// Fail takes an error argument to be used in conjunction with the logger. If no
+// logger exists, err is ignored.
+func (cb *Breaker) Fail(err error) {
 	cb.counts.Fail()
 	atomic.AddInt64(&cb.consecFailures, 1)
 	now := cb.Clock.Now()
 	atomic.StoreInt64(&cb.lastFailure, now.UnixNano())
 	cb.sendEvent(BreakerFail)
 	if cb.ShouldTrip != nil && cb.ShouldTrip(cb) {
+		if cb.logger != nil {
+			cb.logger.Infof("circuitbreaker: %s tripped: %v", cb.name, err)
+		}
 		cb.Trip()
+	} else {
+		if cb.logger != nil {
+			cb.logger.Debugf("circuitbreaker: %s fail (not tripped): %v", cb.name, err)
+		}
 	}
 }
 
@@ -302,7 +338,7 @@ func (cb *Breaker) Success() {
 	cb.backoffLock.Unlock()
 
 	state := cb.state()
-	if state == halfopen {
+	if state != closed {
 		cb.Reset()
 	}
 	atomic.StoreInt64(&cb.consecFailures, 0)
@@ -336,7 +372,9 @@ func (cb *Breaker) Call(circuit func() error, timeout time.Duration) error {
 
 // CallContext is same as Call but if the ctx is canceled after the circuit returned an error,
 // the error will not be marked as a failure because the call was canceled intentionally.
-func (cb *Breaker) CallContext(ctx context.Context, circuit func() error, timeout time.Duration) error {
+func (cb *Breaker) CallContext(
+	ctx context.Context, circuit func() error, timeout time.Duration,
+) error {
 	var err error
 
 	if !cb.Ready() {
@@ -362,7 +400,7 @@ func (cb *Breaker) CallContext(ctx context.Context, circuit func() error, timeou
 
 	if err != nil {
 		if ctx.Err() != context.Canceled {
-			cb.Fail()
+			cb.Fail(err)
 		}
 		return err
 	}
@@ -400,17 +438,35 @@ func (cb *Breaker) state() state {
 	return closed
 }
 
+func (cb *Breaker) logEvent(event BreakerEvent) {
+	if cb.logger == nil {
+		return
+	}
+	switch event {
+	case BreakerTripped, BreakerReset:
+		cb.logger.Infof("circuitbreaker: %v event: %v", cb.name, event)
+	default:
+		cb.logger.Debugf("circuitbreaker: %v event: %v", cb.name, event)
+	}
+}
+
 func (cb *Breaker) sendEvent(event BreakerEvent) {
+	cb.logEvent(event)
 	for _, receiver := range cb.eventReceivers {
 		receiver <- event
 	}
 	for _, listener := range cb.listeners {
 		le := ListenerEvent{CB: cb, Event: event}
+	trySend:
 		select {
 		case listener <- le:
 		default:
-			<-listener
-			listener <- le
+			// The channel was full so attempt to pull off of it and send again.
+			select {
+			case <-listener:
+			default:
+			}
+			goto trySend
 		}
 	}
 }
