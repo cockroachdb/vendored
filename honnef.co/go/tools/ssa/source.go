@@ -2,8 +2,6 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build go1.5
-
 package ssa
 
 // This file defines utilities for working with source positions
@@ -16,7 +14,6 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
-	"log"
 )
 
 // EnclosingFunction returns the function that contains the syntax
@@ -126,9 +123,6 @@ func findNamedFunc(pkg *Package, pos token.Pos) *Function {
 				// Don't call Program.Method: avoid creating wrappers.
 				obj := mset.At(i).Obj().(*types.Func)
 				if obj.Pos() == pos {
-					if pkg.values[obj] == nil {
-						log.Println(obj)
-					}
 					return pkg.values[obj].(*Function)
 				}
 			}
@@ -156,7 +150,7 @@ func findNamedFunc(pkg *Package, pos token.Pos) *Function {
 // (modulo "untyped" bools resulting from comparisons).
 //
 // (Tip: to find the ssa.Value given a source position, use
-// importer.PathEnclosingInterval to locate the ast.Node, then
+// astutil.PathEnclosingInterval to locate the ast.Node, then
 // EnclosingFunction to locate the Function, then ValueForExpr to find
 // the ssa.Value.)
 //
