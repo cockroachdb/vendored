@@ -39,7 +39,9 @@ rm -f c-libedit/*.orig
 
 (cd c-libedit &&
      for i in *.c; do
-	 echo "#include \"$i\"">../libedit-$i
+	 echo "#ifndef GO_LIBEDIT_NO_BUILD">../libedit-$i
+	 echo "#include \"$i\"">>../libedit-$i
+	 echo "#endif">>../libedit-$i
 	 echo "// Nothing to see here.">../../shim/libedit-$i
 	 echo "#include \"libedit-$i\"">../../wrap-$i
      done)

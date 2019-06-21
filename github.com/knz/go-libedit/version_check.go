@@ -1,4 +1,4 @@
-// Copyright 2017 Raphael 'kena' Poss
+// Copyright 2019 Raphael 'kena' Poss
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,10 +12,10 @@
 // implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-#include "go_asm.h"
-#include "textflag.h"
+// +build !go1.11
 
-TEXT ·getptr(SB),NOSPLIT,$0
-	MOVW    $runtime·sigtramp(SB), R0
-	MOVW    R0, ret+0(FP)
-	RET
+package libedit
+
+func init() {
+  panic("go-libedit requires go1.11+")
+}

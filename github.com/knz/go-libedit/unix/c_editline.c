@@ -179,15 +179,10 @@ void go_libedit_rebind_ctrls(EditLine *e) {
     el_set(e, EL_BIND, "^R", "em-inc-search-prev", NULL);
 }
 
-// See the explanation above go_libedit_gets below.
-static void* g_sigtramp;
-
 EditLine* go_libedit_init(int id, char *appName, void** el_signal,
-			  FILE* fin, FILE* fout, FILE *ferr,
-			  void *sigtramp) {
+			  FILE* fin, FILE* fout, FILE *ferr) {
     // Prepare signal handling.
     (*el_signal) = 0;
-    g_sigtramp = sigtramp;
 
     // Do we really want to edit?
     int editmode = 1;
@@ -416,75 +411,6 @@ static void cont_handler(int signo) {
     el_set(g_el, EL_REFRESH);
 }
 
-#ifdef __darwin__
-// On macOS/darwin, the signal trampoline (the function called by the
-// kernel to prepare the register context for the signal handler) is a
-// user-defined function.
-//
-// Go installs its own trampoline for every signal handler, and expects
-// its trampoline to stay in place across cgo calls.
-//
-// A first obstacle here is that the libc wrapper around the darwin
-// syscall (the C function with symbol "sigaction") always forces
-// the trampoline to become libc's own trampoline (called "_sigtramp"),
-// and not Go's (called "runtime·sigtramp").
-//
-// See e.g.:
-// https://opensource.apple.com/source/Libc/Libc-1244.1.7/sys/sigaction.c.auto.html
-//
-// So in order to configure Go's trampoline back, we cannot use
-// the C library wrapper, and instead we must use the low-level
-// syscall wrapper called "__sigaction", which operates on a
-// "struct __sigaction" (with a sa_tramp field), instead of the
-// standard "struct sigaction" (which doesn't have sa_tramp).
-//
-// Naturally, we need to declare it ourselves.
-
-#define sigaction_full __sigaction
-extern int sigaction_full(int sig,
-			  const struct sigaction_full * restrict act,
-			  struct sigaction * restrict oact);
-
-//
-// Another rather unfortunate obstacle, is that the __sigaction()
-// system call on macOS/darwin allows a process to *set* the
-// trampoline, but not *retrieve* it. The `oact` argument has type
-// `struct sigaction` (without sa_tramp), not `struct
-// __sigaction`. This is a ... curious, badly documented and
-// inconvenient limitation of that syscall on darwin.
-//
-// This makes our life difficult, because we want to set our own
-// signal handler for SIGCONT and SIGWINCH, and then "restore the
-// previous signal handler configuration" upon returning. So we can't
-// use __sigaction's `oact` argument and then use it as `act` and expect
-// things to go well -- Go would be left with the libc's _sigtramp
-// and become confused.
-//
-// So we need to proceed as follows:
-//
-// - we must properly identify Go's signal trampoline function. If we
-//   can't identify it properly, we can't restore it, so we shouldn't
-//   even try changing the signal handlers.
-//
-//   The trampoline is identified in g_sigtramp, defined above. If
-//   that pointer is NULL, Go's trampoline was not identified and we
-//   should not do anything.
-//
-//   To populate g_sigtramp, we have no choice but to use grey
-//   magic. See the `unix/sigtramp` package for details.
-//
-// - we must override the sa_tramp field in the struct __sigaction,
-//   not counting on __sigaction() to set it properly for us.
-//
-#else
-
-// Everywhere else, sigaction() is sane and Go's trampoline is the
-// actual signal handler.
-#define sigaction_full sigaction
-
-#endif
-
-
 void *go_libedit_gets(EditLine *el, char *lprompt, char *rprompt,
 		      void *p_sigcfg, int *count, int *interrupted, int widechar) {
     void *ret = NULL;
@@ -502,10 +428,6 @@ void *go_libedit_gets(EditLine *el, char *lprompt, char *rprompt,
     struct sigaction nsa;
 
     memset(osa, 0, sizeof(osa));
-#ifdef __darwin__
-    if (0 != g_sigtramp) {
-	// Only do this if we were able to retrieve the trampoline.
-#endif
 	if (-1 == sigaction(SIGCONT, 0, &osa[0]))
 	    return 0;
 	if (-1 == sigaction(SIGWINCH, 0, &osa[1]))
@@ -520,9 +442,6 @@ void *go_libedit_gets(EditLine *el, char *lprompt, char *rprompt,
 	sigaction(SIGCONT, &nsa, 0);
 	nsa.sa_handler = winch_handler;
 	sigaction(SIGWINCH, &nsa, 0);
-#ifdef __darwin__
-    }
-#endif
 
     // Disable terminal translation of ^C and ^Z to SIGINT and SIGTSTP.
     el_set(el, EL_SETTY, "-d", "intr=", NULL);
@@ -561,27 +480,8 @@ void *go_libedit_gets(EditLine *el, char *lprompt, char *rprompt,
     go_libedit_rprompt_str = NULL;
 
     // Restore Go's signal handlers.
-#ifdef __darwin__
-    if (0 != g_sigtramp) {
-	// Only do this if we were able to retrieve the trampoline.
-	struct sigaction_full newact[2];
-	for (int i = 0; i < 2; i++) {
-	    newact[i].sa_flags = osa[i].sa_flags;
-	    newact[i].sa_sigaction = osa[i].sa_sigaction;
-	    newact[i].sa_handler = osa[i].sa_handler;
-	    newact[i].sa_mask = osa[i].sa_mask;
-	    // We need to restore the trampoline manually.
-	    newact[i].sa_tramp = (void (*)(void*, int, int, siginfo_t*, void*))g_sigtramp;
-	}
-#else
-#define newact osa
-#endif
-	sigaction_full(SIGCONT, &newact[0], 0);
-	sigaction_full(SIGWINCH, &newact[1], 0);
-#undef newact
-#ifdef __darwin__
-    }
-#endif
+	sigaction(SIGCONT, &osa[0], 0);
+	sigaction(SIGWINCH, &osa[1], 0);
 
     // Turn off bracketed paste mode if we turned it on.
     if (cd->bracketed_paste)
