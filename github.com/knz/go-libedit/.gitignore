@@ -50,3 +50,7 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
+# Generated Go code that may be injected by downstream dependencies
+# (e.g., CockroachDB) into a vendored copy of this library.
+zcgo_flags*.go
