@@ -19,9 +19,12 @@
 package transport
 
 import (
+	"fmt"
 	"io"
 	"math"
 	"net"
+	"os"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -30,7 +33,6 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
-
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/channelz"
@@ -122,7 +124,9 @@ type http2Client struct {
 	lastMsgRecv       time.Time
 }
 
-func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error), addr string) (net.Conn, error) {
+func dial(
+	ctx context.Context, fn func(context.Context, string) (net.Conn, error), addr string,
+) (net.Conn, error) {
 	if fn != nil {
 		return fn(ctx, addr)
 	}
@@ -148,7 +152,9 @@ func isTemporary(err error) bool {
 // newHTTP2Client constructs a connected ClientTransport to addr based on HTTP2
 // and starts to receive messages on it. Non-nil error returns if construction
 // fails.
-func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts ConnectOptions, onSuccess func()) (_ ClientTransport, err error) {
+func newHTTP2Client(
+	connectCtx, ctx context.Context, addr TargetInfo, opts ConnectOptions, onSuccess func(),
+) (_ ClientTransport, err error) {
 	scheme := "http"
 	ctx, cancel := context.WithCancel(ctx)
 	defer func() {
@@ -205,9 +211,12 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr TargetInfo, opts Conne
 		readBufSize = opts.ReadBufferSize
 	}
 	t := &http2Client{
-		ctx:                   ctx,
-		ctxDone:               ctx.Done(), // Cache Done chan.
-		cancel:                cancel,
+		ctx:     ctx,
+		ctxDone: ctx.Done(), // Cache Done chan.
+		cancel: func() {
+			debug.PrintStack()
+			cancel()
+		},
 		userAgent:             opts.UserAgent,
 		md:                    addr.Metadata,
 		conn:                  conn,
@@ -356,7 +365,9 @@ func (t *http2Client) getPeer() *peer.Peer {
 	return pr
 }
 
-func (t *http2Client) createHeaderFields(ctx context.Context, callHdr *CallHdr) ([]hpack.HeaderField, error) {
+func (t *http2Client) createHeaderFields(
+	ctx context.Context, callHdr *CallHdr,
+) ([]hpack.HeaderField, error) {
 	aud := t.createAudience(callHdr)
 	authData, err := t.getTrAuthData(ctx, aud)
 	if err != nil {
@@ -455,7 +466,9 @@ func (t *http2Client) createAudience(callHdr *CallHdr) string {
 	return "https://" + host + callHdr.Method[:pos]
 }
 
-func (t *http2Client) getTrAuthData(ctx context.Context, audience string) (map[string]string, error) {
+func (t *http2Client) getTrAuthData(
+	ctx context.Context, audience string,
+) (map[string]string, error) {
 	authData := map[string]string{}
 	for _, c := range t.creds {
 		data, err := c.GetRequestMetadata(ctx, audience)
@@ -475,7 +488,9 @@ func (t *http2Client) getTrAuthData(ctx context.Context, audience string) (map[s
 	return authData, nil
 }
 
-func (t *http2Client) getCallAuthData(ctx context.Context, audience string, callHdr *CallHdr) (map[string]string, error) {
+func (t *http2Client) getCallAuthData(
+	ctx context.Context, audience string, callHdr *CallHdr,
+) (map[string]string, error) {
 	callAuthData := map[string]string{}
 	// Check if credentials.PerRPCCredentials were provided via call options.
 	// Note: if these credentials are provided both via dial options and call
@@ -636,7 +651,15 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 	t.closeStream(s, err, rst, rstCode, nil, nil, false)
 }
 
-func (t *http2Client) closeStream(s *Stream, err error, rst bool, rstCode http2.ErrCode, st *status.Status, mdata map[string][]string, eosReceived bool) {
+func (t *http2Client) closeStream(
+	s *Stream,
+	err error,
+	rst bool,
+	rstCode http2.ErrCode,
+	st *status.Status,
+	mdata map[string][]string,
+	eosReceived bool,
+) {
 	// Set stream status to done.
 	if s.swapState(streamDone) == streamDone {
 		// If it was already done, return.
@@ -1219,6 +1242,8 @@ func (t *http2Client) keepalive() {
 					timer.Reset(t.kp.Time)
 					continue
 				}
+				fmt.Fprintf(os.Stderr, "%s->%s: http2 keepalive timed out after ~%s", t.localAddr, t.remoteAddr, t.kp.Timeout)
+				debug.PrintStack()
 				t.Close()
 				return
 			case <-t.ctx.Done():
