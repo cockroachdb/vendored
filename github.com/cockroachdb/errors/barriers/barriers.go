@@ -22,7 +22,7 @@ import (
 	"github.com/gogo/protobuf/proto"
 )
 
-// Handled swallows the provided error and hides is from the
+// Handled swallows the provided error and hides it from the
 // Cause()/Unwrap() interface, and thus the Is() facility that
 // identifies causes. However, it retains it for the purpose of
 // printing the error out (e.g. for troubleshooting). The error
@@ -97,7 +97,7 @@ func (e *barrierError) Format(s fmt.State, verb rune) { errbase.FormatError(e, s
 func (e *barrierError) FormatError(p errbase.Printer) (next error) {
 	p.Print(e.msg)
 	if p.Detail() {
-		p.Printf("\noriginal cause behind barrier:\n%+v", e.maskedErr)
+		p.Printf("\noriginal cause behind barrier: %+v", e.maskedErr)
 	}
 	return nil
 }
