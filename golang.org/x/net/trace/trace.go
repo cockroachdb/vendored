@@ -72,6 +72,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"runtime"
 	"sort"
 	"strconv"
@@ -84,7 +85,7 @@ import (
 
 // DebugUseAfterFinish controls whether to debug uses of Trace values after finishing.
 // FOR DEBUGGING ONLY. This will slow down the program.
-var DebugUseAfterFinish = false
+var DebugUseAfterFinish = true
 
 // HTTP ServeMux paths.
 const (
@@ -403,7 +404,13 @@ func (tr *trace) Finish() {
 	if DebugUseAfterFinish {
 		buf := make([]byte, 4<<10) // 4 KB should be enough
 		n := runtime.Stack(buf, false)
-		tr.finishStack = buf[:n]
+		buf = buf[:n]
+		if tr.finishStack != nil {
+			fmt.Fprintf(os.Stderr, "net/trace: double-finished:\nFirst call at:\n%s\nSecond call at:\n%s", tr.finishStack, buf)
+			_ = os.Stderr.Sync()
+			os.Exit(123)
+		}
+		tr.finishStack = buf
 	}
 
 	activeMu.RLock()
