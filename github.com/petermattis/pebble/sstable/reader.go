@@ -556,7 +556,7 @@ func (i *compactionIterator) Next() (*InternalKey, []byte) {
 	// Last entry in the block must increment bytes iterated by the size of the block trailer
 	// and restart points.
 	if i.data.nextOffset+(4*(i.data.numRestarts+1)) == int32(len(i.data.data)) {
-		curOffset += blockTrailerLen + uint64(4*(i.data.numRestarts+1))
+		curOffset = i.dataBH.offset + i.dataBH.length + blockTrailerLen
 	}
 	*i.bytesIterated += uint64(curOffset - i.prevOffset)
 	i.prevOffset = curOffset
@@ -578,6 +578,7 @@ type blockTransform func([]byte) ([]byte, error)
 // Reader is a table reader.
 type Reader struct {
 	file              vfs.File
+	dbNum             uint64
 	fileNum           uint64
 	err               error
 	index             weakCachedBlock
@@ -738,7 +739,7 @@ func (r *Reader) readWeakCachedBlock(
 func (r *Reader) readBlock(
 	bh blockHandle, transform blockTransform,
 ) (cache.Handle, error) {
-	if h := r.cache.Get(r.fileNum, bh.offset); h.Get() != nil {
+	if h := r.cache.Get(r.dbNum, r.fileNum, bh.offset); h.Get() != nil {
 		return h, nil
 	}
 
@@ -784,7 +785,7 @@ func (r *Reader) readBlock(
 		}
 	}
 
-	h := r.cache.Set(r.fileNum, bh.offset, b)
+	h := r.cache.Set(r.dbNum, r.fileNum, bh.offset, b)
 	return h, nil
 }
 
@@ -909,10 +910,11 @@ func (r *Reader) readMetaindex(metaindexBH blockHandle, o *Options) error {
 
 // NewReader returns a new table reader for the file. Closing the reader will
 // close the file.
-func NewReader(f vfs.File, fileNum uint64, o *Options) *Reader {
+func NewReader(f vfs.File, dbNum, fileNum uint64, o *Options) *Reader {
 	o = o.EnsureDefaults()
 	r := &Reader{
 		file:    f,
+		dbNum:   dbNum,
 		fileNum: fileNum,
 		opts:    o,
 		cache:   o.Cache,
