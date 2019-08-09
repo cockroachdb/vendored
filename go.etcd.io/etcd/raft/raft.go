@@ -263,7 +263,8 @@ type raft struct {
 
 	maxMsgSize         uint64
 	maxUncommittedSize uint64
-	prs                tracker.ProgressTracker
+	// TODO(tbg): rename to trk.
+	prs tracker.ProgressTracker
 
 	state StateType
 
@@ -327,18 +328,18 @@ func newRaft(c *Config) *raft {
 	if err != nil {
 		panic(err) // TODO(bdarnell)
 	}
-	peers := c.peers
-	learners := c.learners
-	if len(cs.Voters) > 0 || len(cs.Learners) > 0 {
-		if len(peers) > 0 || len(learners) > 0 {
+
+	if len(c.peers) > 0 || len(c.learners) > 0 {
+		if len(cs.Voters) > 0 || len(cs.Learners) > 0 {
 			// TODO(bdarnell): the peers argument is always nil except in
 			// tests; the argument should be removed and these tests should be
 			// updated to specify their nodes through a snapshot.
 			panic("cannot specify both newRaft(peers, learners) and ConfState.(Voters, Learners)")
 		}
-		peers = cs.Voters
-		learners = cs.Learners
+		cs.Voters = c.peers
+		cs.Learners = c.learners
 	}
+
 	r := &raft{
 		id:                        c.ID,
 		lead:                      None,
@@ -355,14 +356,15 @@ func newRaft(c *Config) *raft {
 		readOnly:                  newReadOnly(c.ReadOnlyOption),
 		disableProposalForwarding: c.DisableProposalForwarding,
 	}
-	for _, p := range peers {
-		// Add node to active config.
-		r.applyConfChange(pb.ConfChange{Type: pb.ConfChangeAddNode, NodeID: p}.AsV2())
+
+	cfg, prs, err := confchange.Restore(confchange.Changer{
+		Tracker:   r.prs,
+		LastIndex: raftlog.lastIndex(),
+	}, cs)
+	if err != nil {
+		panic(err)
 	}
-	for _, p := range learners {
-		// Add learner to active config.
-		r.applyConfChange(pb.ConfChange{Type: pb.ConfChangeAddLearnerNode, NodeID: p}.AsV2())
-	}
+	assertConfStatesEquivalent(r.logger, cs, r.switchToConfig(cfg, prs))
 
 	if !isHardStateEqual(hs, emptyState) {
 		r.loadState(hs)
@@ -920,12 +922,6 @@ func (r *raft) Step(m pb.Message) error {
 		}
 
 	case pb.MsgVote, pb.MsgPreVote:
-		if r.isLearner {
-			// TODO: learner may need to vote, in case of node down when confchange.
-			r.logger.Infof("%x [logterm: %d, index: %d, vote: %x] ignored %s from %x [logterm: %d, index: %d] at term %d: learner can not vote",
-				r.id, r.raftLog.lastTerm(), r.raftLog.lastIndex(), r.Vote, m.Type, m.From, m.LogTerm, m.Index, r.Term)
-			return nil
-		}
 		// We can vote if this is a repeat of a vote we've already cast...
 		canVote := r.Vote == m.From ||
 			// ...we haven't voted and we don't think there's a leader yet in this term...
@@ -934,6 +930,24 @@ func (r *raft) Step(m pb.Message) error {
 			(m.Type == pb.MsgPreVote && m.Term > r.Term)
 		// ...and we believe the candidate is up to date.
 		if canVote && r.raftLog.isUpToDate(m.Index, m.LogTerm) {
+			// Note: it turns out that that learners must be allowed to cast votes.
+			// This seems counter- intuitive but is necessary in the situation in which
+			// a learner has been promoted (i.e. is now a voter) but has not learned
+			// about this yet.
+			// For example, consider a group in which id=1 is a learner and id=2 and
+			// id=3 are voters. A configuration change promoting 1 can be committed on
+			// the quorum `{2,3}` without the config change being appended to the
+			// learner's log. If the leader (say 2) fails, there are de facto two
+			// voters remaining. Only 3 can win an election (due to its log containing
+			// all committed entries), but to do so it will need 1 to vote. But 1
+			// considers itself a learner and will continue to do so until 3 has
+			// stepped up as leader, replicates the conf change to 1, and 1 applies it.
+			// Ultimately, by receiving a request to vote, the learner realizes that
+			// the candidate believes it to be a voter, and that it should act
+			// accordingly. The candidate's config may be stale, too; but in that case
+			// it won't win the election, at least in the absence of the bug discussed
+			// in:
+			// https://github.com/etcd-io/etcd/issues/7625#issuecomment-488798263.
 			r.logger.Infof("%x [logterm: %d, index: %d, vote: %x] cast %s for %x [logterm: %d, index: %d] at term %d",
 				r.id, r.raftLog.lastTerm(), r.raftLog.lastIndex(), r.Vote, m.Type, m.From, m.LogTerm, m.Index, r.Term)
 			// When responding to Msg{Pre,}Vote messages we include the term
@@ -1093,6 +1107,9 @@ func stepLeader(r *raft, m pb.Message) error {
 				case pr.State == tracker.StateProbe:
 					pr.BecomeReplicate()
 				case pr.State == tracker.StateSnapshot && pr.Match >= pr.PendingSnapshot:
+					// TODO(tbg): we should also enter this branch if a snapshot is
+					// received that is below pr.PendingSnapshot but which makes it
+					// possible to use the log again.
 					r.logger.Debugf("%x recovered from needing snapshot, resumed sending replication messages to %x [%s]", r.id, m.From, pr)
 					// Transition back to replicating state via probing state
 					// (which takes the snapshot into account). If we didn't
@@ -1415,12 +1432,18 @@ func (r *raft) restore(s pb.Snapshot) bool {
 
 	// Reset the configuration and add the (potentially updated) peers in anew.
 	r.prs = tracker.MakeProgressTracker(r.prs.MaxInflight)
-	for _, id := range s.Metadata.ConfState.Voters {
-		r.applyConfChange(pb.ConfChange{NodeID: id, Type: pb.ConfChangeAddNode}.AsV2())
+	cfg, prs, err := confchange.Restore(confchange.Changer{
+		Tracker:   r.prs,
+		LastIndex: r.raftLog.lastIndex(),
+	}, cs)
+
+	if err != nil {
+		// This should never happen. Either there's a bug in our config change
+		// handling or the client corrupted the conf change.
+		panic(fmt.Sprintf("unable to restore config %+v: %s", cs, err))
 	}
-	for _, id := range s.Metadata.ConfState.Learners {
-		r.applyConfChange(pb.ConfChange{NodeID: id, Type: pb.ConfChangeAddLearnerNode}.AsV2())
-	}
+
+	assertConfStatesEquivalent(r.logger, cs, r.switchToConfig(cfg, prs))
 
 	pr := r.prs.Progress[r.id]
 	pr.MaybeUpdate(pr.Next - 1) // TODO(tbg): this is untested and likely unneeded
@@ -1456,19 +1479,21 @@ func (r *raft) applyConfChange(cc pb.ConfChangeV2) pb.ConfState {
 		panic(err)
 	}
 
+	return r.switchToConfig(cfg, prs)
+}
+
+// switchToConfig reconfigures this node to use the provided configuration. It
+// updates the in-memory state and, when necessary, carries out additional
+// actions such as reacting to the removal of nodes or changed quorum
+// requirements.
+//
+// The inputs usually result from restoring a ConfState or applying a ConfChange.
+func (r *raft) switchToConfig(cfg tracker.Config, prs tracker.ProgressMap) pb.ConfState {
 	r.prs.Config = cfg
 	r.prs.Progress = prs
 
 	r.logger.Infof("%x switched to configuration %s", r.id, r.prs.Config)
-	// Now that the configuration is updated, handle any side effects.
-
-	cs := pb.ConfState{
-		Voters:         r.prs.Voters[0].Slice(),
-		VotersOutgoing: r.prs.Voters[1].Slice(),
-		Learners:       quorum.MajorityConfig(r.prs.Learners).Slice(),
-		LearnersNext:   quorum.MajorityConfig(r.prs.LearnersNext).Slice(),
-		AutoLeave:      r.prs.AutoLeave,
-	}
+	cs := r.prs.ConfState()
 	pr, ok := r.prs.Progress[r.id]
 
 	// Update whether the node itself is a learner, resetting to false when the
