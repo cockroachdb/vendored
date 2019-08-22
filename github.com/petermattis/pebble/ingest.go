@@ -39,8 +39,11 @@ func ingestLoad1(opts *Options, path string, dbNum, fileNum uint64) (*fileMetada
 		return nil, err
 	}
 
-	r := sstable.NewReader(f, dbNum, fileNum, opts)
+	r, err := sstable.NewReader(f, dbNum, fileNum, opts)
 	defer r.Close()
+	if err != nil {
+		return nil, err
+	}
 
 	meta := &fileMetadata{}
 	meta.fileNum = fileNum
@@ -119,7 +122,7 @@ func ingestSortAndVerify(cmp Compare, meta []*fileMetadata) error {
 func ingestCleanup(fs vfs.FS, dirname string, meta []*fileMetadata) error {
 	var firstErr error
 	for i := range meta {
-		target := dbFilename(dirname, fileTypeTable, meta[i].fileNum)
+		target := base.MakeFilename(dirname, fileTypeTable, meta[i].fileNum)
 		if err := fs.Remove(target); err != nil {
 			if firstErr != nil {
 				firstErr = err
@@ -131,7 +134,7 @@ func ingestCleanup(fs vfs.FS, dirname string, meta []*fileMetadata) error {
 
 func ingestLink(opts *Options, dirname string, paths []string, meta []*fileMetadata) error {
 	for i := range paths {
-		target := dbFilename(dirname, fileTypeTable, meta[i].fileNum)
+		target := base.MakeFilename(dirname, fileTypeTable, meta[i].fileNum)
 		err := opts.FS.Link(paths[i], target)
 		if err != nil {
 			if err2 := ingestCleanup(opts.FS, dirname, meta[:i]); err2 != nil {
@@ -196,6 +199,7 @@ func ingestUpdateSeqNum(opts *Options, dirname string, seqNum uint64, meta []*fi
 		// Properties.GlobalSeqNum when an sstable is loaded.
 		m.smallestSeqNum = seqNum
 		m.largestSeqNum = seqNum
+		seqNum++
 
 		// TODO(peter): Update the global sequence number property. This is only
 		// necessary for compatibility with RocksDB.
@@ -354,7 +358,7 @@ func (d *DB) Ingest(paths []string) error {
 		ve, err = d.ingestApply(jobID, meta)
 	}
 
-	d.commit.AllocateSeqNum(prepare, apply)
+	d.commit.AllocateSeqNum(len(meta), prepare, apply)
 
 	if err != nil {
 		if err2 := ingestCleanup(d.opts.FS, d.dirname, meta); err2 != nil {

@@ -126,7 +126,7 @@ type Writer struct {
 	// pendingBH is the blockHandle of a finished block that is waiting for
 	// the next call to Set. If the writer is not in this state, pendingBH
 	// is zero.
-	pendingBH      blockHandle
+	pendingBH      BlockHandle
 	block          blockWriter
 	indexBlock     blockWriter
 	rangeDelBlock  blockWriter
@@ -304,7 +304,11 @@ func (w *Writer) addTombstone(key InternalKey, value []byte) error {
 			w.meta.LargestRange = end.Clone()
 		}
 	}
+	w.props.NumEntries++
+	w.props.NumDeletions++
 	w.props.NumRangeDeletions++
+	w.props.RawKeySize += uint64(key.Size())
+	w.props.RawValueSize += uint64(len(value))
 	w.rangeDelBlock.add(key, value)
 	return nil
 }
@@ -337,7 +341,7 @@ func (w *Writer) maybeFlush(key InternalKey, value []byte) error {
 
 // flushPendingBH adds any pending block handle to the index entries.
 func (w *Writer) flushPendingBH(key InternalKey) {
-	if w.pendingBH.length == 0 {
+	if w.pendingBH.Length == 0 {
 		// A valid blockHandle must be non-zero.
 		// In particular, it must have a non-zero length.
 		return
@@ -359,7 +363,7 @@ func (w *Writer) flushPendingBH(key InternalKey) {
 
 	w.indexBlock.add(sep, w.tmp[:n])
 
-	w.pendingBH = blockHandle{}
+	w.pendingBH = BlockHandle{}
 }
 
 func shouldFlush(key InternalKey, value []byte, block blockWriter, blockSize, sizeThreshold int) bool {
@@ -388,7 +392,7 @@ func shouldFlush(key InternalKey, value []byte, block blockWriter, blockSize, si
 
 // finishBlock finishes the current block and returns its block handle, which is
 // its offset and length in the table.
-func (w *Writer) finishBlock(block *blockWriter) (blockHandle, error) {
+func (w *Writer) finishBlock(block *blockWriter) (BlockHandle, error) {
 	bh, err := w.writeRawBlock(block.finish(), w.compression)
 
 	// Calculate filters.
@@ -410,7 +414,7 @@ func (w *Writer) finishIndexBlock() {
 	}
 }
 
-func (w *Writer) writeTwoLevelIndex() (blockHandle, error) {
+func (w *Writer) writeTwoLevelIndex() (BlockHandle, error) {
 	// Add the final unfinished index.
 	w.finishIndexBlock()
 
@@ -439,7 +443,7 @@ func (w *Writer) writeTwoLevelIndex() (blockHandle, error) {
 	return w.finishBlock(&w.topLevelIndexBlock)
 }
 
-func (w *Writer) writeRawBlock(b []byte, compression Compression) (blockHandle, error) {
+func (w *Writer) writeRawBlock(b []byte, compression Compression) (BlockHandle, error) {
 	blockType := noCompressionBlockType
 	if compression == SnappyCompression {
 		// Compress the buffer, discarding the result if the improvement isn't at
@@ -456,17 +460,17 @@ func (w *Writer) writeRawBlock(b []byte, compression Compression) (blockHandle, 
 	// Calculate the checksum.
 	checksum := crc.New(b).Update(w.tmp[:1]).Value()
 	binary.LittleEndian.PutUint32(w.tmp[1:5], checksum)
-	bh := blockHandle{w.meta.Size, uint64(len(b))}
+	bh := BlockHandle{w.meta.Size, uint64(len(b))}
 
 	// Write the bytes to the file.
 	n, err := w.writer.Write(b)
 	if err != nil {
-		return blockHandle{}, err
+		return BlockHandle{}, err
 	}
 	w.meta.Size += uint64(n)
 	n, err = w.writer.Write(w.tmp[:blockTrailerLen])
 	if err != nil {
-		return blockHandle{}, err
+		return BlockHandle{}, err
 	}
 	w.meta.Size += uint64(n)
 
@@ -521,10 +525,10 @@ func (w *Writer) Close() (err error) {
 		n := encodeBlockHandle(w.tmp[:], bh)
 		metaindex.add(InternalKey{UserKey: []byte(w.filter.metaName())}, w.tmp[:n])
 		w.props.FilterPolicyName = w.filter.policyName()
-		w.props.FilterSize = bh.length
+		w.props.FilterSize = bh.Length
 	}
 
-	var indexBH blockHandle
+	var indexBH BlockHandle
 	if w.twoLevelIndex {
 		w.props.IndexType = twoLevelIndex
 		// Write the two level index block.
@@ -549,7 +553,10 @@ func (w *Writer) Close() (err error) {
 		}
 	}
 
-	// Write the range-del block.
+	// Write the range-del block. The block handle must added to the meta index block
+	// after the properties block has been written. This is because the entries in the
+	// metaindex block must be sorted by key.
+	var rangeDelBH BlockHandle
 	if w.props.NumRangeDeletions > 0 {
 		if !w.rangeDelV1Format {
 			// Because the range tombstones are fragmented, the end key of the last
@@ -560,20 +567,10 @@ func (w *Writer) Close() (err error) {
 			w.meta.LargestRange = base.MakeRangeDeleteSentinelKey(w.rangeDelBlock.curValue)
 		}
 		b := w.rangeDelBlock.finish()
-		bh, err := w.writeRawBlock(b, w.compression)
+		rangeDelBH, err = w.writeRawBlock(b, NoCompression)
 		if err != nil {
 			w.err = err
 			return w.err
-		}
-		n := encodeBlockHandle(w.tmp[:], bh)
-		// The v2 range-del block encoding is backwards compatible with the v1
-		// encoding. We add meta-index entries for both the old name and the new
-		// name so that old code can continue to find the range-del block and new
-		// code knows that the range tombstones in the block are fragmented and
-		// sorted.
-		metaindex.add(InternalKey{UserKey: []byte(metaRangeDelName)}, w.tmp[:n])
-		if !w.rangeDelV1Format {
-			metaindex.add(InternalKey{UserKey: []byte(metaRangeDelV2Name)}, w.tmp[:n])
 		}
 	}
 
@@ -603,6 +600,20 @@ func (w *Writer) Close() (err error) {
 		}
 		n := encodeBlockHandle(w.tmp[:], bh)
 		metaindex.add(InternalKey{UserKey: []byte(metaPropertiesName)}, w.tmp[:n])
+	}
+
+	// Add the range deletion block handle to the metaindex block.
+	if w.props.NumRangeDeletions > 0 {
+		n := encodeBlockHandle(w.tmp[:], rangeDelBH)
+		// The v2 range-del block encoding is backwards compatible with the v1
+		// encoding. We add meta-index entries for both the old name and the new
+		// name so that old code can continue to find the range-del block and new
+		// code knows that the range tombstones in the block are fragmented and
+		// sorted.
+		metaindex.add(InternalKey{UserKey: []byte(metaRangeDelName)}, w.tmp[:n])
+		if !w.rangeDelV1Format {
+			metaindex.add(InternalKey{UserKey: []byte(metaRangeDelV2Name)}, w.tmp[:n])
+		}
 	}
 
 	// Write the metaindex block. It might be an empty block, if the filter
@@ -716,9 +727,9 @@ func NewWriter(f writeCloseSyncer, o *Options, lo TableOptions) *Writer {
 	}
 
 	w.props.ColumnFamilyID = math.MaxInt32
-	w.props.ComparatorName = o.Comparer.Name
+	w.props.ComparerName = o.Comparer.Name
 	w.props.CompressionName = lo.Compression.String()
-	w.props.MergeOperatorName = o.Merger.Name
+	w.props.MergerName = o.Merger.Name
 	w.props.PropertyCollectorNames = "[]"
 	w.props.Version = 2 // TODO(peter): what is this?
 
