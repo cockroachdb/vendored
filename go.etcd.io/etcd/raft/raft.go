@@ -1557,7 +1557,7 @@ func (r *raft) switchToConfig(cfg tracker.Config, prs tracker.ProgressMap) pb.Co
 		// If the configuration change means that more entries are committed now,
 		// broadcast/append to everyone in the updated config.
 		r.bcastAppend()
-	} else {
+	} else if false { // HACK(tbg): causes learner/raftsnapq race failures
 		// Otherwise, still probe the newly added replicas; there's no reason to
 		// let them wait out a heartbeat interval (or the next incoming
 		// proposal).
