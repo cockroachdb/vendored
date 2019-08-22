@@ -14,7 +14,6 @@ import (
 
 	"github.com/petermattis/pebble/internal/arenaskl"
 	"github.com/petermattis/pebble/internal/base"
-	"github.com/petermattis/pebble/internal/rate"
 	"github.com/petermattis/pebble/internal/record"
 	"github.com/petermattis/pebble/vfs"
 )
@@ -35,6 +34,9 @@ var (
 	// ErrClosed is returned when an operation is performed on a closed snapshot
 	// or DB.
 	ErrClosed = errors.New("pebble: closed")
+	// ErrReadOnly is returned when a write operation is performed on a read-only
+	// database.
+	ErrReadOnly = errors.New("pebble: read-only")
 )
 
 type flushable interface {
@@ -173,14 +175,18 @@ type DB struct {
 
 	closed int32 // updated atomically
 
-	compactionLimiter *rate.Limiter
+	compactionLimiter limiter
 
 	// bytesFlushed is the number of bytes flushed in the current flush. This
 	// must be read/written atomically since it is accessed by both the flush
 	// and compaction routines.
 	bytesFlushed uint64
+	// bytesCompacted is the number of bytes compacted in the current compaction.
+	// This is used as a dummy variable to increment during compaction, and the
+	// value is not used anywhere.
+	bytesCompacted uint64
 
-	flushLimiter *rate.Limiter
+	flushLimiter limiter
 
 	// TODO(peter): describe exactly what this mutex protects. So far: every
 	// field in the struct.
@@ -370,6 +376,9 @@ func (d *DB) Apply(batch *Batch, opts *WriteOptions) error {
 	if atomic.LoadInt32(&d.closed) != 0 {
 		panic(ErrClosed)
 	}
+	if d.opts.ReadOnly {
+		return ErrReadOnly
+	}
 
 	sync := opts.GetSync()
 	if sync && d.opts.DisableWAL {
@@ -395,7 +404,7 @@ func (d *DB) commitApply(b *Batch, mem *memTable) error {
 		// This is a large batch which was already added to the immutable queue.
 		return nil
 	}
-	err := mem.apply(b, b.seqNum())
+	err := mem.apply(b, b.SeqNum())
 	if err != nil {
 		return err
 	}
@@ -408,17 +417,19 @@ func (d *DB) commitApply(b *Batch, mem *memTable) error {
 }
 
 func (d *DB) commitWrite(b *Batch, wg *sync.WaitGroup) (*memTable, error) {
+	repr := b.Repr()
+
 	d.mu.Lock()
 
 	if b.flushable != nil {
-		b.flushable.seqNum = b.seqNum()
+		b.flushable.seqNum = b.SeqNum()
 	}
 
 	// Switch out the memtable if there was not enough room to store the batch.
 	err := d.makeRoomForWrite(b)
 
 	if err == nil {
-		d.mu.log.bytesIn += uint64(len(b.storage.data))
+		d.mu.log.bytesIn += uint64(len(repr))
 	}
 
 	// Grab a reference to the memtable while holding DB.mu. Note that
@@ -435,7 +446,7 @@ func (d *DB) commitWrite(b *Batch, wg *sync.WaitGroup) (*memTable, error) {
 		return mem, nil
 	}
 
-	size, err := d.mu.log.SyncRecord(b.storage.data, wg)
+	size, err := d.mu.log.SyncRecord(repr, wg)
 	if err != nil {
 		panic(err)
 	}
@@ -642,7 +653,11 @@ func (d *DB) Close() error {
 		d.mu.compact.cond.Wait()
 	}
 	err := d.tableCache.Close()
-	err = firstError(err, d.mu.log.Close())
+	if !d.opts.ReadOnly {
+		err = firstError(err, d.mu.log.Close())
+	} else if d.mu.log.LogWriter != nil {
+		panic("pebble: log-writer should be nil in read-only mode")
+	}
 	err = firstError(err, d.fileLock.Close())
 	d.commit.Close()
 
@@ -672,6 +687,9 @@ func (d *DB) Close() error {
 func (d *DB) Compact(start, end []byte /* CompactionOptions */) error {
 	if atomic.LoadInt32(&d.closed) != 0 {
 		panic(ErrClosed)
+	}
+	if d.opts.ReadOnly {
+		return ErrReadOnly
 	}
 
 	iStart := base.MakeInternalKey(start, InternalKeySeqNumMax, InternalKeyKindMax)
@@ -757,8 +775,24 @@ func (d *DB) manualCompact(manual *manualCompaction) error {
 
 // Flush the memtable to stable storage.
 func (d *DB) Flush() error {
+	flushDone, err := d.AsyncFlush()
+	if err != nil {
+		return err
+	}
+	<-flushDone
+	return nil
+}
+
+// AsyncFlush asynchronously flushes the memtable to stable storage.
+//
+// If no error is returned, the caller can receive from the returned channel in
+// order to wait for the flush to complete.
+func (d *DB) AsyncFlush() (<-chan struct{}, error) {
 	if atomic.LoadInt32(&d.closed) != 0 {
 		panic(ErrClosed)
+	}
+	if d.opts.ReadOnly {
+		return nil, ErrReadOnly
 	}
 
 	d.commit.mu.Lock()
@@ -768,26 +802,9 @@ func (d *DB) Flush() error {
 	d.mu.Unlock()
 	d.commit.mu.Unlock()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	<-mem.flushed()
-	return nil
-}
-
-// AsyncFlush asynchronously flushes the memtable to stable storage.
-//
-// TODO(peter): untested
-func (d *DB) AsyncFlush() error {
-	if atomic.LoadInt32(&d.closed) != 0 {
-		panic(ErrClosed)
-	}
-
-	d.commit.mu.Lock()
-	d.mu.Lock()
-	err := d.makeRoomForWrite(nil)
-	d.mu.Unlock()
-	d.commit.mu.Unlock()
-	return err
+	return mem.flushed(), nil
 }
 
 // Metrics returns metrics about the database.
@@ -839,6 +856,7 @@ func (d *DB) walPreallocateSize() int {
 // may be released and reacquired.
 func (d *DB) makeRoomForWrite(b *Batch) error {
 	force := b == nil || b.flushable != nil
+	stalled := false
 	for {
 		if d.mu.mem.switching {
 			d.mu.mem.cond.Wait()
@@ -846,25 +864,48 @@ func (d *DB) makeRoomForWrite(b *Batch) error {
 		}
 		if b != nil && b.flushable == nil {
 			err := d.mu.mem.mutable.prepare(b)
-			if err == nil {
-				return nil
-			}
 			if err != arenaskl.ErrArenaFull {
+				if stalled {
+					stalled = false
+					if d.opts.EventListener.WriteStallEnd != nil {
+						d.opts.EventListener.WriteStallEnd()
+					}
+				}
 				return err
 			}
 		} else if !force {
+			if stalled {
+				stalled = false
+				if d.opts.EventListener.WriteStallEnd != nil {
+					d.opts.EventListener.WriteStallEnd()
+				}
+			}
 			return nil
 		}
 		if len(d.mu.mem.queue) >= d.opts.MemTableStopWritesThreshold {
 			// We have filled up the current memtable, but the previous one is still
 			// being compacted, so we wait.
-			// fmt.Printf("memtable stop writes threshold\n")
+			if !stalled {
+				stalled = true
+				if d.opts.EventListener.WriteStallBegin != nil {
+					d.opts.EventListener.WriteStallBegin(WriteStallBeginInfo{
+						Reason: "memtable count limit reached",
+					})
+				}
+			}
 			d.mu.compact.cond.Wait()
 			continue
 		}
 		if len(d.mu.versions.currentVersion().files[0]) > d.opts.L0StopWritesThreshold {
 			// There are too many level-0 files, so we wait.
-			// fmt.Printf("L0 stop writes threshold\n")
+			if !stalled {
+				stalled = true
+				if d.opts.EventListener.WriteStallBegin != nil {
+					d.opts.EventListener.WriteStallBegin(WriteStallBeginInfo{
+						Reason: "L0 file count limit exceeded",
+					})
+				}
+			}
 			d.mu.compact.cond.Wait()
 			continue
 		}
@@ -881,7 +922,7 @@ func (d *DB) makeRoomForWrite(b *Batch) error {
 			d.mu.mem.switching = true
 			d.mu.Unlock()
 
-			newLogName := dbFilename(d.walDirname, fileTypeLog, newLogNumber)
+			newLogName := base.MakeFilename(d.walDirname, fileTypeLog, newLogNumber)
 
 			// Try to use a recycled log file. Recycling log files is an important
 			// performance optimization as it is faster to sync a file that has
@@ -891,7 +932,7 @@ func (d *DB) makeRoomForWrite(b *Batch) error {
 			// preallocation is performed (e.g. fallocate).
 			recycleLogNumber := d.logRecycler.peek()
 			if recycleLogNumber > 0 {
-				recycleLogName := dbFilename(d.walDirname, fileTypeLog, recycleLogNumber)
+				recycleLogName := base.MakeFilename(d.walDirname, fileTypeLog, recycleLogNumber)
 				err = d.opts.FS.Rename(recycleLogName, newLogName)
 			}
 

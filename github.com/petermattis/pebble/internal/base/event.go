@@ -143,6 +143,19 @@ func (i ManifestDeleteInfo) String() string {
 	return fmt.Sprintf("[JOB %d] MANIFEST deleted %06d", i.JobID, i.FileNum)
 }
 
+// TableCreateInfo contains the info for a table creation event.
+type TableCreateInfo struct {
+	JobID int
+	// Reason is the reason for the table creation (flushing or compacting).
+	Reason  string
+	Path    string
+	FileNum uint64
+}
+
+func (i TableCreateInfo) String() string {
+	return fmt.Sprintf("[JOB %d] %s: sstable created %06d", i.JobID, i.Reason, i.FileNum)
+}
+
 // TableDeleteInfo contains the info for a table deletion event.
 type TableDeleteInfo struct {
 	JobID   int
@@ -230,6 +243,15 @@ func (i WALDeleteInfo) String() string {
 	return fmt.Sprintf("[JOB %d] WAL deleted %06d", i.JobID, i.FileNum)
 }
 
+// WriteStallBeginInfo contains the info for a write stall begin event.
+type WriteStallBeginInfo struct {
+	Reason string
+}
+
+func (i WriteStallBeginInfo) String() string {
+	return fmt.Sprintf("write stall beginning: %s", i.Reason)
+}
+
 // EventListener contains a set of functions that will be invoked when various
 // significant DB events occur. Note that the functions should not run for an
 // excessive amount of time as they are invokved synchronously by the DB and
@@ -262,6 +284,9 @@ type EventListener struct {
 	// ManifestDeleted is invoked after a manifest has been deleted.
 	ManifestDeleted func(ManifestDeleteInfo)
 
+	// TableCreated is invoked when a table has been created.
+	TableCreated func(TableCreateInfo)
+
 	// TableDeleted is invoked after a table has been deleted.
 	TableDeleted func(TableDeleteInfo)
 
@@ -274,6 +299,12 @@ type EventListener struct {
 
 	// WALDeleted is invoked after a WAL has been deleted.
 	WALDeleted func(WALDeleteInfo)
+
+	// WriteStallBegin is invoked when writes are intentionally delayed.
+	WriteStallBegin func(WriteStallBeginInfo)
+
+	// WriteStallEnd is invoked when delayed writes are released.
+	WriteStallEnd func()
 }
 
 // EnsureDefaults ensures that background error events are logged to the
@@ -316,6 +347,9 @@ func MakeLoggingEventListener(logger Logger) EventListener {
 		ManifestDeleted: func(info ManifestDeleteInfo) {
 			logger.Infof("%s", info.String())
 		},
+		TableCreated: func(info TableCreateInfo) {
+			logger.Infof("%s", info.String())
+		},
 		TableDeleted: func(info TableDeleteInfo) {
 			logger.Infof("%s", info.String())
 		},
@@ -327,6 +361,12 @@ func MakeLoggingEventListener(logger Logger) EventListener {
 		},
 		WALDeleted: func(info WALDeleteInfo) {
 			logger.Infof("%s", info.String())
+		},
+		WriteStallBegin: func(info WriteStallBeginInfo) {
+			logger.Infof("%s", info.String())
+		},
+		WriteStallEnd: func() {
+			logger.Infof("write stall ending")
 		},
 	}
 }

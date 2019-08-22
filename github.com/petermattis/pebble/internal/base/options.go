@@ -237,14 +237,6 @@ type Options struct {
 	// The default value uses the same ordering as bytes.Compare.
 	Comparer *Comparer
 
-	// Comparers is a map from comparer name to comparer. It is used for
-	// debugging tools which may be used on multiple databases configured with
-	// different comparers. It is not necessary to populate this comparers map
-	// during normal usage of a DB.
-	//
-	// TODO(peter): unimplemented.
-	Comparers map[string]*Comparer
-
 	// Disable the write-ahead log (WAL). Disabling the write-ahead log prohibits
 	// crash recovery, but can improve performance if crash recovery is not
 	// needed (e.g. when only temporary state is being stored in the database).
@@ -265,8 +257,6 @@ type Options struct {
 	// debugging tools which may be used on multiple databases configured with
 	// different filter policies. It is not necessary to populate this filters
 	// map during normal usage of a DB.
-	//
-	// TODO(peter): unimplemented.
 	Filters map[string]FilterPolicy
 
 	// FS provides the interface for persistent file storage.
@@ -326,14 +316,6 @@ type Options struct {
 	// The default merger concatenates values.
 	Merger *Merger
 
-	// Mergers is a map from merger name to merger. It is used for debugging
-	// tools which may be used on multiple databases configured with different
-	// mergers. It is not necessary to populate this mergers map during normal
-	// usage of a DB.
-	//
-	// TODO(peter): unimplemented.
-	Mergers map[string]*Merger
-
 	// MinCompactionRate sets the minimum rate at which compactions occur. The
 	// default is 4 MB/s.
 	MinCompactionRate int
@@ -341,6 +323,12 @@ type Options struct {
 	// MinFlushRate sets the minimum rate at which the MemTables are flushed. The
 	// default is 1 MB/s.
 	MinFlushRate int
+
+	// ReadOnly indicates that the DB should be opened in read-only mode. Writes
+	// to the DB will return an error, background compactions are disabled, and
+	// the flush that normally occurs after replaying the WAL at startup is
+	// disabled.
+	ReadOnly bool
 
 	// TableFormat specifies the format version for sstables. The default is
 	// TableFormatRocksDBv2 which creates RocksDB compatible sstables. Use
@@ -377,6 +365,9 @@ func (o *Options) EnsureDefaults() *Options {
 	}
 	if o.Comparer == nil {
 		o.Comparer = DefaultComparer
+	}
+	if o.FS == nil {
+		o.FS = vfs.Default
 	}
 	if o.L0CompactionThreshold <= 0 {
 		o.L0CompactionThreshold = 4
@@ -428,10 +419,25 @@ func (o *Options) EnsureDefaults() *Options {
 	if o.MinFlushRate == 0 {
 		o.MinFlushRate = 1 << 20 // 1 MB/s
 	}
-	if o.FS == nil {
-		o.FS = vfs.Default
-	}
+
+	o.initMaps()
 	return o
+}
+
+// initMaps initializes the Comparers, Filters, and Mergers maps.
+func (o *Options) initMaps() {
+	for i := range o.Levels {
+		l := &o.Levels[i]
+		if l.FilterPolicy != nil {
+			if o.Filters == nil {
+				o.Filters = make(map[string]FilterPolicy)
+			}
+			name := l.FilterPolicy.Name()
+			if _, ok := o.Filters[name]; !ok {
+				o.Filters[name] = l.FilterPolicy
+			}
+		}
+	}
 }
 
 // Level returns the LevelOptions for the specified level.
@@ -445,6 +451,15 @@ func (o *Options) Level(level int) LevelOptions {
 		l.TargetFileSize *= 2
 	}
 	return l
+}
+
+// Clone creates a shallow-copy of the supplied options.
+func (o *Options) Clone() *Options {
+	n := &Options{}
+	if o != nil {
+		*n = *o
+	}
+	return n
 }
 
 func (o *Options) String() string {
