@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -529,7 +530,6 @@ func (r *raft) bcastAppend() {
 		if id == r.id {
 			return
 		}
-
 		r.sendAppend(id)
 	})
 }
@@ -554,35 +554,34 @@ func (r *raft) bcastHeartbeatWithCtx(ctx []byte) {
 }
 
 func (r *raft) advance(rd Ready) {
+	r.reduceUncommittedSize(rd.CommittedEntries)
+
 	// If entries were applied (or a snapshot), update our cursor for
 	// the next Ready. Note that if the current HardState contains a
 	// new Commit index, this does not mean that we're also applying
 	// all of the new entries due to commit pagination by size.
-	if index := rd.appliedCursor(); index > 0 {
-		r.raftLog.appliedTo(index)
-		if r.prs.Config.AutoLeave && index >= r.pendingConfIndex && r.state == StateLeader {
+	if newApplied := rd.appliedCursor(); newApplied > 0 {
+		oldApplied := r.raftLog.applied
+		r.raftLog.appliedTo(newApplied)
+
+		if r.prs.Config.AutoLeave && oldApplied < r.pendingConfIndex && newApplied >= r.pendingConfIndex && r.state == StateLeader {
 			// If the current (and most recent, at least for this leader's term)
-			// configuration should be auto-left, initiate that now.
-			ccdata, err := (&pb.ConfChangeV2{}).Marshal()
-			if err != nil {
-				panic(err)
-			}
+			// configuration should be auto-left, initiate that now. We use a
+			// nil Data which unmarshals into an empty ConfChangeV2 and has the
+			// benefit that appendEntry can never refuse it based on its size
+			// (which registers as zero).
 			ent := pb.Entry{
 				Type: pb.EntryConfChangeV2,
-				Data: ccdata,
+				Data: nil,
 			}
+			// There's no way in which this proposal should be able to be rejected.
 			if !r.appendEntry(ent) {
-				// If we could not append the entry, bump the pending conf index
-				// so that we'll try again later.
-				//
-				// TODO(tbg): test this case.
-				r.pendingConfIndex = r.raftLog.lastIndex()
-			} else {
-				r.logger.Infof("initiating automatic transition out of joint configuration %s", r.prs.Config)
+				panic("refused un-refusable auto-leaving ConfChangeV2")
 			}
+			r.pendingConfIndex = r.raftLog.lastIndex()
+			r.logger.Infof("initiating automatic transition out of joint configuration %s", r.prs.Config)
 		}
 	}
-	r.reduceUncommittedSize(rd.CommittedEntries)
 
 	if len(rd.Entries) > 0 {
 		e := rd.Entries[len(rd.Entries)-1]
@@ -795,7 +794,16 @@ func (r *raft) campaign(t CampaignType) {
 		}
 		return
 	}
-	for id := range r.prs.Voters.IDs() {
+	var ids []uint64
+	{
+		idMap := r.prs.Voters.IDs()
+		ids = make([]uint64, 0, len(idMap))
+		for id := range idMap {
+			ids = append(ids, id)
+		}
+		sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	}
+	for _, id := range ids {
 		if id == r.id {
 			continue
 		}
@@ -1027,10 +1035,36 @@ func stepLeader(r *raft, m pb.Message) error {
 
 		for i := range m.Entries {
 			e := &m.Entries[i]
-			if e.Type == pb.EntryConfChange || e.Type == pb.EntryConfChangeV2 {
-				if r.pendingConfIndex > r.raftLog.applied {
-					r.logger.Infof("%x propose conf %s ignored since pending unapplied configuration [index %d, applied %d]",
-						r.id, e, r.pendingConfIndex, r.raftLog.applied)
+			var cc pb.ConfChangeI
+			if e.Type == pb.EntryConfChange {
+				var ccc pb.ConfChange
+				if err := ccc.Unmarshal(e.Data); err != nil {
+					panic(err)
+				}
+				cc = ccc
+			} else if e.Type == pb.EntryConfChangeV2 {
+				var ccc pb.ConfChangeV2
+				if err := ccc.Unmarshal(e.Data); err != nil {
+					panic(err)
+				}
+				cc = ccc
+			}
+			if cc != nil {
+				alreadyPending := r.pendingConfIndex > r.raftLog.applied
+				alreadyJoint := len(r.prs.Config.Voters[1]) > 0
+				wantsLeaveJoint := len(cc.AsV2().Changes) == 0
+
+				var refused string
+				if alreadyPending {
+					refused = fmt.Sprintf("possible unapplied conf change at index %d (applied to %d)", r.pendingConfIndex, r.raftLog.applied)
+				} else if alreadyJoint && !wantsLeaveJoint {
+					refused = "must transition out of joint config first"
+				} else if !alreadyJoint && wantsLeaveJoint {
+					refused = "not in joint state; refusing empty conf change"
+				}
+
+				if refused != "" {
+					r.logger.Infof("%x ignoring conf change %v at config %s: %s", r.id, cc, r.prs.Config, refused)
 					m.Entries[i] = pb.Entry{Type: pb.EntryNormal}
 				} else {
 					r.pendingConfIndex = r.raftLog.lastIndex() + uint64(i) + 1
@@ -1396,7 +1430,7 @@ func (r *raft) restore(s pb.Snapshot) bool {
 	}
 
 	// More defense-in-depth: throw away snapshot if recipient is not in the
-	// config. This shouuldn't ever happen (at the time of writing) but lots of
+	// config. This shouldn't ever happen (at the time of writing) but lots of
 	// code here and there assumes that r.id is in the progress tracker.
 	found := false
 	cs := s.Metadata.ConfState
@@ -1518,10 +1552,18 @@ func (r *raft) switchToConfig(cfg tracker.Config, prs tracker.ProgressMap) pb.Co
 	if r.state != StateLeader || len(cs.Voters) == 0 {
 		return cs
 	}
+
 	if r.maybeCommit() {
-		// The quorum size may have been reduced (but not to zero), so see if
-		// any pending entries can be committed.
+		// If the configuration change means that more entries are committed now,
+		// broadcast/append to everyone in the updated config.
 		r.bcastAppend()
+	} else if false { // HACK(tbg): causes learner/raftsnapq race failures
+		// Otherwise, still probe the newly added replicas; there's no reason to
+		// let them wait out a heartbeat interval (or the next incoming
+		// proposal).
+		r.prs.Visit(func(id uint64, pr *tracker.Progress) {
+			r.maybeSendAppend(id, false /* sendIfEmpty */)
+		})
 	}
 	// If the the leadTransferee was removed, abort the leadership transfer.
 	if _, tOK := r.prs.Progress[r.leadTransferee]; !tOK && r.leadTransferee != 0 {
@@ -1564,16 +1606,21 @@ func (r *raft) abortLeaderTransfer() {
 // If the new entries would exceed the limit, the method returns false. If not,
 // the increase in uncommitted entry size is recorded and the method returns
 // true.
+// Configuration changes are never refused.
 func (r *raft) increaseUncommittedSize(ents []pb.Entry) bool {
 	var s uint64
 	for _, e := range ents {
 		s += uint64(PayloadSize(e))
 	}
 
-	if r.uncommittedSize > 0 && r.uncommittedSize+s > r.maxUncommittedSize {
+	if r.uncommittedSize > 0 && s > 0 && r.uncommittedSize+s > r.maxUncommittedSize {
 		// If the uncommitted tail of the Raft log is empty, allow any size
 		// proposal. Otherwise, limit the size of the uncommitted tail of the
 		// log and drop any proposal that would push the size over the limit.
+		// Note the added requirement s>0 which is used to make sure that
+		// appending single empty entries to the log always succeeds, used both
+		// for replicating a new leader's initial empty entry, and for
+		// auto-leaving joint configurations.
 		return false
 	}
 	r.uncommittedSize += s
