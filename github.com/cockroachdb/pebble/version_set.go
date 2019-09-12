@@ -166,7 +166,7 @@ func (vs *versionSet) load(dirname string, opts *Options, mu *sync.Mutex) error 
 	vs.markFileNumUsed(vs.logNum)
 	vs.markFileNumUsed(vs.prevLogNum)
 
-	newVersion, err := bve.Apply(opts, nil, vs.cmp)
+	newVersion, err := bve.Apply(nil, vs.cmp, opts.Comparer.Format)
 	if err != nil {
 		return err
 	}
@@ -227,21 +227,19 @@ func (vs *versionSet) logAndApply(
 		bve.Accumulate(ve)
 
 		var err error
-		newVersion, err = bve.Apply(vs.opts, currentVersion, vs.cmp)
+		newVersion, err = bve.Apply(currentVersion, vs.cmp, vs.opts.Comparer.Format)
 		if err != nil {
 			return err
 		}
 
 		if newManifestFileNum != 0 {
 			if err := vs.createManifest(vs.dirname, newManifestFileNum); err != nil {
-				if vs.opts.EventListener.ManifestCreated != nil {
-					vs.opts.EventListener.ManifestCreated(ManifestCreateInfo{
-						JobID:   jobID,
-						Path:    base.MakeFilename(vs.dirname, fileTypeManifest, newManifestFileNum),
-						FileNum: newManifestFileNum,
-						Err:     err,
-					})
-				}
+				vs.opts.EventListener.ManifestCreated(ManifestCreateInfo{
+					JobID:   jobID,
+					Path:    base.MakeFilename(vs.dirname, fileTypeManifest, newManifestFileNum),
+					FileNum: newManifestFileNum,
+					Err:     err,
+				})
 				return err
 			}
 		}
@@ -276,13 +274,11 @@ func (vs *versionSet) logAndApply(
 				vs.opts.Logger.Fatalf("MANIFEST dirsync failed: %v", err)
 				return err
 			}
-			if vs.opts.EventListener.ManifestCreated != nil {
-				vs.opts.EventListener.ManifestCreated(ManifestCreateInfo{
-					JobID:   jobID,
-					Path:    base.MakeFilename(vs.dirname, fileTypeManifest, newManifestFileNum),
-					FileNum: newManifestFileNum,
-				})
-			}
+			vs.opts.EventListener.ManifestCreated(ManifestCreateInfo{
+				JobID:   jobID,
+				Path:    base.MakeFilename(vs.dirname, fileTypeManifest, newManifestFileNum),
+				FileNum: newManifestFileNum,
+			})
 		}
 		picker = newCompactionPicker(newVersion, vs.opts)
 		if !vs.dynamicBaseLevel {

@@ -163,35 +163,40 @@ type Version struct {
 }
 
 func (v *Version) String() string {
+	return v.Pretty(base.DefaultFormatter)
+}
+
+// Pretty returns a string representation of the version.
+func (v *Version) Pretty(format base.Formatter) string {
 	var buf bytes.Buffer
 	for level := 0; level < NumLevels; level++ {
 		if len(v.Files[level]) == 0 {
 			continue
 		}
-		fmt.Fprintf(&buf, "%d:", level)
+		fmt.Fprintf(&buf, "%d:\n", level)
 		for j := range v.Files[level] {
 			f := &v.Files[level][j]
-			fmt.Fprintf(&buf, " %s-%s", f.Smallest.UserKey, f.Largest.UserKey)
+			fmt.Fprintf(&buf, "  %d:[%s-%s]\n", f.FileNum,
+				format(f.Smallest.UserKey), format(f.Largest.UserKey))
 		}
-		fmt.Fprintf(&buf, "\n")
 	}
 	return buf.String()
 }
 
 // DebugString returns an alternative format to String() which includes
 // sequence number and kind information for the sstable boundaries.
-func (v *Version) DebugString() string {
+func (v *Version) DebugString(format base.Formatter) string {
 	var buf bytes.Buffer
 	for level := 0; level < NumLevels; level++ {
 		if len(v.Files[level]) == 0 {
 			continue
 		}
-		fmt.Fprintf(&buf, "%d:", level)
+		fmt.Fprintf(&buf, "%d:\n", level)
 		for j := range v.Files[level] {
 			f := &v.Files[level][j]
-			fmt.Fprintf(&buf, " %s-%s", f.Smallest, f.Largest)
+			fmt.Fprintf(&buf, "  %d:[%s-%s]\n", f.FileNum,
+				f.Smallest.Pretty(format), f.Largest.Pretty(format))
 		}
-		fmt.Fprintf(&buf, "\n")
 	}
 	return buf.String()
 }
@@ -256,16 +261,22 @@ func (v *Version) Next() *Version {
 // may touch). If level is zero then that assumption cannot be made, and the
 // [start, end] range is expanded to the union of those matching ranges so far
 // and the computation is repeated until [start, end] stabilizes.
+// The returned files are a subsequence of the input files, i.e., the ordering
+// is not changed.
 func (v *Version) Overlaps(
 	level int, cmp Compare, start, end []byte,
 ) (ret []FileMetadata) {
 	if level == 0 {
-		// The sstables in level 0 can overlap with each other. As soon as we find
-		// one sstable that overlaps with our target range, we need to expand the
-		// range and find all sstables that overlap with the expanded range.
-	loop:
+		// Indices that have been selected as overlapping.
+		selectedIndices := make([]bool, len(v.Files[level]))
+		numSelected := 0
 		for {
-			for _, meta := range v.Files[level] {
+			restart := false
+			for i, selected := range selectedIndices {
+				if selected {
+					continue
+				}
+				meta := &v.Files[level][i]
 				smallest := meta.Smallest.UserKey
 				largest := meta.Largest.UserKey
 				if cmp(largest, start) < 0 {
@@ -276,11 +287,15 @@ func (v *Version) Overlaps(
 					// meta is completely after the specified range; skip it.
 					continue
 				}
-				ret = append(ret, meta)
+				// Overlaps.
+				selectedIndices[i] = true
+				numSelected++
 
-				// If level == 0, check if the newly added fileMetadata has
-				// expanded the range. If so, restart the search.
-				restart := false
+				// Since level == 0, check if the newly added fileMetadata has
+				// expanded the range. We expand the range immediately for files
+				// we have remaining to check in this loop. All already checked
+				// and unselected files will need to be rechecked via the
+				// restart below.
 				if cmp(smallest, start) < 0 {
 					start = smallest
 					restart = true
@@ -289,15 +304,21 @@ func (v *Version) Overlaps(
 					end = largest
 					restart = true
 				}
-				if restart {
-					ret = ret[:0]
-					continue loop
-				}
 			}
-			return ret
-		}
-	}
 
+			if !restart {
+				ret = make([]FileMetadata, 0, numSelected)
+				for i, selected := range selectedIndices {
+					if selected {
+						ret = append(ret, v.Files[level][i])
+					}
+				}
+				break
+			}
+			// Continue looping to retry the files that were not selected.
+		}
+		return
+	}
 	// Binary search to find the range of files which overlaps with our target
 	// range.
 	files := v.Files[level]
@@ -316,34 +337,10 @@ func (v *Version) Overlaps(
 // CheckOrdering checks that the files are consistent with respect to
 // increasing file numbers (for level 0 files) and increasing and non-
 // overlapping internal key ranges (for level non-0 files).
-func (v *Version) CheckOrdering(cmp Compare) error {
-	for level, ff := range v.Files {
-		if level == 0 {
-			for i := 1; i < len(ff); i++ {
-				prev := &ff[i-1]
-				f := &ff[i]
-				if prev.LargestSeqNum >= f.LargestSeqNum {
-					return fmt.Errorf("level 0 files are not in increasing largest seqNum order: %d, %d",
-						prev.LargestSeqNum, f.LargestSeqNum)
-				}
-				if prev.SmallestSeqNum >= f.SmallestSeqNum {
-					return fmt.Errorf("level 0 files are not in increasing smallest seqNum order: %d, %d",
-						prev.SmallestSeqNum, f.SmallestSeqNum)
-				}
-			}
-		} else {
-			for i := 1; i < len(ff); i++ {
-				prev := &ff[i-1]
-				f := &ff[i]
-				if base.InternalCompare(cmp, prev.Largest, f.Smallest) >= 0 {
-					return fmt.Errorf("level non-0 files are not in increasing ikey order: %s, %s\n%s",
-						prev.Largest, f.Smallest, v.DebugString())
-				}
-				if base.InternalCompare(cmp, f.Smallest, f.Largest) > 0 {
-					return fmt.Errorf("level non-0 file has inconsistent bounds: %s, %s",
-						f.Smallest, f.Largest)
-				}
-			}
+func (v *Version) CheckOrdering(cmp Compare, format base.Formatter) error {
+	for level, files := range v.Files {
+		if err := CheckOrdering(cmp, format, level, files); err != nil {
+			return fmt.Errorf("%s\n%s", err, v.DebugString(format))
 		}
 	}
 	return nil
@@ -406,4 +403,40 @@ func (l *VersionList) Remove(v *Version) {
 	v.next = nil // avoid memory leaks
 	v.prev = nil // avoid memory leaks
 	v.list = nil // avoid memory leaks
+}
+
+// CheckOrdering checks that the files are consistent with respect to
+// increasing file numbers (for level 0 files) and increasing and non-
+// overlapping internal key ranges (for non-level 0 files).
+func CheckOrdering(cmp Compare, format base.Formatter, level int, files []FileMetadata) error {
+	if level == 0 {
+		for i := 1; i < len(files); i++ {
+			prev := &files[i-1]
+			f := &files[i]
+			if prev.LargestSeqNum >= f.LargestSeqNum {
+				return fmt.Errorf("L0 files %06d and %06d are not in increasing largest seqnum order: %d vs %d",
+					prev.FileNum, f.FileNum, prev.LargestSeqNum, f.LargestSeqNum)
+			}
+			if prev.SmallestSeqNum >= f.SmallestSeqNum {
+				return fmt.Errorf("L0 files %06d and %06d are not in increasing smallest seqnum order: %d vs %d",
+					prev.FileNum, f.FileNum, prev.SmallestSeqNum, f.SmallestSeqNum)
+			}
+		}
+	} else {
+		for i := 0; i < len(files); i++ {
+			f := &files[i]
+			if base.InternalCompare(cmp, f.Smallest, f.Largest) > 0 {
+				return fmt.Errorf("L%d file %06d has inconsistent bounds: %s vs %s",
+					level, f.FileNum, f.Smallest.Pretty(format), f.Largest.Pretty(format))
+			}
+			if i > 0 {
+				prev := &files[i-1]
+				if base.InternalCompare(cmp, prev.Largest, f.Smallest) >= 0 {
+					return fmt.Errorf("L%d files %06d and %06d are not in increasing key order: %s vs %s",
+						level, prev.FileNum, f.FileNum, prev.Largest.Pretty(format), f.Smallest.Pretty(format))
+				}
+			}
+		}
+	}
+	return nil
 }

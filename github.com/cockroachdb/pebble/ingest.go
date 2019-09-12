@@ -51,15 +51,18 @@ func ingestLoad1(opts *Options, path string, dbNum, fileNum uint64) (*fileMetada
 	meta.Smallest = InternalKey{}
 	meta.Largest = InternalKey{}
 	smallestSet, largestSet := false, false
+	empty := true
 
 	{
 		iter := r.NewIter(nil /* lower */, nil /* upper */)
 		defer iter.Close()
 		if key, _ := iter.First(); key != nil {
+			empty = false
 			meta.Smallest = key.Clone()
 			smallestSet = true
 		}
 		if key, _ := iter.Last(); key != nil {
+			empty = false
 			meta.Largest = key.Clone()
 			largestSet = true
 		}
@@ -71,12 +74,14 @@ func ingestLoad1(opts *Options, path string, dbNum, fileNum uint64) (*fileMetada
 	if iter := r.NewRangeDelIter(); iter != nil {
 		defer iter.Close()
 		if key, _ := iter.First(); key != nil {
+			empty = false
 			if !smallestSet ||
 				base.InternalCompare(opts.Comparer.Compare, meta.Smallest, *key) > 0 {
 				meta.Smallest = key.Clone()
 			}
 		}
 		if key, val := iter.Last(); key != nil {
+			empty = false
 			end := base.MakeRangeDeleteSentinelKey(val)
 			if !largestSet ||
 				base.InternalCompare(opts.Comparer.Compare, meta.Largest, end) < 0 {
@@ -85,21 +90,28 @@ func ingestLoad1(opts *Options, path string, dbNum, fileNum uint64) (*fileMetada
 		}
 	}
 
+	if empty {
+		return nil, nil
+	}
 	return meta, nil
 }
 
 func ingestLoad(
 	opts *Options, paths []string, dbNum uint64, pending []uint64,
-) ([]*fileMetadata, error) {
-	meta := make([]*fileMetadata, len(paths))
+) ([]*fileMetadata, []string, error) {
+	meta := make([]*fileMetadata, 0, len(paths))
+	newPaths := make([]string, 0, len(paths))
 	for i := range paths {
-		var err error
-		meta[i], err = ingestLoad1(opts, paths[i], dbNum, pending[i])
+		m, err := ingestLoad1(opts, paths[i], dbNum, pending[i])
 		if err != nil {
-			return nil, err
+			return nil, nil, err
+		}
+		if m != nil {
+			meta = append(meta, m)
+			newPaths = append(newPaths, paths[i])
 		}
 	}
-	return meta, nil
+	return meta, newPaths, nil
 }
 
 func ingestSortAndVerify(cmp Compare, meta []*fileMetadata) error {
@@ -132,7 +144,7 @@ func ingestCleanup(fs vfs.FS, dirname string, meta []*fileMetadata) error {
 	return firstErr
 }
 
-func ingestLink(opts *Options, dirname string, paths []string, meta []*fileMetadata) error {
+func ingestLink(jobID int, opts *Options, dirname string, paths []string, meta []*fileMetadata) error {
 	for i := range paths {
 		target := base.MakeFilename(dirname, fileTypeTable, meta[i].FileNum)
 		err := opts.FS.Link(paths[i], target)
@@ -141,6 +153,14 @@ func ingestLink(opts *Options, dirname string, paths []string, meta []*fileMetad
 				opts.Logger.Infof("ingest cleanup failed: %v", err2)
 			}
 			return err
+		}
+		if opts.EventListener.TableCreated != nil {
+			opts.EventListener.TableCreated(TableCreateInfo{
+				JobID:   jobID,
+				Reason:  "ingesting",
+				Path:    target,
+				FileNum: meta[i].FileNum,
+			})
 		}
 	}
 
@@ -208,7 +228,13 @@ func ingestUpdateSeqNum(opts *Options, dirname string, seqNum uint64, meta []*fi
 }
 
 func ingestTargetLevel(cmp Compare, v *version, meta *fileMetadata) int {
-	// Find the lowest level which does not have any files which overlap meta.
+	// Find the lowest level which does not have any files which overlap meta. We
+	// search from L0 to L6 looking for whether there are any files in the level
+	// which overlap meta. We want the "lowest" level (where lower means
+	// increasing level number) in order to reduce write amplification. We can't
+	// place meta at or below a level in which it has overlap because doing so
+	// could violate the invariant that for a given key the sequence numbers in
+	// higher levels will be larger than those in lower levels.
 	if len(v.Overlaps(0, cmp, meta.Smallest.UserKey, meta.Largest.UserKey)) != 0 {
 		return 0
 	}
@@ -282,10 +308,15 @@ func (d *DB) Ingest(paths []string) error {
 		d.mu.Unlock()
 	}()
 
-	// Load the metadata for all of the files being ingested.
-	meta, err := ingestLoad(d.opts, paths, d.dbNum, pendingOutputs)
+	// Load the metadata for all of the files being ingested. This step detects
+	// and elides empty sstables.
+	meta, paths, err := ingestLoad(d.opts, paths, d.dbNum, pendingOutputs)
 	if err != nil {
 		return err
+	}
+	if len(meta) == 0 {
+		// All of the sstables to be ingested were empty. Nothing to do.
+		return nil
 	}
 
 	// Verify the sstables do not overlap.
@@ -297,7 +328,7 @@ func (d *DB) Ingest(paths []string) error {
 	// referenced by a version, they won't be used. If the hard linking fails
 	// (e.g. because the files reside on a different filesystem) we undo our work
 	// and return an error.
-	if err := ingestLink(d.opts, d.dirname, paths, meta); err != nil {
+	if err := ingestLink(jobID, d.opts, d.dirname, paths, meta); err != nil {
 		return err
 	}
 	// Fsync the directory we added the tables to. We need to do this at some
@@ -366,25 +397,23 @@ func (d *DB) Ingest(paths []string) error {
 		}
 	}
 
-	if d.opts.EventListener.TableIngested != nil {
-		info := TableIngestInfo{
-			JobID:        jobID,
-			GlobalSeqNum: meta[0].SmallestSeqNum,
-			Err:          err,
-		}
-		if ve != nil {
-			info.Tables = make([]struct {
-				TableInfo
-				Level int
-			}, len(ve.NewFiles))
-			for i := range ve.NewFiles {
-				e := &ve.NewFiles[i]
-				info.Tables[i].Level = e.Level
-				info.Tables[i].TableInfo = e.Meta.TableInfo(d.dirname)
-			}
-		}
-		d.opts.EventListener.TableIngested(info)
+	info := TableIngestInfo{
+		JobID:        jobID,
+		GlobalSeqNum: meta[0].SmallestSeqNum,
+		Err:          err,
 	}
+	if ve != nil {
+		info.Tables = make([]struct {
+			TableInfo
+			Level int
+		}, len(ve.NewFiles))
+		for i := range ve.NewFiles {
+			e := &ve.NewFiles[i]
+			info.Tables[i].Level = e.Level
+			info.Tables[i].TableInfo = e.Meta.TableInfo(d.dirname)
+		}
+	}
+	d.opts.EventListener.TableIngested(info)
 
 	return err
 }

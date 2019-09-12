@@ -48,6 +48,8 @@ func totalSize(f []fileMetadata) (size uint64) {
 // given version.
 type compaction struct {
 	cmp     Compare
+	format  base.Formatter
+	logger  base.Logger
 	version *version
 
 	// startLevel is the level that is being compacted. Inputs from startLevel
@@ -121,6 +123,8 @@ func newCompaction(
 
 	return &compaction{
 		cmp:                 opts.Comparer.Compare,
+		format:              opts.Comparer.Format,
+		logger:              opts.Logger,
 		version:             cur,
 		startLevel:          startLevel,
 		outputLevel:         outputLevel,
@@ -140,6 +144,8 @@ func newFlush(
 ) *compaction {
 	c := &compaction{
 		cmp:                 opts.Comparer.Compare,
+		format:              opts.Comparer.Format,
+		logger:              opts.Logger,
 		version:             cur,
 		startLevel:          -1,
 		outputLevel:         0,
@@ -226,7 +232,9 @@ func (c *compaction) setupOtherInputs() {
 // invariant that the versions of keys at level+1 are older than the versions
 // of keys at level. This is achieved by adding tables to the right of the
 // current input tables such that the rightmost table has a "clean cut". A
-// clean cut is either a change in user keys, or
+// clean cut is either a change in user keys, or when the largest key in the
+// left sstable is a range tombstone sentinel key
+// (InternalKeyRangeDeleteSentinel).
 func (c *compaction) expandInputs(inputs []fileMetadata) []fileMetadata {
 	if c.startLevel == 0 {
 		// We already call version.overlaps for L0 and that call guarantees that we
@@ -512,6 +520,15 @@ func (c *compaction) newInputIter(
 		return newMergingIter(c.cmp, iters...), nil
 	}
 
+	// Check that the LSM ordering invariants are ok in order to prevent
+	// generating corrupted sstables due to a violation of those invariants.
+	if err := manifest.CheckOrdering(c.cmp, c.format, c.startLevel, c.inputs[0]); err != nil {
+		c.logger.Fatalf("%s", err)
+	}
+	if err := manifest.CheckOrdering(c.cmp, c.format, c.outputLevel, c.inputs[1]); err != nil {
+		c.logger.Fatalf("%s", err)
+	}
+
 	iters := make([]internalIterator, 0, 2*len(c.inputs[0])+1)
 	defer func() {
 		if retErr != nil {
@@ -656,9 +673,7 @@ func (d *DB) flush() {
 	defer d.mu.Unlock()
 	if err := d.flush1(); err != nil {
 		// TODO(peter): count consecutive flush errors and backoff.
-		if d.opts.EventListener.BackgroundError != nil {
-			d.opts.EventListener.BackgroundError(err)
-		}
+		d.opts.EventListener.BackgroundError(err)
 	}
 	d.mu.compact.flushing = false
 	// More flush work may have arrived while we were flushing, so schedule
@@ -692,11 +707,9 @@ func (d *DB) flush1() error {
 
 	jobID := d.mu.nextJobID
 	d.mu.nextJobID++
-	if d.opts.EventListener.FlushBegin != nil {
-		d.opts.EventListener.FlushBegin(FlushInfo{
-			JobID: jobID,
-		})
-	}
+	d.opts.EventListener.FlushBegin(FlushInfo{
+		JobID: jobID,
+	})
 
 	flushPacer := newFlushPacer(flushPacerEnv{
 		limiter:      d.flushLimiter,
@@ -705,53 +718,54 @@ func (d *DB) flush1() error {
 	})
 	ve, pendingOutputs, err := d.runCompaction(jobID, c, flushPacer)
 
-	if d.opts.EventListener.FlushEnd != nil {
-		info := FlushInfo{
-			JobID: jobID,
-			Err:   err,
+	info := FlushInfo{
+		JobID: jobID,
+		Done:  true,
+		Err:   err,
+	}
+	if err == nil {
+		for i := range ve.NewFiles {
+			e := &ve.NewFiles[i]
+			info.Output = append(info.Output, e.Meta.TableInfo(d.dirname))
 		}
-		if err == nil {
-			for i := range ve.NewFiles {
-				e := &ve.NewFiles[i]
-				info.Output = append(info.Output, e.Meta.TableInfo(d.dirname))
+		if len(ve.NewFiles) == 0 {
+			info.Err = errEmptyTable
+		}
+
+		// The flush succeeded or it produced an empty sstable. In either case we
+		// want to bump the log number.
+		ve.LogNum, _ = d.mu.mem.queue[n].logInfo()
+		metrics := c.metrics[0]
+		for i := 0; i < n; i++ {
+			_, size := d.mu.mem.queue[i].logInfo()
+			metrics.BytesIn += size
+		}
+
+		err = d.mu.versions.logAndApply(jobID, ve, c.metrics, d.dataDir)
+		for _, fileNum := range pendingOutputs {
+			if _, ok := d.mu.compact.pendingOutputs[fileNum]; !ok {
+				panic("pebble: expected pending output not present")
 			}
-			if len(ve.NewFiles) == 0 {
-				info.Err = errEmptyTable
+			delete(d.mu.compact.pendingOutputs, fileNum)
+			if err != nil {
+				// TODO(peter): untested.
+				d.mu.versions.obsoleteTables = append(d.mu.versions.obsoleteTables, fileNum)
 			}
 		}
-		d.opts.EventListener.FlushEnd(info)
 	}
 
-	if err != nil {
-		return err
-	}
-
-	// The flush succeeded or it produced an empty sstable. In either case we
-	// want to bump the log number.
-	ve.LogNum, _ = d.mu.mem.queue[n].logInfo()
-	metrics := c.metrics[0]
-	for i := 0; i < n; i++ {
-		_, size := d.mu.mem.queue[i].logInfo()
-		metrics.BytesIn += size
-	}
-
-	err = d.mu.versions.logAndApply(jobID, ve, c.metrics, d.dataDir)
-	for _, fileNum := range pendingOutputs {
-		if _, ok := d.mu.compact.pendingOutputs[fileNum]; !ok {
-			panic("pebble: expected pending output not present")
-		}
-		delete(d.mu.compact.pendingOutputs, fileNum)
-	}
-	if err != nil {
-		return err
-	}
+	d.opts.EventListener.FlushEnd(info)
 
 	// Refresh bytes flushed count.
 	atomic.StoreUint64(&d.bytesFlushed, 0)
 
-	flushed := d.mu.mem.queue[:n]
-	d.mu.mem.queue = d.mu.mem.queue[n:]
-	d.updateReadStateLocked()
+	var flushed []flushable
+	if err == nil {
+		flushed = d.mu.mem.queue[:n]
+		d.mu.mem.queue = d.mu.mem.queue[n:]
+		d.updateReadStateLocked()
+	}
+
 	d.deleteObsoleteFiles(jobID)
 
 	// Mark all the memtables we flushed as flushed. Note that we do this last so
@@ -763,7 +777,7 @@ func (d *DB) flush1() error {
 	for i := range flushed {
 		close(flushed[i].flushed())
 	}
-	return nil
+	return err
 }
 
 // maybeScheduleCompaction schedules a compaction if necessary.
@@ -795,9 +809,7 @@ func (d *DB) compact() {
 	defer d.mu.Unlock()
 	if err := d.compact1(); err != nil {
 		// TODO(peter): count consecutive compaction errors and backoff.
-		if d.opts.EventListener.BackgroundError != nil {
-			d.opts.EventListener.BackgroundError(err)
-		}
+		d.opts.EventListener.BackgroundError(err)
 	}
 	d.mu.compact.compacting = false
 	// The previous compaction may have produced too many files in a
@@ -831,19 +843,15 @@ func (d *DB) compact1() (err error) {
 	info := CompactionInfo{
 		JobID: jobID,
 	}
-	if d.opts.EventListener.CompactionBegin != nil || d.opts.EventListener.CompactionEnd != nil {
-		info.Input.Level = c.startLevel
-		info.Output.Level = c.outputLevel
-		for i := range c.inputs {
-			for j := range c.inputs[i] {
-				m := &c.inputs[i][j]
-				info.Input.Tables[i] = append(info.Input.Tables[i], m.TableInfo(d.dirname))
-			}
+	info.Input.Level = c.startLevel
+	info.Output.Level = c.outputLevel
+	for i := range c.inputs {
+		for j := range c.inputs[i] {
+			m := &c.inputs[i][j]
+			info.Input.Tables[i] = append(info.Input.Tables[i], m.TableInfo(d.dirname))
 		}
 	}
-	if d.opts.EventListener.CompactionBegin != nil {
-		d.opts.EventListener.CompactionBegin(info)
-	}
+	d.opts.EventListener.CompactionBegin(info)
 
 	compactionPacer := newCompactionPacer(compactionPacerEnv{
 		limiter:      d.compactionLimiter,
@@ -852,34 +860,40 @@ func (d *DB) compact1() (err error) {
 	})
 	ve, pendingOutputs, err := d.runCompaction(jobID, c, compactionPacer)
 
-	if d.opts.EventListener.CompactionEnd != nil {
-		info.Err = err
-		if err == nil {
-			for i := range ve.NewFiles {
-				e := &ve.NewFiles[i]
-				info.Output.Tables = append(info.Output.Tables, e.Meta.TableInfo(d.dirname))
+	if err == nil {
+		err = d.mu.versions.logAndApply(jobID, ve, c.metrics, d.dataDir)
+		for _, fileNum := range pendingOutputs {
+			if _, ok := d.mu.compact.pendingOutputs[fileNum]; !ok {
+				panic("pebble: expected pending output not present")
+			}
+			delete(d.mu.compact.pendingOutputs, fileNum)
+			if err != nil {
+				// TODO(peter): untested.
+				d.mu.versions.obsoleteTables = append(d.mu.versions.obsoleteTables, fileNum)
 			}
 		}
-		d.opts.EventListener.CompactionEnd(info)
 	}
 
-	if err != nil {
-		return err
-	}
-	err = d.mu.versions.logAndApply(jobID, ve, c.metrics, d.dataDir)
-	for _, fileNum := range pendingOutputs {
-		if _, ok := d.mu.compact.pendingOutputs[fileNum]; !ok {
-			panic("pebble: expected pending output not present")
+	info.Done = true
+	info.Err = err
+	if err == nil {
+		for i := range ve.NewFiles {
+			e := &ve.NewFiles[i]
+			info.Output.Tables = append(info.Output.Tables, e.Meta.TableInfo(d.dirname))
 		}
-		delete(d.mu.compact.pendingOutputs, fileNum)
 	}
-	if err != nil {
-		return err
-	}
+	d.opts.EventListener.CompactionEnd(info)
 
-	d.updateReadStateLocked()
+	// Update the read state before deleting obsolete files because the
+	// read-state update will cause the previous version to be unref'd and if
+	// there are no references obsolete tables will be added to the obsolete
+	// table list.
+	if err == nil {
+		d.updateReadStateLocked()
+	}
 	d.deleteObsoleteFiles(jobID)
-	return nil
+
+	return err
 }
 
 // runCompactions runs a compaction that produces new on-disk tables from
@@ -978,18 +992,16 @@ func (d *DB) runCompaction(jobID int, c *compaction, pacer pacer) (
 		if err != nil {
 			return err
 		}
-		if d.opts.EventListener.TableCreated != nil {
-			reason := "flushing"
-			if c.flushing == nil {
-				reason = "compacting"
-			}
-			d.opts.EventListener.TableCreated(TableCreateInfo{
-				JobID:   jobID,
-				Reason:  reason,
-				Path:    filename,
-				FileNum: fileNum,
-			})
+		reason := "flushing"
+		if c.flushing == nil {
+			reason = "compacting"
 		}
+		d.opts.EventListener.TableCreated(TableCreateInfo{
+			JobID:   jobID,
+			Reason:  reason,
+			Path:    filename,
+			FileNum: fileNum,
+		})
 		file = vfs.NewSyncingFile(file, vfs.SyncingFileOptions{
 			BytesPerSync: d.opts.BytesPerSync,
 		})
@@ -1261,32 +1273,26 @@ func (d *DB) deleteObsoleteFiles(jobID int) {
 
 			switch f.fileType {
 			case fileTypeLog:
-				if d.opts.EventListener.WALDeleted != nil {
-					d.opts.EventListener.WALDeleted(WALDeleteInfo{
-						JobID:   jobID,
-						Path:    path,
-						FileNum: fileNum,
-						Err:     err,
-					})
-				}
+				d.opts.EventListener.WALDeleted(WALDeleteInfo{
+					JobID:   jobID,
+					Path:    path,
+					FileNum: fileNum,
+					Err:     err,
+				})
 			case fileTypeManifest:
-				if d.opts.EventListener.ManifestDeleted != nil {
-					d.opts.EventListener.ManifestDeleted(ManifestDeleteInfo{
-						JobID:   jobID,
-						Path:    path,
-						FileNum: fileNum,
-						Err:     err,
-					})
-				}
+				d.opts.EventListener.ManifestDeleted(ManifestDeleteInfo{
+					JobID:   jobID,
+					Path:    path,
+					FileNum: fileNum,
+					Err:     err,
+				})
 			case fileTypeTable:
-				if d.opts.EventListener.TableDeleted != nil {
-					d.opts.EventListener.TableDeleted(TableDeleteInfo{
-						JobID:   jobID,
-						Path:    path,
-						FileNum: fileNum,
-						Err:     err,
-					})
-				}
+				d.opts.EventListener.TableDeleted(TableDeleteInfo{
+					JobID:   jobID,
+					Path:    path,
+					FileNum: fileNum,
+					Err:     err,
+				})
 			}
 		}
 	}
