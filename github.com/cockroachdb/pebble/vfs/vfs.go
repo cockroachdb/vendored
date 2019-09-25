@@ -7,6 +7,7 @@ package vfs
 import (
 	"io"
 	"os"
+	"path/filepath"
 	"syscall"
 )
 
@@ -23,7 +24,7 @@ type File interface {
 	Sync() error
 }
 
-// OpenOptions provide an interface to do work on file handles in the Open()
+// OpenOption provide an interface to do work on file handles in the Open()
 // call.
 type OpenOption interface {
 	// Apply is called on the file handle after it's opened.
@@ -86,6 +87,16 @@ type FS interface {
 
 	// Stat returns an os.FileInfo describing the named file.
 	Stat(name string) (os.FileInfo, error)
+
+	// PathBase returns the last element of path. Trailing path separators are
+	// removed before extracting the last element. If the path is empty, PathBase
+	// returns ".".  If the path consists entirely of separators, PathBase returns a
+	// single separator.
+	PathBase(path string) string
+
+	// PathJoin joins any number of path elements into a single path, adding a
+	// separator if necessary.
+	PathJoin(elem ...string) string
 }
 
 // Default is a FS implementation backed by the underlying operating system's
@@ -113,10 +124,6 @@ func (defaultFS) Open(name string, opts ...OpenOption) (File, error) {
 	return file, nil
 }
 
-func (defaultFS) OpenDir(name string) (File, error) {
-	return os.OpenFile(name, syscall.O_CLOEXEC, 0)
-}
-
 func (defaultFS) Remove(name string) error {
 	return os.Remove(name)
 }
@@ -142,6 +149,13 @@ func (defaultFS) Stat(name string) (os.FileInfo, error) {
 	return os.Stat(name)
 }
 
+func (defaultFS) PathBase(path string) string {
+	return filepath.Base(path)
+}
+
+func (defaultFS) PathJoin(elem ...string) string {
+	return filepath.Join(elem...)
+}
 
 type randomReadsOption struct{}
 

@@ -12,11 +12,19 @@ import (
 	"sync/atomic"
 
 	"github.com/cockroachdb/pebble/internal/base"
+	"github.com/cockroachdb/pebble/vfs"
 )
 
+// Compare exports the base.Compare type.
 type Compare = base.Compare
+
+// InternalKey exports the base.InternalKey type.
 type InternalKey = base.InternalKey
+
+// Options exports the base.Options type.
 type Options = base.Options
+
+// TableInfo exports the base.TableInfo type.
 type TableInfo = base.TableInfo
 
 // FileMetadata holds the metadata for an on-disk table.
@@ -48,9 +56,9 @@ func (m *FileMetadata) String() string {
 
 // TableInfo returns a subset of the FileMetadata state formatted as a
 // TableInfo.
-func (m *FileMetadata) TableInfo(dirname string) TableInfo {
+func (m *FileMetadata) TableInfo(fs vfs.FS, dirname string) TableInfo {
 	return TableInfo{
-		Path:           base.MakeFilename(dirname, base.FileTypeTable, m.FileNum),
+		Path:           base.MakeFilename(fs, dirname, base.FileTypeTable, m.FileNum),
 		FileNum:        m.FileNum,
 		Size:           m.Size,
 		Smallest:       m.Smallest,
@@ -58,6 +66,25 @@ func (m *FileMetadata) TableInfo(dirname string) TableInfo {
 		SmallestSeqNum: m.SmallestSeqNum,
 		LargestSeqNum:  m.LargestSeqNum,
 	}
+}
+
+func (m *FileMetadata) lessSeqNum(b *FileMetadata) bool {
+	// NB: This is the same ordering that RocksDB uses for L0 files.
+
+	// Sort first by largest sequence number.
+	if m.LargestSeqNum != b.LargestSeqNum {
+		return m.LargestSeqNum < b.LargestSeqNum
+	}
+	// Then by smallest sequence number.
+	if m.SmallestSeqNum != b.SmallestSeqNum {
+		return m.SmallestSeqNum < b.SmallestSeqNum
+	}
+	// Break ties by file number.
+	return m.FileNum < b.FileNum
+}
+
+func (m *FileMetadata) lessSmallestKey(b *FileMetadata, cmp Compare) bool {
+	return base.InternalCompare(cmp, m.Smallest, b.Smallest) < 0
 }
 
 // KeyRange returns the minimum smallest and maximum largest internalKey for
@@ -86,36 +113,25 @@ type bySeqNum []FileMetadata
 
 func (b bySeqNum) Len() int { return len(b) }
 func (b bySeqNum) Less(i, j int) bool {
-	// NB: This is the same ordering that RocksDB uses for L0 files.
-
-	// Sort first by largest sequence number.
-	if b[i].LargestSeqNum != b[j].LargestSeqNum {
-		return b[i].LargestSeqNum < b[j].LargestSeqNum
-	}
-	// Then by smallest sequence number.
-	if b[i].SmallestSeqNum != b[j].SmallestSeqNum {
-		return b[i].SmallestSeqNum < b[j].SmallestSeqNum
-	}
-	// Break ties by file number.
-	return b[i].FileNum < b[j].FileNum
+	return b[i].lessSeqNum(&b[j])
 }
 func (b bySeqNum) Swap(i, j int) { b[i], b[j] = b[j], b[i] }
 
-// SortBySeqNum sorts the specified files by decreasing sequence number.
+// SortBySeqNum sorts the specified files by increasing sequence number.
 func SortBySeqNum(files []FileMetadata) {
 	sort.Sort(bySeqNum(files))
 }
 
 type bySmallest struct {
-	dat []FileMetadata
-	cmp Compare
+	files []FileMetadata
+	cmp   Compare
 }
 
-func (b bySmallest) Len() int { return len(b.dat) }
+func (b bySmallest) Len() int { return len(b.files) }
 func (b bySmallest) Less(i, j int) bool {
-	return base.InternalCompare(b.cmp, b.dat[i].Smallest, b.dat[j].Smallest) < 0
+	return b.files[i].lessSmallestKey(&b.files[j], b.cmp)
 }
-func (b bySmallest) Swap(i, j int) { b.dat[i], b.dat[j] = b.dat[j], b.dat[i] }
+func (b bySmallest) Swap(i, j int) { b.files[i], b.files[j] = b.files[j], b.files[i] }
 
 // SortBySmallest sorts the specified files by smallest key using the supplied
 // comparison function to order user keys.
@@ -131,11 +147,15 @@ const NumLevels = 7
 // migrate data from level N to level N+1. The tables map internal keys (which
 // are a user key, a delete or set bit, and a sequence number) to user values.
 //
-// The tables at level 0 are sorted by increasing fileNum. If two level 0
-// tables have fileNums i and j and i < j, then the sequence numbers of every
-// internal key in table i are all less than those for table j. The range of
-// internal keys [fileMetadata.smallest, fileMetadata.largest] in each level 0
-// table may overlap.
+// The tables at level 0 are sorted by largest sequence number. Due to file
+// ingestion, there may be overlap in the ranges of sequence numbers contain in
+// level 0 sstables. In particular, it is valid for one level 0 sstable to have
+// the seqnum range [1,100] while an adjacent sstable has the seqnum range
+// [50,50]. This occurs when the [50,50] table was ingested and given a global
+// seqnum. The ingestion code will have ensured that the [50,50] sstable will
+// not have any keys that overlap with the [1,100] in the seqnum range
+// [1,49]. The range of internal keys [fileMetadata.smallest,
+// fileMetadata.largest] in each level 0 table may overlap.
 //
 // The tables at any non-0 level are sorted by their internal key range and any
 // two tables at the same non-0 level do not overlap.
@@ -406,20 +426,82 @@ func (l *VersionList) Remove(v *Version) {
 }
 
 // CheckOrdering checks that the files are consistent with respect to
-// increasing file numbers (for level 0 files) and increasing and non-
+// seqnums (for level 0 files -- see detailed comment below) and increasing and non-
 // overlapping internal key ranges (for non-level 0 files).
 func CheckOrdering(cmp Compare, format base.Formatter, level int, files []FileMetadata) error {
 	if level == 0 {
-		for i := 1; i < len(files); i++ {
-			prev := &files[i-1]
+		// We have 2 kinds of files:
+		// - Files with exactly one sequence number: these could be either ingested files
+		//   or flushed files. We cannot tell the difference between them based on FileMetadata,
+		//   so our consistency checking here uses the weaker checks assuming it is an ingested
+		//   file.
+		// - Files with multiple sequence numbers: these are necessarily flushed files.
+		//
+		// The only overlapping sequence number case is an ingested file contained in the sequence
+		// numbers of the flushed file -- it must be fully contained (not coincident with either
+		// end of the flushed file) since the memtable must have been at [a, b-1] (where b > a)
+		// when the ingested file was assigned sequence num b, and the memtable got a subsequent
+		// update that was given sequence num b+1, before being flushed.
+		//
+		// So a sequence [1000, 1000] [1002, 1002] [1000, 2000] is invalid since the first and
+		// third file are inconsistent with each other. So comparing adjacent files is insufficient
+		// for consistency checking.
+		//
+		// Visually we have something like
+		// x------y x-----------yx-------------y (flushed files where x, y are the endpoints)
+		//     y       y  y        y             (y's represent ingested files)
+		// And these are ordered in increasing order of y. Note that y's must be unique.
+
+		// The largest sequence number of a flushed file. Increasing.
+		var largestFlushedSeqNum uint64
+
+		// The largest sequence number of any file. Increasing.
+		var largestSeqNum uint64
+
+		// The ingested file sequence numbers that have not yet been checked to be compatible with
+		// flushed files.
+		// They are checked when largestFlushedSeqNum advances past them.
+		var uncheckedIngestedSeqNums []uint64
+
+		for i := 0; i < len(files); i++ {
 			f := &files[i]
-			if prev.LargestSeqNum >= f.LargestSeqNum {
-				return fmt.Errorf("L0 files %06d and %06d are not in increasing largest seqnum order: %d vs %d",
-					prev.FileNum, f.FileNum, prev.LargestSeqNum, f.LargestSeqNum)
+			if i > 0 {
+				// Validate that the sorting is sane.
+				prev := &files[i-1]
+				if !prev.lessSeqNum(f) {
+					return fmt.Errorf("L0 files %06d and %06d are not properly ordered: %d-%d vs %d-%d",
+						prev.FileNum, f.FileNum,
+						prev.SmallestSeqNum, prev.LargestSeqNum,
+						f.SmallestSeqNum, f.LargestSeqNum)
+				}
 			}
-			if prev.SmallestSeqNum >= f.SmallestSeqNum {
-				return fmt.Errorf("L0 files %06d and %06d are not in increasing smallest seqnum order: %d vs %d",
-					prev.FileNum, f.FileNum, prev.SmallestSeqNum, f.SmallestSeqNum)
+			if i > 0 && largestSeqNum >= f.LargestSeqNum {
+				return fmt.Errorf("L0 file %06d does not have strictly increasing "+
+					"largest seqnum: %d-%d vs %d", f.FileNum, f.SmallestSeqNum, f.LargestSeqNum, largestSeqNum)
+			}
+			largestSeqNum = f.LargestSeqNum
+			if f.SmallestSeqNum == f.LargestSeqNum {
+				// Ingested file.
+				uncheckedIngestedSeqNums = append(uncheckedIngestedSeqNums, f.LargestSeqNum)
+			} else {
+				// Flushed file.
+				// Two flushed files cannot overlap.
+				if largestFlushedSeqNum > 0 && f.SmallestSeqNum <= largestFlushedSeqNum {
+					return fmt.Errorf("L0 flushed file %06d overlaps with the largest seqnum of a "+
+						"preceding flushed file: %d-%d vs %d", f.FileNum, f.SmallestSeqNum, f.LargestSeqNum,
+						largestFlushedSeqNum)
+				}
+				largestFlushedSeqNum = f.LargestSeqNum
+				// Check that unchecked ingested sequence numbers are not coincident with f.SmallestSeqNum.
+				// We do not need to check that they are not coincident with f.LargestSeqNum because we
+				// have already confirmed that LargestSeqNums were increasing.
+				for _, seq := range uncheckedIngestedSeqNums {
+					if seq == f.SmallestSeqNum {
+						return fmt.Errorf("L0 flushed file %06d has an ingested file coincident with "+
+							"smallest seqnum: %d-%d", f.FileNum, f.SmallestSeqNum, f.LargestSeqNum)
+					}
+				}
+				uncheckedIngestedSeqNums = uncheckedIngestedSeqNums[:0]
 			}
 		}
 	} else {
@@ -431,9 +513,17 @@ func CheckOrdering(cmp Compare, format base.Formatter, level int, files []FileMe
 			}
 			if i > 0 {
 				prev := &files[i-1]
+				if !prev.lessSmallestKey(f, cmp) {
+					return fmt.Errorf("L%d files %06d and %06d are not properly ordered: %s-%s vs %s-%s",
+						level, prev.FileNum, f.FileNum,
+						prev.Smallest.Pretty(format), prev.Largest.Pretty(format),
+						f.Smallest.Pretty(format), f.Largest.Pretty(format))
+				}
 				if base.InternalCompare(cmp, prev.Largest, f.Smallest) >= 0 {
-					return fmt.Errorf("L%d files %06d and %06d are not in increasing key order: %s vs %s",
-						level, prev.FileNum, f.FileNum, prev.Largest.Pretty(format), f.Smallest.Pretty(format))
+					return fmt.Errorf("L%d files %06d and %06d have overlapping ranges: %s-%s vs %s-%s",
+						level, prev.FileNum, f.FileNum,
+						prev.Smallest.Pretty(format), prev.Largest.Pretty(format),
+						f.Smallest.Pretty(format), f.Largest.Pretty(format))
 				}
 			}
 		}

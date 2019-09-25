@@ -10,7 +10,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"path/filepath"
 	"sort"
 	"sync"
 
@@ -32,40 +31,6 @@ func allocDBNum() uint64 {
 	dbNumAlloc.seq++
 	dbNumAlloc.Unlock()
 	return num
-}
-
-func createDB(dirname string, opts *Options) (retErr error) {
-	const manifestFileNum = 1
-	ve := versionEdit{
-		ComparerName: opts.Comparer.Name,
-		NextFileNum:  manifestFileNum + 1,
-	}
-	manifestFilename := base.MakeFilename(dirname, fileTypeManifest, manifestFileNum)
-	f, err := opts.FS.Create(manifestFilename)
-	if err != nil {
-		return fmt.Errorf("pebble: could not create %q: %v", manifestFilename, err)
-	}
-	defer func() {
-		if retErr != nil {
-			opts.FS.Remove(manifestFilename)
-		}
-	}()
-	defer f.Close()
-
-	recWriter := record.NewWriter(f)
-	w, err := recWriter.Next()
-	if err != nil {
-		return err
-	}
-	err = ve.Encode(w)
-	if err != nil {
-		return err
-	}
-	err = recWriter.Close()
-	if err != nil {
-		return err
-	}
-	return setCurrentFile(dirname, opts.FS, manifestFileNum)
 }
 
 // Open opens a LevelDB whose files live in the given directory.
@@ -116,23 +81,16 @@ func Open(dirname string, opts *Options) (*DB, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	// Lock the database directory.
 	if !d.opts.ReadOnly {
 		err := opts.FS.MkdirAll(dirname, 0755)
 		if err != nil {
 			return nil, err
 		}
 	}
-	fileLock, err := opts.FS.Lock(base.MakeFilename(dirname, fileTypeLock, 0))
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if fileLock != nil {
-			fileLock.Close()
-		}
-	}()
 
+	// Open the database and WAL directories first in order to check for their
+	// existence.
+	var err error
 	d.dataDir, err = opts.FS.OpenDir(dirname)
 	if err != nil {
 		return nil, err
@@ -150,26 +108,44 @@ func Open(dirname string, opts *Options) (*DB, error) {
 			}
 		}
 		d.walDir, err = opts.FS.OpenDir(d.walDirname)
-	}
-
-	if _, err := opts.FS.Stat(base.MakeFilename(dirname, fileTypeCurrent, 0)); os.IsNotExist(err) && !d.opts.ReadOnly {
-		// Create the DB if it did not already exist.
-		if err := createDB(dirname, opts); err != nil {
+		if err != nil {
 			return nil, err
 		}
-		if err := d.dataDir.Sync(); err != nil {
+	}
+
+	// Lock the database directory.
+	fileLock, err := opts.FS.Lock(base.MakeFilename(opts.FS, dirname, fileTypeLock, 0))
+	if err != nil {
+		d.dataDir.Close()
+		if d.dataDir != d.walDir {
+			d.walDir.Close()
+		}
+		return nil, err
+	}
+	defer func() {
+		if fileLock != nil {
+			fileLock.Close()
+		}
+	}()
+
+	jobID := d.mu.nextJobID
+	d.mu.nextJobID++
+
+	currentName := base.MakeFilename(opts.FS, dirname, fileTypeCurrent, 0)
+	if _, err := opts.FS.Stat(currentName); os.IsNotExist(err) && !d.opts.ReadOnly {
+		// Create the DB if it did not already exist.
+		if err := d.mu.versions.create(jobID, dirname, d.dataDir, opts, &d.mu.Mutex); err != nil {
 			return nil, err
 		}
 	} else if err != nil {
 		return nil, fmt.Errorf("pebble: database %q: %v", dirname, err)
 	} else if opts.ErrorIfDBExists {
 		return nil, fmt.Errorf("pebble: database %q already exists", dirname)
-	}
-
-	// Load the version set.
-	err = d.mu.versions.load(dirname, opts, &d.mu.Mutex)
-	if err != nil {
-		return nil, err
+	} else {
+		// Load the version set.
+		if err := d.mu.versions.load(dirname, opts, &d.mu.Mutex); err != nil {
+			return nil, err
+		}
 	}
 
 	ls, err := opts.FS.List(d.walDirname)
@@ -191,17 +167,17 @@ func Open(dirname string, opts *Options) (*DB, error) {
 	}
 	var logFiles []fileNumAndName
 	for _, filename := range ls {
-		ft, fn, ok := base.ParseFilename(filename)
+		ft, fn, ok := base.ParseFilename(opts.FS, filename)
 		if !ok {
 			continue
 		}
 		switch ft {
 		case fileTypeLog:
-			if fn >= d.mu.versions.logNum || fn == d.mu.versions.prevLogNum {
+			if fn >= d.mu.versions.minUnflushedLogNum {
 				logFiles = append(logFiles, fileNumAndName{fn, filename})
 			}
 		case fileTypeOptions:
-			if err := checkOptions(opts, filepath.Join(dirname, filename)); err != nil {
+			if err := checkOptions(opts, opts.FS.PathJoin(dirname, filename)); err != nil {
 				return nil, err
 			}
 		}
@@ -210,12 +186,9 @@ func Open(dirname string, opts *Options) (*DB, error) {
 		return logFiles[i].num < logFiles[j].num
 	})
 
-	jobID := d.mu.nextJobID
-	d.mu.nextJobID++
-
 	var ve versionEdit
 	for _, lf := range logFiles {
-		maxSeqNum, err := d.replayWAL(jobID, &ve, opts.FS, filepath.Join(d.walDirname, lf.name), lf.num)
+		maxSeqNum, err := d.replayWAL(jobID, &ve, opts.FS, opts.FS.PathJoin(d.walDirname, lf.name), lf.num)
 		if err != nil {
 			return nil, err
 		}
@@ -228,24 +201,34 @@ func Open(dirname string, opts *Options) (*DB, error) {
 
 	if !d.opts.ReadOnly {
 		// Create an empty .log file.
-		ve.LogNum = d.mu.versions.getNextFileNum()
-		d.mu.log.queue = append(d.mu.log.queue, ve.LogNum)
-		logFile, err := opts.FS.Create(base.MakeFilename(d.walDirname, fileTypeLog, ve.LogNum))
+		newLogNum := d.mu.versions.getNextFileNum()
+		newLogName := base.MakeFilename(opts.FS, d.walDirname, fileTypeLog, newLogNum)
+		d.mu.log.queue = append(d.mu.log.queue, newLogNum)
+		logFile, err := opts.FS.Create(newLogName)
 		if err != nil {
 			return nil, err
 		}
 		if err := d.walDir.Sync(); err != nil {
 			return nil, err
 		}
+		d.opts.EventListener.WALCreated(WALCreateInfo{
+			JobID:   jobID,
+			Path:    newLogName,
+			FileNum: newLogNum,
+		})
+
 		logFile = vfs.NewSyncingFile(logFile, vfs.SyncingFileOptions{
 			BytesPerSync:    d.opts.BytesPerSync,
 			PreallocateSize: d.walPreallocateSize(),
 		})
-		d.mu.log.LogWriter = record.NewLogWriter(logFile, ve.LogNum)
+		d.mu.log.LogWriter = record.NewLogWriter(logFile, newLogNum)
 		d.mu.versions.metrics.WAL.Files++
 
-		// Write a new manifest to disk.
-		if err := d.mu.versions.logAndApply(0, &ve, nil, d.dataDir); err != nil {
+		// This logic is slightly different than RocksDB's. Specifically, RocksDB
+		// sets MinUnflushedLogNum to max-recovered-log-num + 1. We set it to the
+		// newLogNum. There should be no difference in using either value.
+		ve.MinUnflushedLogNum = newLogNum
+		if err := d.mu.versions.logAndApply(jobID, &ve, nil, d.dataDir); err != nil {
 			return nil, err
 		}
 	}
@@ -254,7 +237,8 @@ func Open(dirname string, opts *Options) (*DB, error) {
 	if !d.opts.ReadOnly {
 		// Write the current options to disk.
 		d.optionsFileNum = d.mu.versions.getNextFileNum()
-		optionsFile, err := opts.FS.Create(base.MakeFilename(dirname, fileTypeOptions, d.optionsFileNum))
+		optionsFile, err := opts.FS.Create(
+			base.MakeFilename(opts.FS, dirname, fileTypeOptions, d.optionsFileNum))
 		if err != nil {
 			return nil, err
 		}

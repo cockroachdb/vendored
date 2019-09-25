@@ -16,6 +16,7 @@ import (
 // Compression is the per-block compression algorithm to use.
 type Compression int
 
+// The available compression types.
 const (
 	DefaultCompression Compression = iota
 	NoCompression
@@ -330,14 +331,10 @@ type Options struct {
 	// disabled.
 	ReadOnly bool
 
-	// TableFormat specifies the format version for sstables. The default is
-	// TableFormatRocksDBv2 which creates RocksDB compatible sstables. Use
+	// TableFormat specifies the format version for writing sstables. The default
+	// is TableFormatRocksDBv2 which creates RocksDB compatible sstables. Use
 	// TableFormatLevelDB to create LevelDB compatible sstable which can be used
 	// by a wider range of tools and libraries.
-	//
-	// TODO(peter): TableFormatLevelDB does not support all of the functionality
-	// of TableFormatRocksDBv2. We should ensure it is only used when writing an
-	// sstable directly, and not used when opening a database.
 	TableFormat TableFormat
 
 	// TablePropertyCollectors is a list of TablePropertyCollector creation

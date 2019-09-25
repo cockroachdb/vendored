@@ -14,12 +14,12 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/golang/snappy"
 	"github.com/cockroachdb/pebble/cache"
 	"github.com/cockroachdb/pebble/internal/base"
 	"github.com/cockroachdb/pebble/internal/crc"
 	"github.com/cockroachdb/pebble/internal/rangedel"
 	"github.com/cockroachdb/pebble/vfs"
+	"github.com/golang/snappy"
 )
 
 // BlockHandle is the file offset and length of a block.
@@ -222,7 +222,6 @@ func (i *singleLevelIterator) SeekGE(key []byte) (*InternalKey, []byte) {
 		return nil, nil
 	}
 	if i.blockUpper != nil && i.cmp(ikey.UserKey, i.blockUpper) >= 0 {
-		i.data.invalidateUpper() // force i.data.Valid() to return false
 		return nil, nil
 	}
 	return ikey, val
@@ -243,7 +242,6 @@ func (i *singleLevelIterator) SeekPrefixGE(prefix, key []byte) (*InternalKey, []
 			return nil, nil
 		}
 		if !i.reader.tableFilter.mayContain(data, prefix) {
-			i.data.invalidateUpper() // force i.data.Valid() to return false
 			return nil, nil
 		}
 	}
@@ -259,7 +257,6 @@ func (i *singleLevelIterator) SeekPrefixGE(prefix, key []byte) (*InternalKey, []
 		return nil, nil
 	}
 	if i.blockUpper != nil && i.cmp(ikey.UserKey, i.blockUpper) >= 0 {
-		i.data.invalidateUpper() // force i.data.Valid() to return false
 		return nil, nil
 	}
 	return ikey, val
@@ -303,7 +300,6 @@ func (i *singleLevelIterator) SeekLT(key []byte) (*InternalKey, []byte) {
 		}
 	}
 	if i.blockLower != nil && i.cmp(ikey.UserKey, i.blockLower) < 0 {
-		i.data.invalidateLower() // force i.data.Valid() to return false
 		return nil, nil
 	}
 	return ikey, val
@@ -329,7 +325,6 @@ func (i *singleLevelIterator) First() (*InternalKey, []byte) {
 		return nil, nil
 	}
 	if i.blockUpper != nil && i.cmp(ikey.UserKey, i.blockUpper) >= 0 {
-		i.data.invalidateUpper() // force i.data.Valid() to return false
 		return nil, nil
 	}
 	return ikey, val
@@ -354,7 +349,6 @@ func (i *singleLevelIterator) Last() (*InternalKey, []byte) {
 		return nil, nil
 	}
 	if i.blockLower != nil && i.cmp(i.data.ikey.UserKey, i.blockLower) < 0 {
-		i.data.invalidateLower()
 		return nil, nil
 	}
 	return &i.data.ikey, i.data.val
@@ -370,7 +364,6 @@ func (i *singleLevelIterator) Next() (*InternalKey, []byte) {
 	}
 	if key, val := i.data.Next(); key != nil {
 		if i.blockUpper != nil && i.cmp(key.UserKey, i.blockUpper) >= 0 {
-			i.data.invalidateUpper()
 			return nil, nil
 		}
 		return key, val
@@ -389,7 +382,6 @@ func (i *singleLevelIterator) Next() (*InternalKey, []byte) {
 				return nil, nil
 			}
 			if i.blockUpper != nil && i.cmp(key.UserKey, i.blockUpper) >= 0 {
-				i.data.invalidateUpper()
 				return nil, nil
 			}
 			return key, val
@@ -406,7 +398,6 @@ func (i *singleLevelIterator) Prev() (*InternalKey, []byte) {
 	}
 	if key, val := i.data.Prev(); key != nil {
 		if i.blockLower != nil && i.cmp(key.UserKey, i.blockLower) < 0 {
-			i.data.invalidateLower()
 			return nil, nil
 		}
 		return key, val
@@ -425,30 +416,12 @@ func (i *singleLevelIterator) Prev() (*InternalKey, []byte) {
 				return nil, nil
 			}
 			if i.blockLower != nil && i.cmp(key.UserKey, i.blockLower) < 0 {
-				i.data.invalidateLower()
 				return nil, nil
 			}
 			return key, val
 		}
 	}
 	return nil, nil
-}
-
-// Key implements internalIterator.Key, as documented in the pebble package.
-func (i *singleLevelIterator) Key() *InternalKey {
-	return i.data.Key()
-}
-
-// Value implements internalIterator.Value, as documented in the pebble
-// package.
-func (i *singleLevelIterator) Value() []byte {
-	return i.data.Value()
-}
-
-// Valid implements internalIterator.Valid, as documented in the pebble
-// package.
-func (i *singleLevelIterator) Valid() bool {
-	return i.data.Valid()
 }
 
 // Error implements internalIterator.Error, as documented in the pebble
@@ -928,7 +901,7 @@ type weakCachedBlock struct {
 
 type blockTransform func([]byte) ([]byte, error)
 
-// OpenOptions provide an interface to do work on Reader while it is being
+// OpenOption provide an interface to do work on Reader while it is being
 // opened.
 type OpenOption interface {
 	// Apply is called on the reader its opened.
@@ -1033,16 +1006,16 @@ func (r *Reader) get(key []byte) (value []byte, err error) {
 	}
 
 	i := r.NewIter(nil /* lower */, nil /* upper */)
-	i.SeekGE(key)
+	ikey, value := i.SeekGE(key)
 
-	if !i.Valid() || r.Compare(key, i.Key().UserKey) != 0 {
+	if ikey == nil || r.Compare(key, ikey.UserKey) != 0 {
 		err := i.Close()
 		if err == nil {
 			err = base.ErrNotFound
 		}
 		return nil, err
 	}
-	return i.Value(), i.Close()
+	return value, i.Close()
 }
 
 // NewIter returns an iterator for the contents of the table.
@@ -1070,20 +1043,19 @@ func (r *Reader) NewCompactionIter(bytesIterated *uint64) Iterator {
 			twoLevelIterator: i,
 			bytesIterated:    bytesIterated,
 		}
-	} else {
-		i := singleLevelIterPool.Get().(*singleLevelIterator)
-		_ = i.Init(r, nil /* lower */, nil /* upper */)
-		return &compactionIterator{
-			singleLevelIterator: i,
-			bytesIterated:       bytesIterated,
-		}
+	}
+	i := singleLevelIterPool.Get().(*singleLevelIterator)
+	_ = i.Init(r, nil /* lower */, nil /* upper */)
+	return &compactionIterator{
+		singleLevelIterator: i,
+		bytesIterated:       bytesIterated,
 	}
 }
 
 // NewRangeDelIter returns an internal iterator for the contents of the
 // range-del block for the table. Returns nil if the table does not contain any
 // range deletions.
-func (r *Reader) NewRangeDelIter() *blockIter {
+func (r *Reader) NewRangeDelIter() base.InternalIterator {
 	if r.rangeDel.bh.Length == 0 {
 		return nil
 	}

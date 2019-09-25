@@ -98,6 +98,8 @@ order which means the records will be printed in that order.
 			"verbose output")
 	}
 
+	s.Check.Flags().Var(
+		&s.fmtKey, "key", "key formatter")
 	s.Layout.Flags().Var(
 		&s.fmtKey, "key", "key formatter")
 	s.Layout.Flags().Var(
@@ -122,7 +124,7 @@ func (s *sstableT) newReader(f vfs.File) (*sstable.Reader, error) {
 func (s *sstableT) runCheck(cmd *cobra.Command, args []string) {
 	for _, arg := range args {
 		func() {
-			f, err := vfs.Default.Open(arg)
+			f, err := s.opts.FS.Open(arg)
 			if err != nil {
 				fmt.Fprintf(stderr, "%s\n", err)
 				return
@@ -138,8 +140,21 @@ func (s *sstableT) runCheck(cmd *cobra.Command, args []string) {
 				return
 			}
 
+			// Update the internal formatter if this comparator has one specified.
+			s.fmtKey.setForComparer(r.Properties.ComparerName, s.comparers)
+
 			iter := r.NewIter(nil, nil)
+			var lastKey base.InternalKey
 			for key, _ := iter.First(); key != nil; key, _ = iter.Next() {
+				if base.InternalCompare(r.Compare, lastKey, *key) >= 0 {
+					fmt.Fprintf(stdout, "WARNING: OUT OF ORDER KEYS!\n")
+					if s.fmtKey.spec != "null" {
+						fmt.Fprintf(stdout, "    %s >= %s\n",
+							lastKey.Pretty(s.fmtKey.fn), key.Pretty(s.fmtKey.fn))
+					}
+				}
+				lastKey.Trailer = key.Trailer
+				lastKey.UserKey = append(lastKey.UserKey[:0], key.UserKey...)
 			}
 			if err := iter.Close(); err != nil {
 				fmt.Fprintf(stdout, "%s\n", err)
@@ -151,7 +166,7 @@ func (s *sstableT) runCheck(cmd *cobra.Command, args []string) {
 func (s *sstableT) runLayout(cmd *cobra.Command, args []string) {
 	for _, arg := range args {
 		func() {
-			f, err := vfs.Default.Open(arg)
+			f, err := s.opts.FS.Open(arg)
 			if err != nil {
 				fmt.Fprintf(stderr, "%s\n", err)
 				return
@@ -189,7 +204,7 @@ func (s *sstableT) runLayout(cmd *cobra.Command, args []string) {
 func (s *sstableT) runProperties(cmd *cobra.Command, args []string) {
 	for _, arg := range args {
 		func() {
-			f, err := vfs.Default.Open(arg)
+			f, err := s.opts.FS.Open(arg)
 			if err != nil {
 				fmt.Fprintf(stderr, "%s\n", err)
 				return
@@ -281,7 +296,7 @@ func (s *sstableT) runProperties(cmd *cobra.Command, args []string) {
 func (s *sstableT) runScan(cmd *cobra.Command, args []string) {
 	for _, arg := range args {
 		func() {
-			f, err := vfs.Default.Open(arg)
+			f, err := s.opts.FS.Open(arg)
 			if err != nil {
 				fmt.Fprintf(stderr, "%s\n", err)
 				return

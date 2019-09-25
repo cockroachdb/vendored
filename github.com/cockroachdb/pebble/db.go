@@ -46,7 +46,7 @@ type flushable interface {
 	totalBytes() uint64
 	flushed() chan struct{}
 	readyForFlush() bool
-	logInfo() (num, size uint64)
+	logInfo() (logNum, size uint64)
 }
 
 // Reader is a readable key/value store.
@@ -388,8 +388,6 @@ func (d *DB) Merge(key, value []byte, opts *WriteOptions) error {
 // which makes it useful for testing WAL performance.
 //
 // It is safe to modify the contents of the argument after LogData returns.
-//
-// TODO(peter): untested.
 func (d *DB) LogData(data []byte, opts *WriteOptions) error {
 	b := newBatch(d)
 	defer b.release()
@@ -423,6 +421,11 @@ func (d *DB) Apply(batch *Batch, opts *WriteOptions) error {
 	if err == nil {
 		// If this is a large batch, we need to clear the batch contents as the
 		// flushable batch may still be present in the flushables queue.
+		//
+		// TODO(peter): Currently large batches are written to the WAL. We could
+		// skip the WAL write and instead wait for the large batch to be flushed to
+		// an sstable. For a 100 MB batch, this might actually be faster. For a 1
+		// GB batch this is almost certainly faster.
 		if batch.flushable != nil {
 			batch.storage.data = nil
 		}
@@ -447,25 +450,40 @@ func (d *DB) commitApply(b *Batch, mem *memTable) error {
 	return nil
 }
 
-func (d *DB) commitWrite(b *Batch, wg *sync.WaitGroup) (*memTable, error) {
+func (d *DB) commitWrite(b *Batch, syncWG *sync.WaitGroup, syncErr *error) (*memTable, error) {
+	var size int64
 	repr := b.Repr()
 
-	d.mu.Lock()
-
 	if b.flushable != nil {
+		// We have a large batch. Such batches are special in that they don't get
+		// added to the memtable, and are instead inserted into the queue of
+		// memtables. The call to makeRoomForWrite with this batch will force the
+		// current memtable to be flushed. We want the large batch to be part of
+		// the same log, so we add it to the WAL here, rather than after the call
+		// to makeRoomForWrite().
 		b.flushable.seqNum = b.SeqNum()
+		if !d.opts.DisableWAL {
+			var err error
+			size, err = d.mu.log.SyncRecord(repr, syncWG, syncErr)
+			if err != nil {
+				panic(err)
+			}
+		}
 	}
+
+	d.mu.Lock()
 
 	// Switch out the memtable if there was not enough room to store the batch.
 	err := d.makeRoomForWrite(b)
 
-	if err == nil {
+	if err == nil && !d.opts.DisableWAL {
 		d.mu.log.bytesIn += uint64(len(repr))
 	}
 
-	// Grab a reference to the memtable while holding DB.mu. Note that
-	// makeRoomForWrite() add a reference to the memtable which will prevent it
-	// from being flushed until we unreference it.
+	// Grab a reference to the memtable while holding DB.mu. Note that for
+	// non-flushable batches (b.flushable == nil) makeRoomForWrite() added a
+	// reference to the memtable which will prevent it from being flushed until
+	// we unreference it. This reference is dropped in DB.commitApply().
 	mem := d.mu.mem.mutable
 
 	d.mu.Unlock()
@@ -477,9 +495,11 @@ func (d *DB) commitWrite(b *Batch, wg *sync.WaitGroup) (*memTable, error) {
 		return mem, nil
 	}
 
-	size, err := d.mu.log.SyncRecord(repr, wg)
-	if err != nil {
-		panic(err)
+	if b.flushable == nil {
+		size, err = d.mu.log.SyncRecord(repr, syncWG, syncErr)
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	atomic.StoreUint64(&d.mu.log.size, uint64(size))
@@ -487,12 +507,10 @@ func (d *DB) commitWrite(b *Batch, wg *sync.WaitGroup) (*memTable, error) {
 }
 
 type iterAlloc struct {
-	dbi             Iterator
-	merging         mergingIter
-	iters           [3 + numLevels]internalIterator
-	rangeDelIters   [3 + numLevels]internalIterator
-	largestUserKeys [3 + numLevels][]byte
-	levels          [numLevels]levelIter
+	dbi     Iterator
+	merging mergingIter
+	mlevels [3 + numLevels]mergingIterLevel
+	levels  [numLevels]levelIter
 }
 
 var iterAllocPool = sync.Pool{
@@ -541,13 +559,12 @@ func (d *DB) newIterInternal(
 		dbi.opts = *o
 	}
 
-	iters := buf.iters[:0]
-	rangeDelIters := buf.rangeDelIters[:0]
-	largestUserKeys := buf.largestUserKeys[:0]
+	mlevels := buf.mlevels[:0]
 	if batchIter != nil {
-		iters = append(iters, batchIter)
-		rangeDelIters = append(rangeDelIters, batchRangeDelIter)
-		largestUserKeys = append(largestUserKeys, nil)
+		mlevels = append(mlevels, mergingIterLevel{
+			iter:         batchIter,
+			rangeDelIter: batchRangeDelIter,
+		})
 	}
 
 	// TODO(peter): We only need to add memtables which contain sequence numbers
@@ -556,9 +573,10 @@ func (d *DB) newIterInternal(
 	memtables := readState.memtables
 	for i := len(memtables) - 1; i >= 0; i-- {
 		mem := memtables[i]
-		iters = append(iters, mem.newIter(&dbi.opts))
-		rangeDelIters = append(rangeDelIters, mem.newRangeDelIter(&dbi.opts))
-		largestUserKeys = append(largestUserKeys, nil)
+		mlevels = append(mlevels, mergingIterLevel{
+			iter:         mem.newIter(&dbi.opts),
+			rangeDelIter: mem.newRangeDelIter(&dbi.opts),
+		})
 	}
 
 	// The level 0 files need to be added from newest to oldest.
@@ -570,23 +588,24 @@ func (d *DB) newIterInternal(
 			dbi.err = err
 			return dbi
 		}
-		iters = append(iters, iter)
-		rangeDelIters = append(rangeDelIters, rangeDelIter)
-		largestUserKeys = append(largestUserKeys, nil)
+		mlevels = append(mlevels, mergingIterLevel{
+			iter:         iter,
+			rangeDelIter: rangeDelIter,
+		})
 	}
 
-	start := len(rangeDelIters)
+	// Determine the final size for mlevels so that we can avoid any more
+	// reallocations. This is important because each levelIter will hold a
+	// reference to elements in mlevels.
+	start := len(mlevels)
 	for level := 1; level < len(current.Files); level++ {
 		if len(current.Files[level]) == 0 {
 			continue
 		}
-		rangeDelIters = append(rangeDelIters, nil)
-		largestUserKeys = append(largestUserKeys, nil)
+		mlevels = append(mlevels, mergingIterLevel{})
 	}
-	buf.merging.rangeDelIters = rangeDelIters
-	buf.merging.largestUserKeys = largestUserKeys
-	rangeDelIters = rangeDelIters[start:]
-	largestUserKeys = largestUserKeys[start:]
+	finalMLevels := mlevels
+	mlevels = mlevels[start:]
 
 	// Add level iterators for the remaining files.
 	levels := buf.levels[:]
@@ -604,14 +623,13 @@ func (d *DB) newIterInternal(
 		}
 
 		li.init(&dbi.opts, d.cmp, d.newIters, current.Files[level], nil)
-		li.initRangeDel(&rangeDelIters[0])
-		li.initLargestUserKey(&largestUserKeys[0])
-		iters = append(iters, li)
-		rangeDelIters = rangeDelIters[1:]
-		largestUserKeys = largestUserKeys[1:]
+		li.initRangeDel(&mlevels[0].rangeDelIter)
+		li.initLargestUserKey(&mlevels[0].largestUserKey)
+		mlevels[0].iter = li
+		mlevels = mlevels[1:]
 	}
 
-	buf.merging.init(d.cmp, iters...)
+	buf.merging.init(d.cmp, finalMLevels...)
 	buf.merging.snapshot = seqNum
 	dbi.iter = &buf.merging
 	return dbi
@@ -693,6 +711,9 @@ func (d *DB) Close() error {
 	d.commit.Close()
 
 	err = firstError(err, d.dataDir.Close())
+	if d.dataDir != d.walDir {
+		err = firstError(err, d.walDir.Close())
+	}
 
 	if err == nil {
 		d.readState.val.unrefLocked()
@@ -909,6 +930,7 @@ func (d *DB) makeRoomForWrite(b *Batch) error {
 			}
 			return nil
 		}
+		// force || err == ErrArenaFull, so we need to rotate the current memtable.
 		if len(d.mu.mem.queue) >= d.opts.MemTableStopWritesThreshold {
 			// We have filled up the current memtable, but the previous one is still
 			// being compacted, so we wait.
@@ -933,7 +955,7 @@ func (d *DB) makeRoomForWrite(b *Batch) error {
 			continue
 		}
 
-		var newLogNumber uint64
+		var newLogNum uint64
 		var newLogFile vfs.File
 		var prevLogSize uint64
 		var err error
@@ -941,11 +963,11 @@ func (d *DB) makeRoomForWrite(b *Batch) error {
 		if !d.opts.DisableWAL {
 			jobID := d.mu.nextJobID
 			d.mu.nextJobID++
-			newLogNumber = d.mu.versions.getNextFileNum()
+			newLogNum = d.mu.versions.getNextFileNum()
 			d.mu.mem.switching = true
 			d.mu.Unlock()
 
-			newLogName := base.MakeFilename(d.walDirname, fileTypeLog, newLogNumber)
+			newLogName := base.MakeFilename(d.opts.FS, d.walDirname, fileTypeLog, newLogNum)
 
 			// Try to use a recycled log file. Recycling log files is an important
 			// performance optimization as it is faster to sync a file that has
@@ -953,9 +975,9 @@ func (d *DB) makeRoomForWrite(b *Batch) error {
 			// time. This is due to the need to sync file metadata when a file is
 			// being written for the first time. Note this is true even if file
 			// preallocation is performed (e.g. fallocate).
-			recycleLogNumber := d.logRecycler.peek()
-			if recycleLogNumber > 0 {
-				recycleLogName := base.MakeFilename(d.walDirname, fileTypeLog, recycleLogNumber)
+			recycleLogNum := d.logRecycler.peek()
+			if recycleLogNum > 0 {
+				recycleLogName := base.MakeFilename(d.opts.FS, d.walDirname, fileTypeLog, recycleLogNum)
 				err = d.opts.FS.Rename(recycleLogName, newLogName)
 			}
 
@@ -982,15 +1004,15 @@ func (d *DB) makeRoomForWrite(b *Batch) error {
 				}
 			}
 
-			if recycleLogNumber > 0 {
-				err = d.logRecycler.pop(recycleLogNumber)
+			if recycleLogNum > 0 {
+				err = d.logRecycler.pop(recycleLogNum)
 			}
 
 			d.opts.EventListener.WALCreated(WALCreateInfo{
 				JobID:           jobID,
 				Path:            newLogName,
-				FileNum:         newLogNumber,
-				RecycledFileNum: recycleLogNumber,
+				FileNum:         newLogNum,
+				RecycledFileNum: recycleLogNum,
 				Err:             err,
 			})
 
@@ -1011,21 +1033,27 @@ func (d *DB) makeRoomForWrite(b *Batch) error {
 		}
 
 		if !d.opts.DisableWAL {
-			d.mu.log.queue = append(d.mu.log.queue, newLogNumber)
-			d.mu.log.LogWriter = record.NewLogWriter(newLogFile, newLogNumber)
+			d.mu.log.queue = append(d.mu.log.queue, newLogNum)
+			d.mu.log.LogWriter = record.NewLogWriter(newLogFile, newLogNum)
 		}
 
 		imm := d.mu.mem.mutable
 		imm.logSize = prevLogSize
-		prevLogNumber := imm.logNum
 
-		var scheduleFlush bool
 		if b != nil && b.flushable != nil {
 			// The batch is too large to fit in the memtable so add it directly to
-			// the immutable queue.
-			b.flushable.logNum = prevLogNumber
+			// the immutable queue. The flushable batch is associated with the same
+			// memtable as the immutable memtable, but logically occurs after it in
+			// seqnum space. So give the flushable batch the logNum and clear it from
+			// the immutable log. This is done as a defensive measure to prevent the
+			// WAL containing the large batch from being deleted prematurely if the
+			// corresponding memtable is flushed without flushing the large batch.
+			//
+			// See DB.commitWrite for the special handling of log writes for large
+			// batches. In particular, the large batch has already written to
+			// imm.logNum.
+			b.flushable.logNum, imm.logNum = imm.logNum, 0
 			d.mu.mem.queue = append(d.mu.mem.queue, b.flushable)
-			scheduleFlush = true
 		}
 
 		// Create a new memtable, scheduling the previous one for flushing. We do
@@ -1036,14 +1064,15 @@ func (d *DB) makeRoomForWrite(b *Batch) error {
 		// flush. Additionally, the memtable is tied to particular WAL file and we
 		// want to go through the flush path in order to recycle that WAL file.
 		d.mu.mem.mutable = newMemTable(d.opts)
-		// NB: When the immutable memtable is flushed to disk it will apply a
-		// versionEdit to the manifest telling it that log files < newLogNumber
-		// have been applied. newLogNumber corresponds to the WAL that contains
-		// mutations that are present in the new memtable.
-		d.mu.mem.mutable.logNum = newLogNumber
+		// NB: newLogNum corresponds to the WAL that contains mutations that are
+		// present in the new memtable. When immutable memtables are flushed to
+		// disk, a VersionEdit will be created telling the manifest the minimum
+		// unflushed log number (which will be the next one in d.mu.mem.mutable
+		// that was not flushed).
+		d.mu.mem.mutable.logNum = newLogNum
 		d.mu.mem.queue = append(d.mu.mem.queue, d.mu.mem.mutable)
 		d.updateReadStateLocked()
-		if (imm != nil && imm.unref()) || scheduleFlush {
+		if imm.unref() {
 			d.maybeScheduleFlush()
 		}
 		force = false
