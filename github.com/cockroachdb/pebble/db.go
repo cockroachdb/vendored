@@ -162,7 +162,7 @@ type Writer interface {
 //		Comparer: myComparer,
 //	})
 type DB struct {
-	dbNum          uint64
+	cacheID        uint64
 	dirname        string
 	walDirname     string
 	opts           *Options
@@ -253,6 +253,7 @@ type DB struct {
 		cleaner struct {
 			cond     sync.Cond
 			cleaning bool
+			disabled int
 		}
 
 		// The list of active snapshots.
@@ -461,7 +462,10 @@ func (d *DB) commitWrite(b *Batch, syncWG *sync.WaitGroup, syncErr *error) (*mem
 		// current memtable to be flushed. We want the large batch to be part of
 		// the same log, so we add it to the WAL here, rather than after the call
 		// to makeRoomForWrite().
-		b.flushable.seqNum = b.SeqNum()
+		//
+		// Set the sequence number since it was not set to the correct value earlier
+		// (see comment in newFlushableBatch()).
+		b.flushable.setSeqNum(b.SeqNum())
 		if !d.opts.DisableWAL {
 			var err error
 			size, err = d.mu.log.SyncRecord(repr, syncWG, syncErr)
@@ -883,6 +887,39 @@ func (d *DB) Metrics() *VersionMetrics {
 	return metrics
 }
 
+// SSTables retrieves the current sstables. The returned slice is indexed by
+// level and each level is indexed by the position of the sstable within the
+// level. Note that this information may be out of date due to concurrent
+// flushes and compactions.
+func (d *DB) SSTables() [][]TableInfo {
+	// Grab and reference the current readState.
+	readState := d.loadReadState()
+	defer readState.unref()
+
+	// TODO(peter): This is somewhat expensive, especially on a large
+	// database. It might be worthwhile to unify TableInfo and FileMetadata and
+	// then we could simply return current.Files. Note that RocksDB is doing
+	// something similar to the current code, so perhaps it isn't too bad.
+	srcLevels := readState.current.Files
+	var totalTables int
+	for i := range srcLevels {
+		totalTables += len(srcLevels[i])
+	}
+
+	destTables := make([]TableInfo, totalTables)
+	destLevels := make([][]TableInfo, len(srcLevels))
+	for i := range destLevels {
+		srcLevel := srcLevels[i]
+		destLevel := destTables[:len(srcLevel):len(srcLevel)]
+		destTables = destTables[len(srcLevel):]
+		for j := range destLevel {
+			destLevel[j] = srcLevel[j].TableInfo()
+		}
+		destLevels[i] = destLevel
+	}
+	return destLevels
+}
+
 func (d *DB) walPreallocateSize() int {
 	// Set the WAL preallocate size to 110% of the memtable size. Note that there
 	// is a bit of apples and oranges in units here as the memtabls size
@@ -943,7 +980,7 @@ func (d *DB) makeRoomForWrite(b *Batch) error {
 			d.mu.compact.cond.Wait()
 			continue
 		}
-		if len(d.mu.versions.currentVersion().Files[0]) > d.opts.L0StopWritesThreshold {
+		if len(d.mu.versions.currentVersion().Files[0]) >= d.opts.L0StopWritesThreshold {
 			// There are too many level-0 files, so we wait.
 			if !stalled {
 				stalled = true
@@ -1043,7 +1080,7 @@ func (d *DB) makeRoomForWrite(b *Batch) error {
 		if b != nil && b.flushable != nil {
 			// The batch is too large to fit in the memtable so add it directly to
 			// the immutable queue. The flushable batch is associated with the same
-			// memtable as the immutable memtable, but logically occurs after it in
+			// log as the immutable memtable, but logically occurs after it in
 			// seqnum space. So give the flushable batch the logNum and clear it from
 			// the immutable log. This is done as a defensive measure to prevent the
 			// WAL containing the large batch from being deleted prematurely if the

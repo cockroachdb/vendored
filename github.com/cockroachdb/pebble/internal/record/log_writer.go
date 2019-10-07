@@ -7,6 +7,7 @@ package record
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"sync"
 	"sync/atomic"
@@ -34,8 +35,9 @@ const (
 	syncConcurrencyBits = 9
 
 	// SyncConcurrency is the maximum number of concurrent sync operations that
-	// can be performed. Exported as this value also limits the commit
-	// concurrency in commitPipeline.
+	// can be performed. Note that a sync operation is initiated either by a call
+	// to SyncRecord or by a call to Close. Exported as this value also limits
+	// the commit concurrency in commitPipeline.
 	SyncConcurrency = 1 << syncConcurrencyBits
 )
 
@@ -81,7 +83,7 @@ func (q *syncQueue) push(wg *sync.WaitGroup, err *error) {
 	ptrs := atomic.LoadUint64(&q.headTail)
 	head, tail := q.unpack(ptrs)
 	if (tail+uint32(len(q.slots)))&(1<<dequeueBits-1) == head {
-		panic("queue is full")
+		panic("pebble: queue is full")
 	}
 
 	slot := &q.slots[head&uint32(len(q.slots)-1)]
@@ -104,17 +106,17 @@ func (q *syncQueue) load() (head, tail uint32) {
 	return head, tail
 }
 
-func (q *syncQueue) pop(head, tail uint32, err error) {
+func (q *syncQueue) pop(head, tail uint32, err error) error {
 	if tail == head {
 		// Queue is empty.
-		return
+		return nil
 	}
 
 	for ; tail != head; tail++ {
 		slot := &q.slots[tail&uint32(len(q.slots)-1)]
 		wg := slot.wg
 		if wg == nil {
-			panic("nil waiter")
+			return fmt.Errorf("nil waiter at %d", tail&uint32(len(q.slots)-1))
 		}
 		*slot.err = err
 		slot.wg = nil
@@ -125,6 +127,8 @@ func (q *syncQueue) pop(head, tail uint32, err error) {
 		atomic.AddUint64(&q.headTail, 1)
 		wg.Done()
 	}
+
+	return nil
 }
 
 // flusherCond is a specialized condition variable that is safe to signal for
@@ -305,7 +309,13 @@ func (w *LogWriter) flushLoop() {
 			if err == nil && w.s != nil {
 				err = w.s.Sync()
 			}
-			f.syncQ.pop(head, tail, err)
+			if popErr := f.syncQ.pop(head, tail, err); popErr != nil {
+				// This slightly odd code structure prevents panic'ing without the lock
+				// held which would immediately hit a Go runtime error when the defer
+				// tries to unlock a mutex that isn't locked.
+				f.Lock()
+				panic(popErr)
+			}
 		}
 
 		f.Lock()
@@ -388,8 +398,10 @@ func (w *LogWriter) SyncRecord(p []byte, wg *sync.WaitGroup, err *error) (int64,
 		return -1, w.err
 	}
 
-	// TODO(peter): why do we need to support empty records?
-	// TestBoundary/LogWriter fails if we don't, but is that actual valid usage.
+	// The `i == 0` condition ensures we handle empty records. Such records can
+	// possibly be generated for VersionEdits stored in the MANIFEST. While the
+	// MANIFEST is currently written using Writer, it is good to support the same
+	// semantics with LogWriter.
 	for i := 0; i == 0 || len(p) > 0; i++ {
 		p = w.emitFragment(i, p)
 	}
@@ -406,7 +418,11 @@ func (w *LogWriter) SyncRecord(p []byte, wg *sync.WaitGroup, err *error) (int64,
 	}
 
 	offset := w.blockNum*blockSize + int64(w.block.written)
-	return offset, w.err
+	// Note that we don't return w.err here as a concurrent call to Close would
+	// race with our read. That's ok because the only error we could be seeing is
+	// one to syncing for which the caller can receive notification of by passing
+	// in a non-nil err argument.
+	return offset, nil
 }
 
 // Size returns the current size of the file.

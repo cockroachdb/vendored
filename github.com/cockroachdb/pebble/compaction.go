@@ -739,7 +739,7 @@ func (d *DB) flush1() error {
 	if err == nil {
 		for i := range ve.NewFiles {
 			e := &ve.NewFiles[i]
-			info.Output = append(info.Output, e.Meta.TableInfo(d.opts.FS, d.dirname))
+			info.Output = append(info.Output, e.Meta.TableInfo())
 		}
 		if len(ve.NewFiles) == 0 {
 			info.Err = errEmptyTable
@@ -862,7 +862,7 @@ func (d *DB) compact1() (err error) {
 	for i := range c.inputs {
 		for j := range c.inputs[i] {
 			m := &c.inputs[i][j]
-			info.Input.Tables[i] = append(info.Input.Tables[i], m.TableInfo(d.opts.FS, d.dirname))
+			info.Input.Tables[i] = append(info.Input.Tables[i], m.TableInfo())
 		}
 	}
 	d.opts.EventListener.CompactionBegin(info)
@@ -893,7 +893,7 @@ func (d *DB) compact1() (err error) {
 	if err == nil {
 		for i := range ve.NewFiles {
 			e := &ve.NewFiles[i]
-			info.Output.Tables = append(info.Output.Tables, e.Meta.TableInfo(d.opts.FS, d.dirname))
+			info.Output.Tables = append(info.Output.Tables, e.Meta.TableInfo())
 		}
 	}
 	d.opts.EventListener.CompactionEnd(info)
@@ -1209,15 +1209,55 @@ func (d *DB) scanObsoleteFiles(list []string) {
 	d.mu.versions.obsoleteOptions = merge(d.mu.versions.obsoleteOptions, obsoleteOptions)
 }
 
+// disableFileDeletions disables file deletions and then waits for any
+// in-progress deletion to finish. The caller is required to call
+// enableFileDeletions in order to enable file deletions again. It is ok for
+// multiple callers to disable file deletions simultaneously, though they must
+// all invoke enableFileDeletions in order for file deletions to be re-enabled
+// (there is an internal reference count on file deletion disablement).
+//
+// d.mu must be held when calling this method.
+func (d *DB) disableFileDeletions() {
+	d.mu.cleaner.disabled++
+	for d.mu.cleaner.cleaning {
+		d.mu.cleaner.cond.Wait()
+	}
+	d.mu.cleaner.cond.Signal()
+}
+
+// enableFileDeletions enables previously disabled file deletions. Note that if
+// file deletions have been re-enabled, the current goroutine will be used to
+// perform the queued up deletions.
+//
+// d.mu must be held when calling this method.
+func (d *DB) enableFileDeletions() {
+	if d.mu.cleaner.disabled <= 0 || d.mu.cleaner.cleaning {
+		panic("pebble: file deletion disablement invariant violated")
+	}
+	d.mu.cleaner.disabled--
+	if d.mu.cleaner.disabled > 0 {
+		return
+	}
+	jobID := d.mu.nextJobID
+	d.mu.nextJobID++
+	d.deleteObsoleteFiles(jobID)
+}
+
 // deleteObsoleteFiles deletes those files that are no longer needed.
 //
 // d.mu must be held when calling this, but the mutex may be dropped and
 // re-acquired during the course of this method.
 func (d *DB) deleteObsoleteFiles(jobID int) {
 	// Only allow a single delete obsolete files job to run at a time.
-	for d.mu.cleaner.cleaning {
+	for d.mu.cleaner.cleaning && d.mu.cleaner.disabled == 0 {
 		d.mu.cleaner.cond.Wait()
 	}
+	if d.mu.cleaner.disabled > 0 {
+		// File deletions are currently disabled. When they are re-enabled a new
+		// job will be allocated to catch
+		return
+	}
+
 	d.mu.cleaner.cleaning = true
 	defer func() {
 		d.mu.cleaner.cleaning = false
@@ -1278,38 +1318,42 @@ func (d *DB) deleteObsoleteFiles(jobID int) {
 			}
 
 			path := base.MakeFilename(d.opts.FS, d.dirname, f.fileType, fileNum)
-			err := d.opts.FS.Remove(path)
-			if err == os.ErrNotExist {
-				continue
-			}
-
-			// TODO(peter): need to handle this errror, probably by re-adding the
-			// file that couldn't be deleted to one of the obsolete slices map.
-
-			switch f.fileType {
-			case fileTypeLog:
-				d.opts.EventListener.WALDeleted(WALDeleteInfo{
-					JobID:   jobID,
-					Path:    path,
-					FileNum: fileNum,
-					Err:     err,
-				})
-			case fileTypeManifest:
-				d.opts.EventListener.ManifestDeleted(ManifestDeleteInfo{
-					JobID:   jobID,
-					Path:    path,
-					FileNum: fileNum,
-					Err:     err,
-				})
-			case fileTypeTable:
-				d.opts.EventListener.TableDeleted(TableDeleteInfo{
-					JobID:   jobID,
-					Path:    path,
-					FileNum: fileNum,
-					Err:     err,
-				})
-			}
+			d.deleteObsoleteFile(f.fileType, jobID, path, fileNum)
 		}
+	}
+}
+
+// deleteObsoleteFile deletes file that is no longer needed.
+func (d *DB) deleteObsoleteFile(fileType fileType, jobID int, path string, fileNum uint64) {
+	// TODO(peter): need to handle this error, probably by re-adding the
+	// file that couldn't be deleted to one of the obsolete slices map.
+	err := d.opts.Cleaner.Clean(d.opts.FS, fileType, path)
+	if err == os.ErrNotExist {
+		return
+	}
+
+	switch fileType {
+	case fileTypeLog:
+		d.opts.EventListener.WALDeleted(WALDeleteInfo{
+			JobID:   jobID,
+			Path:    path,
+			FileNum: fileNum,
+			Err:     err,
+		})
+	case fileTypeManifest:
+		d.opts.EventListener.ManifestDeleted(ManifestDeleteInfo{
+			JobID:   jobID,
+			Path:    path,
+			FileNum: fileNum,
+			Err:     err,
+		})
+	case fileTypeTable:
+		d.opts.EventListener.TableDeleted(TableDeleteInfo{
+			JobID:   jobID,
+			Path:    path,
+			FileNum: fileNum,
+			Err:     err,
+		})
 	}
 }
 

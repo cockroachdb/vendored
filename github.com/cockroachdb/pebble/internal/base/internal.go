@@ -5,7 +5,6 @@
 package base // import "github.com/cockroachdb/pebble/internal/base"
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"strconv"
@@ -146,7 +145,10 @@ var kindsMap = map[string]InternalKeyKind{
 func ParseInternalKey(s string) InternalKey {
 	x := strings.Split(s, ".")
 	ukey := x[0]
-	kind := kindsMap[x[1]]
+	kind, ok := kindsMap[x[1]]
+	if !ok {
+		panic(fmt.Sprintf("unknown kind: %q", x[1]))
+	}
 	j := 0
 	if x[2][0] == 'b' {
 		j = 1
@@ -180,23 +182,14 @@ func DecodeInternalKey(encodedKey []byte) InternalKey {
 // compare in descending kind order (though this should never happen in
 // practice).
 func InternalCompare(userCmp Compare, a, b InternalKey) int {
-	if !a.Valid() {
-		if b.Valid() {
-			return -1
-		}
-		return bytes.Compare(a.UserKey, b.UserKey)
-	}
-	if !b.Valid() {
-		return 1
-	}
 	if x := userCmp(a.UserKey, b.UserKey); x != 0 {
 		return x
 	}
-	if a.Trailer < b.Trailer {
-		return 1
-	}
 	if a.Trailer > b.Trailer {
 		return -1
+	}
+	if a.Trailer < b.Trailer {
+		return 1
 	}
 	return 0
 }

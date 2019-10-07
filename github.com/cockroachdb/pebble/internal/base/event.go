@@ -7,14 +7,13 @@ package base
 import (
 	"bytes"
 	"fmt"
+	"strings"
 
 	"github.com/cockroachdb/pebble/internal/humanize"
 )
 
 // TableInfo contains the common information for table related events.
 type TableInfo struct {
-	// Path is the location of the file on disk.
-	Path string
 	// FileNum is the internal DB identifier for the table.
 	FileNum uint64
 	// Size is the size of the file in bytes.
@@ -35,6 +34,17 @@ func totalSize(tables []TableInfo) uint64 {
 		size += tables[i].Size
 	}
 	return size
+}
+
+func formatFileNums(tables []TableInfo) string {
+	var buf strings.Builder
+	for i := range tables {
+		if i > 0 {
+			buf.WriteString(" ")
+		}
+		fmt.Fprintf(&buf, "%06d", tables[i].FileNum)
+	}
+	return buf.String()
 }
 
 // CompactionInfo contains the info for a compaction event.
@@ -68,19 +78,26 @@ func (i CompactionInfo) String() string {
 	}
 
 	if !i.Done {
-		return fmt.Sprintf("[JOB %d] compacting L%d -> L%d: %d+%d (%s + %s)",
-			i.JobID, i.Input.Level, i.Output.Level,
-			len(i.Input.Tables[0]), len(i.Input.Tables[1]),
+		return fmt.Sprintf("[JOB %d] compacting L%d [%s] (%s) + L%d [%s] (%s)",
+			i.JobID,
+			i.Input.Level,
+			formatFileNums(i.Input.Tables[0]),
 			humanize.Uint64(totalSize(i.Input.Tables[0])),
+			i.Output.Level,
+			formatFileNums(i.Input.Tables[1]),
 			humanize.Uint64(totalSize(i.Input.Tables[1])))
 	}
 
-	return fmt.Sprintf("[JOB %d] compacted L%d -> L%d: %d+%d (%s + %s) -> %d (%s)",
-		i.JobID, i.Input.Level, i.Output.Level,
-		len(i.Input.Tables[0]), len(i.Input.Tables[1]),
+	return fmt.Sprintf("[JOB %d] compacted L%d [%s] (%s) + L%d [%s] (%s) -> L%d [%s] (%s)",
+		i.JobID,
+		i.Input.Level,
+		formatFileNums(i.Input.Tables[0]),
 		humanize.Uint64(totalSize(i.Input.Tables[0])),
+		i.Output.Level,
+		formatFileNums(i.Input.Tables[1]),
 		humanize.Uint64(totalSize(i.Input.Tables[1])),
-		len(i.Output.Tables),
+		i.Output.Level,
+		formatFileNums(i.Output.Tables),
 		humanize.Uint64(totalSize(i.Output.Tables)))
 }
 
@@ -106,8 +123,10 @@ func (i FlushInfo) String() string {
 		return fmt.Sprintf("[JOB %d] flushing to L0", i.JobID)
 	}
 
-	return fmt.Sprintf("[JOB %d] flushed to L0: %d (%s)", i.JobID,
-		len(i.Output), humanize.Uint64(totalSize(i.Output)))
+	return fmt.Sprintf("[JOB %d] flushed to L0 [%s] (%s)",
+		i.JobID,
+		formatFileNums(i.Output),
+		humanize.Uint64(totalSize(i.Output)))
 }
 
 // ManifestCreateInfo contains info about a manifest creation event.

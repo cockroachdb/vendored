@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 
 	"github.com/cockroachdb/pebble/internal/base"
+	"github.com/cockroachdb/pebble/internal/private"
 	"github.com/cockroachdb/pebble/sstable"
 	"github.com/cockroachdb/pebble/vfs"
 )
@@ -29,7 +30,19 @@ func sstableKeyCompare(userCmp Compare, a, b InternalKey) int {
 	return 0
 }
 
-func ingestLoad1(opts *Options, path string, dbNum, fileNum uint64) (*fileMetadata, error) {
+func ingestValidateKey(opts *Options, key *InternalKey) error {
+	if key.Kind() == InternalKeyKindInvalid {
+		return fmt.Errorf("pebble: external sstable has corrupted key: %s",
+			key.Pretty(opts.Comparer.Format))
+	}
+	if key.SeqNum() != 0 {
+		return fmt.Errorf("pebble: external sstable has non-zero seqnum: %s",
+			key.Pretty(opts.Comparer.Format))
+	}
+	return nil
+}
+
+func ingestLoad1(opts *Options, path string, cacheID, fileNum uint64) (*fileMetadata, error) {
 	stat, err := opts.FS.Stat(path)
 	if err != nil {
 		return nil, err
@@ -40,7 +53,8 @@ func ingestLoad1(opts *Options, path string, dbNum, fileNum uint64) (*fileMetada
 		return nil, err
 	}
 
-	r, err := sstable.NewReader(f, dbNum, fileNum, opts)
+	cacheOpts := private.SSTableCacheOpts(cacheID, fileNum).(sstable.OpenOption)
+	r, err := sstable.NewReader(f, opts, cacheOpts)
 	defer r.Close()
 	if err != nil {
 		return nil, err
@@ -58,11 +72,17 @@ func ingestLoad1(opts *Options, path string, dbNum, fileNum uint64) (*fileMetada
 		iter := r.NewIter(nil /* lower */, nil /* upper */)
 		defer iter.Close()
 		if key, _ := iter.First(); key != nil {
+			if err := ingestValidateKey(opts, key); err != nil {
+				return nil, err
+			}
 			empty = false
 			meta.Smallest = key.Clone()
 			smallestSet = true
 		}
 		if key, _ := iter.Last(); key != nil {
+			if err := ingestValidateKey(opts, key); err != nil {
+				return nil, err
+			}
 			empty = false
 			meta.Largest = key.Clone()
 			largestSet = true
@@ -75,6 +95,9 @@ func ingestLoad1(opts *Options, path string, dbNum, fileNum uint64) (*fileMetada
 	if iter := r.NewRangeDelIter(); iter != nil {
 		defer iter.Close()
 		if key, _ := iter.First(); key != nil {
+			if err := ingestValidateKey(opts, key); err != nil {
+				return nil, err
+			}
 			empty = false
 			if !smallestSet ||
 				base.InternalCompare(opts.Comparer.Compare, meta.Smallest, *key) > 0 {
@@ -82,6 +105,9 @@ func ingestLoad1(opts *Options, path string, dbNum, fileNum uint64) (*fileMetada
 			}
 		}
 		if key, val := iter.Last(); key != nil {
+			if err := ingestValidateKey(opts, key); err != nil {
+				return nil, err
+			}
 			empty = false
 			end := base.MakeRangeDeleteSentinelKey(val)
 			if !largestSet ||
@@ -98,12 +124,12 @@ func ingestLoad1(opts *Options, path string, dbNum, fileNum uint64) (*fileMetada
 }
 
 func ingestLoad(
-	opts *Options, paths []string, dbNum uint64, pending []uint64,
+	opts *Options, paths []string, cacheID uint64, pending []uint64,
 ) ([]*fileMetadata, []string, error) {
 	meta := make([]*fileMetadata, 0, len(paths))
 	newPaths := make([]string, 0, len(paths))
 	for i := range paths {
-		m, err := ingestLoad1(opts, paths[i], dbNum, pending[i])
+		m, err := ingestLoad1(opts, paths[i], cacheID, pending[i])
 		if err != nil {
 			return nil, nil, err
 		}
@@ -126,7 +152,7 @@ func ingestSortAndVerify(cmp Compare, meta []*fileMetadata) error {
 
 	for i := 1; i < len(meta); i++ {
 		if sstableKeyCompare(cmp, meta[i-1].Largest, meta[i].Smallest) >= 0 {
-			return fmt.Errorf("files have overlapping ranges")
+			return fmt.Errorf("pebble: external sstables have overlapping ranges")
 		}
 	}
 	return nil
@@ -146,11 +172,20 @@ func ingestCleanup(fs vfs.FS, dirname string, meta []*fileMetadata) error {
 }
 
 func ingestLink(jobID int, opts *Options, dirname string, paths []string, meta []*fileMetadata) error {
+	// Wrap the normal filesystem with one which wraps newly created files with
+	// vfs.NewSyncingFile.
+	fs := syncingFS{
+		FS: opts.FS,
+		syncOpts: vfs.SyncingFileOptions{
+			BytesPerSync: opts.BytesPerSync,
+		},
+	}
+
 	for i := range paths {
-		target := base.MakeFilename(opts.FS, dirname, fileTypeTable, meta[i].FileNum)
-		err := opts.FS.Link(paths[i], target)
+		target := base.MakeFilename(fs, dirname, fileTypeTable, meta[i].FileNum)
+		err := vfs.LinkOrCopy(fs, paths[i], target)
 		if err != nil {
-			if err2 := ingestCleanup(opts.FS, dirname, meta[:i]); err2 != nil {
+			if err2 := ingestCleanup(fs, dirname, meta[:i]); err2 != nil {
 				opts.Logger.Infof("ingest cleanup failed: %v", err2)
 			}
 			return err
@@ -318,7 +353,7 @@ func (d *DB) Ingest(paths []string) error {
 
 	// Load the metadata for all of the files being ingested. This step detects
 	// and elides empty sstables.
-	meta, paths, err := ingestLoad(d.opts, paths, d.dbNum, pendingOutputs)
+	meta, paths, err := ingestLoad(d.opts, paths, d.cacheID, pendingOutputs)
 	if err != nil {
 		return err
 	}
@@ -334,8 +369,9 @@ func (d *DB) Ingest(paths []string) error {
 
 	// Hard link the sstables into the DB directory. Since the sstables aren't
 	// referenced by a version, they won't be used. If the hard linking fails
-	// (e.g. because the files reside on a different filesystem) we undo our work
-	// and return an error.
+	// (e.g. because the files reside on a different filesystem), ingestLink will
+	// fall back to copying, and if that fails we undo our work and return an
+	// error.
 	if err := ingestLink(jobID, d.opts, d.dirname, paths, meta); err != nil {
 		return err
 	}
@@ -349,6 +385,8 @@ func (d *DB) Ingest(paths []string) error {
 
 	var mem flushable
 	prepare := func() {
+		// Note that d.commit.mu is held by commitPipeline when calling prepare.
+
 		d.mu.Lock()
 		defer d.mu.Unlock()
 
@@ -418,7 +456,7 @@ func (d *DB) Ingest(paths []string) error {
 		for i := range ve.NewFiles {
 			e := &ve.NewFiles[i]
 			info.Tables[i].Level = e.Level
-			info.Tables[i].TableInfo = e.Meta.TableInfo(d.opts.FS, d.dirname)
+			info.Tables[i].TableInfo = e.Meta.TableInfo()
 		}
 	}
 	d.opts.EventListener.TableIngested(info)
@@ -453,5 +491,9 @@ func (d *DB) ingestApply(jobID int, meta []*fileMetadata) (*versionEdit, error) 
 		return nil, err
 	}
 	d.updateReadStateLocked()
+	d.deleteObsoleteFiles(jobID)
+	// The ingestion may have pushed a level over the threshold for compaction,
+	// so check to see if one is necessary and schedule it.
+	d.maybeScheduleCompaction()
 	return ve, nil
 }

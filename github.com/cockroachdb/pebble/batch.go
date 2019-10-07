@@ -15,8 +15,8 @@ import (
 	"unsafe"
 
 	"github.com/cockroachdb/pebble/internal/base"
-	"github.com/cockroachdb/pebble/internal/batch"
 	"github.com/cockroachdb/pebble/internal/batchskl"
+	"github.com/cockroachdb/pebble/internal/private"
 	"github.com/cockroachdb/pebble/internal/rangedel"
 	"github.com/cockroachdb/pebble/internal/rawalloc"
 )
@@ -766,6 +766,7 @@ func (b *Batch) Reset() {
 		} else {
 			// Otherwise, reset the buffer for re-use.
 			b.storage.data = b.storage.data[:batchHeaderLen]
+			b.setSeqNum(0)
 		}
 		b.count = 0
 	}
@@ -1079,7 +1080,13 @@ func newFlushableBatch(batch *Batch, comparer *Comparer) *flushableBatch {
 		offsets:   make([]flushableBatchEntry, 0, batch.Count()),
 		flushedCh: make(chan struct{}),
 	}
-
+	if b.data != nil {
+		// Note that this sequence number is not correct when this batch has not
+		// been applied since the sequence number has not been assigned yet. The
+		// correct sequence number will be set later. But it is correct when the
+		// batch is being replayed from the WAL.
+		b.seqNum = batch.SeqNum()
+	}
 	var rangeDelOffsets []flushableBatchEntry
 	if len(b.data) > batchHeaderLen {
 		// Non-empty batch.
@@ -1132,16 +1139,23 @@ func newFlushableBatch(batch *Batch, comparer *Comparer) *flushableBatch {
 			cmp:     b.cmp,
 			index:   -1,
 		}
-		for {
-			key, val := it.Next()
-			if key == nil {
-				break
-			}
+		for key, val := it.First(); key != nil; key, val = it.Next() {
 			frag.Add(*key, val)
 		}
 		frag.Finish()
 	}
 	return b
+}
+
+func (b *flushableBatch) setSeqNum(seqNum uint64) {
+	if b.seqNum != 0 {
+		panic(fmt.Sprintf("pebble: flushableBatch.seqNum already set: %d", b.seqNum))
+	}
+	b.seqNum = seqNum
+	for i := range b.tombstones {
+		start := &b.tombstones[i].Start
+		start.SetSeqNum(seqNum + start.SeqNum())
+	}
 }
 
 func (b *flushableBatch) Len() int {
@@ -1491,5 +1505,5 @@ func batchSort(i interface{}) (internalIterator, internalIterator) {
 }
 
 func init() {
-	batch.Sort = batchSort
+	private.BatchSort = batchSort
 }

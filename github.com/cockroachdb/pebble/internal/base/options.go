@@ -6,10 +6,12 @@ package base
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
-	"github.com/cockroachdb/pebble/cache"
+	"github.com/cockroachdb/pebble/internal/cache"
 	"github.com/cockroachdb/pebble/vfs"
 )
 
@@ -231,6 +233,11 @@ type Options struct {
 	// The default cache size is 8 MB.
 	Cache *cache.Cache
 
+	// Cleaner cleans obsolete files.
+	//
+	// The default cleaner uses the DeleteCleaner.
+	Cleaner Cleaner
+
 	// Comparer defines a total ordering over the space of []byte keys: a 'less
 	// than' relationship. The same comparison algorithm must be used for reads
 	// and writes over the lifetime of the DB.
@@ -360,6 +367,9 @@ func (o *Options) EnsureDefaults() *Options {
 	if o.Cache == nil {
 		o.Cache = cache.New(8 << 20) // 8 MB
 	}
+	if o.Cleaner == nil {
+		o.Cleaner = DeleteCleaner{}
+	}
 	if o.Comparer == nil {
 		o.Comparer = DefaultComparer
 	}
@@ -468,6 +478,7 @@ func (o *Options) String() string {
 	fmt.Fprintf(&buf, "[Options]\n")
 	fmt.Fprintf(&buf, "  bytes_per_sync=%d\n", o.BytesPerSync)
 	fmt.Fprintf(&buf, "  cache_size=%d\n", o.Cache.MaxSize())
+	fmt.Fprintf(&buf, "  cleaner=%s\n", o.Cleaner)
 	fmt.Fprintf(&buf, "  comparer=%s\n", o.Comparer.Name)
 	fmt.Fprintf(&buf, "  disable_wal=%t\n", o.DisableWAL)
 	fmt.Fprintf(&buf, "  l0_compaction_threshold=%d\n", o.L0CompactionThreshold)
@@ -508,10 +519,7 @@ func (o *Options) String() string {
 	return buf.String()
 }
 
-// Check verifies the options are compatible with the previous options
-// serialized by Options.String(). For example, the Comparer and Merger must be
-// the same, or data will not be able to be properly read from the DB.
-func (o *Options) Check(s string) error {
+func parseOptions(s string, fn func(section, key, value string) error) error {
 	var section string
 	for _, line := range strings.Split(s, "\n") {
 		line = strings.TrimSpace(line)
@@ -537,12 +545,178 @@ func (o *Options) Check(s string) error {
 
 		key := strings.TrimSpace(line[:pos])
 		value := strings.TrimSpace(line[pos+1:])
-		path := section + "." + key
+		if err := fn(section, key, value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
+// ParseHooks contains callbacks to create options fields which can have
+// user-defined implementations.
+type ParseHooks struct {
+	NewCleaner      func(name string) (Cleaner, error)
+	NewComparer     func(name string) (*Comparer, error)
+	NewFilterPolicy func(name string) (FilterPolicy, error)
+	NewMerger       func(name string) (*Merger, error)
+}
+
+// Parse parses the options from the specified string. Note that certain
+// options cannot be parsed into populated fields. For example, comparer and
+// merger.
+func (o *Options) Parse(s string, hooks *ParseHooks) error {
+	return parseOptions(s, func(section, key, value string) error {
+		switch {
+		case section == "Version":
+			switch key {
+			case "pebble_version":
+			default:
+				return fmt.Errorf("pebble: unknown option: %s.%s", section, key)
+			}
+			return nil
+
+		case section == "Options":
+			var err error
+			switch key {
+			case "bytes_per_sync":
+				o.BytesPerSync, err = strconv.Atoi(value)
+			case "cache_size":
+				n, err := strconv.ParseInt(value, 10, 64)
+				if err == nil {
+					o.Cache = cache.New(n)
+				}
+			case "cleaner":
+				switch value {
+				case "archive":
+					o.Cleaner = ArchiveCleaner{}
+				case "delete":
+					o.Cleaner = DeleteCleaner{}
+				default:
+					if hooks != nil && hooks.NewCleaner != nil {
+						o.Cleaner, err = hooks.NewCleaner(value)
+					}
+				}
+			case "comparer":
+				switch value {
+				case "leveldb.BytewiseComparator":
+					o.Comparer = DefaultComparer
+				default:
+					if hooks != nil && hooks.NewComparer != nil {
+						o.Comparer, err = hooks.NewComparer(value)
+					}
+				}
+			case "disable_wal":
+				o.DisableWAL, err = strconv.ParseBool(value)
+			case "l0_compaction_threshold":
+				o.L0CompactionThreshold, err = strconv.Atoi(value)
+			case "l0_stop_writes_threshold":
+				o.L0StopWritesThreshold, err = strconv.Atoi(value)
+			case "lbase_max_bytes":
+				o.LBaseMaxBytes, err = strconv.ParseInt(value, 10, 64)
+			case "max_manifest_file_size":
+				o.MaxManifestFileSize, err = strconv.ParseInt(value, 10, 64)
+			case "max_open_files":
+				o.MaxOpenFiles, err = strconv.Atoi(value)
+			case "mem_table_size":
+				o.MemTableSize, err = strconv.Atoi(value)
+			case "mem_table_stop_writes_threshold":
+				o.MemTableStopWritesThreshold, err = strconv.Atoi(value)
+			case "min_compaction_rate":
+				o.MinCompactionRate, err = strconv.Atoi(value)
+			case "min_flush_rate":
+				o.MinFlushRate, err = strconv.Atoi(value)
+			case "merger":
+				switch value {
+				case "pebble.concatenate":
+					o.Merger = DefaultMerger
+				default:
+					if hooks != nil && hooks.NewMerger != nil {
+						o.Merger, err = hooks.NewMerger(value)
+					}
+				}
+			case "table_format":
+				switch value {
+				case "leveldb":
+					o.TableFormat = TableFormatLevelDB
+				case "rocksdbv2":
+					o.TableFormat = TableFormatRocksDBv2
+				default:
+					return fmt.Errorf("pebble: unknown table format: %q", value)
+				}
+			case "table_property_collectors":
+				// TODO(peter): set o.TablePropertyCollectors
+			case "wal_dir":
+				o.WALDir = value
+			default:
+				return fmt.Errorf("pebble: unknown option: %s.%s", section, key)
+			}
+			return err
+
+		case strings.HasPrefix(section, "Level "):
+			var index int
+			if n, err := fmt.Sscanf(section, `Level "%d"`, &index); err != nil {
+				return err
+			} else if n != 1 {
+				return fmt.Errorf("pebble: unknown section: %q", section)
+			}
+
+			if len(o.Levels) <= index {
+				newLevels := make([]LevelOptions, index+1)
+				copy(newLevels, o.Levels)
+				o.Levels = newLevels
+			}
+			l := &o.Levels[index]
+
+			var err error
+			switch key {
+			case "block_restart_interval":
+				l.BlockRestartInterval, err = strconv.Atoi(value)
+			case "block_size":
+				l.BlockSize, err = strconv.Atoi(value)
+			case "compression":
+				switch value {
+				case "Default":
+					l.Compression = DefaultCompression
+				case "NoCompression":
+					l.Compression = NoCompression
+				case "Snappy":
+					l.Compression = SnappyCompression
+				default:
+					return fmt.Errorf("pebble: unknown compression: %q", value)
+				}
+			case "filter_policy":
+				if hooks != nil && hooks.NewFilterPolicy != nil {
+					l.FilterPolicy, err = hooks.NewFilterPolicy(value)
+				}
+			case "filter_type":
+				switch value {
+				case "table":
+					l.FilterType = TableFilter
+				default:
+					return fmt.Errorf("pebble: unknown filter type: %q", value)
+				}
+			case "index_block_size":
+				l.IndexBlockSize, err = strconv.Atoi(value)
+			case "target_file_size":
+				l.TargetFileSize, err = strconv.ParseInt(value, 10, 64)
+			default:
+				return fmt.Errorf("pebble: unknown option: %s.%s", section, key)
+			}
+			return err
+		}
+		return fmt.Errorf("pebble: unknown section: %q", section)
+	})
+}
+
+// Check verifies the options are compatible with the previous options
+// serialized by Options.String(). For example, the Comparer and Merger must be
+// the same, or data will not be able to be properly read from the DB.
+func (o *Options) Check(s string) error {
+	return parseOptions(s, func(section, key, value string) error {
 		// RocksDB uses a similar (INI-style) syntax for the OPTIONS file, but
 		// different section names and keys. The "CFOptions ..." paths below are
 		// the RocksDB versions.
-		switch path {
+		switch section + "." + key {
 		case "Options.comparer", `CFOptions "default".comparator`:
 			if value != o.Comparer.Name {
 				return fmt.Errorf("pebble: comparer name from file %q != comparer name from options %q",
@@ -556,6 +730,32 @@ func (o *Options) Check(s string) error {
 					value, o.Merger.Name)
 			}
 		}
+		return nil
+	})
+}
+
+// Validate verifies that the options are mutually consistent. For example,
+// L0StopWritesThreshold must be >= L0CompactionThreshold, otherwise a write
+// stall would persist indefinitely.
+func (o *Options) Validate() error {
+	// Note that we can presume Options.EnsureDefaults has been called, so there
+	// is no need to check for zero values.
+
+	var buf strings.Builder
+	if o.L0StopWritesThreshold < o.L0CompactionThreshold {
+		fmt.Fprintf(&buf, "L0StopWritesThreshold (%d) must be >= L0CompactionThreshold (%d)\n",
+			o.L0StopWritesThreshold, o.L0CompactionThreshold)
 	}
-	return nil
+	if o.MemTableStopWritesThreshold < 2 {
+		fmt.Fprintf(&buf, "MemTableStopWritesThreshold (%d) must be >= 2\n",
+			o.MemTableStopWritesThreshold)
+	}
+	switch o.TableFormat {
+	case TableFormatLevelDB:
+		fmt.Fprintf(&buf, "TableFormatLevelDB not supported for DB\n")
+	}
+	if buf.Len() == 0 {
+		return nil
+	}
+	return errors.New(buf.String())
 }
