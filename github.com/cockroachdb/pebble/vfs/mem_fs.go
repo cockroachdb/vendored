@@ -29,6 +29,18 @@ func NewMem() FS {
 	}
 }
 
+// NewMemFile returns a memory-backed File implementation. The memory-backed
+// file takes ownership of data.
+func NewMemFile(data []byte) File {
+	return &memFile{
+		n: &memNode{
+			data:    data,
+			modTime: time.Now(),
+		},
+		read: true,
+	}
+}
+
 // memFS implements FS.
 type memFS struct {
 	mu   sync.Mutex
