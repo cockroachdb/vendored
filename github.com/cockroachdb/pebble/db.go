@@ -43,7 +43,10 @@ type flushable interface {
 	newIter(o *IterOptions) internalIterator
 	newFlushIter(o *IterOptions, bytesFlushed *uint64) internalIterator
 	newRangeDelIter(o *IterOptions) internalIterator
+	inuseBytes() uint64
 	totalBytes() uint64
+	readerRef()
+	readerUnref()
 	flushed() chan struct{}
 	readyForFlush() bool
 	logInfo() (logNum, size uint64)
@@ -194,6 +197,8 @@ type DB struct {
 	logRecycler logRecycler
 
 	closed int32 // updated atomically
+
+	memTableReserved int64 // number of bytes reserved in the cache for memtables
 
 	compactionLimiter limiter
 
@@ -449,7 +454,7 @@ func (d *DB) commitApply(b *Batch, mem *memTable) error {
 	if err != nil {
 		return err
 	}
-	if mem.unref() {
+	if mem.writerUnref() {
 		d.mu.Lock()
 		d.maybeScheduleFlush()
 		d.mu.Unlock()
@@ -741,6 +746,13 @@ func (d *DB) Close() error {
 				return fmt.Errorf("leaked iterators:\n%s", v)
 			}
 		}
+
+		for _, mem := range d.mu.mem.queue {
+			mem.readerUnref()
+		}
+		if reserved := atomic.LoadInt64(&d.memTableReserved); reserved != 0 {
+			return fmt.Errorf("leaked memtable reservation: %d", reserved)
+		}
 	}
 	return err
 }
@@ -870,11 +882,17 @@ func (d *DB) AsyncFlush() (<-chan struct{}, error) {
 }
 
 // Metrics returns metrics about the database.
-func (d *DB) Metrics() *VersionMetrics {
-	metrics := &VersionMetrics{}
+func (d *DB) Metrics() *Metrics {
+	metrics := &Metrics{}
 	recycledLogs := d.logRecycler.count()
+
 	d.mu.Lock()
 	*metrics = d.mu.versions.metrics
+	metrics.Compact.EstimatedDebt = d.mu.versions.picker.estimatedCompactionDebt(0)
+	for _, m := range d.mu.mem.queue {
+		metrics.MemTable.Size += m.totalBytes()
+	}
+	metrics.MemTable.Count = int64(len(d.mu.mem.queue))
 	metrics.WAL.ObsoleteFiles = int64(recycledLogs)
 	metrics.WAL.Size = atomic.LoadUint64(&d.mu.log.size)
 	metrics.WAL.BytesIn = d.mu.log.bytesIn // protected by d.mu
@@ -890,6 +908,10 @@ func (d *DB) Metrics() *VersionMetrics {
 		}
 	}
 	d.mu.Unlock()
+
+	metrics.BlockCache = d.opts.Cache.Metrics()
+	metrics.TableCache, metrics.Filter = d.tableCache.metrics()
+	metrics.TableIters = int64(d.tableCache.iterCount())
 	return metrics
 }
 
@@ -938,6 +960,10 @@ func (d *DB) walPreallocateSize() int {
 	size := d.opts.MemTableSize
 	size = (size / 10) + size
 	return size
+}
+
+func (d *DB) newMemTable() *memTable {
+	return newMemTable(d.opts, &d.memTableReserved)
 }
 
 // makeRoomForWrite ensures that the memtable has room to hold the contents of
@@ -1106,7 +1132,7 @@ func (d *DB) makeRoomForWrite(b *Batch) error {
 		// also have to wait for all previous immutable tables to
 		// flush. Additionally, the memtable is tied to particular WAL file and we
 		// want to go through the flush path in order to recycle that WAL file.
-		d.mu.mem.mutable = newMemTable(d.opts)
+		d.mu.mem.mutable = d.newMemTable()
 		// NB: newLogNum corresponds to the WAL that contains mutations that are
 		// present in the new memtable. When immutable memtables are flushed to
 		// disk, a VersionEdit will be created telling the manifest the minimum
@@ -1115,7 +1141,7 @@ func (d *DB) makeRoomForWrite(b *Batch) error {
 		d.mu.mem.mutable.logNum = newLogNum
 		d.mu.mem.queue = append(d.mu.mem.queue, d.mu.mem.mutable)
 		d.updateReadStateLocked()
-		if imm.unref() {
+		if imm.writerUnref() {
 			d.maybeScheduleFlush()
 		}
 		force = false
