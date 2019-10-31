@@ -3,7 +3,7 @@
 Command goimports updates your Go import lines,
 adding missing ones and removing unreferenced ones.
 
-     $ go get golang.org/x/tools/cmd/goimports
+     $ go get github.com/cockroachdb/gostdlib/x/tools/cmd/goimports
 
 In addition to fixing imports, goimports also formats
 your code in the same style as gofmt so it can be used
@@ -13,8 +13,6 @@ For emacs, make sure you have the latest go-mode.el:
    https://github.com/dominikh/go-mode.el
 Then in your .emacs file:
    (setq gofmt-command "goimports")
-   (add-to-list 'load-path "/home/you/somewhere/emacs/")
-   (require 'go-mode-autoloads)
    (add-hook 'before-save-hook 'gofmt-before-save)
 
 For vim, set "gofmt_command" to "goimports":

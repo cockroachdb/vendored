@@ -105,7 +105,7 @@ func (p *printer) internalError(msg ...interface{}) {
 	if debug {
 		fmt.Print(p.pos.String() + ": ")
 		fmt.Println(msg...)
-		panic("go/printer")
+		panic("github.com/cockroachdb/gostdlib/go/printer")
 	}
 }
 
@@ -974,7 +974,7 @@ func (p *printer) print(args ...interface{}) {
 
 		default:
 			fmt.Fprintf(os.Stderr, "print: unsupported argument %v (%T)\n", arg, arg)
-			panic("go/printer type")
+			panic("github.com/cockroachdb/gostdlib/go/printer type")
 		}
 		// data != ""
 
@@ -1157,7 +1157,7 @@ func (p *printer) printNode(node interface{}) error {
 	return nil
 
 unsupported:
-	return fmt.Errorf("go/printer: unsupported node type %T", node)
+	return fmt.Errorf("github.com/cockroachdb/gostdlib/go/printer: unsupported node type %T", node)
 }
 
 // ----------------------------------------------------------------------------
@@ -1354,7 +1354,7 @@ func (cfg *Config) Fprint(output io.Writer, fset *token.FileSet, node interface{
 // Fprint "pretty-prints" an AST node to output.
 // It calls Config.Fprint with default settings.
 // Note that gofmt uses tabs for indentation but spaces for alignment;
-// use format.Node (package go/format) for output that matches gofmt.
+// use format.Node (package github.com/cockroachdb/gostdlib/go/format) for output that matches gofmt.
 //
 func Fprint(output io.Writer, fset *token.FileSet, node interface{}) error {
 	return (&Config{Tabwidth: 8}).Fprint(output, fset, node)
