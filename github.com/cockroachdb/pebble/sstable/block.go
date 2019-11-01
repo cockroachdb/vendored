@@ -116,7 +116,6 @@ type blockIter struct {
 	data         []byte
 	key, val     []byte
 	fullKey      []byte
-	keyBuf       [256]byte
 	ikey         InternalKey
 	cached       []blockEntry
 	cachedBuf    []byte
@@ -140,14 +139,18 @@ func (i *blockIter) init(cmp Compare, block block, globalSeqNum uint64) error {
 	i.globalSeqNum = globalSeqNum
 	i.ptr = unsafe.Pointer(&block[0])
 	i.data = block
-	if i.fullKey == nil {
-		i.fullKey = i.keyBuf[:0]
-	} else {
-		i.fullKey = i.fullKey[:0]
-	}
+	i.fullKey = i.fullKey[:0]
 	i.val = nil
 	i.clearCache()
 	return nil
+}
+
+func (i *blockIter) resetForReuse() blockIter {
+	return blockIter{
+		fullKey:   i.fullKey[:0],
+		cached:    i.cached[:0],
+		cachedBuf: i.cachedBuf[:0],
+	}
 }
 
 func (i *blockIter) setCacheHandle(h cache.Handle) {
@@ -282,6 +285,8 @@ func (i *blockIter) cacheEntry() {
 // SeekGE implements internalIterator.SeekGE, as documented in the pebble
 // package.
 func (i *blockIter) SeekGE(key []byte) (*InternalKey, []byte) {
+	i.clearCache()
+
 	ikey := base.MakeSearchKey(key)
 
 	// Find the index of the smallest restart point whose key is > the key
@@ -392,6 +397,8 @@ func (i *blockIter) SeekPrefixGE(prefix, key []byte) (*InternalKey, []byte) {
 // SeekLT implements internalIterator.SeekLT, as documented in the pebble
 // package.
 func (i *blockIter) SeekLT(key []byte) (*InternalKey, []byte) {
+	i.clearCache()
+
 	ikey := base.MakeSearchKey(key)
 
 	// Find the index of the smallest restart point whose key is >= the key
@@ -487,7 +494,6 @@ func (i *blockIter) SeekLT(key []byte) (*InternalKey, []byte) {
 	// Iterate from that restart point to somewhere >= the key sought, then back
 	// up to the previous entry. The expectation is that we'll be performing
 	// reverse iteration, so we cache the entries as we advance forward.
-	i.clearCache()
 	i.nextOffset = i.offset
 
 	for {
@@ -522,6 +528,7 @@ func (i *blockIter) First() (*InternalKey, []byte) {
 	if !i.Valid() {
 		return nil, nil
 	}
+	i.clearCache()
 	i.readEntry()
 	i.decodeInternalKey(i.key)
 	return &i.ikey, i.val
@@ -552,6 +559,20 @@ func (i *blockIter) Last() (*InternalKey, []byte) {
 // Next implements internalIterator.Next, as documented in the pebble
 // package.
 func (i *blockIter) Next() (*InternalKey, []byte) {
+	if n := len(i.cached); n > 0 {
+		// We're switching from reverse iteration to forward iteration. We need to
+		// populate i.fullKey with the current key we're positioned at so that
+		// readEntry() can use i.fullKey for key prefix decompression.
+		//
+		// TODO(peter): Rather than clearing the cache, we could instead use the
+		// cache until it is exhausted. This would likely be faster than falling
+		// through to the normal forward iteration code below.
+		e := &i.cached[n-1]
+		key := i.cachedBuf[e.keyStart:e.keyEnd]
+		i.fullKey = append(i.fullKey[:0], key...)
+		i.clearCache()
+	}
+
 	i.offset = i.nextOffset
 	if !i.Valid() {
 		return nil, nil
@@ -574,7 +595,7 @@ func (i *blockIter) Next() (*InternalKey, []byte) {
 // Prev implements internalIterator.Prev, as documented in the pebble
 // package.
 func (i *blockIter) Prev() (*InternalKey, []byte) {
-	if n := len(i.cached) - 1; n > 0 && i.cached[n].offset == i.offset {
+	if n := len(i.cached) - 1; n > 0 {
 		i.nextOffset = i.offset
 		e := &i.cached[n-1]
 		i.offset = e.offset
@@ -595,6 +616,7 @@ func (i *blockIter) Prev() (*InternalKey, []byte) {
 		return &i.ikey, i.val
 	}
 
+	i.clearCache()
 	if i.offset == 0 {
 		i.offset = -1
 		i.nextOffset = 0
@@ -630,7 +652,6 @@ func (i *blockIter) Prev() (*InternalKey, []byte) {
 	}
 
 	i.readEntry()
-	i.clearCache()
 	i.cacheEntry()
 
 	for i.nextOffset < targetOffset {

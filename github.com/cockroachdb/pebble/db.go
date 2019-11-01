@@ -1072,10 +1072,8 @@ func (d *DB) makeRoomForWrite(b *Batch) error {
 			recycleLogNum := d.logRecycler.peek()
 			if recycleLogNum > 0 {
 				recycleLogName := base.MakeFilename(d.opts.FS, d.walDirname, fileTypeLog, recycleLogNum)
-				err = d.opts.FS.Rename(recycleLogName, newLogName)
-			}
-
-			if err == nil {
+				newLogFile, err = d.opts.FS.ReuseForWrite(recycleLogName, newLogName)
+			} else {
 				newLogFile, err = d.opts.FS.Create(newLogName)
 			}
 
@@ -1099,7 +1097,7 @@ func (d *DB) makeRoomForWrite(b *Batch) error {
 			}
 
 			if recycleLogNum > 0 {
-				err = d.logRecycler.pop(recycleLogNum)
+				err = firstError(err, d.logRecycler.pop(recycleLogNum))
 			}
 
 			d.opts.EventListener.WALCreated(WALCreateInfo{
@@ -1129,6 +1127,7 @@ func (d *DB) makeRoomForWrite(b *Batch) error {
 		if !d.opts.DisableWAL {
 			d.mu.log.queue = append(d.mu.log.queue, newLogNum)
 			d.mu.log.LogWriter = record.NewLogWriter(newLogFile, newLogNum)
+			d.mu.log.LogWriter.SetMinSyncInterval(d.opts.WALMinSyncInterval)
 		}
 
 		imm := d.mu.mem.mutable

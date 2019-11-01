@@ -89,12 +89,11 @@ var twoLevelIterPool = sync.Pool{
 // synonmous with Reader.NewIter, but allows for reusing of the iterator
 // between different Readers.
 func (i *singleLevelIterator) Init(r *Reader, lower, upper []byte) error {
-	*i = singleLevelIterator{
-		lower:  lower,
-		upper:  upper,
-		reader: r,
-		err:    r.err,
-	}
+	i.lower = lower
+	i.upper = upper
+	i.reader = r
+	i.err = r.err
+
 	if i.err == nil {
 		var index block
 		index, i.err = r.readIndex()
@@ -105,6 +104,13 @@ func (i *singleLevelIterator) Init(r *Reader, lower, upper []byte) error {
 		i.err = i.index.init(i.cmp, index, r.Properties.GlobalSeqNum)
 	}
 	return i.err
+}
+
+func (i *singleLevelIterator) resetForReuse() singleLevelIterator {
+	return singleLevelIterator{
+		index: i.index.resetForReuse(),
+		data:  i.data.resetForReuse(),
+	}
 }
 
 func (i *singleLevelIterator) initBounds() {
@@ -415,7 +421,7 @@ func (i *singleLevelIterator) Close() error {
 		return err
 	}
 	err := i.err
-	*i = singleLevelIterator{}
+	*i = i.resetForReuse()
 	singleLevelIterPool.Put(i)
 	return err
 }
@@ -556,14 +562,11 @@ func (i *twoLevelIterator) loadIndex() bool {
 }
 
 func (i *twoLevelIterator) Init(r *Reader, lower, upper []byte) error {
-	*i = twoLevelIterator{
-		singleLevelIterator: singleLevelIterator{
-			lower:  lower,
-			upper:  upper,
-			reader: r,
-			err:    r.err,
-		},
-	}
+	i.lower = lower
+	i.upper = upper
+	i.reader = r
+	i.err = r.err
+
 	if i.err == nil {
 		topLevelIndex, err := r.readIndex()
 		if i.err != nil {
@@ -758,7 +761,10 @@ func (i *twoLevelIterator) Close() error {
 		return err
 	}
 	err := i.err
-	*i = twoLevelIterator{}
+	*i = twoLevelIterator{
+		singleLevelIterator: i.singleLevelIterator.resetForReuse(),
+		topLevelIndex:       i.topLevelIndex.resetForReuse(),
+	}
 	twoLevelIterPool.Put(i)
 	return err
 }
@@ -931,10 +937,23 @@ func (c *cacheOpts) writerApply(w *Writer) {
 	}
 }
 
+// rawTombstonesOpt is a Reader open option for specifying that range
+// tombstones returned by Reader.NewRangeDelIter() should not be
+// fragmented. Used by debug tools to get a raw view of the tombstones
+// contained in an sstable.
+type rawTombstonesOpt struct{}
+
+func (rawTombstonesOpt) preApply() {}
+
+func (rawTombstonesOpt) readerApply(r *Reader) {
+	r.rawTombstones = true
+}
+
 func init() {
 	private.SSTableCacheOpts = func(cacheID, fileNum uint64) interface{} {
 		return &cacheOpts{cacheID, fileNum}
 	}
+	private.SSTableRawTombstonesOpt = rawTombstonesOpt{}
 }
 
 // Reader is a table reader.
@@ -942,6 +961,7 @@ type Reader struct {
 	file              vfs.File
 	cacheID           uint64
 	fileNum           uint64
+	rawTombstones     bool
 	err               error
 	index             weakCachedBlock
 	filter            weakCachedBlock
@@ -1247,7 +1267,9 @@ func (r *Reader) readMetaindex(metaindexBH BlockHandle) error {
 		r.rangeDel.bh = bh
 	} else if bh, ok := meta[metaRangeDelName]; ok {
 		r.rangeDel.bh = bh
-		r.rangeDelTransform = r.transformRangeDelV1
+		if !r.rawTombstones {
+			r.rangeDelTransform = r.transformRangeDelV1
+		}
 	}
 
 	for name, fp := range r.opts.Filters {
