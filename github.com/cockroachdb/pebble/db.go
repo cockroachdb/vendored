@@ -466,7 +466,7 @@ func (d *DB) Apply(batch *Batch, opts *WriteOptions) error {
 	// an sstable. For a 100 MB batch, this might actually be faster. For a 1
 	// GB batch this is almost certainly faster.
 	if batch.flushable != nil {
-		batch.storage.data = nil
+		batch.data = nil
 	}
 	return nil
 }
@@ -749,6 +749,10 @@ func (d *DB) Close() error {
 		panic("pebble: log-writer should be nil in read-only mode")
 	}
 	err = firstError(err, d.fileLock.Close())
+
+	// Note that versionSet.close() only closes the MANIFEST. The versions list
+	// is still valid for the checks below.
+	err = firstError(err, d.mu.versions.close())
 
 	err = firstError(err, d.dataDir.Close())
 	if d.dataDir != d.walDir {
