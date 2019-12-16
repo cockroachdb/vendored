@@ -6,10 +6,12 @@ package pebble
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"math"
 	"os"
+	"runtime/pprof"
 	"sort"
 	"sync/atomic"
 	"unsafe"
@@ -24,6 +26,10 @@ import (
 
 var errEmptyTable = errors.New("pebble: empty table")
 var errFlushInvariant = errors.New("pebble: flush next log number is unset")
+
+var compactLabels = pprof.Labels("pebble", "compact")
+var flushLabels = pprof.Labels("pebble", "flush")
+var gcLabels = pprof.Labels("pebble", "gc")
 
 // expandedCompactionByteSizeLimit is the maximum number of bytes in all
 // compacted files. We avoid expanding the lower level file set of a compaction
@@ -790,20 +796,22 @@ func (d *DB) maybeScheduleFlush() {
 }
 
 func (d *DB) flush() {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	if err := d.flush1(); err != nil {
-		// TODO(peter): count consecutive flush errors and backoff.
-		d.opts.EventListener.BackgroundError(err)
-	}
-	d.mu.compact.flushing = false
-	// More flush work may have arrived while we were flushing, so schedule
-	// another flush if needed.
-	d.maybeScheduleFlush()
-	// The flush may have produced too many files in a level, so schedule a
-	// compaction if needed.
-	d.maybeScheduleCompaction()
-	d.mu.compact.cond.Broadcast()
+	pprof.Do(context.Background(), flushLabels, func(context.Context) {
+		d.mu.Lock()
+		defer d.mu.Unlock()
+		if err := d.flush1(); err != nil {
+			// TODO(peter): count consecutive flush errors and backoff.
+			d.opts.EventListener.BackgroundError(err)
+		}
+		d.mu.compact.flushing = false
+		// More flush work may have arrived while we were flushing, so schedule
+		// another flush if needed.
+		d.maybeScheduleFlush()
+		// The flush may have produced too many files in a level, so schedule a
+		// compaction if needed.
+		d.maybeScheduleCompaction()
+		d.mu.compact.cond.Broadcast()
+	})
 }
 
 // flush runs a compaction that copies the immutable memtables from memory to
@@ -837,6 +845,7 @@ func (d *DB) flush1() error {
 
 	c := newFlush(d.opts, d.mu.versions.currentVersion(),
 		d.mu.versions.picker.baseLevel, d.mu.mem.queue[:n], &d.bytesFlushed)
+	d.mu.compact.inProgress[c] = struct{}{}
 
 	jobID := d.mu.nextJobID
 	d.mu.nextJobID++
@@ -877,18 +886,13 @@ func (d *DB) flush1() error {
 
 		d.mu.versions.logLock()
 		err = d.mu.versions.logAndApply(jobID, ve, c.metrics, d.dataDir)
-		for _, fileNum := range pendingOutputs {
-			if _, ok := d.mu.compact.pendingOutputs[fileNum]; !ok {
-				panic("pebble: expected pending output not present")
-			}
-			delete(d.mu.compact.pendingOutputs, fileNum)
-			if err != nil {
-				// TODO(peter): untested.
-				d.mu.versions.obsoleteTables = append(d.mu.versions.obsoleteTables, fileNum)
-			}
+		if err != nil {
+			// TODO(peter): untested.
+			d.mu.versions.obsoleteTables = append(d.mu.versions.obsoleteTables, pendingOutputs...)
 		}
 	}
 
+	delete(d.mu.compact.inProgress, c)
 	d.mu.versions.incrementFlushes()
 	d.opts.EventListener.FlushEnd(info)
 
@@ -899,7 +903,11 @@ func (d *DB) flush1() error {
 	if err == nil {
 		flushed = d.mu.mem.queue[:n]
 		d.mu.mem.queue = d.mu.mem.queue[n:]
-		d.updateReadStateLocked()
+		var checker func() error
+		if d.opts.DebugCheck {
+			checker = func() error { return d.CheckLevels(nil) }
+		}
+		d.updateReadStateLocked(checker)
 	}
 
 	d.deleteObsoleteFiles(jobID)
@@ -946,17 +954,19 @@ func (d *DB) maybeScheduleCompaction() {
 
 // compact runs one compaction and maybe schedules another call to compact.
 func (d *DB) compact() {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	if err := d.compact1(); err != nil {
-		// TODO(peter): count consecutive compaction errors and backoff.
-		d.opts.EventListener.BackgroundError(err)
-	}
-	d.mu.compact.compacting = false
-	// The previous compaction may have produced too many files in a
-	// level, so reschedule another compaction if needed.
-	d.maybeScheduleCompaction()
-	d.mu.compact.cond.Broadcast()
+	pprof.Do(context.Background(), compactLabels, func(context.Context) {
+		d.mu.Lock()
+		defer d.mu.Unlock()
+		if err := d.compact1(); err != nil {
+			// TODO(peter): count consecutive compaction errors and backoff.
+			d.opts.EventListener.BackgroundError(err)
+		}
+		d.mu.compact.compacting = false
+		// The previous compaction may have produced too many files in a
+		// level, so reschedule another compaction if needed.
+		d.maybeScheduleCompaction()
+		d.mu.compact.cond.Broadcast()
+	})
 }
 
 // compact1 runs one compaction.
@@ -978,6 +988,8 @@ func (d *DB) compact1() (err error) {
 	if c == nil {
 		return nil
 	}
+
+	d.mu.compact.inProgress[c] = struct{}{}
 
 	jobID := d.mu.nextJobID
 	d.mu.nextJobID++
@@ -1004,15 +1016,9 @@ func (d *DB) compact1() (err error) {
 	if err == nil {
 		d.mu.versions.logLock()
 		err = d.mu.versions.logAndApply(jobID, ve, c.metrics, d.dataDir)
-		for _, fileNum := range pendingOutputs {
-			if _, ok := d.mu.compact.pendingOutputs[fileNum]; !ok {
-				panic("pebble: expected pending output not present")
-			}
-			delete(d.mu.compact.pendingOutputs, fileNum)
-			if err != nil {
-				// TODO(peter): untested.
-				d.mu.versions.obsoleteTables = append(d.mu.versions.obsoleteTables, fileNum)
-			}
+		if err != nil {
+			// TODO(peter): untested.
+			d.mu.versions.obsoleteTables = append(d.mu.versions.obsoleteTables, pendingOutputs...)
 		}
 	}
 
@@ -1024,6 +1030,8 @@ func (d *DB) compact1() (err error) {
 			info.Output.Tables = append(info.Output.Tables, e.Meta.TableInfo())
 		}
 	}
+
+	delete(d.mu.compact.inProgress, c)
 	d.mu.versions.incrementCompactions()
 	d.opts.EventListener.CompactionEnd(info)
 
@@ -1032,7 +1040,11 @@ func (d *DB) compact1() (err error) {
 	// there are no references obsolete tables will be added to the obsolete
 	// table list.
 	if err == nil {
-		d.updateReadStateLocked()
+		var checker func() error
+		if d.opts.DebugCheck {
+			checker = func() error { return d.CheckLevels(nil) }
+		}
+		d.updateReadStateLocked(checker)
 	}
 	d.deleteObsoleteFiles(jobID)
 
@@ -1072,9 +1084,6 @@ func (d *DB) runCompaction(
 
 	defer func() {
 		if retErr != nil {
-			for _, fileNum := range pendingOutputs {
-				delete(d.mu.compact.pendingOutputs, fileNum)
-			}
 			pendingOutputs = nil
 		}
 	}()
@@ -1130,7 +1139,6 @@ func (d *DB) runCompaction(
 	newOutput := func() error {
 		d.mu.Lock()
 		fileNum := d.mu.versions.getNextFileNum()
-		d.mu.compact.pendingOutputs[fileNum] = struct{}{}
 		pendingOutputs = append(pendingOutputs, fileNum)
 		d.mu.Unlock()
 
@@ -1393,14 +1401,16 @@ func (d *DB) runCompaction(
 }
 
 // scanObsoleteFiles scans the filesystem for files that are no longer needed
-// and adds those to the internal lists of obsolete files. Note that he files
+// and adds those to the internal lists of obsolete files. Note that the files
 // are not actually deleted by this method. A subsequent call to
-// deleteObsoleteFiles must be performed.
+// deleteObsoleteFiles must be performed. Must be not be called concurrently
+// with compactions and flushes.
 func (d *DB) scanObsoleteFiles(list []string) {
-	liveFileNums := make(map[uint64]struct{}, len(d.mu.compact.pendingOutputs))
-	for fileNum := range d.mu.compact.pendingOutputs {
-		liveFileNums[fileNum] = struct{}{}
+	if d.mu.compact.compacting || d.mu.compact.flushing {
+		panic("pebble: cannot scan obsolete files concurrently with compaction/flushing")
 	}
+
+	liveFileNums := make(map[uint64]struct{})
 	d.mu.versions.addLiveFileNums(liveFileNums)
 	minUnflushedLogNum := d.mu.versions.minUnflushedLogNum
 	manifestFileNum := d.mu.versions.manifestFileNum
@@ -1494,12 +1504,17 @@ func (d *DB) deleteObsoleteFiles(jobID int) {
 	}
 	if d.mu.cleaner.disabled > 0 {
 		// File deletions are currently disabled. When they are re-enabled a new
-		// job will be allocated to catch
+		// job will be created to catch up on file deletions.
 		return
 	}
 
+	var obsoleteTables []uint64
+
 	d.mu.cleaner.cleaning = true
 	defer func() {
+		for _, fileNum := range obsoleteTables {
+			delete(d.mu.versions.zombieTables, fileNum)
+		}
 		d.mu.cleaner.cleaning = false
 		d.mu.cleaner.cond.Signal()
 	}()
@@ -1518,7 +1533,7 @@ func (d *DB) deleteObsoleteFiles(jobID int) {
 		}
 	}
 
-	obsoleteTables := d.mu.versions.obsoleteTables
+	obsoleteTables = d.mu.versions.obsoleteTables
 	d.mu.versions.obsoleteTables = nil
 
 	obsoleteManifests := d.mu.versions.obsoleteManifests
@@ -1564,6 +1579,29 @@ func (d *DB) deleteObsoleteFiles(jobID int) {
 			d.deleteObsoleteFile(f.fileType, jobID, path, fileNum)
 		}
 	}
+}
+
+func (d *DB) maybeScheduleObsoleteTableDeletion() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if d.mu.cleaner.disabled > 0 || d.mu.cleaner.cleaning {
+		return
+	}
+	if len(d.mu.versions.obsoleteTables) == 0 {
+		return
+	}
+
+	go func() {
+		pprof.Do(context.Background(), gcLabels, func(context.Context) {
+			d.mu.Lock()
+			defer d.mu.Unlock()
+
+			jobID := d.mu.nextJobID
+			d.mu.nextJobID++
+			d.deleteObsoleteFiles(jobID)
+		})
+	}()
 }
 
 // deleteObsoleteFile deletes file that is no longer needed.

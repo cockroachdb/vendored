@@ -199,6 +199,10 @@ type DB struct {
 
 	closed int32 // updated atomically
 
+	// The count and size of referenced memtables. This includes memtables
+	// present in DB.mu.mem.queue, as well as memtables that have been flushed
+	// but are still referenced by an inuse readState.
+	memTableCount    int64
 	memTableReserved int64 // number of bytes reserved in the cache for memtables
 
 	compactionLimiter limiter
@@ -255,11 +259,14 @@ type DB struct {
 		}
 
 		compact struct {
-			cond           sync.Cond
-			flushing       bool
-			compacting     bool
-			pendingOutputs map[uint64]struct{}
-			manual         []*manualCompaction
+			cond       sync.Cond
+			flushing   bool
+			compacting bool
+			// The list of manual compactions. The next manual compaction to perform
+			// is at the start of the list. New entries are added to the end.
+			manual []*manualCompaction
+			// inProgress is the set of in-progress flushes and compactions.
+			inProgress map[*compaction]struct{}
 		}
 
 		cleaner struct {
@@ -751,7 +758,11 @@ func (d *DB) Close() error {
 	for d.mu.compact.compacting || d.mu.compact.flushing {
 		d.mu.compact.cond.Wait()
 	}
-	err := d.tableCache.Close()
+	var err error
+	if n := len(d.mu.compact.inProgress); n > 0 {
+		err = fmt.Errorf("pebble: %d unexpected in-progress compactions", n)
+	}
+	err = firstError(err, d.tableCache.Close())
 	if !d.opts.ReadOnly {
 		err = firstError(err, d.mu.log.Close())
 	} else if d.mu.log.LogWriter != nil {
@@ -933,6 +944,8 @@ func (d *DB) Metrics() *Metrics {
 		metrics.MemTable.Size += m.totalBytes()
 	}
 	metrics.MemTable.Count = int64(len(d.mu.mem.queue))
+	metrics.MemTable.ZombieCount = atomic.LoadInt64(&d.memTableCount) - metrics.MemTable.Count
+	metrics.MemTable.ZombieSize = uint64(atomic.LoadInt64(&d.memTableReserved)) - metrics.MemTable.Size
 	metrics.WAL.ObsoleteFiles = int64(recycledLogs)
 	metrics.WAL.Size = atomic.LoadUint64(&d.mu.log.size)
 	metrics.WAL.BytesIn = d.mu.log.bytesIn // protected by d.mu
@@ -946,6 +959,10 @@ func (d *DB) Metrics() *Metrics {
 		for level := 1; level < numLevels; level++ {
 			metrics.Levels[level].Score = float64(metrics.Levels[level].Size) / float64(p.levelMaxBytes[level])
 		}
+	}
+	metrics.Table.ZombieCount = int64(len(d.mu.versions.zombieTables))
+	for _, size := range d.mu.versions.zombieTables {
+		metrics.Table.ZombieSize += size
 	}
 	d.mu.Unlock()
 
@@ -1067,7 +1084,17 @@ func (d *DB) newMemTable() *memTable {
 			d.mu.mem.nextSize = d.opts.MemTableSize
 		}
 	}
-	return newMemTable(d.opts, size, &d.memTableReserved)
+	return newMemTable(d.opts, size,
+		func(size int) func() {
+			atomic.AddInt64(&d.memTableCount, 1)
+			atomic.AddInt64(&d.memTableReserved, int64(size))
+			releaseAccountingReservation := d.opts.Cache.Reserve(size)
+			return func() {
+				atomic.AddInt64(&d.memTableCount, -1)
+				atomic.AddInt64(&d.memTableReserved, -int64(size))
+				releaseAccountingReservation()
+			}
+		})
 }
 
 // makeRoomForWrite ensures that the memtable has room to hold the contents of
@@ -1258,7 +1285,7 @@ func (d *DB) makeRoomForWrite(b *Batch) error {
 		// that was not flushed).
 		d.mu.mem.mutable.logNum = newLogNum
 		d.mu.mem.queue = append(d.mu.mem.queue, d.mu.mem.mutable)
-		d.updateReadStateLocked()
+		d.updateReadStateLocked(nil)
 		if imm.writerUnref() {
 			d.maybeScheduleFlush()
 		}
