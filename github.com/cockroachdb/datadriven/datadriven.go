@@ -15,7 +15,6 @@
 package datadriven
 
 import (
-	"bufio"
 	"flag"
 	"fmt"
 	"io"
@@ -86,7 +85,13 @@ var (
 // error by calling t.Error().
 func RunTest(t *testing.T, path string, f func(t *testing.T, d *TestData) string) {
 	t.Helper()
-	file, err := os.OpenFile(path, os.O_RDWR, 0644 /* irrelevant */)
+	mode := os.O_RDONLY
+	if *rewriteTestFiles {
+		// We only open read-write if rewriting, so as to enable running
+		// tests on read-only copies of the source tree.
+		mode = os.O_RDWR
+	}
+	file, err := os.OpenFile(path, mode, 0644 /* irrelevant */)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,6 +166,11 @@ func runDirectiveOrSubTest(
 	}
 }
 
+// runSubTest runs a subtest up to and including the final `subtest
+// end`. The opening `subtest` directive has been consumed already.
+// The first parameter `subTestName` is the full path to the subtest,
+// including the parent subtest names as prefix. This is used to
+// validate the nesting and thus prevent mistakes.
 func runSubTest(
 	subTestName string, t *testing.T, r *testDataReader, f func(*testing.T, *TestData) string,
 ) {
@@ -174,8 +184,13 @@ func runSubTest(
 	// inside a subtest. See below for details.
 	seenSkip := false
 
+	// The name passed to t.Run is the last component in the subtest
+	// name, because all components before that are already prefixed by
+	// t.Run from the names of the parent sub-tests.
+	testingSubTestName := subTestName[strings.LastIndex(subTestName, "/")+1:]
+
 	// Begin the sub-test.
-	t.Run(subTestName, func(t *testing.T) {
+	t.Run(testingSubTestName, func(t *testing.T) {
 		defer func() {
 			// Skips are signalled using Goexit() so we must catch it /
 			// remember it here.
@@ -317,7 +332,7 @@ func runDirective(t *testing.T, r *testDataReader, f func(*testing.T, *TestData)
 //
 //    datadriven.Walk(t, path, func (t *testing.T, path string) {
 //      // initialize per-test state
-//      datadriven.RunTest(t, path, func (d *datadriven.TestData) {
+//      datadriven.RunTest(t, path, func (t *testing.T, d *datadriven.TestData) string {
 //       // ...
 //      }
 //    }
@@ -496,12 +511,23 @@ func (td TestData) Fatalf(tb testing.TB, format string, args ...interface{}) {
 	tb.Fatalf("%s: %s", td.Pos, fmt.Sprintf(format, args...))
 }
 
+// hasBlankLine returns true iff `s` contains at least one line that's
+// empty or contains only whitespace.
 func hasBlankLine(s string) bool {
-	scanner := bufio.NewScanner(strings.NewReader(s))
-	for scanner.Scan() {
-		if strings.TrimSpace(scanner.Text()) == "" {
-			return true
-		}
-	}
-	return false
+	return blankLineRe.MatchString(s)
 }
+
+// blankLineRe matches lines that contain only whitespaces (or
+// entirely empty/blank lines).  We use the "m" flag for "multiline"
+// mode so that "^" can match the beginning of individual lines inside
+// the input, not just the beginning of the input.  In multiline mode,
+// "$" also matches the end of lines. However, note how the regexp
+// uses "\n" to match the end of lines instead of "$". This is
+// because of an oddity in the Go regexp engine: at the very end of
+// the input, *after the final \n in the input*, Go estimates there is
+// still one more line containing no characters but that matches the
+// "^.*$" regexp. The result of this oddity is that an input text like
+// "foo\n" will match as "foo\n" (no match) + "" (yes match). We don't
+// want that final match to be included, so we force the end-of-line
+// match using "\n" specifically.
+var blankLineRe = regexp.MustCompile(`(?m)^[\t ]*\n`)
