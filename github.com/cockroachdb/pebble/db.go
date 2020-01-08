@@ -11,6 +11,7 @@ import (
 	"io"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/cockroachdb/pebble/internal/arenaskl"
 	"github.com/cockroachdb/pebble/internal/base"
@@ -175,18 +176,20 @@ type DB struct {
 	merge          Merge
 	split          Split
 	abbreviatedKey AbbreviatedKey
+	// The threshold for determining when a batch is "large" and will skip being
+	// inserted into a memtable.
+	largeBatchThreshold int
+	// The current OPTIONS file number.
+	optionsFileNum uint64
 
-	dataDir vfs.File
-	walDir  vfs.File
+	fileLock io.Closer
+	dataDir  vfs.File
+	walDir   vfs.File
 
 	tableCache tableCache
 	newIters   tableNewIters
 
-	commit   *commitPipeline
-	fileLock io.Closer
-
-	largeBatchThreshold int
-	optionsFileNum      uint64
+	commit *commitPipeline
 
 	// readState provides access to the state needed for reading without needing
 	// to acquire DB.mu.
@@ -195,6 +198,10 @@ type DB struct {
 		val *readState
 	}
 
+	// logRecycler holds a set of log file numbers that are available for
+	// reuse. Writing to a recycled log file is faster than to a new log file on
+	// some common filesystems (xfs, and ext3/4) due to avoiding metadata
+	// updates.
 	logRecycler logRecycler
 
 	closed int32 // updated atomically
@@ -218,18 +225,40 @@ type DB struct {
 
 	flushLimiter limiter
 
-	// TODO(peter): describe exactly what this mutex protects. So far: every
-	// field in the struct.
+	// The main mutex protecting internal DB state. This mutex encompasses many
+	// fields because those fields need to be accessed and updated atomically. In
+	// particular, the current version, log.*, mem.*, and snapshot list need to
+	// be accessed and updated atomically during compaction.
+	//
+	// Care is taken to avoid holding DB.mu during IO operations. Accomplishing
+	// this sometimes requires releasing DB.mu in a method that was called with
+	// it held. See versionSet.logAndApply() and DB.makeRoomForWrite() for
+	// examples. This is a common pattern, so be careful about expectations that
+	// DB.mu will be held continuously across a set of calls.
 	mu struct {
 		sync.Mutex
 
+		// The ID of the next job. Job IDs are passed to event listener
+		// notifications and act as a mechanism for tying together the events and
+		// log messages for a single job such as a flush, compaction, or file
+		// ingestion. Job IDs are not serialized to disk or used for correctness.
 		nextJobID int
 
+		// The collection of immutable versions and state about the log and visible
+		// sequence numbers.
 		versions versionSet
 
 		log struct {
-			queue   []uint64
-			size    uint64
+			// The queue of logs, containing both flushed and unflushed logs. The
+			// flushed logs will be a prefix, the unflushed logs a suffix. The
+			// delimeter between flushed and unflushed logs is
+			// versionSet.minUnflushedLogNum.
+			queue []uint64
+			// The size of the current log file (i.e. queue[len(queue)-1].
+			size uint64
+			// The number of input bytes to the log. This is the raw size of the
+			// batches written to the WAL, without the overhead of the record
+			// envelopes.
 			bytesIn uint64
 			// The LogWriter is protected by commitPipeline.mu. This allows log
 			// writes to be performed without holding DB.mu, but requires both
@@ -239,6 +268,8 @@ type DB struct {
 		}
 
 		mem struct {
+			// Condition variable used to serialize memtable switching. See
+			// DB.makeRoomForWrite().
 			cond sync.Cond
 			// The current mutable memTable.
 			mutable *memTable
@@ -259,8 +290,13 @@ type DB struct {
 		}
 
 		compact struct {
-			cond       sync.Cond
-			flushing   bool
+			// Condition variable used to signal when a flush or compaction has
+			// completed. Used by the write-stall mechanism to wait for the stall
+			// condition to clear. See DB.makeRoomForWrite().
+			cond sync.Cond
+			// True when a flush is in progress.
+			flushing bool
+			// True when a compaction is in progress.
 			compacting bool
 			// The list of manual compactions. The next manual compaction to perform
 			// is at the start of the list. New entries are added to the end.
@@ -270,14 +306,23 @@ type DB struct {
 		}
 
 		cleaner struct {
-			cond     sync.Cond
+			// Condition variable used to signal the completion of a file cleaning
+			// operation.
+			cond sync.Cond
+			// True when a file cleaning operation is in progress.
 			cleaning bool
+			// Non-zero when file cleaning is disabled. The disabled count acts as a
+			// reference count to prohibit file cleaning. See
+			// DB.{disable,Enable}FileDeletions().
 			disabled int
 		}
 
 		// The list of active snapshots.
 		snapshots snapshotList
 	}
+
+	// Normally equal to time.Now() but may be overridden in tests.
+	timeNow func() time.Time
 }
 
 var _ Reader = (*DB)(nil)
@@ -317,6 +362,7 @@ func (d *DB) getInternal(key []byte, b *Batch, s *Snapshot) ([]byte, error) {
 	}
 
 	get := &buf.get
+	get.logger = d.opts.Logger
 	get.cmp = d.cmp
 	get.equal = d.equal
 	get.newIters = d.newIters
@@ -601,15 +647,19 @@ func (d *DB) newIterInternal(
 	// them together.
 	buf := iterAllocPool.Get().(*iterAlloc)
 	dbi := &buf.dbi
-	dbi.alloc = buf
-	dbi.cmp = d.cmp
-	dbi.equal = d.equal
-	dbi.merge = d.merge
-	dbi.split = d.split
-	dbi.readState = readState
+	*dbi = Iterator{
+		alloc:     buf,
+		cmp:       d.cmp,
+		equal:     d.equal,
+		iter:      &buf.merging,
+		merge:     d.merge,
+		split:     d.split,
+		readState: readState,
+	}
 	if o != nil {
 		dbi.opts = *o
 	}
+	dbi.opts.logger = d.opts.Logger
 
 	mlevels := buf.mlevels[:0]
 	if batchIter != nil {
@@ -641,6 +691,9 @@ func (d *DB) newIterInternal(
 		f := &current.Files[0][i]
 		iter, rangeDelIter, err := d.newIters(f, &dbi.opts, nil)
 		if err != nil {
+			// Ensure the mergingIter is initialized so Iterator.Close will properly
+			// close any sstable iterators that have been opened.
+			buf.merging.init(&dbi.opts, d.cmp, mlevels...)
 			dbi.err = err
 			return dbi
 		}
@@ -678,7 +731,7 @@ func (d *DB) newIterInternal(
 			li = &levelIter{}
 		}
 
-		li.init(&dbi.opts, d.cmp, d.newIters, current.Files[level], nil)
+		li.init(dbi.opts, d.cmp, d.newIters, current.Files[level], nil)
 		li.initRangeDel(&mlevels[0].rangeDelIter)
 		li.initSmallestLargestUserKey(&mlevels[0].smallestUserKey, &mlevels[0].largestUserKey,
 			&mlevels[0].isLargestUserKeyRangeDelSentinel)
@@ -686,9 +739,9 @@ func (d *DB) newIterInternal(
 		mlevels = mlevels[1:]
 	}
 
-	buf.merging.init(d.cmp, finalMLevels...)
+	buf.merging.init(&dbi.opts, d.cmp, finalMLevels...)
 	buf.merging.snapshot = seqNum
-	dbi.iter = &buf.merging
+	buf.merging.elideRangeTombstones = true
 	return dbi
 }
 

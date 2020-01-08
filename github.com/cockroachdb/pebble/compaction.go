@@ -601,7 +601,7 @@ func (c *compaction) newInputIter(newIters tableNewIters) (_ internalIterator, r
 			f := c.flushing[0]
 			iter := f.newFlushIter(nil, &c.bytesIterated)
 			if rangeDelIter := f.newRangeDelIter(nil); rangeDelIter != nil {
-				return newMergingIter(c.cmp, iter, rangeDelIter), nil
+				return newMergingIter(c.logger, c.cmp, iter, rangeDelIter), nil
 			}
 			return iter, nil
 		}
@@ -614,7 +614,7 @@ func (c *compaction) newInputIter(newIters tableNewIters) (_ internalIterator, r
 				iters = append(iters, rangeDelIter)
 			}
 		}
-		return newMergingIter(c.cmp, iters...), nil
+		return newMergingIter(c.logger, c.cmp, iters...), nil
 	}
 
 	// Check that the LSM ordering invariants are ok in order to prevent
@@ -672,12 +672,16 @@ func (c *compaction) newInputIter(newIters tableNewIters) (_ internalIterator, r
 				rangeDelIter = rangedel.Truncate(c.cmp, rangeDelIter, lowerBound, upperBound)
 			}
 		}
+		if rangeDelIter == nil {
+			rangeDelIter = emptyIter
+		}
 		return rangeDelIter, nil, err
 	}
 
+	iterOpts := IterOptions{logger: c.logger}
 	if c.startLevel != 0 {
-		iters = append(iters, newLevelIter(nil, c.cmp, newIters, c.inputs[0], &c.bytesIterated))
-		iters = append(iters, newLevelIter(nil, c.cmp, newRangeDelIter, c.inputs[0], &c.bytesIterated))
+		iters = append(iters, newLevelIter(iterOpts, c.cmp, newIters, c.inputs[0], &c.bytesIterated))
+		iters = append(iters, newLevelIter(iterOpts, c.cmp, newRangeDelIter, c.inputs[0], &c.bytesIterated))
 	} else {
 		for i := range c.inputs[0] {
 			f := &c.inputs[0][i]
@@ -692,9 +696,9 @@ func (c *compaction) newInputIter(newIters tableNewIters) (_ internalIterator, r
 		}
 	}
 
-	iters = append(iters, newLevelIter(nil, c.cmp, newIters, c.inputs[1], &c.bytesIterated))
-	iters = append(iters, newLevelIter(nil, c.cmp, newRangeDelIter, c.inputs[1], &c.bytesIterated))
-	return newMergingIter(c.cmp, iters...), nil
+	iters = append(iters, newLevelIter(iterOpts, c.cmp, newIters, c.inputs[1], &c.bytesIterated))
+	iters = append(iters, newLevelIter(iterOpts, c.cmp, newRangeDelIter, c.inputs[1], &c.bytesIterated))
+	return newMergingIter(c.logger, c.cmp, iters...), nil
 }
 
 func (c *compaction) String() string {
@@ -1010,6 +1014,7 @@ func (d *DB) compact1() (err error) {
 		}
 	}
 	d.opts.EventListener.CompactionBegin(info)
+	startTime := d.timeNow()
 
 	compactionPacer := (pacer)(nilPacer)
 	if d.opts.enablePacing {
@@ -1024,6 +1029,7 @@ func (d *DB) compact1() (err error) {
 	}
 	ve, pendingOutputs, err := d.runCompaction(jobID, c, compactionPacer)
 
+	info.Duration = d.timeNow().Sub(startTime)
 	if err == nil {
 		d.mu.versions.logLock()
 		err = d.mu.versions.logAndApply(jobID, ve, c.metrics, d.dataDir)

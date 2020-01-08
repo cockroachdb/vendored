@@ -5,6 +5,7 @@
 package pebble
 
 import (
+	"github.com/cockroachdb/pebble/internal/base"
 	"github.com/cockroachdb/pebble/internal/rangedel"
 )
 
@@ -13,6 +14,7 @@ import (
 // internalIterator, but specialized for Get operations so that it loads data
 // lazily.
 type getIter struct {
+	logger       Logger
 	cmp          Compare
 	equal        Equal
 	newIters     tableNewIters
@@ -32,8 +34,8 @@ type getIter struct {
 	err          error
 }
 
-// getIter implements the internalIterator interface.
-var _ internalIterator = (*getIter)(nil)
+// getIter implements the base.InternalIterator interface.
+var _ base.InternalIterator = (*getIter)(nil)
 
 func (g *getIter) SeekGE(key []byte) (*InternalKey, []byte) {
 	panic("pebble: SeekGE unimplemented")
@@ -154,7 +156,8 @@ func (g *getIter) Next() (*InternalKey, []byte) {
 			continue
 		}
 
-		g.levelIter.init(nil, g.cmp, g.newIters, g.version.Files[g.level], nil)
+		iterOpts := IterOptions{logger: g.logger}
+		g.levelIter.init(iterOpts, g.cmp, g.newIters, g.version.Files[g.level], nil)
 		g.levelIter.initRangeDel(&g.rangeDelIter)
 		g.level++
 		g.iter = &g.levelIter

@@ -125,14 +125,12 @@ type compactionIter struct {
 	merge Merge
 	iter  internalIterator
 	err   error
-	// `key.UserKey` is in one of two states:
-	// - Set to `i.iterKey.UserKey`: this happens within `Next()` and is a
-	//   transient state before the code decides to save the key.
-	// - Set to `keyBuf`: caused by saving `i.iterKey.UserKey`. This is the
-	//   case on return from all public methods -- these methods return `key`.
-	//   Additionally, it is the internal state when the code is moving to the
-	//   next key so it can determine whether the user key has changed from
-	//   the previous key.
+	// `key.UserKey` is set to `keyBuf` caused by saving `i.iterKey.UserKey`
+	// and `key.Trailer` is set to `i.iterKey.Trailer`. This is the
+	// case on return from all public methods -- these methods return `key`.
+	// Additionally, it is the internal state when the code is moving to the
+	// next key so it can determine whether the user key has changed from
+	// the previous key.
 	key   InternalKey
 	value []byte
 	// Temporary buffer used for storing the previous user key in order to
@@ -241,8 +239,7 @@ func (i *compactionIter) Next() (*InternalKey, []byte) {
 	i.pos = iterPosCur
 	i.valid = false
 	for i.iterKey != nil {
-		i.key = *i.iterKey
-		if i.key.Kind() == InternalKeyKindRangeDelete {
+		if i.iterKey.Kind() == InternalKeyKindRangeDelete {
 			// Return the range tombstone so the compaction can use it for
 			// file truncation and add it to the fragmenter. We do not set `skip`
 			// to true before returning as there may be a forthcoming point key
@@ -259,23 +256,23 @@ func (i *compactionIter) Next() (*InternalKey, []byte) {
 			return &i.key, i.value
 		}
 
-		if i.rangeDelFrag.Deleted(i.key, i.curSnapshotSeqNum) {
+		if i.rangeDelFrag.Deleted(*i.iterKey, i.curSnapshotSeqNum) {
 			i.saveKey()
 			i.skipInStripe()
 			continue
 		}
 
-		switch i.key.Kind() {
+		switch i.iterKey.Kind() {
 		case InternalKeyKindDelete, InternalKeyKindSingleDelete:
 			// If we're at the last snapshot stripe and the tombstone can be elided
 			// skip skippable keys in the same stripe.
-			if i.curSnapshotIdx == 0 && i.elideTombstone(i.key.UserKey) {
+			if i.curSnapshotIdx == 0 && i.elideTombstone(i.iterKey.UserKey) {
 				i.saveKey()
 				i.skipInStripe()
 				continue
 			}
 
-			switch i.key.Kind() {
+			switch i.iterKey.Kind() {
 			case InternalKeyKindDelete:
 				i.saveKey()
 				i.value = i.iterValue
@@ -296,30 +293,43 @@ func (i *compactionIter) Next() (*InternalKey, []byte) {
 			i.value = i.iterValue
 			i.valid = true
 			i.skip = true
-			i.maybeZeroSeqnum()
+			i.maybeZeroSeqnum(i.curSnapshotIdx)
 			return &i.key, i.value
 
 		case InternalKeyKindMerge:
-			// NB: it is important to call maybeZeroSeqnum before mergeNext as
-			// merging advances the iterator, adjusting curSnapshotIdx and thus
-			// invalidating the state that maybeZeroSeqnum uses to make its
-			// determination.
-			i.maybeZeroSeqnum()
+			// Record the snapshot index before mergeNext as merging
+			// advances the iterator, adjusting curSnapshotIdx.
+			origSnapshotIdx := i.curSnapshotIdx
 			var valueMerger ValueMerger
 			valueMerger, i.err = i.merge(i.iterKey.UserKey, i.iterValue)
+			var change stripeChangeType
 			if i.err == nil {
-				i.mergeNext(valueMerger)
+				change = i.mergeNext(valueMerger)
 			}
 			if i.err == nil {
 				i.value, i.err = valueMerger.Finish()
 			}
 			if i.err == nil {
+				// A non-skippable entry does not necessarily cover later merge
+				// operands, so we must not zero the current merge result's seqnum.
+				//
+				// For example, suppose the forthcoming two keys are a range
+				// tombstone, `[a, b)#3`, and a merge operand, `a#3`. Recall that
+				// range tombstones do not cover point keys at the same seqnum, so
+				// `a#3` is not deleted. The range tombstone will be seen first due
+				// to its larger value type. Since it is a non-skippable key, the
+				// current merge will not include `a#3`. If we zeroed the current
+				// merge result's seqnum, then it would conflict with the upcoming
+				// merge including `a#3`, whose seqnum will also be zeroed.
+				if change != sameStripeNonSkippable {
+					i.maybeZeroSeqnum(origSnapshotIdx)
+				}
 				return &i.key, i.value
 			}
 			return nil, nil
 
 		default:
-			i.err = fmt.Errorf("invalid internal key kind: %d", i.key.Kind())
+			i.err = fmt.Errorf("invalid internal key kind: %d", i.iterKey.Kind())
 			return nil, nil
 		}
 	}
@@ -342,7 +352,7 @@ func snapshotIndex(seq uint64, snapshots []uint64) (int, uint64) {
 // skipInStripe skips over skippable keys in the same stripe and user key.
 func (i *compactionIter) skipInStripe() {
 	i.skip = true
-	var change int
+	var change stripeChangeType
 	for {
 		change = i.nextInStripe()
 		if change == sameStripeNonSkippable || change == newStripe {
@@ -363,15 +373,19 @@ func (i *compactionIter) iterNext() bool {
 	return i.iterKey != nil
 }
 
+// stripeChangeType indicates how the snapshot stripe changed relative to the previous
+// key. If no change, it also indicates whether the current entry is skippable.
+type stripeChangeType int
+
 const (
-	newStripe = iota
+	newStripe stripeChangeType = iota
 	sameStripeSkippable
 	sameStripeNonSkippable
 )
 
 // nextInStripe advances the iterator and returns one of the above const ints
 // indicating how its state changed.
-func (i *compactionIter) nextInStripe() int {
+func (i *compactionIter) nextInStripe() stripeChangeType {
 	if !i.iterNext() {
 		return newStripe
 	}
@@ -403,7 +417,7 @@ func (i *compactionIter) nextInStripe() int {
 	return newStripe
 }
 
-func (i *compactionIter) mergeNext(valueMerger ValueMerger) {
+func (i *compactionIter) mergeNext(valueMerger ValueMerger) stripeChangeType {
 	// Save the current key.
 	i.saveKey()
 	i.valid = true
@@ -413,49 +427,62 @@ func (i *compactionIter) mergeNext(valueMerger ValueMerger) {
 	for {
 		if change := i.nextInStripe(); change == sameStripeNonSkippable || change == newStripe {
 			i.pos = iterPosNext
-			return
+			return change
 		}
 		key := i.iterKey
 		switch key.Kind() {
 		case InternalKeyKindDelete:
 			// We've hit a deletion tombstone. Return everything up to this point and
-			// then skip entries until the next snapshot stripe.
+			// then skip entries until the next snapshot stripe. We change the kind
+			// of the result key to a Set so that it shadows keys in lower
+			// levels. That is, MERGE+DEL -> SET.
+			i.key.SetKind(InternalKeyKindSet)
 			i.skip = true
-			return
+			return sameStripeSkippable
 
 		case InternalKeyKindSet:
 			if i.rangeDelFrag.Deleted(*key, i.curSnapshotSeqNum) {
+				// We change the kind of the result key to a Set so that it shadows
+				// keys in lower levels. That is, MERGE+RANGEDEL -> SET. This isn't
+				// strictly necessary, but provides consistency with the behavior of
+				// MERGE+DEL.
+				i.key.SetKind(InternalKeyKindSet)
 				i.skip = true
-				return
+				return sameStripeSkippable
 			}
 
 			// We've hit a Set value. Merge with the existing value and return. We
 			// change the kind of the resulting key to a Set so that it shadows keys
-			// in lower levels. That is, MERGE+MERGE+SET -> SET.
+			// in lower levels. That is, MERGE+SET -> SET.
 			i.err = valueMerger.MergeOlder(i.iterValue)
 			if i.err != nil {
-				return
+				return sameStripeSkippable
 			}
 			i.key.SetKind(InternalKeyKindSet)
 			i.skip = true
-			return
+			return sameStripeSkippable
 
 		case InternalKeyKindMerge:
 			if i.rangeDelFrag.Deleted(*key, i.curSnapshotSeqNum) {
+				// We change the kind of the result key to a Set so that it shadows
+				// keys in lower levels. That is, MERGE+RANGEDEL -> SET. This isn't
+				// strictly necessary, but provides consistency with the behavior of
+				// MERGE+DEL.
+				i.key.SetKind(InternalKeyKindSet)
 				i.skip = true
-				return
+				return sameStripeSkippable
 			}
 
 			// We've hit another Merge value. Merge with the existing value and
 			// continue looping.
 			i.err = valueMerger.MergeOlder(i.iterValue)
 			if i.err != nil {
-				return
+				return sameStripeSkippable
 			}
 
 		default:
 			i.err = fmt.Errorf("invalid internal key kind: %d", i.iterKey.Kind())
-			return
+			return sameStripeSkippable
 		}
 	}
 }
@@ -463,6 +490,7 @@ func (i *compactionIter) mergeNext(valueMerger ValueMerger) {
 func (i *compactionIter) singleDeleteNext() bool {
 	// Save the current key.
 	i.saveKey()
+	i.value = i.iterValue
 	i.valid = true
 
 	// Loop until finds a key to be passed to the next level.
@@ -498,6 +526,7 @@ func (i *compactionIter) singleDeleteNext() bool {
 func (i *compactionIter) saveKey() {
 	i.keyBuf = append(i.keyBuf[:0], i.iterKey.UserKey...)
 	i.key.UserKey = i.keyBuf
+	i.key.Trailer = i.iterKey.Trailer
 }
 
 func (i *compactionIter) cloneKey(key InternalKey) InternalKey {
@@ -568,7 +597,7 @@ func (i *compactionIter) emitRangeDelChunk(fragmented []rangedel.Tombstone) {
 // so improves compression and enables an optimization during forward iteration
 // to skip some key comparisons. The seqnum for an entry can be zeroed if the
 // entry is on the bottom snapshot stripe and on the bottom level of the LSM.
-func (i *compactionIter) maybeZeroSeqnum() {
+func (i *compactionIter) maybeZeroSeqnum(snapshotIdx int) {
 	if !i.allowZeroSeqNum {
 		// TODO(peter): allowZeroSeqNum applies to the entire compaction. We could
 		// make the determination on a key by key basis, similar to what is done
@@ -576,7 +605,7 @@ func (i *compactionIter) maybeZeroSeqnum() {
 		// that isn't too expensive.
 		return
 	}
-	if i.curSnapshotIdx > 0 {
+	if snapshotIdx > 0 {
 		// This is not the last snapshot
 		return
 	}

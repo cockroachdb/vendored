@@ -18,6 +18,8 @@ const (
 	iterPosPrev iterPos = -1
 )
 
+var errReversePrefixIteration = fmt.Errorf("pebble: unsupported reverse prefix iteration")
+
 // Iterator iterates over a DB's key/value pairs in key order.
 //
 // An iterator must be closed after use, but it is not necessary to read an
@@ -61,12 +63,6 @@ func (i *Iterator) findNextEntry() bool {
 			i.nextUserKey()
 			continue
 
-		case InternalKeyKindRangeDelete:
-			// Range deletions are treated as no-ops. See the comments in levelIter
-			// for more details.
-			i.iterKey, i.iterValue = i.iter.Next()
-			continue
-
 		case InternalKeyKindSet:
 			if i.prefix != nil {
 				if n := i.split(key.UserKey); !bytes.Equal(i.prefix, key.UserKey[:n]) {
@@ -96,7 +92,7 @@ func (i *Iterator) findNextEntry() bool {
 			return i.err == nil
 
 		default:
-			i.err = fmt.Errorf("invalid internal key kind: %d", key.Kind())
+			i.err = fmt.Errorf("pebble: invalid internal key kind: %d", key.Kind())
 			return false
 		}
 	}
@@ -115,7 +111,10 @@ func (i *Iterator) nextUserKey() {
 	}
 	for {
 		i.iterKey, i.iterValue = i.iter.Next()
-		if done || i.iterKey == nil || !i.equal(i.key, i.iterKey.UserKey) {
+		if done || i.iterKey == nil {
+			break
+		}
+		if !i.equal(i.key, i.iterKey.UserKey) {
 			break
 		}
 		done = i.iterKey.SeqNum() == 0
@@ -129,6 +128,7 @@ func (i *Iterator) findPrevEntry() bool {
 	var valueMerger ValueMerger
 	for i.iterKey != nil {
 		key := *i.iterKey
+
 		if i.valid {
 			if !i.equal(key.UserKey, i.key) {
 				// We've iterated to the previous user key.
@@ -148,18 +148,7 @@ func (i *Iterator) findPrevEntry() bool {
 			i.iterKey, i.iterValue = i.iter.Prev()
 			continue
 
-		case InternalKeyKindRangeDelete:
-			// Range deletions are treated as no-ops. See the comments in levelIter
-			// for more details.
-			i.iterKey, i.iterValue = i.iter.Prev()
-			continue
-
 		case InternalKeyKindSet:
-			if i.prefix != nil {
-				if n := i.split(key.UserKey); !bytes.Equal(i.prefix, key.UserKey[:n]) {
-					return false
-				}
-			}
 			i.keyBuf = append(i.keyBuf[:0], key.UserKey...)
 			i.key = i.keyBuf
 			i.value = i.iterValue
@@ -170,11 +159,6 @@ func (i *Iterator) findPrevEntry() bool {
 
 		case InternalKeyKindMerge:
 			if !i.valid {
-				if i.prefix != nil {
-					if n := i.split(key.UserKey); !bytes.Equal(i.prefix, key.UserKey[:n]) {
-						return false
-					}
-				}
 				i.keyBuf = append(i.keyBuf[:0], key.UserKey...)
 				i.key = i.keyBuf
 				valueMerger, i.err = i.merge(i.key, i.iterValue)
@@ -200,7 +184,7 @@ func (i *Iterator) findPrevEntry() bool {
 			continue
 
 		default:
-			i.err = fmt.Errorf("invalid internal key kind: %d", key.Kind())
+			i.err = fmt.Errorf("pebble: invalid internal key kind: %d", key.Kind())
 			return false
 		}
 	}
@@ -228,7 +212,10 @@ func (i *Iterator) prevUserKey() {
 	}
 	for {
 		i.iterKey, i.iterValue = i.iter.Prev()
-		if i.iterKey == nil || !i.equal(i.key, i.iterKey.UserKey) {
+		if i.iterKey == nil {
+			break
+		}
+		if !i.equal(i.key, i.iterKey.UserKey) {
 			break
 		}
 	}
@@ -259,11 +246,6 @@ func (i *Iterator) mergeNext(key InternalKey, valueMerger ValueMerger) {
 			// point.
 			return
 
-		case InternalKeyKindRangeDelete:
-			// Range deletions are treated as no-ops. See the comments in levelIter
-			// for more details.
-			continue
-
 		case InternalKeyKindSet:
 			// We've hit a Set value. Merge with the existing value and return.
 			i.err = valueMerger.MergeOlder(i.iterValue)
@@ -279,7 +261,7 @@ func (i *Iterator) mergeNext(key InternalKey, valueMerger ValueMerger) {
 			continue
 
 		default:
-			i.err = fmt.Errorf("invalid internal key kind: %d", key.Kind())
+			i.err = fmt.Errorf("pebble: invalid internal key kind: %d", key.Kind())
 			return
 		}
 	}
@@ -307,7 +289,8 @@ func (i *Iterator) SeekGE(key []byte) bool {
 // given key. Returns true if the iterator is pointing at a valid entry and
 // false otherwise. Note that a user-defined Split function must be supplied to
 // the Comparer. Also note that the iterator will not observe keys not matching
-// the prefix.
+// the prefix. Reverse iteration (Prev) is not supported when an iterator is in
+// prefix iteration mode.
 func (i *Iterator) SeekPrefixGE(key []byte) bool {
 	if i.err != nil {
 		return false
@@ -422,6 +405,10 @@ func (i *Iterator) Prev() bool {
 	if i.err != nil {
 		return false
 	}
+	if i.prefix != nil {
+		i.err = errReversePrefixIteration
+		return false
+	}
 	switch i.pos {
 	case iterPosCur:
 		i.prevUserKey()
@@ -429,7 +416,7 @@ func (i *Iterator) Prev() bool {
 		// The underlying iterator is pointed to the next key (this can only happen
 		// when switching iteration directions). We set i.valid to false here to
 		// force the calls to prevUserKey to save the current key i.iter is
-		// pointing at in order to determine when the next user-key is reached.
+		// pointing at in order to determine when the prev user-key is reached.
 		i.valid = false
 		if i.iterKey == nil {
 			// We're positioned after the last key. Need to reposition to point to
@@ -470,7 +457,7 @@ func (i *Iterator) Valid() bool {
 
 // Error returns any accumulated error.
 func (i *Iterator) Error() error {
-	return i.err
+	return firstError(i.err, i.iter.Error())
 }
 
 // Close closes the iterator and returns any accumulated error. Exhausting
@@ -482,9 +469,7 @@ func (i *Iterator) Close() error {
 		i.readState.unref()
 		i.readState = nil
 	}
-	if err := i.iter.Close(); err != nil && i.err != nil {
-		i.err = err
-	}
+	i.err = firstError(i.err, i.iter.Close())
 	err := i.err
 	if alloc := i.alloc; alloc != nil {
 		*i = Iterator{}

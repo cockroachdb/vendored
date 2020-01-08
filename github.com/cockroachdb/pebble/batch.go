@@ -269,6 +269,8 @@ func (b *Batch) release() {
 	b.abbreviatedKey = nil
 	b.memTableSize = 0
 
+	b.deferredOp = DeferredBatchOp{}
+	b.tombstones = nil
 	b.flushable = nil
 	b.commit = sync.WaitGroup{}
 	b.commitErr = nil
@@ -330,6 +332,7 @@ func (b *Batch) Apply(batch *Batch, _ *WriteOptions) error {
 			if b.index != nil {
 				var err error
 				if kind == InternalKeyKindRangeDelete {
+					b.tombstones = nil
 					if b.rangeDelIndex == nil {
 						b.rangeDelIndex = batchskl.NewSkiplist(&b.data, b.cmp, b.abbreviatedKey)
 					}
@@ -690,11 +693,13 @@ func (b *Batch) newRangeDelIter(o *IterOptions) internalIterator {
 			batch: b,
 			iter:  b.rangeDelIndex.NewIter(nil, nil),
 		}
-		for {
-			key, val := it.Next()
-			if key == nil {
-				break
-			}
+		// The memory management here is a bit subtle. The keys and values returned
+		// by the iterator are slices in Batch.data. Thus the fragmented tombstones
+		// are slices within Batch.data. If additional entries are added to the
+		// Batch, Batch.data may be reallocated. The references in the fragmented
+		// tombstones will remain valid, pointing into the old Batch.data. GC for
+		// the win.
+		for key, val := it.First(); key != nil; key, val = it.Next() {
 			frag.Add(*key, val)
 		}
 		frag.Finish()
@@ -879,8 +884,8 @@ type batchIter struct {
 	err   error
 }
 
-// batchIter implements the internalIterator interface.
-var _ internalIterator = (*batchIter)(nil)
+// batchIter implements the base.InternalIterator interface.
+var _ base.InternalIterator = (*batchIter)(nil)
 
 func (i *batchIter) SeekGE(key []byte) (*InternalKey, []byte) {
 	ikey := i.iter.SeekGE(key)
@@ -1217,8 +1222,8 @@ type flushableBatchIter struct {
 	upper []byte
 }
 
-// flushableBatchIter implements the internalIterator interface.
-var _ internalIterator = (*flushableBatchIter)(nil)
+// flushableBatchIter implements the base.InternalIterator interface.
+var _ base.InternalIterator = (*flushableBatchIter)(nil)
 
 // SeekGE implements internalIterator.SeekGE, as documented in the pebble
 // package.
@@ -1387,8 +1392,8 @@ type flushFlushableBatchIter struct {
 	bytesIterated *uint64
 }
 
-// flushFlushableBatchIter implements the internalIterator interface.
-var _ internalIterator = (*flushFlushableBatchIter)(nil)
+// flushFlushableBatchIter implements the base.InternalIterator interface.
+var _ base.InternalIterator = (*flushFlushableBatchIter)(nil)
 
 func (i *flushFlushableBatchIter) SeekGE(key []byte) (*InternalKey, []byte) {
 	panic("pebble: SeekGE unimplemented")
