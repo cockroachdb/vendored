@@ -58,17 +58,19 @@ func (i *Iterator) findNextEntry() bool {
 
 	for i.iterKey != nil {
 		key := *i.iterKey
+
+		if i.prefix != nil {
+			if n := i.split(key.UserKey); !bytes.Equal(i.prefix, key.UserKey[:n]) {
+				return false
+			}
+		}
+
 		switch key.Kind() {
 		case InternalKeyKindDelete, InternalKeyKindSingleDelete:
 			i.nextUserKey()
 			continue
 
 		case InternalKeyKindSet:
-			if i.prefix != nil {
-				if n := i.split(key.UserKey); !bytes.Equal(i.prefix, key.UserKey[:n]) {
-					return false
-				}
-			}
 			i.keyBuf = append(i.keyBuf[:0], key.UserKey...)
 			i.key = i.keyBuf
 			i.value = i.iterValue
@@ -76,11 +78,6 @@ func (i *Iterator) findNextEntry() bool {
 			return true
 
 		case InternalKeyKindMerge:
-			if i.prefix != nil {
-				if n := i.split(key.UserKey); !bytes.Equal(i.prefix, key.UserKey[:n]) {
-					return false
-				}
-			}
 			var valueMerger ValueMerger
 			valueMerger, i.err = i.merge(i.key, i.iterValue)
 			if i.err == nil {
@@ -465,12 +462,18 @@ func (i *Iterator) Error() error {
 // It is valid to call Close multiple times. Other methods should not be
 // called after the iterator has been closed.
 func (i *Iterator) Close() error {
+	// Close the child iterator before releasing the readState because when the
+	// readState is released sstables referenced by the readState may be deleted
+	// which will fail on Windows if the sstables are still open by the child
+	// iterator.
+	i.err = firstError(i.err, i.iter.Close())
+	err := i.err
+
 	if i.readState != nil {
 		i.readState.unref()
 		i.readState = nil
 	}
-	i.err = firstError(i.err, i.iter.Close())
-	err := i.err
+
 	if alloc := i.alloc; alloc != nil {
 		*i = Iterator{}
 		iterAllocPool.Put(alloc)

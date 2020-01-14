@@ -213,7 +213,26 @@ func ingestLink(
 
 	for i := range paths {
 		target := base.MakeFilename(fs, dirname, fileTypeTable, meta[i].FileNum)
-		err := vfs.LinkOrCopy(fs, paths[i], target)
+		var err error
+		if _, ok := opts.FS.(*vfs.MemFS); ok && opts.DebugCheck {
+			// The combination of MemFS+Ingest+DebugCheck produces awkwardness around
+			// the subsequent deletion of files. The problem is that MemFS implements
+			// the Windows semantics of disallowing removal of an open file. This is
+			// desirable because it helps catch bugs where we violate the
+			// requirements of the Windows semantics. The normal practice for Ingest
+			// is for the caller to remove the source files after the ingest
+			// completes successfully. Unfortunately, Options.DebugCheck causes
+			// ingest to run DB.CheckLevels() before the ingest finishes, and
+			// DB.CheckLevels() populates the table cache with the newly ingested
+			// files.
+			//
+			// The combination of MemFS+Ingest+DebugCheck is primarily used in
+			// tests. As a workaround, disable hard linking this combination
+			// occurs. See https://github.com/cockroachdb/pebble/issues/495.
+			err = vfs.Copy(fs, paths[i], target)
+		} else {
+			err = vfs.LinkOrCopy(fs, paths[i], target)
+		}
 		if err != nil {
 			if err2 := ingestCleanup(fs, dirname, meta[:i]); err2 != nil {
 				opts.Logger.Infof("ingest cleanup failed: %v", err2)
@@ -299,7 +318,7 @@ func ingestUpdateSeqNum(opts *Options, dirname string, seqNum uint64, meta []*fi
 }
 
 func ingestTargetLevel(
-	cmp Compare, v *version, compactions map[*compaction]struct{}, meta *fileMetadata,
+	cmp Compare, v *version, baseLevel int, compactions map[*compaction]struct{}, meta *fileMetadata,
 ) int {
 	// Find the lowest level which does not have any files which overlap meta. We
 	// search from L0 to L6 looking for whether there are any files in the level
@@ -312,8 +331,8 @@ func ingestTargetLevel(
 		return 0
 	}
 
-	level := 1
-	for ; level < numLevels; level++ {
+	targetLevel := 0
+	for level := baseLevel; level < numLevels; level++ {
 		if len(v.Overlaps(level, cmp, meta.Smallest.UserKey, meta.Largest.UserKey)) != 0 {
 			break
 		}
@@ -331,8 +350,9 @@ func ingestTargetLevel(
 		if overlaps {
 			break
 		}
+		targetLevel = level
 	}
-	return level - 1
+	return targetLevel
 }
 
 // Ingest ingests a set of sstables into the DB. Ingestion of the files is
@@ -340,7 +360,7 @@ func ingestTargetLevel(
 // of the mutations in the sstables. Ingestion may require the memtable to be
 // flushed. The ingested sstable files are moved into the DB and must reside on
 // the same filesystem as the DB. Sstables can be created for ingestion using
-// sstable.Writer.
+// sstable.Writer. On success, Ingest removes the input paths.
 //
 // Ingestion loads each sstable into the lowest level of the LSM which it
 // doesn't overlap (see ingestTargetLevel). If an sstable overlaps a memtable,
@@ -352,7 +372,7 @@ func ingestTargetLevel(
 //   1. Allocate file numbers for every sstable beign ingested.
 //   2. Load the metadata for all sstables being ingest.
 //   3. Sort the sstables by smallest key, verifying non overlap.
-//   4. Hard link the sstables into the DB directory.
+//   4. Hard link (or copy) the sstables into the DB directory.
 //   5. Allocate a sequence number to use for all of the entries in the
 //      sstables. This is the step where overlap with memtables is
 //      determined. If there is overlap, we remember the most recent memtable
@@ -481,6 +501,12 @@ func (d *DB) Ingest(paths []string) error {
 		if err2 := ingestCleanup(d.opts.FS, d.dirname, meta); err2 != nil {
 			d.opts.Logger.Infof("ingest cleanup failed: %v", err2)
 		}
+	} else {
+		for _, path := range paths {
+			if err2 := d.opts.FS.Remove(path); err2 != nil {
+				d.opts.Logger.Infof("ingest failed to remove original file: %s", err2)
+			}
+		}
 	}
 
 	info := TableIngestInfo{
@@ -519,12 +545,13 @@ func (d *DB) ingestApply(jobID int, meta []*fileMetadata) (*versionEdit, error) 
 	// provides serialization with concurrent compaction and flush jobs.
 	d.mu.versions.logLock()
 	current := d.mu.versions.currentVersion()
+	baseLevel := d.mu.versions.picker.getBaseLevel()
 	for i := range meta {
 		// Determine the lowest level in the LSM for which the sstable doesn't
 		// overlap any existing files in the level.
 		m := meta[i]
 		f := &ve.NewFiles[i]
-		f.Level = ingestTargetLevel(d.cmp, current, d.mu.compact.inProgress, m)
+		f.Level = ingestTargetLevel(d.cmp, current, baseLevel, d.mu.compact.inProgress, m)
 		f.Meta = *m
 		levelMetrics := metrics[f.Level]
 		if levelMetrics == nil {
@@ -534,7 +561,9 @@ func (d *DB) ingestApply(jobID int, meta []*fileMetadata) (*versionEdit, error) 
 		levelMetrics.BytesIngested += m.Size
 		levelMetrics.TablesIngested++
 	}
-	if err := d.mu.versions.logAndApply(jobID, ve, metrics, d.dataDir); err != nil {
+	if err := d.mu.versions.logAndApply(jobID, ve, metrics, d.dataDir, func() []compactionInfo {
+		return d.getInProgressCompactionInfoLocked(nil)
+	}); err != nil {
 		return nil, err
 	}
 	var checker func() error

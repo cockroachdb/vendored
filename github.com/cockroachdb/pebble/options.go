@@ -351,6 +351,10 @@ type Options struct {
 	// default is 1 MB/s.
 	MinFlushRate int
 
+	// MaxConcurrentCompactions specifies the maximum number of concurrent compactions. The
+	// default is 1.
+	MaxConcurrentCompactions int
+
 	// ReadOnly indicates that the DB should be opened in read-only mode. Writes
 	// to the DB will return an error, background compactions are disabled, and
 	// the flush that normally occurs after replaying the WAL at startup is
@@ -462,6 +466,9 @@ func (o *Options) EnsureDefaults() *Options {
 	if o.MinFlushRate == 0 {
 		o.MinFlushRate = 1 << 20 // 1 MB/s
 	}
+	if o.MaxConcurrentCompactions <= 0 {
+		o.MaxConcurrentCompactions = 1
+	}
 
 	o.initMaps()
 	return o
@@ -527,6 +534,7 @@ func (o *Options) String() string {
 	fmt.Fprintf(&buf, "  l0_compaction_threshold=%d\n", o.L0CompactionThreshold)
 	fmt.Fprintf(&buf, "  l0_stop_writes_threshold=%d\n", o.L0StopWritesThreshold)
 	fmt.Fprintf(&buf, "  lbase_max_bytes=%d\n", o.LBaseMaxBytes)
+	fmt.Fprintf(&buf, "  max_concurrent_compactions=%d\n", o.MaxConcurrentCompactions)
 	fmt.Fprintf(&buf, "  max_manifest_file_size=%d\n", o.MaxManifestFileSize)
 	fmt.Fprintf(&buf, "  max_open_files=%d\n", o.MaxOpenFiles)
 	fmt.Fprintf(&buf, "  mem_table_size=%d\n", o.MemTableSize)
@@ -675,6 +683,8 @@ func (o *Options) Parse(s string, hooks *ParseHooks) error {
 				o.L0StopWritesThreshold, err = strconv.Atoi(value)
 			case "lbase_max_bytes":
 				o.LBaseMaxBytes, err = strconv.ParseInt(value, 10, 64)
+			case "max_concurrent_compactions":
+				o.MaxConcurrentCompactions, err = strconv.Atoi(value)
 			case "max_manifest_file_size":
 				o.MaxManifestFileSize, err = strconv.ParseInt(value, 10, 64)
 			case "max_open_files":

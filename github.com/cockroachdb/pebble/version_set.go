@@ -47,7 +47,7 @@ type versionSet struct {
 
 	// Mutable fields.
 	versions versionList
-	picker   *compactionPicker
+	picker   compactionPicker
 
 	metrics Metrics
 
@@ -109,12 +109,12 @@ func (vs *versionSet) create(
 	vs.init(dirname, opts, mu)
 	newVersion := &version{}
 	vs.append(newVersion)
-	vs.picker = newCompactionPicker(newVersion, vs.opts)
+	vs.picker = newCompactionPicker(newVersion, vs.opts, nil)
 
 	// Note that a "snapshot" version edit is written to the manifest when it is
 	// created.
 	vs.manifestFileNum = vs.getNextFileNum()
-	err := vs.createManifest(vs.dirname, vs.manifestFileNum)
+	err := vs.createManifest(vs.dirname, vs.manifestFileNum, vs.minUnflushedLogNum, vs.nextFileNum)
 	if err == nil {
 		if err = vs.manifest.Flush(); err != nil {
 			vs.opts.Logger.Fatalf("MANIFEST flush failed: %v", err)
@@ -241,7 +241,7 @@ func (vs *versionSet) load(dirname string, opts *Options, mu *sync.Mutex) error 
 	}
 	vs.append(newVersion)
 
-	vs.picker = newCompactionPicker(newVersion, vs.opts)
+	vs.picker = newCompactionPicker(newVersion, vs.opts, nil)
 
 	for i := range vs.metrics.Levels {
 		l := &vs.metrics.Levels[i]
@@ -291,8 +291,14 @@ func (vs *versionSet) logUnlock() {
 // while performing file I/O. Requires that the manifest is locked for writing
 // (see logLock). Will unconditionally release the manifest lock (via
 // logUnlock) even if an error occurs.
+//
+// inProgressCompactions is called while DB.mu is held, to get the list of in-progress compactions.
 func (vs *versionSet) logAndApply(
-	jobID int, ve *versionEdit, metrics map[int]*LevelMetrics, dir vfs.File,
+	jobID int,
+	ve *versionEdit,
+	metrics map[int]*LevelMetrics,
+	dir vfs.File,
+	inProgressCompactions func() []compactionInfo,
 ) error {
 	if !vs.writing {
 		vs.opts.Logger.Fatalf("MANIFEST not locked for writing")
@@ -326,7 +332,10 @@ func (vs *versionSet) logAndApply(
 		newManifestFileNum = vs.getNextFileNum()
 	}
 
-	var picker *compactionPicker
+	// Grab certain values before releasing vs.mu, in case createManifest() needs to be called.
+	minUnflushedLogNum := vs.minUnflushedLogNum
+	nextFileNum := vs.nextFileNum
+
 	var zombies map[uint64]uint64
 	if err := func() error {
 		vs.mu.Unlock()
@@ -342,7 +351,7 @@ func (vs *versionSet) logAndApply(
 		}
 
 		if newManifestFileNum != 0 {
-			if err := vs.createManifest(vs.dirname, newManifestFileNum); err != nil {
+			if err := vs.createManifest(vs.dirname, newManifestFileNum, minUnflushedLogNum, nextFileNum); err != nil {
 				vs.opts.EventListener.ManifestCreated(ManifestCreateInfo{
 					JobID:   jobID,
 					Path:    base.MakeFilename(vs.fs, vs.dirname, fileTypeManifest, newManifestFileNum),
@@ -389,10 +398,6 @@ func (vs *versionSet) logAndApply(
 				FileNum: newManifestFileNum,
 			})
 		}
-		picker = newCompactionPicker(newVersion, vs.opts)
-		if !vs.dynamicBaseLevel {
-			picker.baseLevel = 1
-		}
 		return nil
 	}(); err != nil {
 		return err
@@ -416,7 +421,10 @@ func (vs *versionSet) logAndApply(
 		}
 		vs.manifestFileNum = newManifestFileNum
 	}
-	vs.picker = picker
+	vs.picker = newCompactionPicker(newVersion, vs.opts, inProgressCompactions())
+	if !vs.dynamicBaseLevel {
+		vs.picker.forceBaseLevel1()
+	}
 
 	for level, update := range metrics {
 		vs.metrics.Levels[level].Add(update)
@@ -438,7 +446,9 @@ func (vs *versionSet) incrementFlushes() {
 }
 
 // createManifest creates a manifest file that contains a snapshot of vs.
-func (vs *versionSet) createManifest(dirname string, fileNum uint64) (err error) {
+func (vs *versionSet) createManifest(
+	dirname string, fileNum uint64, minUnflushedLogNum uint64, nextFileNum uint64,
+) (err error) {
 	var (
 		filename     = base.MakeFilename(vs.fs, dirname, fileTypeManifest, fileNum)
 		manifestFile vfs.File
@@ -473,12 +483,32 @@ func (vs *versionSet) createManifest(dirname string, fileNum uint64) (err error)
 		}
 	}
 
+	// When creating a version snapshot for an existing DB, this snapshot VersionEdit will be
+	// immediately followed by another VersionEdit (being written in logAndApply()). That
+	// VersionEdit always contains a LastSeqNum, so we don't need to include that in the snapshot.
+	// But it does not necessarily include MinUnflushedLogNum, NextFileNum, so we initialize those
+	// using the corresponding fields in the versionSet (which came from the latest preceding
+	// VersionEdit that had those fields).
+	snapshot.MinUnflushedLogNum = minUnflushedLogNum
+	snapshot.NextFileNum = nextFileNum
+
 	w, err1 := manifest.Next()
 	if err1 != nil {
 		return err1
 	}
 	if err := snapshot.Encode(w); err != nil {
 		return err
+	}
+
+	if vs.manifest != nil {
+		vs.manifest.Close()
+		vs.manifest = nil
+	}
+	if vs.manifestFile != nil {
+		if err := vs.manifestFile.Close(); err != nil {
+			return err
+		}
+		vs.manifestFile = nil
 	}
 
 	vs.manifest, manifest = manifest, nil
