@@ -14,6 +14,7 @@ import (
 )
 
 //go:generate go run -tags make_incorrect_manifests make_incorrect_manifests.go
+//go:generate go run -tags make_test_find_db make_test_find_db.go
 //go:generate go run -tags make_test_sstables make_test_sstables.go
 
 // Comparer exports the base.Comparer type.
@@ -29,6 +30,8 @@ type Merger = base.Merger
 type T struct {
 	Commands  []*cobra.Command
 	db        *dbT
+	find      *findT
+	lsm       *lsmT
 	manifest  *manifestT
 	sstable   *sstableT
 	wal       *walT
@@ -55,11 +58,15 @@ func New() *T {
 	t.RegisterMerger(base.DefaultMerger)
 
 	t.db = newDB(&t.opts, t.comparers, t.mergers)
+	t.find = newFind(&t.opts, t.comparers)
+	t.lsm = newLSM(&t.opts, t.comparers)
 	t.manifest = newManifest(&t.opts, t.comparers)
 	t.sstable = newSSTable(&t.opts, t.comparers, t.mergers)
 	t.wal = newWAL(&t.opts, t.comparers)
 	t.Commands = []*cobra.Command{
 		t.db.Root,
+		t.find.Root,
+		t.lsm.Root,
 		t.manifest.Root,
 		t.sstable.Root,
 		t.wal.Root,
