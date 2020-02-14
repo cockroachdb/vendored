@@ -10,12 +10,16 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"runtime"
 	"sort"
 	"sync/atomic"
 	"time"
 
 	"github.com/cockroachdb/pebble/internal/arenaskl"
 	"github.com/cockroachdb/pebble/internal/base"
+	"github.com/cockroachdb/pebble/internal/cache"
+	"github.com/cockroachdb/pebble/internal/invariants"
+	"github.com/cockroachdb/pebble/internal/manual"
 	"github.com/cockroachdb/pebble/internal/rate"
 	"github.com/cockroachdb/pebble/internal/record"
 	"github.com/cockroachdb/pebble/vfs"
@@ -23,8 +27,8 @@ import (
 
 const initialMemTableSize = 256 << 10 // 256 KB
 
-// Open opens a LevelDB whose files live in the given directory.
-func Open(dirname string, opts *Options) (*DB, error) {
+// Open opens a DB whose files live in the given directory.
+func Open(dirname string, opts *Options) (db *DB, _ error) {
 	// Make a copy of the options so that we don't mutate the passed in options.
 	opts = opts.Clone()
 	opts = opts.EnsureDefaults()
@@ -32,18 +36,48 @@ func Open(dirname string, opts *Options) (*DB, error) {
 		return nil, err
 	}
 
-	d := &DB{
-		cacheID:        opts.Cache.NewID(),
-		dirname:        dirname,
-		walDirname:     opts.WALDir,
-		opts:           opts,
-		cmp:            opts.Comparer.Compare,
-		equal:          opts.Comparer.Equal,
-		merge:          opts.Merger.Merge,
-		split:          opts.Comparer.Split,
-		abbreviatedKey: opts.Comparer.AbbreviatedKey,
-		logRecycler:    logRecycler{limit: opts.MemTableStopWritesThreshold + 1},
+	if opts.Cache == nil {
+		opts.Cache = cache.New(cacheDefaultSize)
+	} else {
+		opts.Cache.Ref()
 	}
+
+	d := &DB{
+		cacheID:             opts.Cache.NewID(),
+		dirname:             dirname,
+		walDirname:          opts.WALDir,
+		opts:                opts,
+		cmp:                 opts.Comparer.Compare,
+		equal:               opts.Comparer.Equal,
+		merge:               opts.Merger.Merge,
+		split:               opts.Comparer.Split,
+		abbreviatedKey:      opts.Comparer.AbbreviatedKey,
+		largeBatchThreshold: (opts.MemTableSize - int(memTableEmptySize)) / 2,
+		logRecycler:         logRecycler{limit: opts.MemTableStopWritesThreshold + 1},
+	}
+
+	defer func() {
+		// If an error or panic occurs during open, attempt to release the manually
+		// allocated memory resources. Note that rather than look for an error, we
+		// look for the return of a nil DB pointer.
+		if r := recover(); db == nil {
+			// Release our references to the Cache. Note that both the DB, and
+			// tableCache have a reference and we need to release both.
+			opts.Cache.Unref()
+			opts.Cache.Unref()
+			for _, mem := range d.mu.mem.queue {
+				switch t := mem.flushable.(type) {
+				case *memTable:
+					manual.Free(t.arenaBuf)
+					t.arenaBuf = nil
+				}
+			}
+			if r != nil {
+				panic(r)
+			}
+		}
+	}()
+
 	if d.equal == nil {
 		d.equal = bytes.Equal
 	}
@@ -145,9 +179,14 @@ func Open(dirname string, opts *Options) (*DB, error) {
 		}
 	}
 
-	d.mu.mem.mutable = d.newMemTable(atomic.LoadUint64(&d.mu.versions.logSeqNum))
-	d.mu.mem.queue = append(d.mu.mem.queue, d.mu.mem.mutable)
-	d.largeBatchThreshold = (d.opts.MemTableSize - int(d.mu.mem.mutable.emptySize)) / 2
+	// In read-only mode, we replay directly into the mutable memtable but never
+	// flush it. We need to delay creation of the memtable until we know the
+	// sequence number of the first batch that will be inserted.
+	if !d.opts.ReadOnly {
+		var entry *flushableEntry
+		d.mu.mem.mutable, entry = d.newMemTable(0 /* logNum */, d.mu.versions.logSeqNum)
+		d.mu.mem.queue = append(d.mu.mem.queue, entry)
+	}
 
 	ls, err := opts.FS.List(d.walDirname)
 	if err != nil {
@@ -217,6 +256,9 @@ func Open(dirname string, opts *Options) (*DB, error) {
 			Path:    newLogName,
 			FileNum: newLogNum,
 		})
+		// This isn't strictly necessary as we don't use the log number for
+		// memtables being flushed, only for the next unflushed memtable.
+		d.mu.mem.queue[len(d.mu.mem.queue)-1].logNum = newLogNum
 
 		logFile = vfs.NewSyncingFile(logFile, vfs.SyncingFileOptions{
 			BytesPerSync:    d.opts.BytesPerSync,
@@ -268,6 +310,16 @@ func Open(dirname string, opts *Options) (*DB, error) {
 	d.maybeScheduleFlush()
 	d.maybeScheduleCompaction()
 
+	if invariants.Enabled {
+		runtime.SetFinalizer(d, func(obj interface{}) {
+			d := obj.(*DB)
+			if atomic.LoadInt32(&d.closed) == 0 {
+				fmt.Fprintf(os.Stderr, "%p: unreferenced DB not closed\n", d)
+				os.Exit(1)
+			}
+		})
+	}
+
 	d.fileLock, fileLock = fileLock, nil
 	return d, nil
 }
@@ -289,7 +341,8 @@ func (d *DB) replayWAL(
 		b               Batch
 		buf             bytes.Buffer
 		mem             *memTable
-		toFlush         []flushable
+		entry           *flushableEntry
+		toFlush         flushableList
 		rr              = record.NewReader(file, logNum)
 		offset          int64 // byte offset in rr
 		lastFlushOffset int64
@@ -299,6 +352,9 @@ func (d *DB) replayWAL(
 		// In read-only mode, we replay directly into the mutable memtable which will
 		// never be flushed.
 		mem = d.mu.mem.mutable
+		if mem != nil {
+			entry = d.mu.mem.queue[len(d.mu.mem.queue)-1]
+		}
 	}
 
 	// Flushes the current memtable, if not nil.
@@ -312,22 +368,22 @@ func (d *DB) replayWAL(
 		}
 		// Else, this was the initial memtable in the read-only case which must have
 		// been empty, but we need to flush it since we don't want to add to it later.
-		mem.logSize = logSize
 		lastFlushOffset = offset
+		entry.logSize = logSize
 		if !d.opts.ReadOnly {
-			toFlush = append(toFlush, mem)
+			toFlush = append(toFlush, entry)
 		}
-		mem = nil
+		mem, entry = nil, nil
 	}
 	// Creates a new memtable if there is no current memtable.
 	ensureMem := func(seqNum uint64) {
 		if mem != nil {
 			return
 		}
-		mem = d.newMemTable(seqNum)
+		mem, entry = d.newMemTable(logNum, seqNum)
 		if d.opts.ReadOnly {
 			d.mu.mem.mutable = mem
-			d.mu.mem.queue = append(d.mu.mem.queue, d.mu.mem.mutable)
+			d.mu.mem.queue = append(d.mu.mem.queue, entry)
 		}
 	}
 	for {
@@ -364,10 +420,14 @@ func (d *DB) replayWAL(
 			// be reused in the next iteration.
 			b.data = append([]byte(nil), b.data...)
 			b.flushable = newFlushableBatch(&b, d.opts.Comparer)
+			entry := d.newFlushableEntry(b.flushable, logNum, b.SeqNum())
+			// Disable memory accounting by adding a reader ref that will never be
+			// removed.
+			entry.readerRefs++
 			if d.opts.ReadOnly {
-				d.mu.mem.queue = append(d.mu.mem.queue, b.flushable)
+				d.mu.mem.queue = append(d.mu.mem.queue, entry)
 			} else {
-				toFlush = append(toFlush, b.flushable)
+				toFlush = append(toFlush, entry)
 			}
 		} else {
 			ensureMem(seqNum)

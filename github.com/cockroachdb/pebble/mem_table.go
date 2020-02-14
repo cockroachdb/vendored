@@ -5,7 +5,9 @@
 package pebble
 
 import (
+	"bytes"
 	"fmt"
+	"os"
 	"sync"
 	"sync/atomic"
 	"unsafe"
@@ -19,6 +21,17 @@ func memTableEntrySize(keyBytes, valueBytes int) uint32 {
 	return arenaskl.MaxNodeSize(uint32(keyBytes)+8, uint32(valueBytes))
 }
 
+// memTableEmptySize is the amount of allocated space in the arena when the
+// memtable is empty.
+var memTableEmptySize = func() uint32 {
+	var pointSkl arenaskl.Skiplist
+	var rangeDelSkl arenaskl.Skiplist
+	arena := arenaskl.NewArena(make([]byte, 16<<10 /* 16 KB */))
+	pointSkl.Reset(arena, bytes.Compare)
+	rangeDelSkl.Reset(arena, bytes.Compare)
+	return arena.Size()
+}()
+
 // A memTable implements an in-memory layer of the LSM. A memTable is mutable,
 // but append-only. Records are added, but never removed. Deletion is supported
 // via tombstones, but it is up to higher level code (see Iterator) to support
@@ -26,14 +39,14 @@ func memTableEntrySize(keyBytes, valueBytes int) uint32 {
 //
 // A memTable is implemented on top of a lock-free arena-backed skiplist. An
 // arena is a fixed size contiguous chunk of memory (see
-// Options.MemTableSize). A memTable's memory consumtion is thus fixed at
-// the time of creation (with the exception of the cached fragmented range
+// Options.MemTableSize). A memTable's memory consumption is thus fixed at the
+// time of creation (with the exception of the cached fragmented range
 // tombstones). The arena-backed skiplist provides both forward and reverse
 // links which makes forward and reverse iteration the same speed.
 //
 // A batch is "applied" to a memTable in a two step process: prepare(batch) ->
 // apply(batch). memTable.prepare() is not thread-safe and must be called with
-// external sychronization. Preparation reserves space in the memTable for the
+// external synchronization. Preparation reserves space in the memTable for the
 // batch. Note that we pessimistically compute how much space a batch will
 // consume in the memTable (see memTableEntrySize and
 // Batch.memTableSize). Preparation is an O(1) operation. Applying a batch to
@@ -47,41 +60,24 @@ func memTableEntrySize(keyBytes, valueBytes int) uint32 {
 type memTable struct {
 	cmp         Compare
 	equal       Equal
+	arenaBuf    []byte
 	skl         arenaskl.Skiplist
 	rangeDelSkl arenaskl.Skiplist
-	// emptySize is the amount of allocated space in the arena when the memtable
-	// is empty.
-	emptySize uint32
 	// reserved tracks the amount of space used by the memtable, both by actual
 	// data stored in the memtable as well as inflight batch commit
 	// operations. This value is incremented pessimistically by prepare() in
 	// order to account for the space needed by a batch.
 	reserved uint32
-	// readerRefs tracks the read references on the memtable. The two sources of
-	// reader references are DB.mu.mem.queue and readState.memtables. The memory
-	// reserved by the memtable in the cache is released when the reader refs
-	// drop to zero. When the reader refs drops to zero, the writer refs will
-	// already be zero because the memtable will have been flushed and that only
-	// occurs once the writer refs drops to zero.
-	readerRefs int32
 	// writerRefs tracks the write references on the memtable. The two sources of
 	// writer references are the memtable being on DB.mu.mem.queue and from
 	// inflight mutations that have reserved space in the memtable but not yet
 	// applied. The memtable cannot be flushed to disk until the writer refs
 	// drops to zero.
 	writerRefs int32
-	flushedCh  chan struct{}
-	// flushForced indicates whether a flush was forced on this memtable (either
-	// manual, or due to ingestion).
-	flushForced bool
-	tombstones  rangeTombstoneCache
-	logNum      uint64
-	logSize     uint64
+	tombstones rangeTombstoneCache
 	// The current logSeqNum at the time the memtable was created. This is
 	// guaranteed to be less than or equal to any seqnum stored in the memtable.
 	logSeqNum uint64
-	// Closure to invoke to release memory accounting.
-	releaseMemAccounting func()
 }
 
 // memTableOptions holds configuration used when creating a memTable. All of
@@ -89,58 +85,43 @@ type memTable struct {
 // which is used by tests.
 type memTableOptions struct {
 	*Options
+	arenaBuf  []byte
 	size      int
 	logSeqNum uint64
-	// Callback to reserve space for the primary memory use of the memTable. The
-	// returned closure must be called to release the reservation.
-	memAccounting func(size int) func()
+}
+
+func checkMemTable(obj interface{}) {
+	m := obj.(*memTable)
+	if m.arenaBuf != nil {
+		fmt.Fprintf(os.Stderr, "%p: memTable buffer was not freed\n", m.arenaBuf)
+		os.Exit(1)
+	}
 }
 
 // newMemTable returns a new MemTable of the specified size. If size is zero,
 // Options.MemTableSize is used instead.
 func newMemTable(opts memTableOptions) *memTable {
 	opts.Options = opts.Options.EnsureDefaults()
-	m := &memTable{
-		cmp:        opts.Comparer.Compare,
-		equal:      opts.Comparer.Equal,
-		readerRefs: 1,
-		writerRefs: 1,
-		flushedCh:  make(chan struct{}),
-		logSeqNum:  opts.logSeqNum,
-	}
-
 	if opts.size == 0 {
 		opts.size = opts.MemTableSize
 	}
-	if opts.memAccounting != nil {
-		m.releaseMemAccounting = opts.memAccounting(opts.size)
+
+	m := &memTable{
+		cmp:        opts.Comparer.Compare,
+		equal:      opts.Comparer.Equal,
+		arenaBuf:   opts.arenaBuf,
+		writerRefs: 1,
+		logSeqNum:  opts.logSeqNum,
 	}
 
-	arena := arenaskl.NewArena(uint32(opts.size), 0)
+	if m.arenaBuf == nil {
+		m.arenaBuf = make([]byte, opts.size)
+	}
+
+	arena := arenaskl.NewArena(m.arenaBuf)
 	m.skl.Reset(arena, m.cmp)
 	m.rangeDelSkl.Reset(arena, m.cmp)
-	m.emptySize = arena.Size()
 	return m
-}
-
-func (m *memTable) readerRef() {
-	switch v := atomic.AddInt32(&m.readerRefs, 1); {
-	case v <= 1:
-		panic(fmt.Sprintf("pebble: inconsistent reference count: %d", v))
-	}
-}
-
-func (m *memTable) readerUnref() {
-	switch v := atomic.AddInt32(&m.readerRefs, -1); {
-	case v < 0:
-		panic(fmt.Sprintf("pebble: inconsistent reference count: %d", v))
-	case v == 0:
-		if m.releaseMemAccounting == nil {
-			panic(fmt.Sprintf("pebble: memtable reservation already released"))
-		}
-		m.releaseMemAccounting()
-		m.releaseMemAccounting = nil
-	}
 }
 
 func (m *memTable) writerRef() {
@@ -161,24 +142,8 @@ func (m *memTable) writerUnref() bool {
 	}
 }
 
-func (m *memTable) flushed() chan struct{} {
-	return m.flushedCh
-}
-
-func (m *memTable) forcedFlush() bool {
-	return m.flushForced
-}
-
-func (m *memTable) setForceFlush() {
-	m.flushForced = true
-}
-
 func (m *memTable) readyForFlush() bool {
 	return atomic.LoadInt32(&m.writerRefs) == 0
-}
-
-func (m *memTable) logInfo() (logNum, size, seqNum uint64) {
-	return m.logNum, atomic.LoadUint64(&m.logSize), m.logSeqNum
 }
 
 // Get gets the value for the given key. It returns ErrNotFound if the DB does
@@ -287,7 +252,7 @@ func (m *memTable) availBytes() uint32 {
 }
 
 func (m *memTable) inuseBytes() uint64 {
-	return uint64(m.skl.Size() - m.emptySize)
+	return uint64(m.skl.Size() - memTableEmptySize)
 }
 
 func (m *memTable) totalBytes() uint64 {
@@ -300,7 +265,7 @@ func (m *memTable) close() error {
 
 // empty returns whether the MemTable has no key/value pairs.
 func (m *memTable) empty() bool {
-	return m.skl.Size() == m.emptySize
+	return m.skl.Size() == memTableEmptySize
 }
 
 // A rangeTombstoneFrags holds a set of fragmented range tombstones generated

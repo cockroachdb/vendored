@@ -88,7 +88,7 @@ type compaction struct {
 	disableRangeTombstoneElision bool
 
 	// flushing contains the flushables (aka memtables) that are being flushed.
-	flushing []flushable
+	flushing flushableList
 	// bytesIterated contains the number of bytes that have been flushed/compacted.
 	bytesIterated uint64
 	// atomicBytesIterated points to the variable to increment during iteration.
@@ -159,7 +159,7 @@ func newCompaction(
 }
 
 func newFlush(
-	opts *Options, cur *version, baseLevel int, flushing []flushable, bytesFlushed *uint64,
+	opts *Options, cur *version, baseLevel int, flushing flushableList, bytesFlushed *uint64,
 ) *compaction {
 	c := &compaction{
 		cmp:                 opts.Comparer.Compare,
@@ -788,7 +788,7 @@ func (d *DB) maybeScheduleFlush() {
 		if !d.mu.mem.queue[n].readyForFlush() {
 			break
 		}
-		if d.mu.mem.queue[n].forcedFlush() {
+		if d.mu.mem.queue[n].flushForced {
 			// A flush was forced. Pretend the memtable size is the configured
 			// size. See minFlushSize below.
 			size += uint64(d.opts.MemTableSize)
@@ -852,10 +852,10 @@ func (d *DB) flush1() error {
 
 	// Require that every memtable being flushed has a log number less than the
 	// new minimum unflushed log number.
-	minUnflushedLogNum, _, _ := d.mu.mem.queue[n].logInfo()
+	minUnflushedLogNum := d.mu.mem.queue[n].logNum
 	if !d.opts.DisableWAL {
 		for i := 0; i < n; i++ {
-			logNum, _, _ := d.mu.mem.queue[i].logInfo()
+			logNum := d.mu.mem.queue[i].logNum
 			if logNum >= minUnflushedLogNum {
 				return errFlushInvariant
 			}
@@ -904,8 +904,7 @@ func (d *DB) flush1() error {
 		ve.MinUnflushedLogNum = minUnflushedLogNum
 		metrics := c.metrics[0]
 		for i := 0; i < n; i++ {
-			_, size, _ := d.mu.mem.queue[i].logInfo()
-			metrics.BytesIn += size
+			metrics.BytesIn += d.mu.mem.queue[i].logSize
 		}
 
 		d.mu.versions.logLock()
@@ -924,7 +923,7 @@ func (d *DB) flush1() error {
 	// Refresh bytes flushed count.
 	atomic.StoreUint64(&d.bytesFlushed, 0)
 
-	var flushed []flushable
+	var flushed flushableList
 	if err == nil {
 		flushed = d.mu.mem.queue[:n]
 		d.mu.mem.queue = d.mu.mem.queue[n:]
@@ -949,7 +948,7 @@ func (d *DB) flush1() error {
 		// memtable reservation has been released by the time a synchronous flush
 		// returns.
 		flushed[i].readerUnref()
-		close(flushed[i].flushed())
+		close(flushed[i].flushed)
 	}
 	return err
 }
@@ -968,6 +967,14 @@ func (d *DB) maybeScheduleCompaction() {
 		}
 		return
 	}
+
+	// Compacting picking needs a coherent view a Version. In particular, we need
+	// to exlude concurrent ingestions from making a decision on which level to
+	// ingest into that conflicts with our compaction
+	// decision. versionSet.logLock provides the necessary mutual exclusion.
+	d.mu.versions.logLock()
+	defer d.mu.versions.logUnlock()
+
 	for len(d.mu.compact.manual) > 0 && d.mu.compact.compactingCount < d.opts.MaxConcurrentCompactions {
 		manual := d.mu.compact.manual[0]
 		c, retryLater := d.mu.versions.picker.pickManual(d.opts, manual, &d.bytesCompacted, d.getInProgressCompactionInfoLocked(nil))
@@ -1206,7 +1213,8 @@ func (d *DB) runCompaction(
 		})
 		filenames = append(filenames, filename)
 		cacheOpts := private.SSTableCacheOpts(d.cacheID, fileNum).(sstable.WriterOption)
-		tw = sstable.NewWriter(file, writerOpts, cacheOpts)
+		internalTableOpt := private.SSTableInternalTableOpt.(sstable.WriterOption)
+		tw = sstable.NewWriter(file, writerOpts, cacheOpts, internalTableOpt)
 
 		ve.NewFiles = append(ve.NewFiles, newFileEntry{
 			Level: c.outputLevel,
