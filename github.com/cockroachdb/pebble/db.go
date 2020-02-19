@@ -691,7 +691,7 @@ func (d *DB) newIterInternal(
 	// need to wrap level 0 files individually in level iterators.
 	current := readState.current
 	for i := len(current.Files[0]) - 1; i >= 0; i-- {
-		f := &current.Files[0][i]
+		f := current.Files[0][i]
 		iter, rangeDelIter, err := d.newIters(f, &dbi.opts, nil)
 		if err != nil {
 			// Ensure the mergingIter is initialized so Iterator.Close will properly
@@ -1114,7 +1114,7 @@ func (d *DB) EstimateDiskUsage(start, end []byte) (uint64, error) {
 				totalSize += file.Size
 			} else if d.opts.Comparer.Compare(file.Smallest.UserKey, end) <= 0 &&
 				d.opts.Comparer.Compare(start, file.Largest.UserKey) <= 0 {
-				size, err := d.tableCache.estimateDiskUsage(&file, start, end)
+				size, err := d.tableCache.estimateDiskUsage(file, start, end)
 				if err != nil {
 					return 0, err
 				}
@@ -1407,8 +1407,12 @@ func (d *DB) getEarliestUnflushedSeqNumLocked() uint64 {
 
 func (d *DB) getInProgressCompactionInfoLocked(finishing *compaction) (rv []compactionInfo) {
 	for c := range d.mu.compact.inProgress {
-		if c.outputLevel > 0 && (finishing == nil || c != finishing) {
-			rv = append(rv, c)
+		if len(c.flushing) == 0 && (finishing == nil || c != finishing) {
+			rv = append(rv, compactionInfo{
+				startLevel:  c.startLevel,
+				outputLevel: c.outputLevel,
+				inputs:      c.inputs,
+			})
 		}
 	}
 	return
