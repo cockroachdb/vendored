@@ -220,7 +220,14 @@ func (vs *versionSet) load(dirname string, opts *Options, mu *sync.Mutex) error 
 			vs.nextFileNum = ve.NextFileNum
 		}
 		if ve.LastSeqNum != 0 {
-			vs.logSeqNum = ve.LastSeqNum
+			// logSeqNum is the _next_ sequence number that will be assigned,
+			// while LastSeqNum is the last assigned sequence number. Note that
+			// this behaviour mimics that in RocksDB; the first sequence number
+			// assigned is one greater than the one present in the manifest
+			// (assuming no WALs contain higher sequence numbers than the
+			// manifest's LastSeqNum). Increment LastSeqNum by 1 to get the
+			// next sequence number that will be assigned.
+			vs.logSeqNum = ve.LastSeqNum + 1
 		}
 	}
 	// We have already set vs.nextFileNum = 2 at the beginning of the
@@ -324,13 +331,21 @@ func (vs *versionSet) logAndApply(
 	// LastSeqNum is set to the current upper bound on the assigned sequence
 	// numbers. Note that this is exactly the behavior of RocksDB. LastSeqNum is
 	// used to initialize versionSet.logSeqNum and versionSet.visibleSeqNum on
-	// replay. It must be higher than any than any sequence number written to an
-	// sstable, including sequence numbers in ingested files. Note that
-	// LastSeqNum is not (and cannot be) the minumum unflushed sequence
+	// replay. It must be higher than or equal to any than any sequence number
+	// written to an sstable, including sequence numbers in ingested files.
+	// Note that LastSeqNum is not (and cannot be) the minumum unflushed sequence
 	// number. This is fallout from ingestion which allows a sequence number X to
 	// be assigned to an ingested sstable even though sequence number X-1 resides
-	// in an unflushed memtable.
-	ve.LastSeqNum = atomic.LoadUint64(&vs.logSeqNum)
+	// in an unflushed memtable. logSeqNum is the _next_ sequence number that
+	// will be assigned, so subtract that by 1 to get the upper bound on the
+	// last assigned sequence number.
+	logSeqNum := atomic.LoadUint64(&vs.logSeqNum)
+	ve.LastSeqNum = logSeqNum - 1
+	if logSeqNum == 0 {
+		// logSeqNum is initialized to 1 in Open() if there are no previous WAL
+		// or manifest records, so this case should never happen.
+		vs.opts.Logger.Fatalf("logSeqNum must be a positive integer: %d", logSeqNum)
+	}
 
 	currentVersion := vs.currentVersion()
 	var newVersion *version
