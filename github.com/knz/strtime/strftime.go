@@ -131,7 +131,7 @@ func Strftime(t time.Time, f string) (string, error) {
 				case 'e':
 					add(fmt.Sprintf("%2d", t.Day()))
 				case 'f':
-					add(fmt.Sprintf("%09d", t.Nanosecond()))
+					add(fmt.Sprintf("%06d", t.Nanosecond()/1000))
 				case 'F':
 					add(fmt.Sprintf("%04d-%02d-%02d", t.Year(), t.Month(), t.Day()))
 				case 'H':
