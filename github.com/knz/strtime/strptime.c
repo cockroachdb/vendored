@@ -243,11 +243,11 @@ label:
 			break;
 			
 		case 'f':
-		    /* CockroachDB extension: nanoseconds */
+		    /* CockroachDB extension: microseconds */
 			if (!isdigit_l((unsigned char)*buf, locale))
 				return (NULL);
 
-			len = 9;
+			len = 6;
 			for (i = 0; len && *buf != 0 &&
 			     isdigit_l((unsigned char)*buf, locale); buf++){
 				i *= 10;
@@ -259,7 +259,7 @@ label:
 			    len--;
 			}
 
-			tm->tm_nsec = i;
+			tm->tm_nsec = i * 1000;
 
 			break;
 
