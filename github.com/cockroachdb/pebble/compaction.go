@@ -1043,12 +1043,18 @@ func (d *DB) maybeScheduleCompaction() {
 		return
 	}
 
-	// Compaction picking needs a coherent view a Version. In particular, we need
-	// to exlude concurrent ingestions from making a decision on which level to
-	// ingest into that conflicts with our compaction
+	// Compaction picking needs a coherent view of a Version. In particular, we
+	// need to exlude concurrent ingestions from making a decision on which level
+	// to ingest into that conflicts with our compaction
 	// decision. versionSet.logLock provides the necessary mutual exclusion.
 	d.mu.versions.logLock()
 	defer d.mu.versions.logUnlock()
+
+	// Check for the closed flag again, in case the DB was closed while we were
+	// waiting for logLock().
+	if atomic.LoadInt32(&d.closed) != 0 {
+		return
+	}
 
 	env := compactionEnv{
 		bytesCompacted:          &d.bytesCompacted,
@@ -1346,11 +1352,12 @@ func (d *DB) runCompaction(
 		meta.SmallestSeqNum = writerMeta.SmallestSeqNum
 		meta.LargestSeqNum = writerMeta.LargestSeqNum
 
-		metrics.BytesWritten += meta.Size
 		if c.flushing == nil {
 			metrics.TablesCompacted++
+			metrics.BytesCompacted += meta.Size
 		} else {
 			metrics.TablesFlushed++
+			metrics.BytesFlushed += meta.Size
 		}
 
 		// The handling of range boundaries is a bit complicated.
