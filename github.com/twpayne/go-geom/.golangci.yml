@@ -1,0 +1,11 @@
+linters:
+  enable-all: true
+  disable:
+    - dupl
+    - funlen
+    - gochecknoglobals
+    - gocognit
+    - gocyclo
+    - godox
+    - lll
+    - wsl
