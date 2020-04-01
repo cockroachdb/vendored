@@ -7,7 +7,6 @@ package sstable
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -16,6 +15,7 @@ import (
 	"sync"
 	"unsafe"
 
+	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/pebble/internal/base"
 	"github.com/cockroachdb/pebble/internal/cache"
 	"github.com/cockroachdb/pebble/internal/crc"
@@ -500,7 +500,7 @@ func (i *singleLevelIterator) Close() error {
 }
 
 func (i *singleLevelIterator) String() string {
-	return fmt.Sprintf("%06d", i.reader.fileNum)
+	return i.reader.fileNum.String()
 }
 
 // SetBounds implements internalIterator.SetBounds, as documented in the pebble
@@ -524,7 +524,7 @@ type compactionIterator struct {
 var _ base.InternalIterator = (*compactionIterator)(nil)
 
 func (i *compactionIterator) String() string {
-	return fmt.Sprintf("%06d", i.reader.fileNum)
+	return i.reader.fileNum.String()
 }
 
 func (i *compactionIterator) SeekGE(key []byte) (*InternalKey, []byte) {
@@ -636,7 +636,7 @@ func (i *twoLevelIterator) Init(r *Reader, lower, upper []byte) error {
 }
 
 func (i *twoLevelIterator) String() string {
-	return fmt.Sprintf("%06d", i.reader.fileNum)
+	return i.reader.fileNum.String()
 }
 
 // SeekGE implements internalIterator.SeekGE, as documented in the pebble
@@ -901,7 +901,7 @@ func (i *twoLevelCompactionIterator) Prev() (*InternalKey, []byte) {
 }
 
 func (i *twoLevelCompactionIterator) String() string {
-	return fmt.Sprintf("%06d", i.reader.fileNum)
+	return i.reader.fileNum.String()
 }
 
 func (i *twoLevelCompactionIterator) skipForward(
@@ -1005,7 +1005,7 @@ func (m Mergers) readerApply(r *Reader) {
 // number. If not specified, a unique cache ID will be used.
 type cacheOpts struct {
 	cacheID uint64
-	fileNum uint64
+	fileNum base.FileNum
 }
 
 // Marker function to indicate the option should be applied before reading the
@@ -1044,7 +1044,7 @@ func (rawTombstonesOpt) readerApply(r *Reader) {
 }
 
 func init() {
-	private.SSTableCacheOpts = func(cacheID, fileNum uint64) interface{} {
+	private.SSTableCacheOpts = func(cacheID uint64, fileNum base.FileNum) interface{} {
 		return &cacheOpts{cacheID, fileNum}
 	}
 	private.SSTableRawTombstonesOpt = rawTombstonesOpt{}
@@ -1054,7 +1054,7 @@ func init() {
 type Reader struct {
 	file              vfs.File
 	cacheID           uint64
-	fileNum           uint64
+	fileNum           base.FileNum
 	rawTombstones     bool
 	err               error
 	index             weakCachedBlock
@@ -1273,13 +1273,13 @@ func (r *Reader) readBlock(bh BlockHandle, transform blockTransform) (cache.Hand
 		if len(result) != 0 &&
 			(len(result) != len(decodedBuf) || &result[0] != &decodedBuf[0]) {
 			r.opts.Cache.Free(decoded)
-			return cache.Handle{}, fmt.Errorf("pebble/table: snappy decoded into unexpected buffer: %p != %p",
-				result, decodedBuf)
+			return cache.Handle{}, errors.Errorf("pebble/table: snappy decoded into unexpected buffer: %p != %p",
+				errors.Safe(result), errors.Safe(decodedBuf))
 		}
 		v, b = decoded, decodedBuf
 	default:
 		r.opts.Cache.Free(v)
-		return cache.Handle{}, fmt.Errorf("pebble/table: unknown block compression: %d", typ)
+		return cache.Handle{}, errors.Errorf("pebble/table: unknown block compression: %d", errors.Safe(typ))
 	}
 
 	if transform != nil {
@@ -1352,8 +1352,8 @@ func (r *Reader) readMetaindex(metaindexBH BlockHandle) error {
 	defer b.Release()
 
 	if uint64(len(data)) != metaindexBH.Length {
-		return fmt.Errorf("pebble/table: unexpected metaindex block size: %d vs %d",
-			len(data), metaindexBH.Length)
+		return errors.Errorf("pebble/table: unexpected metaindex block size: %d vs %d",
+			errors.Safe(len(data)), errors.Safe(metaindexBH.Length))
 	}
 
 	i, err := newRawBlockIter(bytes.Compare, data)
@@ -1411,7 +1411,7 @@ func (r *Reader) readMetaindex(metaindexBH BlockHandle) error {
 				case TableFilter:
 					r.tableFilter = newTableFilterReader(fp)
 				default:
-					return fmt.Errorf("unknown filter type: %v", t.ftype)
+					return errors.Errorf("unknown filter type: %v", errors.Safe(t.ftype))
 				}
 
 				done = true
@@ -1657,13 +1657,13 @@ func NewReader(f vfs.File, o ReaderOptions, extraOpts ...ReaderOption) (*Reader,
 	}
 
 	if r.Compare == nil {
-		r.err = fmt.Errorf("pebble/table: %d: unknown comparer %s",
-			r.fileNum, r.Properties.ComparerName)
+		r.err = errors.Errorf("pebble/table: %d: unknown comparer %s",
+			errors.Safe(r.fileNum), errors.Safe(r.Properties.ComparerName))
 	}
 	if !r.mergerOK {
 		if name := r.Properties.MergerName; name != "" && name != "nullptr" {
-			r.err = fmt.Errorf("pebble/table: %d: unknown merger %s",
-				r.fileNum, r.Properties.MergerName)
+			r.err = errors.Errorf("pebble/table: %d: unknown merger %s",
+				errors.Safe(r.fileNum), errors.Safe(r.Properties.MergerName))
 		}
 	}
 	if r.err != nil {

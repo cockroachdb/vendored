@@ -6,7 +6,6 @@
 package pebble // import "github.com/cockroachdb/pebble"
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"runtime"
@@ -14,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/pebble/internal/arenaskl"
 	"github.com/cockroachdb/pebble/internal/base"
 	"github.com/cockroachdb/pebble/internal/invariants"
@@ -171,7 +171,7 @@ type DB struct {
 	// inserted into a memtable.
 	largeBatchThreshold int
 	// The current OPTIONS file number.
-	optionsFileNum uint64
+	optionsFileNum FileNum
 
 	fileLock io.Closer
 	dataDir  vfs.File
@@ -244,7 +244,7 @@ type DB struct {
 			// flushed logs will be a prefix, the unflushed logs a suffix. The
 			// delimeter between flushed and unflushed logs is
 			// versionSet.minUnflushedLogNum.
-			queue []uint64
+			queue []FileNum
 			// The size of the current log file (i.e. queue[len(queue)-1].
 			size uint64
 			// The number of input bytes to the log. This is the raw size of the
@@ -804,9 +804,9 @@ func (d *DB) NewSnapshot() *Snapshot {
 
 // Close closes the DB.
 //
-// It is not safe to close a DB until all outstanding iterators are closed.
-// It is valid to call Close multiple times. Other methods should not be
-// called after the DB has been closed.
+// It is not safe to close a DB until all outstanding iterators are closed
+// or to call Close concurrently with any other DB method. It is not valid
+// to call any of a DB's methods after the DB has been closed.
 func (d *DB) Close() error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -822,7 +822,7 @@ func (d *DB) Close() error {
 	}
 	var err error
 	if n := len(d.mu.compact.inProgress); n > 0 {
-		err = fmt.Errorf("pebble: %d unexpected in-progress compactions", n)
+		err = errors.Errorf("pebble: %d unexpected in-progress compactions", errors.Safe(n))
 	}
 	err = firstError(err, d.tableCache.Close())
 	if !d.opts.ReadOnly {
@@ -849,12 +849,12 @@ func (d *DB) Close() error {
 			refs := v.Refs()
 			if v == current {
 				if refs != 1 {
-					return fmt.Errorf("leaked iterators: current\n%s", v)
+					return errors.Errorf("leaked iterators: current\n%s", v)
 				}
 				break
 			}
 			if refs != 0 {
-				return fmt.Errorf("leaked iterators:\n%s", v)
+				return errors.Errorf("leaked iterators:\n%s", v)
 			}
 		}
 
@@ -862,7 +862,7 @@ func (d *DB) Close() error {
 			mem.readerUnref()
 		}
 		if reserved := atomic.LoadInt64(&d.memTableReserved); reserved != 0 {
-			return fmt.Errorf("leaked memtable reservation: %d", reserved)
+			return errors.Errorf("leaked memtable reservation: %d", errors.Safe(reserved))
 		}
 	}
 
@@ -1145,7 +1145,7 @@ func (d *DB) walPreallocateSize() int {
 	return size
 }
 
-func (d *DB) newMemTable(logNum, logSeqNum uint64) (*memTable, *flushableEntry) {
+func (d *DB) newMemTable(logNum FileNum, logSeqNum uint64) (*memTable, *flushableEntry) {
 	size := d.mu.mem.nextSize
 	if d.mu.mem.nextSize < d.opts.MemTableSize {
 		d.mu.mem.nextSize *= 2
@@ -1178,7 +1178,7 @@ func (d *DB) newMemTable(logNum, logSeqNum uint64) (*memTable, *flushableEntry) 
 	return mem, entry
 }
 
-func (d *DB) newFlushableEntry(f flushable, logNum, logSeqNum uint64) *flushableEntry {
+func (d *DB) newFlushableEntry(f flushable, logNum FileNum, logSeqNum uint64) *flushableEntry {
 	return &flushableEntry{
 		flushable:  f,
 		flushed:    make(chan struct{}),
@@ -1252,7 +1252,7 @@ func (d *DB) makeRoomForWrite(b *Batch) error {
 			continue
 		}
 
-		var newLogNum uint64
+		var newLogNum FileNum
 		var newLogFile vfs.File
 		var prevLogSize uint64
 		var err error

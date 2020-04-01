@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/pebble/internal/arenaskl"
 	"github.com/cockroachdb/pebble/internal/base"
 	"github.com/cockroachdb/pebble/internal/cache"
@@ -172,9 +173,9 @@ func Open(dirname string, opts *Options) (db *DB, _ error) {
 			return nil, err
 		}
 	} else if err != nil {
-		return nil, fmt.Errorf("pebble: database %q: %v", dirname, err)
+		return nil, errors.Wrapf(err, "pebble: database %q", dirname)
 	} else if opts.ErrorIfExists {
-		return nil, fmt.Errorf("pebble: database %q already exists", dirname)
+		return nil, errors.Errorf("pebble: database %q already exists", dirname)
 	} else {
 		// Load the version set.
 		if err := d.mu.versions.load(dirname, opts, &d.mu.Mutex); err != nil {
@@ -205,7 +206,7 @@ func Open(dirname string, opts *Options) (db *DB, _ error) {
 
 	// Replay any newer log files than the ones named in the manifest.
 	type fileNumAndName struct {
-		num  uint64
+		num  FileNum
 		name string
 	}
 	var logFiles []fileNumAndName
@@ -225,6 +226,15 @@ func Open(dirname string, opts *Options) (db *DB, _ error) {
 		case fileTypeOptions:
 			if err := checkOptions(opts, opts.FS.PathJoin(dirname, filename)); err != nil {
 				return nil, err
+			}
+		case fileTypeTemp:
+			if !d.opts.ReadOnly {
+				// A temp file is leftover if a process exits in the middle of
+				// updating the CURRENT file. Remove it.
+				err := opts.FS.Remove(opts.FS.PathJoin(dirname, filename))
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
@@ -285,11 +295,7 @@ func Open(dirname string, opts *Options) (db *DB, _ error) {
 			return nil, err
 		}
 	}
-	var checker func() error
-	if d.opts.DebugCheck {
-		checker = func() error { return d.CheckLevels(nil) }
-	}
-	d.updateReadStateLocked(checker)
+	d.updateReadStateLocked(d.opts.DebugCheck)
 
 	if !d.opts.ReadOnly {
 		// Write the current options to disk.
@@ -340,7 +346,7 @@ func GetVersion(dir string, fs vfs.FS) (string, error) {
 		return "", err
 	}
 	var version string
-	lastOptionsSeen := uint64(0)
+	lastOptionsSeen := FileNum(0)
 	for _, filename := range ls {
 		ft, fn, ok := base.ParseFilename(fs, filename)
 		if !ok {
@@ -393,7 +399,7 @@ func GetVersion(dir string, fs vfs.FS) (string, error) {
 // d.mu must be held when calling this, but the mutex may be dropped and
 // re-acquired during the course of this method.
 func (d *DB) replayWAL(
-	jobID int, ve *versionEdit, fs vfs.FS, filename string, logNum uint64,
+	jobID int, ve *versionEdit, fs vfs.FS, filename string, logNum FileNum,
 ) (maxSeqNum uint64, err error) {
 	file, err := fs.Open(filename)
 	if err != nil {
@@ -468,7 +474,8 @@ func (d *DB) replayWAL(
 		}
 
 		if buf.Len() < batchHeaderLen {
-			return 0, fmt.Errorf("pebble: corrupt log file %q", filename)
+			return 0, errors.Errorf("pebble: corrupt log file %q (num %s)",
+				filename, errors.Safe(logNum))
 		}
 
 		// Specify Batch.db so that Batch.SetRepr will compute Batch.memTableSize

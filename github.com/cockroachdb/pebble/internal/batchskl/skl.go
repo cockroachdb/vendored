@@ -56,12 +56,12 @@ package batchskl // import "github.com/cockroachdb/pebble/internal/batchskl"
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"math"
 	"time"
 	"unsafe"
 
+	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/pebble/internal/base"
 	"golang.org/x/exp/rand"
 )
@@ -137,9 +137,7 @@ func init() {
 }
 
 // NewSkiplist constructs and initializes a new, empty skiplist.
-func NewSkiplist(
-	storage *[]byte, cmp base.Compare, abbreviatedKey base.AbbreviatedKey,
-) *Skiplist {
+func NewSkiplist(storage *[]byte, cmp base.Compare, abbreviatedKey base.AbbreviatedKey) *Skiplist {
 	s := &Skiplist{}
 	s.Init(storage, cmp, abbreviatedKey)
 	return s
@@ -158,9 +156,7 @@ func (s *Skiplist) Reset() {
 }
 
 // Init the skiplist to empty and re-initialize.
-func (s *Skiplist) Init(
-	storage *[]byte, cmp base.Compare, abbreviatedKey base.AbbreviatedKey,
-) {
+func (s *Skiplist) Init(storage *[]byte, cmp base.Compare, abbreviatedKey base.AbbreviatedKey) {
 	*s = Skiplist{
 		storage:        storage,
 		cmp:            cmp,
@@ -194,11 +190,11 @@ func (s *Skiplist) Add(keyOffset uint32) error {
 	data := (*s.storage)[keyOffset+1:]
 	v, n := binary.Uvarint(data)
 	if n <= 0 {
-		return fmt.Errorf("corrupted batch entry: %d", keyOffset)
+		return errors.Errorf("corrupted batch entry: %d", errors.Safe(keyOffset))
 	}
 	data = data[n:]
 	if v > uint64(len(data)) {
-		return fmt.Errorf("corrupted batch entry: %d", keyOffset)
+		return errors.Errorf("corrupted batch entry: %d", errors.Safe(keyOffset))
 	}
 	keyStart := 1 + keyOffset + uint32(n)
 	keyEnd := keyStart + uint32(v)
@@ -258,11 +254,8 @@ func (s *Skiplist) NewIter(lower, upper []byte) Iterator {
 	return Iterator{list: s, lower: lower, upper: upper}
 }
 
-func (s *Skiplist) newNode(
-	height,
-	offset, keyStart, keyEnd uint32,
-	abbreviatedKey uint64,
-) uint32 {
+func (s *Skiplist) newNode(height,
+	offset, keyStart, keyEnd uint32, abbreviatedKey uint64) uint32 {
 	if height < 1 || height > maxHeight {
 		panic("height cannot be less than one or greater than the max height")
 	}
@@ -308,9 +301,7 @@ func (s *Skiplist) randomHeight() uint32 {
 	return h
 }
 
-func (s *Skiplist) findSplice(
-	key []byte, abbreviatedKey uint64, spl *[maxHeight]splice,
-) {
+func (s *Skiplist) findSplice(key []byte, abbreviatedKey uint64, spl *[maxHeight]splice) {
 	prev := s.head
 
 	for level := s.height - 1; ; level-- {

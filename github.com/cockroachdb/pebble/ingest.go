@@ -5,11 +5,11 @@
 package pebble
 
 import (
-	"fmt"
 	"sort"
 	"sync/atomic"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/pebble/internal/base"
 	"github.com/cockroachdb/pebble/internal/private"
 	"github.com/cockroachdb/pebble/sstable"
@@ -33,17 +33,19 @@ func sstableKeyCompare(userCmp Compare, a, b InternalKey) int {
 
 func ingestValidateKey(opts *Options, key *InternalKey) error {
 	if key.Kind() == InternalKeyKindInvalid {
-		return fmt.Errorf("pebble: external sstable has corrupted key: %s",
+		return errors.Errorf("pebble: external sstable has corrupted key: %s",
 			key.Pretty(opts.Comparer.Format))
 	}
 	if key.SeqNum() != 0 {
-		return fmt.Errorf("pebble: external sstable has non-zero seqnum: %s",
+		return errors.Errorf("pebble: external sstable has non-zero seqnum: %s",
 			key.Pretty(opts.Comparer.Format))
 	}
 	return nil
 }
 
-func ingestLoad1(opts *Options, path string, cacheID, fileNum uint64) (*fileMetadata, error) {
+func ingestLoad1(
+	opts *Options, path string, cacheID uint64, fileNum FileNum,
+) (*fileMetadata, error) {
 	stat, err := opts.FS.Stat(path)
 	if err != nil {
 		return nil, err
@@ -130,7 +132,7 @@ func ingestLoad1(opts *Options, path string, cacheID, fileNum uint64) (*fileMeta
 }
 
 func ingestLoad(
-	opts *Options, paths []string, cacheID uint64, pending []uint64,
+	opts *Options, paths []string, cacheID uint64, pending []FileNum,
 ) ([]*fileMetadata, []string, error) {
 	meta := make([]*fileMetadata, 0, len(paths))
 	newPaths := make([]string, 0, len(paths))
@@ -182,7 +184,7 @@ func ingestSortAndVerify(cmp Compare, meta []*fileMetadata, paths []string) erro
 
 	for i := 1; i < len(meta); i++ {
 		if sstableKeyCompare(cmp, meta[i-1].Largest, meta[i].Smallest) >= 0 {
-			return fmt.Errorf("pebble: external sstables have overlapping ranges")
+			return errors.New("pebble: external sstables have overlapping ranges")
 		}
 	}
 	return nil
@@ -216,7 +218,7 @@ func ingestLink(
 	for i := range paths {
 		target := base.MakeFilename(fs, dirname, fileTypeTable, meta[i].FileNum)
 		var err error
-		if _, ok := opts.FS.(*vfs.MemFS); ok && opts.DebugCheck {
+		if _, ok := opts.FS.(*vfs.MemFS); ok && opts.DebugCheck != nil {
 			// The combination of MemFS+Ingest+DebugCheck produces awkwardness around
 			// the subsequent deletion of files. The problem is that MemFS implements
 			// the Windows semantics of disallowing removal of an open file. This is
@@ -482,7 +484,7 @@ func (d *DB) Ingest(paths []string) error {
 	// ordering. The sorting of L0 tables by sequence number avoids relying on
 	// that (busted) invariant.
 	d.mu.Lock()
-	pendingOutputs := make([]uint64, len(paths))
+	pendingOutputs := make([]FileNum, len(paths))
 	for i := range paths {
 		pendingOutputs[i] = d.mu.versions.getNextFileNum()
 	}
@@ -647,11 +649,7 @@ func (d *DB) ingestApply(jobID int, meta []*fileMetadata) (*versionEdit, error) 
 	}); err != nil {
 		return nil, err
 	}
-	var checker func() error
-	if d.opts.DebugCheck {
-		checker = func() error { return d.CheckLevels(nil) }
-	}
-	d.updateReadStateLocked(checker)
+	d.updateReadStateLocked(d.opts.DebugCheck)
 	d.deleteObsoleteFiles(jobID)
 	// The ingestion may have pushed a level over the threshold for compaction,
 	// so check to see if one is necessary and schedule it.
