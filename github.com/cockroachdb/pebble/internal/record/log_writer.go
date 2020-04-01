@@ -7,15 +7,14 @@ package record
 import (
 	"context"
 	"encoding/binary"
-	"errors"
-	"fmt"
 	"io"
-	"runtime/debug"
 	"runtime/pprof"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/cockroachdb/errors"
+	"github.com/cockroachdb/pebble/internal/base"
 	"github.com/cockroachdb/pebble/internal/crc"
 )
 
@@ -139,7 +138,7 @@ func (q *syncQueue) pop(head, tail uint32, err error) error {
 		slot := &q.slots[tail&uint32(len(q.slots)-1)]
 		wg := slot.wg
 		if wg == nil {
-			return fmt.Errorf("nil waiter at %d", tail&uint32(len(q.slots)-1))
+			return errors.Errorf("nil waiter at %d", errors.Safe(tail&uint32(len(q.slots)-1)))
 		}
 		*slot.err = err
 		slot.wg = nil
@@ -282,7 +281,7 @@ type LogWriter struct {
 }
 
 // NewLogWriter returns a new LogWriter.
-func NewLogWriter(w io.Writer, logNum uint64) *LogWriter {
+func NewLogWriter(w io.Writer, logNum base.FileNum) *LogWriter {
 	c, _ := w.(io.Closer)
 	s, _ := w.(syncer)
 	r := &LogWriter{
@@ -446,7 +445,7 @@ func (w *LogWriter) flushPending(
 		// the stack that created the panic if panic'ing itself hits a panic
 		// (e.g. unlock of unlocked mutex).
 		if r := recover(); r != nil {
-			err = fmt.Errorf("%v\n%s", err, debug.Stack())
+			err = errors.Newf("%v", r)
 		}
 	}()
 

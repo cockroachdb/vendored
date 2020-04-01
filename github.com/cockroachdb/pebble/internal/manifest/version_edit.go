@@ -8,12 +8,12 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"sort"
 	"sync/atomic"
 
+	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/pebble/internal/base"
 )
 
@@ -61,7 +61,7 @@ const (
 // itself might still be referenced by another level.
 type DeletedFileEntry struct {
 	Level   int
-	FileNum uint64
+	FileNum base.FileNum
 }
 
 // NewFileEntry holds the state for a new file or one moved from a different
@@ -84,7 +84,7 @@ type VersionEdit struct {
 	// mutations that have not been flushed to an sstable.
 	//
 	// This is an optional field, and 0 represents it is not set.
-	MinUnflushedLogNum uint64
+	MinUnflushedLogNum base.FileNum
 
 	// ObsoletePrevLogNum is a historic artifact from LevelDB that is not used by
 	// Pebble, RocksDB, or even LevelDB. Its use in LevelDB was deprecated in
@@ -94,7 +94,7 @@ type VersionEdit struct {
 
 	// The next file number. A single counter is used to assign file numbers
 	// for the WAL, MANIFEST, sstable, and OPTIONS files.
-	NextFileNum uint64
+	NextFileNum base.FileNum
 
 	// LastSeqNum is an upper bound on the sequence numbers that have been
 	// assigned in flushed WALs. Unflushed WALs (that will be replayed during
@@ -132,14 +132,14 @@ func (v *VersionEdit) Decode(r io.Reader) error {
 			v.ComparerName = string(s)
 
 		case tagLogNumber:
-			n, err := d.readUvarint()
+			n, err := d.readFileNum()
 			if err != nil {
 				return err
 			}
 			v.MinUnflushedLogNum = n
 
 		case tagNextFileNumber:
-			n, err := d.readUvarint()
+			n, err := d.readFileNum()
 			if err != nil {
 				return err
 			}
@@ -166,7 +166,7 @@ func (v *VersionEdit) Decode(r io.Reader) error {
 			if err != nil {
 				return err
 			}
-			fileNum, err := d.readUvarint()
+			fileNum, err := d.readFileNum()
 			if err != nil {
 				return err
 			}
@@ -180,7 +180,7 @@ func (v *VersionEdit) Decode(r io.Reader) error {
 			if err != nil {
 				return err
 			}
-			fileNum, err := d.readUvarint()
+			fileNum, err := d.readFileNum()
 			if err != nil {
 				return err
 			}
@@ -233,7 +233,7 @@ func (v *VersionEdit) Decode(r io.Reader) error {
 					switch customTag {
 					case customTagNeedsCompaction:
 						if len(field) != 1 {
-							return fmt.Errorf("new-file4: need-compaction field wrong size")
+							return errors.New("new-file4: need-compaction field wrong size")
 						}
 						markedForCompaction = (field[0] == 1)
 
@@ -241,15 +241,15 @@ func (v *VersionEdit) Decode(r io.Reader) error {
 						var n int
 						creationTime, n = binary.Uvarint(field)
 						if n != len(field) {
-							return fmt.Errorf("new-file4: invalid file creation time")
+							return errors.New("new-file4: invalid file creation time")
 						}
 
 					case customTagPathID:
-						return fmt.Errorf("new-file4: path-id field not supported")
+						return errors.New("new-file4: path-id field not supported")
 
 					default:
 						if (customTag & customTagNonSafeIgnoreMask) != 0 {
-							return fmt.Errorf("new-file4: custom field not supported: %d", customTag)
+							return errors.Errorf("new-file4: custom field not supported: %d", customTag)
 						}
 					}
 				}
@@ -276,7 +276,7 @@ func (v *VersionEdit) Decode(r io.Reader) error {
 			v.ObsoletePrevLogNum = n
 
 		case tagColumnFamily, tagColumnFamilyAdd, tagColumnFamilyDrop, tagMaxColumnFamily:
-			return fmt.Errorf("column families are not supported")
+			return errors.New("column families are not supported")
 
 		default:
 			return errCorruptManifest
@@ -295,7 +295,7 @@ func (v *VersionEdit) Encode(w io.Writer) error {
 	}
 	if v.MinUnflushedLogNum != 0 {
 		e.writeUvarint(tagLogNumber)
-		e.writeUvarint(v.MinUnflushedLogNum)
+		e.writeUvarint(uint64(v.MinUnflushedLogNum))
 	}
 	if v.ObsoletePrevLogNum != 0 {
 		e.writeUvarint(tagPrevLogNumber)
@@ -303,7 +303,7 @@ func (v *VersionEdit) Encode(w io.Writer) error {
 	}
 	if v.NextFileNum != 0 {
 		e.writeUvarint(tagNextFileNumber)
-		e.writeUvarint(v.NextFileNum)
+		e.writeUvarint(uint64(v.NextFileNum))
 	}
 	// RocksDB requires LastSeqNum to be encoded for the first MANIFEST entry,
 	// even though its value is zero. We detect this by encoding LastSeqNum when
@@ -315,7 +315,7 @@ func (v *VersionEdit) Encode(w io.Writer) error {
 	for x := range v.DeletedFiles {
 		e.writeUvarint(tagDeletedFile)
 		e.writeUvarint(uint64(x.Level))
-		e.writeUvarint(x.FileNum)
+		e.writeUvarint(uint64(x.FileNum))
 	}
 	for _, x := range v.NewFiles {
 		var customFields bool
@@ -326,7 +326,7 @@ func (v *VersionEdit) Encode(w io.Writer) error {
 			e.writeUvarint(tagNewFile2)
 		}
 		e.writeUvarint(uint64(x.Level))
-		e.writeUvarint(x.Meta.FileNum)
+		e.writeUvarint(uint64(x.Meta.FileNum))
 		e.writeUvarint(x.Meta.Size)
 		e.writeKey(x.Meta.Smallest)
 		e.writeKey(x.Meta.Largest)
@@ -381,6 +381,14 @@ func (d versionEditDecoder) readLevel() (int, error) {
 	return int(u), nil
 }
 
+func (d versionEditDecoder) readFileNum() (base.FileNum, error) {
+	u, err := d.readUvarint()
+	if err != nil {
+		return 0, err
+	}
+	return base.FileNum(u), nil
+}
+
 func (d versionEditDecoder) readUvarint() (uint64, error) {
 	u, err := binary.ReadUvarint(d)
 	if err != nil {
@@ -423,7 +431,7 @@ func (e versionEditEncoder) writeUvarint(u uint64) {
 // edits.
 type BulkVersionEdit struct {
 	Added   [NumLevels][]*FileMetadata
-	Deleted [NumLevels]map[uint64]bool // map[uint64]bool is a set of fileNums
+	Deleted [NumLevels]map[base.FileNum]bool
 }
 
 // Accumulate adds the file addition and deletions in the specified version
@@ -432,7 +440,7 @@ func (b *BulkVersionEdit) Accumulate(ve *VersionEdit) {
 	for df := range ve.DeletedFiles {
 		dmap := b.Deleted[df.Level]
 		if dmap == nil {
-			dmap = make(map[uint64]bool)
+			dmap = make(map[base.FileNum]bool)
 			b.Deleted[df.Level] = dmap
 		}
 		dmap[df.FileNum] = true
@@ -461,16 +469,16 @@ func (b *BulkVersionEdit) Accumulate(ve *VersionEdit) {
 // are still in use by the incoming Version.
 func (b *BulkVersionEdit) Apply(
 	curr *Version, cmp Compare, format base.Formatter,
-) (_ *Version, zombies map[uint64]uint64, _ error) {
-	addZombie := func(fileNum, size uint64) {
+) (_ *Version, zombies map[base.FileNum]uint64, _ error) {
+	addZombie := func(fileNum base.FileNum, size uint64) {
 		if zombies == nil {
-			zombies = make(map[uint64]uint64)
+			zombies = make(map[base.FileNum]uint64)
 		}
 		zombies[fileNum] = size
 	}
 	// The remove zombie function is used to handle tables that are moved from
 	// one level to another during a version edit (i.e. a "move" compaction).
-	removeZombie := func(fileNum uint64) {
+	removeZombie := func(fileNum base.FileNum) {
 		if zombies != nil {
 			delete(zombies, fileNum)
 		}
@@ -501,8 +509,9 @@ func (b *BulkVersionEdit) Apply(
 		deletedMap := b.Deleted[level]
 		n := len(currFiles) + len(addedFiles)
 		if n == 0 {
-			return nil, nil, fmt.Errorf(
-				"pebble: internal error: No current or added files but have deleted files: %d", len(deletedMap))
+			return nil, nil, errors.Errorf(
+				"pebble: internal error: No current or added files but have deleted files: %d",
+				errors.Safe(len(deletedMap)))
 		}
 		v.Files[level] = make([]*FileMetadata, 0, n)
 		// We have 2 lists of files, currFiles and addedFiles either of which (but not both) can
@@ -539,7 +548,7 @@ func (b *BulkVersionEdit) Apply(
 			}
 			SortBySeqNum(v.Files[level])
 			if err := CheckOrdering(cmp, format, 0, v.Files[level]); err != nil {
-				return nil, nil, fmt.Errorf("pebble: internal error: %v", err)
+				return nil, nil, errors.Wrap(err, "pebble: internal error")
 			}
 			continue
 		}
@@ -592,9 +601,10 @@ func (b *BulkVersionEdit) Apply(
 				// addedFiles for internal consistency).
 				if base.InternalCompare(cmp, v.Files[level][numFiles-1].Largest, f.Smallest) >= 0 {
 					cf := v.Files[level][numFiles-1]
-					return nil, nil, fmt.Errorf(
-						"pebble: internal error: L%d files %06d and %06d have overlapping ranges: %s-%s vs %s-%s",
-						level, cf.FileNum, f.FileNum, cf.Smallest.Pretty(format), cf.Largest.Pretty(format),
+					return nil, nil, errors.Errorf(
+						"pebble: internal error: L%d files %s and %s have overlapping ranges: [%s-%s] vs [%s-%s]",
+						errors.Safe(level), errors.Safe(cf.FileNum), errors.Safe(f.FileNum),
+						cf.Smallest.Pretty(format), cf.Largest.Pretty(format),
 						f.Smallest.Pretty(format), f.Largest.Pretty(format))
 				}
 			}

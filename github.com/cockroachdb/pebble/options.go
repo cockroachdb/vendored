@@ -6,12 +6,12 @@ package pebble
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/pebble/internal/base"
 	"github.com/cockroachdb/pebble/internal/cache"
 	"github.com/cockroachdb/pebble/sstable"
@@ -252,10 +252,10 @@ type Options struct {
 	// The default value uses the same ordering as bytes.Compare.
 	Comparer *Comparer
 
-	// Setting this to true causes DB.CheckLevels() to be called whenever a new version is being
-	// installed. DB.CheckLevels() iterates over all the data in the DB, so set this to true only
-	// in tests.
-	DebugCheck bool
+	// DebugCheck is invoked, if non-nil, whenever a new version is being
+	// installed. Typically, this is set to pebble.DebugCheckLevels in tests
+	// or tools only, to check invariants over all the data in the database.
+	DebugCheck func(*DB) error
 
 	// Disable the write-ahead log (WAL). Disabling the write-ahead log prohibits
 	// crash recovery, but can improve performance if crash recovery is not
@@ -397,6 +397,13 @@ type Options struct {
 	// by tests. Compaction/flush pacing is disabled until we fix the impact on
 	// throughput.
 	enablePacing bool
+}
+
+// DebugCheckLevels calls CheckLevels on the provided database.
+// It may be set in the DebugCheck field of Options to check
+// level invariants whenever a new version is installed.
+func DebugCheckLevels(db *DB) error {
+	return db.CheckLevels(nil)
 }
 
 // EnsureDefaults ensures that the default values for all options are set if a
@@ -597,7 +604,7 @@ func parseOptions(s string, fn func(section, key, value string) error) error {
 
 		pos := strings.Index(line, "=")
 		if pos < 0 {
-			return fmt.Errorf("pebble: invalid key=value syntax: %s", line)
+			return errors.Errorf("pebble: invalid key=value syntax: %s", errors.Safe(line))
 		}
 
 		key := strings.TrimSpace(line[:pos])
@@ -647,7 +654,8 @@ func (o *Options) Parse(s string, hooks *ParseHooks) error {
 				if hooks != nil && hooks.SkipUnknown != nil && hooks.SkipUnknown(section+"."+key) {
 					return nil
 				}
-				return fmt.Errorf("pebble: unknown option: %s.%s", section, key)
+				return errors.Errorf("pebble: unknown option: %s.%s",
+					errors.Safe(section), errors.Safe(key))
 			}
 			return nil
 
@@ -721,7 +729,7 @@ func (o *Options) Parse(s string, hooks *ParseHooks) error {
 				case "rocksdbv2":
 					o.TableFormat = TableFormatRocksDBv2
 				default:
-					return fmt.Errorf("pebble: unknown table format: %q", value)
+					return errors.Errorf("pebble: unknown table format: %q", errors.Safe(value))
 				}
 			case "table_property_collectors":
 				// TODO(peter): set o.TablePropertyCollectors
@@ -731,7 +739,8 @@ func (o *Options) Parse(s string, hooks *ParseHooks) error {
 				if hooks != nil && hooks.SkipUnknown != nil && hooks.SkipUnknown(section+"."+key) {
 					return nil
 				}
-				return fmt.Errorf("pebble: unknown option: %s.%s", section, key)
+				return errors.Errorf("pebble: unknown option: %s.%s",
+					errors.Safe(section), errors.Safe(key))
 			}
 			return err
 
@@ -743,7 +752,7 @@ func (o *Options) Parse(s string, hooks *ParseHooks) error {
 				if hooks != nil && hooks.SkipUnknown != nil && hooks.SkipUnknown(section) {
 					return nil
 				}
-				return fmt.Errorf("pebble: unknown section: %q", section)
+				return errors.Errorf("pebble: unknown section: %q", errors.Safe(section))
 			}
 
 			if len(o.Levels) <= index {
@@ -768,7 +777,7 @@ func (o *Options) Parse(s string, hooks *ParseHooks) error {
 				case "Snappy":
 					l.Compression = SnappyCompression
 				default:
-					return fmt.Errorf("pebble: unknown compression: %q", value)
+					return errors.Errorf("pebble: unknown compression: %q", errors.Safe(value))
 				}
 			case "filter_policy":
 				if hooks != nil && hooks.NewFilterPolicy != nil {
@@ -779,7 +788,7 @@ func (o *Options) Parse(s string, hooks *ParseHooks) error {
 				case "table":
 					l.FilterType = TableFilter
 				default:
-					return fmt.Errorf("pebble: unknown filter type: %q", value)
+					return errors.Errorf("pebble: unknown filter type: %q", errors.Safe(value))
 				}
 			case "index_block_size":
 				l.IndexBlockSize, err = strconv.Atoi(value)
@@ -789,14 +798,14 @@ func (o *Options) Parse(s string, hooks *ParseHooks) error {
 				if hooks != nil && hooks.SkipUnknown != nil && hooks.SkipUnknown(section+"."+key) {
 					return nil
 				}
-				return fmt.Errorf("pebble: unknown option: %s.%s", section, key)
+				return errors.Errorf("pebble: unknown option: %s.%s", errors.Safe(section), errors.Safe(key))
 			}
 			return err
 		}
 		if hooks != nil && hooks.SkipUnknown != nil && hooks.SkipUnknown(section+"."+key) {
 			return nil
 		}
-		return fmt.Errorf("pebble: unknown section: %q", section)
+		return errors.Errorf("pebble: unknown section: %q", errors.Safe(section))
 	})
 }
 
@@ -808,15 +817,15 @@ func (o *Options) Check(s string) error {
 		switch section + "." + key {
 		case "Options.comparer":
 			if value != o.Comparer.Name {
-				return fmt.Errorf("pebble: comparer name from file %q != comparer name from options %q",
-					value, o.Comparer.Name)
+				return errors.Errorf("pebble: comparer name from file %q != comparer name from options %q",
+					errors.Safe(value), errors.Safe(o.Comparer.Name))
 			}
 		case "Options.merger":
 			// RocksDB allows the merge operator to be unspecified, in which case it
 			// shows up as "nullptr".
 			if value != "nullptr" && value != o.Merger.Name {
-				return fmt.Errorf("pebble: merger name from file %q != merger name from options %q",
-					value, o.Merger.Name)
+				return errors.Errorf("pebble: merger name from file %q != merger name from options %q",
+					errors.Safe(value), errors.Safe(o.Merger.Name))
 			}
 		}
 		return nil

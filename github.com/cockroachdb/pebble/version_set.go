@@ -11,6 +11,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/pebble/internal/base"
 	"github.com/cockroachdb/pebble/internal/manifest"
 	"github.com/cockroachdb/pebble/internal/record"
@@ -53,22 +54,22 @@ type versionSet struct {
 
 	// A pointer to versionSet.addObsoleteLocked. Avoids allocating a new closure
 	// on the creation of every version.
-	obsoleteFn        func(obsolete []uint64)
-	obsoleteTables    []uint64
-	obsoleteManifests []uint64
-	obsoleteOptions   []uint64
+	obsoleteFn        func(obsolete []FileNum)
+	obsoleteTables    []FileNum
+	obsoleteManifests []FileNum
+	obsoleteOptions   []FileNum
 
 	// Zombie tables which have been removed from the current version but are
 	// still referenced by an inuse iterator.
-	zombieTables map[uint64]uint64 // filenum -> size
+	zombieTables map[FileNum]uint64 // filenum -> size
 
 	// minUnflushedLogNum is the smallest WAL log file number corresponding to
 	// mutations that have not been flushed to an sstable.
-	minUnflushedLogNum uint64
+	minUnflushedLogNum FileNum
 
 	// The next file number. A single counter is used to assign file numbers
 	// for the WAL, MANIFEST, sstable, and OPTIONS files.
-	nextFileNum uint64
+	nextFileNum FileNum
 
 	// The upper bound on sequence numbers that have been assigned so far.
 	// A suffix of these sequence numbers may not have been written to a
@@ -78,7 +79,7 @@ type versionSet struct {
 	visibleSeqNum uint64 // visible seqNum (<= logSeqNum)
 
 	// The current manifest file number.
-	manifestFileNum uint64
+	manifestFileNum FileNum
 
 	manifestFile vfs.File
 	manifest     *record.Writer
@@ -98,7 +99,7 @@ func (vs *versionSet) init(dirname string, opts *Options, mu *sync.Mutex) {
 	vs.dynamicBaseLevel = true
 	vs.versions.Init(mu)
 	vs.obsoleteFn = vs.addObsoleteLocked
-	vs.zombieTables = make(map[uint64]uint64)
+	vs.zombieTables = make(map[FileNum]uint64)
 	vs.nextFileNum = 1
 }
 
@@ -155,7 +156,7 @@ func (vs *versionSet) load(dirname string, opts *Options, mu *sync.Mutex) error 
 	// Read the CURRENT file to find the current manifest file.
 	current, err := vs.fs.Open(base.MakeFilename(vs.fs, dirname, fileTypeCurrent, 0))
 	if err != nil {
-		return fmt.Errorf("pebble: could not open CURRENT file for DB %q: %v", dirname, err)
+		return errors.Wrapf(err, "pebble: could not open CURRENT file for DB %q", dirname)
 	}
 	defer current.Close()
 	stat, err := current.Stat()
@@ -164,10 +165,10 @@ func (vs *versionSet) load(dirname string, opts *Options, mu *sync.Mutex) error 
 	}
 	n := stat.Size()
 	if n == 0 {
-		return fmt.Errorf("pebble: CURRENT file for DB %q is empty", dirname)
+		return errors.Errorf("pebble: CURRENT file for DB %q is empty", dirname)
 	}
 	if n > 4096 {
-		return fmt.Errorf("pebble: CURRENT file for DB %q is too large", dirname)
+		return errors.Errorf("pebble: CURRENT file for DB %q is too large", dirname)
 	}
 	b := make([]byte, n)
 	_, err = current.ReadAt(b, 0)
@@ -175,20 +176,21 @@ func (vs *versionSet) load(dirname string, opts *Options, mu *sync.Mutex) error 
 		return err
 	}
 	if b[n-1] != '\n' {
-		return fmt.Errorf("pebble: CURRENT file for DB %q is malformed", dirname)
+		return errors.Errorf("pebble: CURRENT file for DB %q is malformed", dirname)
 	}
 	b = bytes.TrimSpace(b)
 
 	var ok bool
 	if _, vs.manifestFileNum, ok = base.ParseFilename(vs.fs, string(b)); !ok {
-		return fmt.Errorf("pebble: MANIFEST name %q is malformed", b)
+		return errors.Errorf("pebble: MANIFEST name %q is malformed", errors.Safe(b))
 	}
 
 	// Read the versionEdits in the manifest file.
 	var bve bulkVersionEdit
 	manifest, err := vs.fs.Open(vs.fs.PathJoin(dirname, string(b)))
 	if err != nil {
-		return fmt.Errorf("pebble: could not open manifest file %q for DB %q: %v", b, dirname, err)
+		return errors.Wrapf(err, "pebble: could not open manifest file %q for DB %q",
+			errors.Safe(b), dirname)
 	}
 	defer manifest.Close()
 	rr := record.NewReader(manifest, 0 /* logNum */)
@@ -207,9 +209,9 @@ func (vs *versionSet) load(dirname string, opts *Options, mu *sync.Mutex) error 
 		}
 		if ve.ComparerName != "" {
 			if ve.ComparerName != vs.cmpName {
-				return fmt.Errorf("pebble: manifest file %q for DB %q: "+
+				return errors.Errorf("pebble: manifest file %q for DB %q: "+
 					"comparer name from file %q != comparer name from Options %q",
-					b, dirname, ve.ComparerName, vs.cmpName)
+					errors.Safe(b), dirname, errors.Safe(ve.ComparerName), errors.Safe(vs.cmpName))
 			}
 		}
 		bve.Accumulate(&ve)
@@ -234,10 +236,15 @@ func (vs *versionSet) load(dirname string, opts *Options, mu *sync.Mutex) error 
 	// function and could have only updated it to some other non-zero value,
 	// so it cannot be 0 here.
 	if vs.minUnflushedLogNum == 0 {
-		if vs.nextFileNum == 2 {
-			// We have a freshly created DB.
+		if vs.nextFileNum >= 2 {
+			// We either have a freshly created DB, or a DB created by RocksDB
+			// that has not had a single flushed SSTable yet. This is because
+			// RocksDB bumps up nextFileNum in this case without bumping up
+			// minUnflushedLogNum, even if WALs with non-zero file numbers are
+			// present in the directory.
 		} else {
-			return fmt.Errorf("pebble: incomplete manifest file %q for DB %q", b, dirname)
+			return errors.Errorf("pebble: malformed manifest file %q for DB %q",
+				errors.Safe(b), dirname)
 		}
 	}
 	vs.markFileNumUsed(vs.minUnflushedLogNum)
@@ -353,7 +360,7 @@ func (vs *versionSet) logAndApply(
 
 	// Generate a new manifest if we don't currently have one, or the current one
 	// is too large.
-	var newManifestFileNum uint64
+	var newManifestFileNum FileNum
 	if vs.manifest == nil || vs.manifest.Size() >= vs.opts.MaxManifestFileSize {
 		newManifestFileNum = vs.getNextFileNum()
 	}
@@ -363,7 +370,7 @@ func (vs *versionSet) logAndApply(
 	minUnflushedLogNum := vs.minUnflushedLogNum
 	nextFileNum := vs.nextFileNum
 
-	var zombies map[uint64]uint64
+	var zombies map[FileNum]uint64
 	if err := func() error {
 		vs.mu.Unlock()
 		defer vs.mu.Lock()
@@ -474,7 +481,7 @@ func (vs *versionSet) incrementFlushes() {
 
 // createManifest creates a manifest file that contains a snapshot of vs.
 func (vs *versionSet) createManifest(
-	dirname string, fileNum, minUnflushedLogNum, nextFileNum uint64,
+	dirname string, fileNum, minUnflushedLogNum, nextFileNum FileNum,
 ) (err error) {
 	var (
 		filename     = base.MakeFilename(vs.fs, dirname, fileTypeManifest, fileNum)
@@ -543,13 +550,13 @@ func (vs *versionSet) createManifest(
 	return nil
 }
 
-func (vs *versionSet) markFileNumUsed(fileNum uint64) {
+func (vs *versionSet) markFileNumUsed(fileNum FileNum) {
 	if vs.nextFileNum <= fileNum {
 		vs.nextFileNum = fileNum + 1
 	}
 }
 
-func (vs *versionSet) getNextFileNum() uint64 {
+func (vs *versionSet) getNextFileNum() FileNum {
 	x := vs.nextFileNum
 	vs.nextFileNum++
 	return x
@@ -571,7 +578,7 @@ func (vs *versionSet) currentVersion() *version {
 	return vs.versions.Back()
 }
 
-func (vs *versionSet) addLiveFileNums(m map[uint64]struct{}) {
+func (vs *versionSet) addLiveFileNums(m map[FileNum]struct{}) {
 	current := vs.currentVersion()
 	for v := vs.versions.Front(); true; v = v.Next() {
 		for _, ff := range v.Files {
@@ -585,13 +592,13 @@ func (vs *versionSet) addLiveFileNums(m map[uint64]struct{}) {
 	}
 }
 
-func (vs *versionSet) addObsoleteLocked(obsolete []uint64) {
+func (vs *versionSet) addObsoleteLocked(obsolete []FileNum) {
 	for _, fileNum := range obsolete {
 		// Note that the obsolete tables are no longer zombie by the definition of
 		// zombie, but we leave them in the zombie tables map until they are
 		// deleted from disk.
 		if _, ok := vs.zombieTables[fileNum]; !ok {
-			vs.opts.Logger.Fatalf("MANIFEST obsolete table %06d not marked as zombie", fileNum)
+			vs.opts.Logger.Fatalf("MANIFEST obsolete table %s not marked as zombie", fileNum)
 		}
 	}
 	vs.obsoleteTables = append(vs.obsoleteTables, obsolete...)

@@ -5,8 +5,9 @@
 package pebble
 
 import (
-	"fmt"
 	"sync"
+
+	"github.com/cockroachdb/errors"
 )
 
 type logRecycler struct {
@@ -18,19 +19,19 @@ type logRecycler struct {
 	// recycling a log written by a previous instance of the DB which may not
 	// have had log recycling enabled. If that previous instance of the DB was
 	// RocksDB, the old non-recyclable log record headers will be present.
-	minRecycleLogNum uint64
+	minRecycleLogNum FileNum
 
 	mu struct {
 		sync.Mutex
-		logNums   []uint64
-		maxLogNum uint64
+		logNums   []FileNum
+		maxLogNum FileNum
 	}
 }
 
 // add attempts to recycle the log file specified by logNum. Returns true if
 // the log file should not be deleted (i.e. the log is being recycled), and
 // false otherwise.
-func (r *logRecycler) add(logNum uint64) bool {
+func (r *logRecycler) add(logNum FileNum) bool {
 	if logNum < r.minRecycleLogNum {
 		return false
 	}
@@ -58,7 +59,7 @@ func (r *logRecycler) add(logNum uint64) bool {
 
 // peek returns the log number at the head of the recycling queue, or zero if
 // the queue is empty.
-func (r *logRecycler) peek() uint64 {
+func (r *logRecycler) peek() FileNum {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -77,15 +78,15 @@ func (r *logRecycler) count() int {
 // pop removes the log number at the head of the recycling queue, enforcing
 // that it matches the specifed logNum. An error is returned of the recycling
 // queue is empty or the head log number does not match the specified one.
-func (r *logRecycler) pop(logNum uint64) error {
+func (r *logRecycler) pop(logNum FileNum) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	if len(r.mu.logNums) == 0 {
-		return fmt.Errorf("pebble: log recycler empty")
+		return errors.New("pebble: log recycler empty")
 	}
 	if r.mu.logNums[0] != logNum {
-		return fmt.Errorf("pebble: log recycler invalid %d vs %d", logNum, r.mu.logNums)
+		return errors.Errorf("pebble: log recycler invalid %d vs %d", errors.Safe(logNum), errors.Safe(r.mu.logNums))
 	}
 	r.mu.logNums = r.mu.logNums[1:]
 	return nil
