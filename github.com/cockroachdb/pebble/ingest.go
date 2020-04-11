@@ -73,7 +73,10 @@ func ingestLoad1(
 	empty := true
 
 	{
-		iter := r.NewIter(nil /* lower */, nil /* upper */)
+		iter, err := r.NewIter(nil /* lower */, nil /* upper */)
+		if err != nil {
+			return nil, err
+		}
 		defer iter.Close()
 		if key, _ := iter.First(); key != nil {
 			if err := ingestValidateKey(opts, key); err != nil {
@@ -82,6 +85,9 @@ func ingestLoad1(
 			empty = false
 			meta.Smallest = key.Clone()
 			smallestSet = true
+		}
+		if err := iter.Error(); err != nil {
+			return nil, err
 		}
 		if key, _ := iter.Last(); key != nil {
 			if err := ingestValidateKey(opts, key); err != nil {
@@ -111,6 +117,9 @@ func ingestLoad1(
 				base.InternalCompare(opts.Comparer.Compare, meta.Smallest, *key) > 0 {
 				meta.Smallest = key.Clone()
 			}
+		}
+		if err := iter.Error(); err != nil {
+			return nil, err
 		}
 		if key, val := iter.Last(); key != nil {
 			if err := ingestValidateKey(opts, key); err != nil {
@@ -621,6 +630,8 @@ func (d *DB) ingestApply(jobID int, meta []*fileMetadata) (*versionEdit, error) 
 	// determine the target level. This prevents two concurrent ingestion jobs
 	// from using the same version to determine the target level, and also
 	// provides serialization with concurrent compaction and flush jobs.
+	// logAndApply unconditionally releases the manifest lock, but any earlier
+	// returns must unlock the manifest.
 	d.mu.versions.logLock()
 	current := d.mu.versions.currentVersion()
 	baseLevel := d.mu.versions.picker.getBaseLevel()
@@ -633,6 +644,7 @@ func (d *DB) ingestApply(jobID int, meta []*fileMetadata) (*versionEdit, error) 
 		var err error
 		f.Level, err = ingestTargetLevel(d.newIters, iterOps, d.cmp, current, baseLevel, d.mu.compact.inProgress, m)
 		if err != nil {
+			d.mu.versions.logUnlock()
 			return nil, err
 		}
 		f.Meta = m
