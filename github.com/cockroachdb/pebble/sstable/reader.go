@@ -54,7 +54,6 @@ type block []byte
 type Iterator interface {
 	base.InternalIterator
 
-	Init(r *Reader, lower, upper []byte) error
 	SetCloseHook(fn func(i Iterator) error)
 }
 
@@ -125,25 +124,29 @@ func checkTwoLevelIterator(obj interface{}) {
 	}
 }
 
-// Init initializes a singleLevelIterator for reading from the table. It is
+// init initializes a singleLevelIterator for reading from the table. It is
 // synonmous with Reader.NewIter, but allows for reusing of the iterator
 // between different Readers.
-func (i *singleLevelIterator) Init(r *Reader, lower, upper []byte) error {
+func (i *singleLevelIterator) init(r *Reader, lower, upper []byte) error {
+	if r.err != nil {
+		return r.err
+	}
+	indexH, err := r.readIndex()
+	if err != nil {
+		return err
+	}
+
 	i.lower = lower
 	i.upper = upper
 	i.reader = r
-	i.err = r.err
-
-	if i.err == nil {
-		var indexH cache.Handle
-		indexH, i.err = r.readIndex()
-		if i.err != nil {
-			return i.err
-		}
-		i.cmp = r.Compare
-		i.err = i.index.initHandle(i.cmp, indexH, r.Properties.GlobalSeqNum)
+	i.cmp = r.Compare
+	err = i.index.initHandle(i.cmp, indexH, r.Properties.GlobalSeqNum)
+	if err != nil {
+		// blockIter.Close releases indexH and always returns a nil error
+		_ = i.index.Close()
+		return err
 	}
-	return i.err
+	return nil
 }
 
 func (i *singleLevelIterator) resetForReuse() singleLevelIterator {
@@ -183,7 +186,6 @@ func (i *singleLevelIterator) loadBlock() bool {
 	// fails.
 	i.data.invalidate()
 	if !i.index.Valid() {
-		i.err = i.index.err
 		return false
 	}
 	// Load the next block.
@@ -229,9 +231,7 @@ func (i *singleLevelIterator) recordOffset() uint64 {
 // package. Note that SeekGE only checks the upper bound. It is up to the
 // caller to ensure that key is greater than or equal to the lower bound.
 func (i *singleLevelIterator) SeekGE(key []byte) (*InternalKey, []byte) {
-	if i.err != nil {
-		return nil, nil
-	}
+	i.err = nil // clear cached iteration error
 
 	if ikey, _ := i.index.SeekGE(key); ikey == nil {
 		// The target key is greater than any key in the sstable. Invalidate the
@@ -256,9 +256,7 @@ func (i *singleLevelIterator) SeekGE(key []byte) (*InternalKey, []byte) {
 // pebble package. Note that SeekPrefixGE only checks the upper bound. It is up
 // to the caller to ensure that key is greater than or equal to the lower bound.
 func (i *singleLevelIterator) SeekPrefixGE(prefix, key []byte) (*InternalKey, []byte) {
-	if i.err != nil {
-		return nil, nil
-	}
+	i.err = nil // clear cached iteration error
 
 	// Check prefix bloom filter.
 	if i.reader.tableFilter != nil {
@@ -296,9 +294,7 @@ func (i *singleLevelIterator) SeekPrefixGE(prefix, key []byte) (*InternalKey, []
 // package. Note that SeekLT only checks the lower bound. It is up to the
 // caller to ensure that key is less than the upper bound.
 func (i *singleLevelIterator) SeekLT(key []byte) (*InternalKey, []byte) {
-	if i.err != nil {
-		return nil, nil
-	}
+	i.err = nil // clear cached iteration error
 
 	if ikey, _ := i.index.SeekGE(key); ikey == nil {
 		i.index.Last()
@@ -331,9 +327,7 @@ func (i *singleLevelIterator) SeekLT(key []byte) (*InternalKey, []byte) {
 // to ensure that key is greater than or equal to the lower bound (e.g. via a
 // call to SeekGE(lower)).
 func (i *singleLevelIterator) First() (*InternalKey, []byte) {
-	if i.err != nil {
-		return nil, nil
-	}
+	i.err = nil // clear cached iteration error
 
 	if ikey, _ := i.index.First(); ikey == nil {
 		i.data.invalidate()
@@ -356,9 +350,7 @@ func (i *singleLevelIterator) First() (*InternalKey, []byte) {
 // to ensure that key is less than the upper bound (e.g. via a call to
 // SeekLT(upper))
 func (i *singleLevelIterator) Last() (*InternalKey, []byte) {
-	if i.err != nil {
-		return nil, nil
-	}
+	i.err = nil // clear cached iteration error
 
 	if ikey, _ := i.index.Last(); ikey == nil {
 		i.data.invalidate()
@@ -410,10 +402,6 @@ func (i *singleLevelIterator) Prev() (*InternalKey, []byte) {
 
 func (i *singleLevelIterator) skipForward() (*InternalKey, []byte) {
 	for {
-		if i.data.err != nil {
-			i.err = i.data.err
-			break
-		}
 		if key, _ := i.index.Next(); key == nil {
 			i.data.invalidate()
 			break
@@ -432,10 +420,6 @@ func (i *singleLevelIterator) skipForward() (*InternalKey, []byte) {
 
 func (i *singleLevelIterator) skipBackward() (*InternalKey, []byte) {
 	for {
-		if i.data.err != nil {
-			i.err = i.data.err
-			break
-		}
 		if key, _ := i.index.Prev(); key == nil {
 			i.data.invalidate()
 			break
@@ -540,6 +524,7 @@ func (i *compactionIterator) SeekLT(key []byte) (*InternalKey, []byte) {
 }
 
 func (i *compactionIterator) First() (*InternalKey, []byte) {
+	i.err = nil // clear cached iteration error
 	return i.skipForward(i.singleLevelIterator.First())
 }
 
@@ -563,10 +548,6 @@ func (i *compactionIterator) Prev() (*InternalKey, []byte) {
 func (i *compactionIterator) skipForward(key *InternalKey, val []byte) (*InternalKey, []byte) {
 	if key == nil {
 		for {
-			if i.data.err != nil {
-				i.err = i.data.err
-				return nil, nil
-			}
 			if key, _ := i.index.Next(); key == nil {
 				break
 			}
@@ -598,7 +579,6 @@ var _ base.InternalIterator = (*twoLevelIterator)(nil)
 // This is used for two level indexes.
 func (i *twoLevelIterator) loadIndex() bool {
 	if !i.topLevelIndex.Valid() {
-		i.err = i.topLevelIndex.err
 		i.index.offset = 0
 		i.index.restarts = 0
 		return false
@@ -617,22 +597,26 @@ func (i *twoLevelIterator) loadIndex() bool {
 	return i.err == nil
 }
 
-func (i *twoLevelIterator) Init(r *Reader, lower, upper []byte) error {
+func (i *twoLevelIterator) init(r *Reader, lower, upper []byte) error {
+	if r.err != nil {
+		return r.err
+	}
+	topLevelIndexH, err := r.readIndex()
+	if err != nil {
+		return err
+	}
+
 	i.lower = lower
 	i.upper = upper
 	i.reader = r
-	i.err = r.err
-
-	if i.err == nil {
-		topLevelIndexH, err := r.readIndex()
-		if i.err != nil {
-			i.err = err
-			return i.err
-		}
-		i.cmp = r.Compare
-		i.err = i.topLevelIndex.initHandle(i.cmp, topLevelIndexH, r.Properties.GlobalSeqNum)
+	i.cmp = r.Compare
+	err = i.topLevelIndex.initHandle(i.cmp, topLevelIndexH, r.Properties.GlobalSeqNum)
+	if err != nil {
+		// blockIter.Close releases topLevelIndexH and always returns a nil error
+		_ = i.topLevelIndex.Close()
+		return err
 	}
-	return i.err
+	return nil
 }
 
 func (i *twoLevelIterator) String() string {
@@ -643,9 +627,7 @@ func (i *twoLevelIterator) String() string {
 // package. Note that SeekGE only checks the upper bound. It is up to the
 // caller to ensure that key is greater than or equal to the lower bound.
 func (i *twoLevelIterator) SeekGE(key []byte) (*InternalKey, []byte) {
-	if i.err != nil {
-		return nil, nil
-	}
+	i.err = nil // clear cached iteration error
 
 	if ikey, _ := i.topLevelIndex.SeekGE(key); ikey == nil {
 		return nil, nil
@@ -665,9 +647,7 @@ func (i *twoLevelIterator) SeekGE(key []byte) (*InternalKey, []byte) {
 // pebble package. Note that SeekPrefixGE only checks the upper bound. It is up
 // to the caller to ensure that key is greater than or equal to the lower bound.
 func (i *twoLevelIterator) SeekPrefixGE(prefix, key []byte) (*InternalKey, []byte) {
-	if i.err != nil {
-		return nil, nil
-	}
+	i.err = nil // clear cached iteration error
 
 	if ikey, _ := i.topLevelIndex.SeekGE(key); ikey == nil {
 		return nil, nil
@@ -687,9 +667,7 @@ func (i *twoLevelIterator) SeekPrefixGE(prefix, key []byte) (*InternalKey, []byt
 // package. Note that SeekLT only checks the lower bound. It is up to the
 // caller to ensure that key is less than the upper bound.
 func (i *twoLevelIterator) SeekLT(key []byte) (*InternalKey, []byte) {
-	if i.err != nil {
-		return nil, nil
-	}
+	i.err = nil // clear cached iteration error
 
 	if ikey, _ := i.topLevelIndex.SeekGE(key); ikey == nil {
 		if ikey, _ := i.topLevelIndex.Last(); ikey == nil {
@@ -718,9 +696,7 @@ func (i *twoLevelIterator) SeekLT(key []byte) (*InternalKey, []byte) {
 // to ensure that key is greater than or equal to the lower bound (e.g. via a
 // call to SeekGE(lower)).
 func (i *twoLevelIterator) First() (*InternalKey, []byte) {
-	if i.err != nil {
-		return nil, nil
-	}
+	i.err = nil // clear cached iteration error
 
 	if ikey, _ := i.topLevelIndex.First(); ikey == nil {
 		return nil, nil
@@ -741,9 +717,7 @@ func (i *twoLevelIterator) First() (*InternalKey, []byte) {
 // to ensure that key is less than the upper bound (e.g. via a call to
 // SeekLT(upper))
 func (i *twoLevelIterator) Last() (*InternalKey, []byte) {
-	if i.err != nil {
-		return nil, nil
-	}
+	i.err = nil // clear cached iteration error
 
 	if ikey, _ := i.topLevelIndex.Last(); ikey == nil {
 		return nil, nil
@@ -787,10 +761,6 @@ func (i *twoLevelIterator) Prev() (*InternalKey, []byte) {
 
 func (i *twoLevelIterator) skipForward() (*InternalKey, []byte) {
 	for {
-		if i.index.err != nil {
-			i.err = i.index.err
-			break
-		}
 		if i.singleLevelIterator.valid() {
 			// The iterator is positioned at valid record in the current data block
 			// which implies the previous positioning call reached the upper bound.
@@ -806,15 +776,10 @@ func (i *twoLevelIterator) skipForward() (*InternalKey, []byte) {
 			return ikey, val
 		}
 	}
-	return nil, nil
 }
 
 func (i *twoLevelIterator) skipBackward() (*InternalKey, []byte) {
 	for {
-		if i.index.err != nil {
-			i.err = i.index.err
-			break
-		}
 		if i.singleLevelIterator.valid() {
 			// The iterator is positioned at valid record in the current data block
 			// which implies the previous positioning call reached the lower bound.
@@ -830,7 +795,6 @@ func (i *twoLevelIterator) skipBackward() (*InternalKey, []byte) {
 			return ikey, val
 		}
 	}
-	return nil, nil
 }
 
 // Close implements internalIterator.Close, as documented in the pebble
@@ -880,6 +844,7 @@ func (i *twoLevelCompactionIterator) SeekLT(key []byte) (*InternalKey, []byte) {
 }
 
 func (i *twoLevelCompactionIterator) First() (*InternalKey, []byte) {
+	i.err = nil // clear cached iteration error
 	return i.skipForward(i.twoLevelIterator.First())
 }
 
@@ -909,10 +874,6 @@ func (i *twoLevelCompactionIterator) skipForward(
 ) (*InternalKey, []byte) {
 	if key == nil {
 		for {
-			if i.index.err != nil {
-				i.err = i.index.err
-				return nil, nil
-			}
 			if key, _ := i.topLevelIndex.Next(); key == nil {
 				break
 			}
@@ -1123,7 +1084,10 @@ func (r *Reader) get(key []byte) (value []byte, err error) {
 		}
 	}
 
-	i := r.NewIter(nil /* lower */, nil /* upper */)
+	i, err := r.NewIter(nil /* lower */, nil /* upper */)
+	if err != nil {
+		return nil, err
+	}
 	ikey, value := i.SeekGE(key)
 
 	if ikey == nil || r.Compare(key, ikey.UserKey) != 0 {
@@ -1144,38 +1108,53 @@ func (r *Reader) get(key []byte) (value []byte, err error) {
 	return newValue, nil
 }
 
-// NewIter returns an iterator for the contents of the table.
-func (r *Reader) NewIter(lower, upper []byte) Iterator {
+// NewIter returns an iterator for the contents of the table. If an error
+// occurs, NewIter cleans up after itself and returns a nil iterator.
+func (r *Reader) NewIter(lower, upper []byte) (Iterator, error) {
 	// NB: pebble.tableCache wraps the returned iterator with one which performs
 	// reference counting on the Reader, preventing the Reader from being closed
 	// until the final iterator closes.
-	var i Iterator
 	if r.Properties.IndexType == twoLevelIndex {
-		i = twoLevelIterPool.Get().(*twoLevelIterator)
-	} else {
-		i = singleLevelIterPool.Get().(*singleLevelIterator)
+		i := twoLevelIterPool.Get().(*twoLevelIterator)
+		err := i.init(r, lower, upper)
+		if err != nil {
+			return nil, err
+		}
+		return i, nil
 	}
-	_ = i.Init(r, lower, upper)
-	return i
+
+	i := singleLevelIterPool.Get().(*singleLevelIterator)
+	err := i.init(r, lower, upper)
+	if err != nil {
+		return nil, err
+	}
+	return i, nil
 }
 
 // NewCompactionIter returns an iterator similar to NewIter but it also increments
-// the number of bytes iterated.
-func (r *Reader) NewCompactionIter(bytesIterated *uint64) Iterator {
+// the number of bytes iterated. If an error occurs, NewCompactionIter cleans up
+// after itself and returns a nil iterator.
+func (r *Reader) NewCompactionIter(bytesIterated *uint64) (Iterator, error) {
 	if r.Properties.IndexType == twoLevelIndex {
 		i := twoLevelIterPool.Get().(*twoLevelIterator)
-		_ = i.Init(r, nil /* lower */, nil /* upper */)
+		err := i.init(r, nil /* lower */, nil /* upper */)
+		if err != nil {
+			return nil, err
+		}
 		return &twoLevelCompactionIterator{
 			twoLevelIterator: i,
 			bytesIterated:    bytesIterated,
-		}
+		}, nil
 	}
 	i := singleLevelIterPool.Get().(*singleLevelIterator)
-	_ = i.Init(r, nil /* lower */, nil /* upper */)
+	err := i.init(r, nil /* lower */, nil /* upper */)
+	if err != nil {
+		return nil, err
+	}
 	return &compactionIterator{
 		singleLevelIterator: i,
 		bytesIterated:       bytesIterated,
-	}
+	}, nil
 }
 
 // NewRangeDelIter returns an internal iterator for the contents of the
@@ -1536,6 +1515,7 @@ func (r *Reader) EstimateDiskUsage(start, end []byte) (uint64, error) {
 		if err != nil {
 			return 0, err
 		}
+		defer startIdxBlock.Release()
 		startIdxIter, err = newBlockIter(r.Compare, startIdxBlock.Get())
 		if err != nil {
 			return 0, err
@@ -1555,6 +1535,7 @@ func (r *Reader) EstimateDiskUsage(start, end []byte) (uint64, error) {
 			if err != nil {
 				return 0, err
 			}
+			defer endIdxBlock.Release()
 			endIdxIter, err = newBlockIter(r.Compare, endIdxBlock.Get())
 			if err != nil {
 				return 0, err
