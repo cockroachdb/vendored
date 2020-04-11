@@ -17,6 +17,7 @@ package markers
 import (
 	"context"
 	"fmt"
+	"reflect"
 
 	"github.com/cockroachdb/errors/errbase"
 	"github.com/cockroachdb/errors/errorspb"
@@ -56,6 +57,39 @@ func Is(err, reference error) bool {
 		}
 	}
 	return false
+}
+
+// HasType returns true iff err contains an error whose concrete type
+// matches that of referenceType.
+func HasType(err error, referenceType error) bool {
+	typ := reflect.TypeOf(referenceType)
+	_, isType := If(err, func(err error) (interface{}, bool) {
+		return nil, reflect.TypeOf(err) == typ
+	})
+	return isType
+}
+
+// IsType returns true if the outermost err object has a concrete type
+// matching that of referenceType.
+func IsType(err error, referenceType error) bool {
+	return reflect.TypeOf(err) == reflect.TypeOf(referenceType)
+}
+
+// IsInterface returns true if err contains an error which implements the
+// interface pointed to by referenceInterface. The type of referenceInterface
+// must be a pointer to an interface type. If referenceInterface is not a
+// pointer to an interface, this function will panic.
+func IsInterface(err error, referenceInterface interface{}) bool {
+	typ := reflect.TypeOf(referenceInterface)
+	if typ == nil || typ.Kind() != reflect.Ptr || typ.Elem().Kind() != reflect.Interface {
+		panic(fmt.Errorf("errors.IsInterface: referenceInterface must be a pointer to an interface, "+
+			"found %T", referenceInterface))
+	}
+	iface := typ.Elem()
+	_, isType := If(err, func(err error) (interface{}, bool) {
+		return nil, reflect.TypeOf(err).Implements(iface)
+	})
+	return isType
 }
 
 // If returns a predicate's return value the first time the predicate returns true.
@@ -130,11 +164,22 @@ func getMark(err error) errorMark {
 	if m, ok := err.(*withMark); ok {
 		return m.mark
 	}
-	m := errorMark{msg: err.Error(), types: []errorspb.ErrorTypeMark{errbase.GetTypeMark(err)}}
+	m := errorMark{msg: safeGetErrMsg(err), types: []errorspb.ErrorTypeMark{errbase.GetTypeMark(err)}}
 	for c := errbase.UnwrapOnce(err); c != nil; c = errbase.UnwrapOnce(c) {
 		m.types = append(m.types, errbase.GetTypeMark(c))
 	}
 	return m
+}
+
+// safeGetErrMsg extracts an error's Error() but tolerates panics.
+func safeGetErrMsg(err error) (result string) {
+	defer func() {
+		if r := recover(); r != nil {
+			result = fmt.Sprintf("(%p).Error() panic: %v", err, r)
+		}
+	}()
+	result = err.Error()
+	return
 }
 
 // Mark creates an explicit mark for the given error, using
@@ -169,7 +214,8 @@ func (m *withMark) Format(s fmt.State, verb rune) { errbase.FormatError(m, s, ve
 
 func (m *withMark) FormatError(p errbase.Printer) error {
 	if p.Detail() {
-		p.Printf("error with mark override:\n%q\n%s::%s",
+		p.Print("forced error mark\n")
+		p.Printf("%q\n%s::%s",
 			m.mark.msg,
 			m.mark.types[0].FamilyName,
 			m.mark.types[0].Extension,

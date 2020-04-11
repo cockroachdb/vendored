@@ -50,8 +50,8 @@ func (e *withSecondaryError) Format(s fmt.State, verb rune) { errbase.FormatErro
 
 func (e *withSecondaryError) FormatError(p errbase.Printer) (next error) {
 	if p.Detail() {
-		p.Printf("combined error\nancillary error: %+v", e.secondaryError)
-		p.Print("\n(main error follows)")
+		p.Print("secondary error attachment\n")
+		p.Printf("%+v", e.secondaryError)
 	}
 	return e.cause
 }
