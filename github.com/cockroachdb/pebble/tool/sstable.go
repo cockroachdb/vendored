@@ -13,6 +13,7 @@ import (
 
 	"github.com/cockroachdb/pebble"
 	"github.com/cockroachdb/pebble/internal/base"
+	"github.com/cockroachdb/pebble/internal/humanize"
 	"github.com/cockroachdb/pebble/internal/private"
 	"github.com/cockroachdb/pebble/internal/rangedel"
 	"github.com/cockroachdb/pebble/sstable"
@@ -36,8 +37,8 @@ type sstableT struct {
 	mergers   sstable.Mergers
 
 	// Flags.
-	fmtKey   formatter
-	fmtValue formatter
+	fmtKey   keyFormatter
+	fmtValue valueFormatter
 	start    key
 	end      key
 	filter   key
@@ -166,12 +167,26 @@ func (s *sstableT) runCheck(cmd *cobra.Command, args []string) {
 
 		// Update the internal formatter if this comparator has one specified.
 		s.fmtKey.setForComparer(r.Properties.ComparerName, s.comparers)
+		s.fmtValue.setForComparer(r.Properties.ComparerName, s.comparers)
 
 		iter, err := r.NewIter(nil, nil)
 		if err != nil {
 			fmt.Fprintf(stderr, "%s\n", err)
 			return
 		}
+
+		// If a split function is defined for the comparer, verify that
+		// SeekPrefixGE can find every key in the table.
+		var prefixIter sstable.Iterator
+		if r.Split != nil {
+			var err error
+			prefixIter, err = r.NewIter(nil, nil)
+			if err != nil {
+				fmt.Fprintf(stderr, "%s\n", err)
+				return
+			}
+		}
+
 		var lastKey base.InternalKey
 		for key, _ := iter.First(); key != nil; key, _ = iter.Next() {
 			if base.InternalCompare(r.Compare, lastKey, *key) >= 0 {
@@ -183,9 +198,27 @@ func (s *sstableT) runCheck(cmd *cobra.Command, args []string) {
 			}
 			lastKey.Trailer = key.Trailer
 			lastKey.UserKey = append(lastKey.UserKey[:0], key.UserKey...)
+
+			if prefixIter != nil {
+				n := r.Split(key.UserKey)
+				prefix := key.UserKey[:n]
+				key2, _ := prefixIter.SeekPrefixGE(prefix, key.UserKey)
+				if key2 == nil {
+					fmt.Fprintf(stdout, "WARNING: PREFIX ITERATION FAILURE!\n")
+					if s.fmtKey.spec != "null" {
+						fmt.Fprintf(stdout, "    %s not found\n", key.Pretty(s.fmtKey.fn))
+					}
+				}
+			}
 		}
+
 		if err := iter.Close(); err != nil {
 			fmt.Fprintf(stdout, "%s\n", err)
+		}
+		if prefixIter != nil {
+			if err := prefixIter.Close(); err != nil {
+				fmt.Fprintf(stdout, "%s\n", err)
+			}
 		}
 	})
 }
@@ -201,15 +234,15 @@ func (s *sstableT) runLayout(cmd *cobra.Command, args []string) {
 		fmt.Fprintf(stdout, "%s\n", arg)
 
 		r, err := s.newReader(f)
-		defer r.Close()
-
 		if err != nil {
 			fmt.Fprintf(stdout, "%s\n", err)
 			return
 		}
+		defer r.Close()
 
 		// Update the internal formatter if this comparator has one specified.
 		s.fmtKey.setForComparer(r.Properties.ComparerName, s.comparers)
+		s.fmtValue.setForComparer(r.Properties.ComparerName, s.comparers)
 
 		l, err := r.Layout()
 		if err != nil {
@@ -237,12 +270,11 @@ func (s *sstableT) runProperties(cmd *cobra.Command, args []string) {
 		fmt.Fprintf(stdout, "%s\n", arg)
 
 		r, err := s.newReader(f)
-		defer r.Close()
-
 		if err != nil {
 			fmt.Fprintf(stdout, "%s\n", err)
 			return
 		}
+		defer r.Close()
 
 		if s.verbose {
 			fmt.Fprintf(stdout, "%s", r.Properties.String())
@@ -266,15 +298,15 @@ func (s *sstableT) runProperties(cmd *cobra.Command, args []string) {
 		tw := tabwriter.NewWriter(stdout, 2, 1, 2, ' ', 0)
 		fmt.Fprintf(tw, "version\t%d\n", r.Properties.FormatVersion)
 		fmt.Fprintf(tw, "size\t\n")
-		fmt.Fprintf(tw, "  file\t%d\n", stat.Size())
-		fmt.Fprintf(tw, "  data\t%d\n", r.Properties.DataSize)
+		fmt.Fprintf(tw, "  file\t%s\n", humanize.Int64(stat.Size()))
+		fmt.Fprintf(tw, "  data\t%s\n", humanize.Uint64(r.Properties.DataSize))
 		fmt.Fprintf(tw, "    blocks\t%d\n", r.Properties.NumDataBlocks)
-		fmt.Fprintf(tw, "  index\t%d\n", r.Properties.IndexSize)
+		fmt.Fprintf(tw, "  index\t%s\n", humanize.Uint64(r.Properties.IndexSize))
 		fmt.Fprintf(tw, "    blocks\t%d\n", 1+r.Properties.IndexPartitions)
-		fmt.Fprintf(tw, "    top-level\t%d\n", r.Properties.TopLevelIndexSize)
-		fmt.Fprintf(tw, "  filter\t%d\n", r.Properties.FilterSize)
-		fmt.Fprintf(tw, "  raw-key\t%d\n", r.Properties.RawKeySize)
-		fmt.Fprintf(tw, "  raw-value\t%d\n", r.Properties.RawValueSize)
+		fmt.Fprintf(tw, "    top-level\t%s\n", humanize.Uint64(r.Properties.TopLevelIndexSize))
+		fmt.Fprintf(tw, "  filter\t%s\n", humanize.Uint64(r.Properties.FilterSize))
+		fmt.Fprintf(tw, "  raw-key\t%s\n", humanize.Uint64(r.Properties.RawKeySize))
+		fmt.Fprintf(tw, "  raw-value\t%s\n", humanize.Uint64(r.Properties.RawValueSize))
 		fmt.Fprintf(tw, "records\t%d\n", r.Properties.NumEntries)
 		fmt.Fprintf(tw, "  set\t%d\n", r.Properties.NumEntries-
 			(r.Properties.NumDeletions+r.Properties.NumMergeOperands))
@@ -334,15 +366,15 @@ func (s *sstableT) runScan(cmd *cobra.Command, args []string) {
 		}
 
 		r, err := s.newReader(f)
-		defer r.Close()
-
 		if err != nil {
 			fmt.Fprintf(stdout, "%s%s\n", prefix, err)
 			return
 		}
+		defer r.Close()
 
 		// Update the internal formatter if this comparator has one specified.
 		s.fmtKey.setForComparer(r.Properties.ComparerName, s.comparers)
+		s.fmtValue.setForComparer(r.Properties.ComparerName, s.comparers)
 
 		iter, err := r.NewIter(nil, s.end)
 		if err != nil {

@@ -62,6 +62,18 @@ type FileMetadata struct {
 	MarkedForCompaction bool
 	// True if the file is actively being compacted. Protected by DB.mu.
 	Compacting bool
+	// For L0 files only. Protected by DB.mu. Used to generate L0 sublevels and
+	// pick L0 compactions.
+	//
+	// IsIntraL0Compacting is set to True if this file is part of an intra-L0
+	// compaction. When it's true, Compacting must also be true. If Compacting
+	// is true and IsIntraL0Compacting is false for an L0 file, the file must
+	// be part of a compaction to Lbase.
+	IsIntraL0Compacting bool
+	subLevel            int
+	l0Index             int
+	minIntervalIndex    int
+	maxIntervalIndex    int
 }
 
 func (m FileMetadata) String() string {
@@ -200,7 +212,7 @@ func (v *Version) String() string {
 }
 
 // Pretty returns a string representation of the version.
-func (v *Version) Pretty(format base.Formatter) string {
+func (v *Version) Pretty(format base.FormatKey) string {
 	var buf bytes.Buffer
 	for level := 0; level < NumLevels; level++ {
 		if len(v.Files[level]) == 0 {
@@ -218,7 +230,7 @@ func (v *Version) Pretty(format base.Formatter) string {
 
 // DebugString returns an alternative format to String() which includes
 // sequence number and kind information for the sstable boundaries.
-func (v *Version) DebugString(format base.Formatter) string {
+func (v *Version) DebugString(format base.FormatKey) string {
 	var buf bytes.Buffer
 	for level := 0; level < NumLevels; level++ {
 		if len(v.Files[level]) == 0 {
@@ -368,7 +380,7 @@ func (v *Version) Overlaps(level int, cmp Compare, start, end []byte) (ret []*Fi
 // CheckOrdering checks that the files are consistent with respect to
 // increasing file numbers (for level 0 files) and increasing and non-
 // overlapping internal key ranges (for level non-0 files).
-func (v *Version) CheckOrdering(cmp Compare, format base.Formatter) error {
+func (v *Version) CheckOrdering(cmp Compare, format base.FormatKey) error {
 	for level, files := range v.Files {
 		if err := CheckOrdering(cmp, format, level, files); err != nil {
 			return errors.Errorf("%s\n%s", err, v.DebugString(format))
@@ -439,7 +451,7 @@ func (l *VersionList) Remove(v *Version) {
 // CheckOrdering checks that the files are consistent with respect to
 // seqnums (for level 0 files -- see detailed comment below) and increasing and non-
 // overlapping internal key ranges (for non-level 0 files).
-func CheckOrdering(cmp Compare, format base.Formatter, level int, files []*FileMetadata) error {
+func CheckOrdering(cmp Compare, format base.FormatKey, level int, files []*FileMetadata) error {
 	if level == 0 {
 		// We have 2 kinds of files:
 		// - Files with exactly one sequence number: these could be either ingested files
