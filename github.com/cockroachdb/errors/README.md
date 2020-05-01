@@ -33,6 +33,7 @@ Table of contents:
 | error causes (`Cause` / `Unwrap`)                                                                     |                     | ✔                       | ✔                          | ✔                    |
 | cause barriers (`Opaque` / `Handled`)                                                                 |                     |                         | ✔                          | ✔                    |
 | `errors.As()`, `errors.Is()`                                                                          |                     |                         | ✔                          | ✔                    |
+| automatic error wrap when format ends with `: %w`                                                     |                     |                         | ✔                          | ✔                    |
 | standard wrappers with efficient stack trace capture                                                  |                     | ✔                       |                            | ✔                    |
 | **transparent protobuf encode/decode with forward compatibility**                                     |                     |                         |                            | ✔                    |
 | **`errors.Is()` recognizes errors across the network**                                                |                     |                         |                            | ✔                    |
@@ -44,7 +45,7 @@ Table of contents:
 | wrappers for user-facing hints and details                                                            |                     |                         |                            | ✔                    |
 | wrappers to attach secondary causes                                                                   |                     |                         |                            | ✔                    |
 | wrappers to attach [`logtags`](https://github.com/cockroachdb/logtags) details from `context.Context` |                     |                         |                            | ✔                    |
-| `errors.FormatError()`, `Formatter`, `Printer`                                                        |                     |                         | ✔                          | (under construction) |
+| `errors.FormatError()`, `Formatter`, `Printer`                                                        |                     |                         | (under construction)       | (under construction) |
 
 "Forward compatibility" above refers to the ability of this library to
 recognize and properly handle network communication of error types it
@@ -76,12 +77,12 @@ older version of the package.
 |-----------------------------------------------------------------|-------------------------------------|--------------|-------------------------------|-----------------------------------|
 | main message, eg `New()`                                        | visible                             | visible      | redacted                      | redacted                          |
 | wrap prefix, eg `WithMessage()`                                 | visible (as prefix)                 | visible      | redacted                      | redacted                          |
-| stack trace, eg `WithStack()`                                   | not visible                         | visible      | yes                           | full                              |
+| stack trace, eg `WithStack()`                                   | not visible                         | simplified   | yes                           | full                              |
 | hint , eg `WithHint()`                                          | not visible                         | visible      | no                            | type only                         |
 | detail, eg `WithDetail()`                                       | not visible                         | visible      | no                            | type only                         |
 | assertion failure annotation, eg `WithAssertionFailure()`       | not visible                         | visible      | no                            | type only                         |
 | issue links, eg `WithIssueLink()`, `UnimplementedError()`       | not visible                         | visible      | yes                           | full                              |
-| safe details, eg `WithSafeDetails()`                            | not visible                         | visible      | yes                           | full                              |
+| safe details, eg `WithSafeDetails()`                            | not visible                         | not visible  | yes                           | full                              |
 | telemetry keys, eg. `WithTelemetryKey()`                        | not visible                         | visible      | yes                           | full                              |
 | secondary errors, eg. `WithSecondaryError()`, `CombineErrors()` | not visible                         | visible      | redacted, recursively         | redacted, recursively             |
 | barrier origins, eg. `Handled()`                                | not visible                         | visible      | redacted, recursively         | redacted, recursively             |
@@ -89,6 +90,10 @@ older version of the package.
 | context tags, eg. `WithContextTags()`                           | not visible                         | visible      | keys visible, values redacted | keys visible, values redacted     |
 
 ## Available error leaves
+
+An error *leaf* is an object that implements the `error` interface,
+but does not refer to another error via a `Unwrap()` or `Cause()`
+method.
 
 - `New(string) error`, `Newf(string, ...interface{}) error`, `Errorf(string, ...interface{}) error`: leaf errors with message
   - **when to use: common error cases.**
@@ -115,6 +120,10 @@ older version of the package.
 
 ## Available wrapper constructors
 
+An error *wrapper* is an object that implements the `error` interface,
+and also refers to another error via an `Unwrap()` (preferred) and/or
+`Cause()` method.
+
 All wrapper constructors can be applied safely to a `nil` `error`:
 they behave as no-ops in this case:
 
@@ -126,7 +135,7 @@ they behave as no-ops in this case:
 // return nil
 //
 // is not needed. Instead, you can use this:
-return errors.Wrap(foo())
+return errors.Wrap(foo(), "foo")
 ```
 
 - `Wrap(error, string) error`, `Wrapf(error, string, ...interface{}) error`:
