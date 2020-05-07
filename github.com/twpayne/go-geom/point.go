@@ -10,6 +10,11 @@ func NewPoint(l Layout) *Point {
 	return NewPointFlat(l, make([]float64, l.Stride()))
 }
 
+// NewPointEmpty allocates a new Point with no coordinates.
+func NewPointEmpty(l Layout) *Point {
+	return NewPointFlat(l, []float64{})
+}
+
 // NewPointFlat allocates a new Point with layout l and flat coordinates flatCoords.
 func NewPointFlat(l Layout, flatCoords []float64) *Point {
 	g := new(Point)
@@ -27,11 +32,6 @@ func (g *Point) Area() float64 {
 // Clone returns a copy of g that does not alias g.
 func (g *Point) Clone() *Point {
 	return deriveClonePoint(g)
-}
-
-// Empty returns false.
-func (g *Point) Empty() bool {
-	return false
 }
 
 // Length returns the length of g, i.e. zero.
