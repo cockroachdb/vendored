@@ -31,7 +31,7 @@ import (
 // package location or a different type, ensure that
 // RegisterTypeMigration() was called prior to Is().
 func Is(err, reference error) bool {
-	if err == nil {
+	if reference == nil {
 		return err == reference
 	}
 
@@ -111,11 +111,16 @@ func If(err error, pred func(err error) (interface{}, bool)) (interface{}, bool)
 // RegisterTypeMigration() was called prior to IsAny().
 func IsAny(err error, references ...error) bool {
 	// First try using direct reference comparison.
-	for c := err; c != nil; c = errbase.UnwrapOnce(c) {
+	for c := err; ; c = errbase.UnwrapOnce(c) {
 		for _, refErr := range references {
 			if c == refErr {
 				return true
 			}
+		}
+		if c == nil {
+			// This special case is to support a comparison to a nil
+			// reference.
+			break
 		}
 	}
 
@@ -124,9 +129,12 @@ func IsAny(err error, references ...error) bool {
 	// that any pair of string only gets compared once. Should this
 	// become a performance bottleneck, that algorithm can be considered
 	// instead.
-	refMarks := make([]errorMark, len(references))
-	for i, refErr := range references {
-		refMarks[i] = getMark(refErr)
+	refMarks := make([]errorMark, 0, len(references))
+	for _, refErr := range references {
+		if refErr == nil {
+			continue
+		}
+		refMarks = append(refMarks, getMark(refErr))
 	}
 	for c := err; c != nil; c = errbase.UnwrapOnce(c) {
 		errMark := getMark(c)
