@@ -21,7 +21,7 @@ import (
 	"sync/atomic"
 
 	"github.com/apache/arrow/go/arrow"
-	"github.com/apache/arrow/go/arrow/internal/bitutil"
+	"github.com/apache/arrow/go/arrow/bitutil"
 	"github.com/apache/arrow/go/arrow/memory"
 )
 
@@ -230,7 +230,8 @@ func newBuilder(mem memory.Allocator, dtype arrow.DataType) Builder {
 		return NewUint64Builder(mem)
 	case arrow.INT64:
 		return NewInt64Builder(mem)
-	case arrow.HALF_FLOAT:
+	case arrow.FLOAT16:
+		return NewFloat16Builder(mem)
 	case arrow.FLOAT32:
 		return NewFloat32Builder(mem)
 	case arrow.FLOAT64:
@@ -262,6 +263,11 @@ func newBuilder(mem memory.Allocator, dtype arrow.DataType) Builder {
 	case arrow.UNION:
 	case arrow.DICTIONARY:
 	case arrow.MAP:
+	case arrow.EXTENSION:
+	case arrow.FIXED_SIZE_LIST:
+		typ := dtype.(*arrow.FixedSizeListType)
+		return NewFixedSizeListBuilder(mem, typ.Len(), typ.Elem())
+	case arrow.DURATION:
 	}
 	panic(fmt.Errorf("arrow/array: unsupported builder for %T", dtype))
 }
