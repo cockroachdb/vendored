@@ -8,7 +8,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/pebble/internal/private"
 )
 
@@ -49,32 +48,14 @@ func flushExternalTable(untypedDB interface{}, path string, originalMeta *fileMe
 		return err
 	}
 
+	// Assign sequence numbers from its current value through to the
+	// external file's largest sequence number. It's possible that the current
+	// sequence number has already exceeded m.LargestSeqNum if there were many
+	// nonoverlapping ingestions, so skip if this doesn't bump the sequence
+	// number.
+	d.commit.ratchetSeqNum(m.LargestSeqNum + 1)
 	d.commit.mu.Lock()
 	defer d.commit.mu.Unlock()
-
-	// Verify that the log sequence number hasn't exceeded the minimum
-	// sequence number of the file.
-	nextSeqNum := atomic.LoadUint64(d.commit.env.logSeqNum)
-	if nextSeqNum > m.SmallestSeqNum {
-		if err := ingestCleanup(d.opts.FS, d.dirname, []*fileMetadata{m}); err != nil {
-			d.opts.Logger.Infof("flush external cleanup failed: %v", err)
-		}
-		return errors.Errorf("flush external %s: commit seqnum %d > file's smallest seqnum %d",
-			m.FileNum, nextSeqNum, m.SmallestSeqNum)
-	}
-
-	// Assign sequence numbers from its current value through to the
-	// external file's largest sequence number.
-	count := m.LargestSeqNum - nextSeqNum + 1
-
-	b := newBatch(nil)
-	defer b.release()
-	b.data = make([]byte, batchHeaderLen)
-	b.setCount(uint32(count))
-	b.commit.Add(1)
-	d.commit.pending.enqueue(b)
-	seqNum := atomic.AddUint64(d.commit.env.logSeqNum, uint64(count)) - uint64(count)
-	b.setSeqNum(seqNum)
 
 	// Apply the version edit.
 	d.mu.Lock()
@@ -100,13 +81,22 @@ func flushExternalTable(untypedDB interface{}, path string, originalMeta *fileMe
 	d.deleteObsoleteFiles(jobID)
 	d.maybeScheduleCompaction()
 	d.mu.Unlock()
-
-	// Publish the sequence number.
-	d.commit.publish(b)
-
 	return nil
+}
+
+// ratchetSeqNum is a hook for allocating and publishing sequence numbers up
+// to a specific absolute value. Its first parameter is a *pebble.DB and its
+// second is the new next sequence number. RatchetSeqNum does nothing if the
+// next sequence is already greater than or equal to nextSeqNum.
+//
+// This function is used by the internal/replay package to ensure replayed
+// operations receive the same absolute sequence number.
+func ratchetSeqNum(untypedDB interface{}, nextSeqNum uint64) {
+	d := untypedDB.(*DB)
+	d.commit.ratchetSeqNum(nextSeqNum)
 }
 
 func init() {
 	private.FlushExternalTable = flushExternalTable
+	private.RatchetSeqNum = ratchetSeqNum
 }

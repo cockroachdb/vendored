@@ -188,7 +188,7 @@ func (r *Reservation) CancelAt(now time.Time) {
 }
 
 // Reserve is shorthand for ReserveN(time.Now(), 1).
-func (lim *Limiter) Reserve() *Reservation {
+func (lim *Limiter) Reserve() Reservation {
 	return lim.ReserveN(time.Now(), 1)
 }
 
@@ -206,9 +206,8 @@ func (lim *Limiter) Reserve() *Reservation {
 // Use this method if you wish to wait and slow down in accordance with the rate limit without dropping events.
 // If you need to respect a deadline or cancel the delay, use Wait instead.
 // To drop or skip events exceeding rate limit, use Allow instead.
-func (lim *Limiter) ReserveN(now time.Time, n int) *Reservation {
-	r := lim.reserveN(now, n, InfDuration)
-	return &r
+func (lim *Limiter) ReserveN(now time.Time, n int) Reservation {
+	return lim.reserveN(now, n, InfDuration)
 }
 
 // Wait is shorthand for WaitN(ctx, 1).
@@ -257,6 +256,19 @@ func (lim *Limiter) WaitN(ctx context.Context, n int) (err error) {
 		r.Cancel()
 		return ctx.Err()
 	}
+}
+
+// Delay is shorthand for DelayN(time.Now(), 1).
+func (lim *Limiter) Delay() time.Duration {
+	return lim.DelayN(time.Now(), 1)
+}
+
+// DelayN returns the delay to wait to permit n events to happen. Zero duration
+// means act immediately. InfDuration means the limiter cannot grant the tokens
+// requested within the maximum wait time.
+func (lim *Limiter) DelayN(now time.Time, n int) time.Duration {
+	r := lim.reserveN(now, n, InfDuration)
+	return r.DelayFrom(now)
 }
 
 // SetLimit is shorthand for SetLimitAt(time.Now(), newLimit).
