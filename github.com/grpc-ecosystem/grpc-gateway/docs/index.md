@@ -1,11 +1,11 @@
 # grpc-gateway
 
-[![Build Status](https://travis-ci.org/grpc-ecosystem/grpc-gateway.svg?branch=master)](https://travis-ci.org/grpc-ecosystem/grpc-gateway)
+[![CircleCI](https://circleci.com/gh/grpc-ecosystem/grpc-gateway.svg?style=svg)](https://circleci.com/gh/grpc-ecosystem/grpc-gateway)
 
-grpc-gateway is a plugin of [protoc](http://github.com/google/protobuf).
-It reads [gRPC](http://github.com/grpc/grpc-common) service definition,
+grpc-gateway is a plugin of [protoc](https://github.com/protocolbuffers/protobuf).
+It reads a [gRPC](https://grpc.io) service definition,
 and generates a reverse-proxy server which translates a RESTful JSON API into gRPC.
-This server is generated according to [custom options](https://cloud.google.com/service-management/reference/rpc/google.api#http) in your gRPC definition.
+This server is generated according to [custom options](https://cloud.google.com/service-infrastructure/docs/service-management/reference/rpc/google.api#http) in your gRPC definition.
 
 It helps you to provide your APIs in both gRPC and RESTful style at the same time.
 
@@ -17,6 +17,7 @@ To learn more about us check out our documentation on:
 *   [Installation and usage](_docs/usage.md)
 *   [Examples](_docs/examples.md)
 *   [Features](_docs/features.md)
+*   [AWS API Gateway tips](_docs/aws.md)
 
 
 # Contribution
