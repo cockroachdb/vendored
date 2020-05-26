@@ -136,40 +136,33 @@ func (p *compactionPickerByScore) estimatedCompactionDebt(l0ExtraSize uint64) ui
 		return 0
 	}
 
-	// We assume that all the bytes in L0 need to be compacted to L1. This is unlike
-	// the RocksDB logic that figures out whether L0 needs compaction.
-	compactionDebt := totalSize(p.vers.Files[0]) + l0ExtraSize
-	bytesAddedToNextLevel := compactionDebt
+	// We assume that all the bytes in L0 need to be compacted to Lbase. This is
+	// unlike the RocksDB logic that figures out whether L0 needs compaction.
+	bytesAddedToNextLevel := l0ExtraSize + totalSize(p.vers.Files[0])
+	nextLevelSize := totalSize(p.vers.Files[p.baseLevel])
 
-	levelSize := totalSize(p.vers.Files[p.baseLevel])
-	// estimatedL0CompactionSize is the estimated size of the L0 component in the
-	// current or next L0->LBase compaction. This is needed to estimate the number
-	// of L0->LBase compactions which will need to occur for the LSM tree to
-	// become stable.
-	estimatedL0CompactionSize := uint64(p.opts.L0CompactionThreshold * p.opts.MemTableSize)
-	// The ratio bytesAddedToNextLevel(L0 Size)/estimatedL0CompactionSize is the
-	// estimated number of L0->LBase compactions which will need to occur for the
-	// LSM tree to become stable. Let this ratio be N.
-	//
-	// We assume that each of these N compactions will overlap with all the current bytes
-	// in LBase, so we multiply N * totalSize(LBase) to count the contribution of LBase inputs
-	// to these compactions. Note that each compaction is adding bytes to LBase that will take
-	// part in future compactions, but we have already counted those.
-	compactionDebt += (levelSize * bytesAddedToNextLevel) / estimatedL0CompactionSize
+	var compactionDebt uint64
+	if bytesAddedToNextLevel > 0 && nextLevelSize > 0 {
+		// We only incur compaction debt if both L0 and Lbase contain data. If L0
+		// is empty, no compaction is necessary. If Lbase is empty, a move-based
+		// compaction from L0 would occur.
+		compactionDebt += bytesAddedToNextLevel + nextLevelSize
+	}
 
-	var nextLevelSize uint64
 	for level := p.baseLevel; level < numLevels-1; level++ {
-		levelSize += bytesAddedToNextLevel
-		bytesAddedToNextLevel = 0
+		levelSize := nextLevelSize + bytesAddedToNextLevel
 		nextLevelSize = totalSize(p.vers.Files[level+1])
 		if levelSize > uint64(p.levelMaxBytes[level]) {
 			bytesAddedToNextLevel = levelSize - uint64(p.levelMaxBytes[level])
-			levelRatio := float64(nextLevelSize) / float64(levelSize)
-			// The current level contributes bytesAddedToNextLevel to compactions.
-			// The next level contributes levelRatio * bytesAddedToNextLevel.
-			compactionDebt += uint64(float64(bytesAddedToNextLevel) * (levelRatio + 1))
+			if nextLevelSize > 0 {
+				// We only incur compaction debt if the next level contains data. If the
+				// next level is empty, a move-based compaction would be used.
+				levelRatio := float64(nextLevelSize) / float64(levelSize)
+				// The current level contributes bytesAddedToNextLevel to compactions.
+				// The next level contributes levelRatio * bytesAddedToNextLevel.
+				compactionDebt += uint64(float64(bytesAddedToNextLevel) * (levelRatio + 1))
+			}
 		}
-		levelSize = nextLevelSize
 	}
 
 	return compactionDebt
@@ -301,6 +294,14 @@ func (p *compactionPickerByScore) initScores(inProgressCompactions []compactionI
 }
 
 func (p *compactionPickerByScore) initL0Score(inProgressCompactions []compactionInfo) {
+	if p.opts.Experimental.L0SublevelCompactions {
+		// If L0SubLevels are present, we use the sublevel count as opposed to
+		// the L0 file count to score this level. The base vs intra-L0
+		// compaction determination happens in pickAuto, not here.
+		p.scores[0].score =
+			float64(p.vers.L0SubLevels.MaxDepthAfterOngoingCompactions()) / float64(p.opts.L0CompactionThreshold)
+		return
+	}
 	// TODO(peter): The current scoring logic precludes concurrent L0->Lbase
 	// compactions in most cases because if there is an in-progress L0->Lbase
 	// compaction we'll instead preferentially score an intra-L0 compaction. One
@@ -442,6 +443,17 @@ func (p *compactionPickerByScore) pickAuto(env compactionEnv) (c *compaction) {
 			break
 		}
 
+		if info.level == 0 && p.opts.Experimental.L0SublevelCompactions {
+			c = pickL0(env, p.opts, p.vers, p.baseLevel)
+			// Fail-safe to protect against compacting the same sstable
+			// concurrently.
+			if c != nil && !inputAlreadyCompacting(c) {
+				c.score = info.score
+				return c
+			}
+			continue
+		}
+
 		info.file = p.pickFile(info.level)
 		if info.file == -1 {
 			continue
@@ -514,6 +526,76 @@ func pickAutoHelper(
 	}
 
 	c.setupInputs()
+	return c
+}
+
+// Helper method to pick compactions originating from L0. Uses information about
+// sublevels to generate a compaction.
+func pickL0(env compactionEnv, opts *Options, vers *version, baseLevel int) (c *compaction) {
+	// It is important to pass information about Lbase files to L0SubLevels
+	// so it can pick a compaction that does not conflict with an Lbase => Lbase+1
+	// compaction. Without this, we observed reduced concurrency of L0=>Lbase
+	// compactions, and increasing read amplification in L0.
+	lcf, err := vers.L0SubLevels.PickBaseCompaction(
+		opts.L0CompactionThreshold, vers.Files[baseLevel])
+	if err != nil {
+		opts.Logger.Infof("error when picking base compaction: %s", err)
+		return
+	}
+	if lcf != nil {
+		// Manually build the compaction as opposed to calling
+		// pickAutoHelper. This is because L0SubLevels has already added
+		// any overlapping L0 SSTables that need to be added, and
+		// because compactions built by L0SSTables do not necessarily
+		// pick contiguous sequences of files in p.vers.Files[0].
+		c = newCompaction(opts, vers, 0, baseLevel, env.bytesCompacted)
+		c.lcf = lcf
+		if c.outputLevel != baseLevel {
+			opts.Logger.Fatalf("compaction picked unexpected output level: %d != %d", c.outputLevel, baseLevel)
+		}
+		c.inputs[0] = make([]*manifest.FileMetadata, 0, len(lcf.Files))
+		for j := range lcf.FilesIncluded {
+			if lcf.FilesIncluded[j] {
+				c.inputs[0] = append(c.inputs[0], vers.Files[0][j])
+			}
+		}
+		c.setupInputs()
+		if len(c.inputs[0]) == 0 {
+			opts.Logger.Fatalf("empty compaction chosen")
+		}
+		return c
+	}
+
+	// Couldn't choose a base compaction. Try choosing an intra-L0
+	// compaction.
+	lcf, err = vers.L0SubLevels.PickIntraL0Compaction(env.earliestUnflushedSeqNum, opts.L0CompactionThreshold)
+	if err != nil {
+		opts.Logger.Infof("error when picking base compaction: %s", err)
+		return
+	}
+	if lcf != nil {
+		c = newCompaction(opts, vers, 0, 0, env.bytesCompacted)
+		c.lcf = lcf
+		c.inputs[0] = make([]*manifest.FileMetadata, 0, len(lcf.Files))
+		for j := range lcf.FilesIncluded {
+			if lcf.FilesIncluded[j] {
+				c.inputs[0] = append(c.inputs[0], vers.Files[0][j])
+			}
+		}
+		if len(c.inputs[0]) == 0 {
+			opts.Logger.Fatalf("empty compaction chosen")
+		}
+		c.smallest, c.largest = manifest.KeyRange(c.cmp, c.inputs[0], nil)
+		c.setupInuseKeyRanges()
+		// Output only a single sstable for intra-L0 compactions.
+		// Now that we have the ability to split flushes, we could conceivably
+		// split the output of intra-L0 compactions too. This may be unnecessary
+		// complexity -- the inputs to intra-L0 should be narrow in the key space
+		// (unlike flushes), so writing a single sstable should be ok.
+		c.maxOutputFileSize = math.MaxUint64
+		c.maxOverlapBytes = math.MaxUint64
+		c.maxExpandedBytes = math.MaxUint64
+	}
 	return c
 }
 
