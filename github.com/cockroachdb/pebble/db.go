@@ -711,7 +711,7 @@ func (d *DB) newIterInternal(
 	mlevels = mlevels[start:]
 
 	levels := buf.levels[:]
-	addLevelIterForFiles := func(files []*manifest.FileMetadata, level int) {
+	addLevelIterForFiles := func(files []*manifest.FileMetadata, level int, sublevel int) {
 		if len(files) == 0 {
 			return
 		}
@@ -723,7 +723,7 @@ func (d *DB) newIterInternal(
 			li = &levelIter{}
 		}
 
-		li.init(dbi.opts, d.cmp, d.newIters, files, level, nil)
+		li.init(dbi.opts, d.cmp, d.newIters, files, level, sublevel, nil)
 		li.initRangeDel(&mlevels[0].rangeDelIter)
 		li.initSmallestLargestUserKey(&mlevels[0].smallestUserKey, &mlevels[0].largestUserKey,
 			&mlevels[0].isLargestUserKeyRangeDelSentinel)
@@ -734,12 +734,12 @@ func (d *DB) newIterInternal(
 	// Add level iterators for the L0 sublevels, iterating from newest to
 	// oldest.
 	for i := len(current.L0SubLevels.Files) - 1; i >= 0; i-- {
-		addLevelIterForFiles(current.L0SubLevels.Files[i], 0)
+		addLevelIterForFiles(current.L0SubLevels.Files[i], 0, i)
 	}
 
 	// Add level iterators for the non-empty non-L0 levels.
 	for level := 1; level < len(current.Files); level++ {
-		addLevelIterForFiles(current.Files[level], level)
+		addLevelIterForFiles(current.Files[level], level, invalidSublevel)
 	}
 
 	buf.merging.init(&dbi.opts, d.cmp, finalMLevels...)
@@ -1019,11 +1019,10 @@ func (d *DB) Metrics() *Metrics {
 		metrics.WAL.Size += d.mu.mem.queue[i].logSize
 	}
 	metrics.WAL.BytesWritten = metrics.Levels[0].BytesIn + metrics.WAL.Size
-	metrics.Levels[0].Score = float64(metrics.Levels[0].NumFiles) / float64(d.opts.L0CompactionThreshold)
 	if p := d.mu.versions.picker; p != nil {
-		levelMaxBytes := p.getLevelMaxBytes()
-		for level := 1; level < numLevels; level++ {
-			metrics.Levels[level].Score = float64(metrics.Levels[level].Size) / float64(levelMaxBytes[level])
+		compactions := d.getInProgressCompactionInfoLocked(nil)
+		for level, score := range p.getScores(compactions) {
+			metrics.Levels[level].Score = score
 		}
 	}
 	metrics.Table.ZombieCount = int64(len(d.mu.versions.zombieTables))
