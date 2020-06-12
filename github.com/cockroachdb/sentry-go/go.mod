@@ -1,6 +1,6 @@
-module github.com/getsentry/sentry-go
+module github.com/cockroachdb/sentry-go
 
-go 1.12
+go 1.11
 
 require (
 	github.com/ajg/form v1.5.1 // indirect
@@ -9,7 +9,7 @@ require (
 	github.com/gin-gonic/gin v1.4.0
 	github.com/go-errors/errors v1.0.1
 	github.com/go-martini/martini v0.0.0-20170121215854-22fa46961aab
-	github.com/google/go-cmp v0.4.0
+	github.com/google/go-cmp v0.3.1
 	github.com/google/go-querystring v1.0.0 // indirect
 	github.com/imkira/go-interpol v1.1.0 // indirect
 	github.com/k0kubun/colorstring v0.0.0-20150214042306-9440f1994b88 // indirect
@@ -22,7 +22,7 @@ require (
 	github.com/pkg/errors v0.8.1
 	github.com/sergi/go-diff v1.0.0 // indirect
 	github.com/smartystreets/goconvey v1.6.4 // indirect
-	github.com/ugorji/go v1.1.7 // indirect
+	github.com/ugorji/go/codec v1.1.7 // indirect
 	github.com/urfave/negroni v1.0.0
 	github.com/valyala/fasthttp v1.6.0
 	github.com/xeipuuv/gojsonschema v1.2.0 // indirect

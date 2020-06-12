@@ -367,7 +367,7 @@ func newRaft(c *Config) *raft {
 	}
 	assertConfStatesEquivalent(r.logger, cs, r.switchToConfig(cfg, prs))
 
-	if !isHardStateEqual(hs, emptyState) {
+	if !IsEmptyHardState(hs) {
 		r.loadState(hs)
 	}
 	if c.Applied > 0 {
@@ -1099,7 +1099,7 @@ func stepLeader(r *raft, m pb.Message) error {
 			case ReadOnlyLeaseBased:
 				ri := r.raftLog.committed
 				if m.From == None || m.From == r.id { // from local member
-					r.readStates = append(r.readStates, ReadState{Index: r.raftLog.committed, RequestCtx: m.Entries[0].Data})
+					r.readStates = append(r.readStates, ReadState{Index: ri, RequestCtx: m.Entries[0].Data})
 				} else {
 					r.send(pb.Message{To: m.From, Type: pb.MsgReadIndexResp, Index: ri, Entries: m.Entries})
 				}
@@ -1431,7 +1431,7 @@ func (r *raft) restore(s pb.Snapshot) bool {
 	}
 
 	// More defense-in-depth: throw away snapshot if recipient is not in the
-	// config. This shouldn't ever happen (at the time of writing) but lots of
+	// config. This shouuldn't ever happen (at the time of writing) but lots of
 	// code here and there assumes that r.id is in the progress tracker.
 	found := false
 	cs := s.Metadata.ConfState

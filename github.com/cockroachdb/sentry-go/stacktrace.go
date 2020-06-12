@@ -1,7 +1,6 @@
 package sentry
 
 import (
-	"go/build"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -230,16 +229,6 @@ func filterFrames(frames []Frame) []Frame {
 	}
 
 	return filteredFrames
-}
-
-func isInAppFrame(frame Frame) bool {
-	if strings.HasPrefix(frame.AbsPath, build.Default.GOROOT) ||
-		strings.Contains(frame.Module, "vendor") ||
-		strings.Contains(frame.Module, "third_party") {
-		return false
-	}
-
-	return true
 }
 
 func callerFunctionName() string {
