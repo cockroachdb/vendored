@@ -215,9 +215,9 @@ type Version struct {
 	// levels, sublevel n contains older tables (lower sequence numbers) than
 	// sublevel n+1.
 	//
-	// L0SubLevels.Files contains L0 files ordered by sublevels. All the files
-	// in Files[0] are in L0SubLevels.Files.
-	L0SubLevels *L0SubLevels
+	// L0Sublevels.Files contains L0 files ordered by sublevels. All the files
+	// in Files[0] are in L0Sublevels.Files.
+	L0Sublevels *L0Sublevels
 
 	Files [NumLevels][]*FileMetadata
 
@@ -245,9 +245,9 @@ func (v *Version) Pretty(format base.FormatKey) string {
 		}
 
 		if level == 0 {
-			for sublevel := len(v.L0SubLevels.Files) - 1; sublevel >= 0; sublevel-- {
+			for sublevel := len(v.L0Sublevels.Files) - 1; sublevel >= 0; sublevel-- {
 				fmt.Fprintf(&buf, "0.%d:\n", sublevel)
-				for _, f := range v.L0SubLevels.Files[sublevel] {
+				for _, f := range v.L0Sublevels.Files[sublevel] {
 					fmt.Fprintf(&buf, "  %06d:[%s-%s]\n", f.FileNum,
 						format(f.Smallest.UserKey), format(f.Largest.UserKey))
 				}
@@ -275,9 +275,9 @@ func (v *Version) DebugString(format base.FormatKey) string {
 		}
 
 		if level == 0 {
-			for sublevel := len(v.L0SubLevels.Files) - 1; sublevel >= 0; sublevel-- {
+			for sublevel := len(v.L0Sublevels.Files) - 1; sublevel >= 0; sublevel-- {
 				fmt.Fprintf(&buf, "0.%d:\n", sublevel)
-				for _, f := range v.L0SubLevels.Files[sublevel] {
+				for _, f := range v.L0Sublevels.Files[sublevel] {
 					fmt.Fprintf(&buf, "  %06d:[%s-%s]\n", f.FileNum,
 						f.Smallest.Pretty(format), f.Largest.Pretty(format))
 				}
@@ -349,12 +349,12 @@ func (v *Version) Next() *Version {
 	return v.next
 }
 
-// InitL0Sublevels initializes the L0SubLevels
-func (v *Version) InitL0Sublevels(cmp Compare, formatKey base.FormatKey) error {
-	// TODO(bilal): Experiment with flushSplitMaxBytes to pick a good value, and
-	// make it configurable.
+// InitL0Sublevels initializes the L0Sublevels
+func (v *Version) InitL0Sublevels(
+	cmp Compare, formatKey base.FormatKey, flushSplitBytes int64,
+) error {
 	var err error
-	v.L0SubLevels, err = NewL0SubLevels(v.Files[0], cmp, formatKey, 10<<20)
+	v.L0Sublevels, err = NewL0Sublevels(v.Files[0], cmp, formatKey, flushSplitBytes)
 	return err
 }
 
@@ -433,8 +433,8 @@ func (v *Version) Overlaps(level int, cmp Compare, start, end []byte) (ret []*Fi
 // increasing file numbers (for level 0 files) and increasing and non-
 // overlapping internal key ranges (for level non-0 files).
 func (v *Version) CheckOrdering(cmp Compare, format base.FormatKey) error {
-	for sublevel := len(v.L0SubLevels.Files) - 1; sublevel >= 0; sublevel-- {
-		if err := CheckOrdering(cmp, format, L0Sublevel(sublevel), v.L0SubLevels.Files[sublevel]); err != nil {
+	for sublevel := len(v.L0Sublevels.Files) - 1; sublevel >= 0; sublevel-- {
+		if err := CheckOrdering(cmp, format, L0Sublevel(sublevel), v.L0Sublevels.Files[sublevel]); err != nil {
 			return errors.Errorf("%s\n%s", err, v.DebugString(format))
 		}
 	}
@@ -550,8 +550,8 @@ func CheckOrdering(cmp Compare, format base.FormatKey, level Level, files []*Fil
 		//   or flushed files. We cannot tell the difference between them based on FileMetadata,
 		//   so our consistency checking here uses the weaker checks assuming it is a narrow
 		//   flushed file. We cannot error on ingested files having sequence numbers coincident
-		//   with flushed files, as the seemingly ingested file could just be a flushed file
-		//   with just one key in it, which is a truncated range tombstone sharing sequence numbers
+		//   with flushed files as the seemingly ingested file could just be a flushed file
+		//   with just one key in it which is a truncated range tombstone sharing sequence numbers
 		//   with other files in the same flush.
 		// - Files with multiple sequence numbers: these are necessarily flushed files.
 		//

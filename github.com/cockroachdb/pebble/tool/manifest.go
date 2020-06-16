@@ -79,10 +79,10 @@ Check the contents of the MANIFEST files.
 
 func (m *manifestT) printLevels(v *manifest.Version) {
 	for level := range v.Files {
-		if level == 0 && v.L0SubLevels != nil && len(v.Files[level]) > 0 {
-			for sublevel := len(v.L0SubLevels.Files)-1; sublevel >= 0; sublevel-- {
+		if level == 0 && v.L0Sublevels != nil && len(v.Files[level]) > 0 {
+			for sublevel := len(v.L0Sublevels.Files)-1; sublevel >= 0; sublevel-- {
 				fmt.Fprintf(stdout, "--- L0.%d ---\n", sublevel)
-				for _, f := range v.L0SubLevels.Files[sublevel] {
+				for _, f := range v.L0Sublevels.Files[sublevel] {
 					fmt.Fprintf(stdout, "  %s:%d", f.FileNum, f.Size)
 					formatSeqNumRange(stdout, f.SmallestSeqNum, f.LargestSeqNum)
 					formatKeyRange(stdout, m.fmtKey, &f.Smallest, &f.Largest)
@@ -196,7 +196,7 @@ func (m *manifestT) runDump(cmd *cobra.Command, args []string) {
 			}
 
 			if cmp != nil {
-				v, _, err := bve.Apply(nil /* version */, cmp.Compare, m.fmtKey.fn)
+				v, _, err := bve.Apply(nil /* version */, cmp.Compare, m.fmtKey.fn, 0)
 				if err != nil {
 					fmt.Fprintf(stdout, "%s\n", err)
 					return
@@ -264,7 +264,7 @@ func (m *manifestT) runCheck(cmd *cobra.Command, args []string) {
 				}
 				// TODO(sbhola): add option to Apply that reports all errors instead of
 				// one error.
-				newv, _, err := bve.Apply(v, cmp.Compare, m.fmtKey.fn)
+				newv, _, err := bve.Apply(v, cmp.Compare, m.fmtKey.fn, 0)
 				if err != nil {
 					fmt.Fprintf(stdout, "%s: offset: %d err: %s\n",
 						arg, offset, err)

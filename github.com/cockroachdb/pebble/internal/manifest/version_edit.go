@@ -468,7 +468,7 @@ func (b *BulkVersionEdit) Accumulate(ve *VersionEdit) {
 // are no longer referenced by the returned Version, but cannot be deleted from
 // disk as they are still in use by the incoming Version.
 func (b *BulkVersionEdit) Apply(
-	curr *Version, cmp Compare, formatKey base.FormatKey,
+	curr *Version, cmp Compare, formatKey base.FormatKey, flushSplitBytes int64,
 ) (_ *Version, zombies map[base.FileNum]uint64, _ error) {
 	addZombie := func(fileNum base.FileNum, size uint64) {
 		if zombies == nil {
@@ -489,13 +489,13 @@ func (b *BulkVersionEdit) Apply(
 		if len(b.Added[level]) == 0 && len(b.Deleted[level]) == 0 {
 			// There are no edits on this level.
 			if level == 0 {
-				// Initialize L0SubLevels.
-				if curr == nil || curr.L0SubLevels == nil {
-					if err := v.InitL0Sublevels(cmp, formatKey); err != nil {
+				// Initialize L0Sublevels.
+				if curr == nil || curr.L0Sublevels == nil {
+					if err := v.InitL0Sublevels(cmp, formatKey, flushSplitBytes); err != nil {
 						return nil, nil, errors.Wrap(err, "pebble: internal error")
 					}
 				} else {
-					v.L0SubLevels = curr.L0SubLevels
+					v.L0Sublevels = curr.L0Sublevels
 				}
 			}
 			if curr == nil {
@@ -557,7 +557,7 @@ func (b *BulkVersionEdit) Apply(
 				}
 			}
 			SortBySeqNum(v.Files[level])
-			if err := v.InitL0Sublevels(cmp, formatKey); err != nil {
+			if err := v.InitL0Sublevels(cmp, formatKey, flushSplitBytes); err != nil {
 				return nil, nil, errors.Wrap(err, "pebble: internal error")
 			}
 			if err := CheckOrdering(cmp, formatKey, Level(0), v.Files[level]); err != nil {
