@@ -314,6 +314,24 @@ type DB struct {
 
 		// The list of active snapshots.
 		snapshots snapshotList
+
+		tableStats struct {
+			// Condition variable used to signal the completion of a
+			// job to collect table stats.
+			cond sync.Cond
+			// True when a stat collection operation is in progress.
+			loading bool
+			// True if stat collection has loaded statistics for all tables
+			// other than those listed explcitly in pending. This flag starts
+			// as false when a database is opened and flips to true once stat
+			// collection has caught up.
+			loadedInitial bool
+			// A slice of files for which stats have not been computed.
+			// Compactions, ingests, flushes append files to be processed. An
+			// active stat collection goroutine clears the list and processes
+			// them.
+			pending []manifest.NewFileEntry
+		}
 	}
 
 	// Normally equal to time.Now() but may be overridden in tests.
@@ -367,7 +385,7 @@ func (d *DB) getInternal(key []byte, b *Batch, s *Snapshot) ([]byte, io.Closer, 
 	get.key = key
 	get.batch = b
 	get.mem = readState.memtables
-	get.l0 = readState.current.L0Sublevels.Files
+	get.l0 = readState.current.L0Sublevels.Levels
 	get.version = readState.current
 
 	// Strip off memtables which cannot possibly contain the seqNum being read
@@ -696,13 +714,13 @@ func (d *DB) newIterInternal(
 	// reference to elements in mlevels.
 	start := len(mlevels)
 	current := readState.current
-	for sl := 0; sl < len(current.L0Sublevels.Files); sl++ {
-		if len(current.L0Sublevels.Files[sl]) > 0 {
+	for sl := 0; sl < len(current.L0Sublevels.Levels); sl++ {
+		if len(current.L0Sublevels.Levels[sl]) > 0 {
 			mlevels = append(mlevels, mergingIterLevel{})
 		}
 	}
-	for level := 1; level < len(current.Files); level++ {
-		if len(current.Files[level]) == 0 {
+	for level := 1; level < len(current.Levels); level++ {
+		if len(current.Levels[level]) == 0 {
 			continue
 		}
 		mlevels = append(mlevels, mergingIterLevel{})
@@ -733,13 +751,13 @@ func (d *DB) newIterInternal(
 
 	// Add level iterators for the L0 sublevels, iterating from newest to
 	// oldest.
-	for i := len(current.L0Sublevels.Files) - 1; i >= 0; i-- {
-		addLevelIterForFiles(current.L0Sublevels.Files[i], manifest.L0Sublevel(i))
+	for i := len(current.L0Sublevels.Levels) - 1; i >= 0; i-- {
+		addLevelIterForFiles(current.L0Sublevels.Levels[i], manifest.L0Sublevel(i))
 	}
 
 	// Add level iterators for the non-empty non-L0 levels.
-	for level := 1; level < len(current.Files); level++ {
-		addLevelIterForFiles(current.Files[level], manifest.Level(level))
+	for level := 1; level < len(current.Levels); level++ {
+		addLevelIterForFiles(current.Levels[level], manifest.Level(level))
 	}
 
 	buf.merging.init(&dbi.opts, d.cmp, finalMLevels...)
@@ -789,11 +807,11 @@ func (d *DB) NewSnapshot() *Snapshot {
 		panic(ErrClosed)
 	}
 
+	d.mu.Lock()
 	s := &Snapshot{
 		db:     d,
 		seqNum: atomic.LoadUint64(&d.mu.versions.visibleSeqNum),
 	}
-	d.mu.Lock()
 	d.mu.snapshots.pushBack(s)
 	d.mu.Unlock()
 	return s
@@ -817,6 +835,10 @@ func (d *DB) Close() error {
 	for d.mu.compact.compactingCount > 0 || d.mu.compact.flushing {
 		d.mu.compact.cond.Wait()
 	}
+	for d.mu.tableStats.loading {
+		d.mu.tableStats.cond.Wait()
+	}
+
 	var err error
 	if n := len(d.mu.compact.inProgress); n > 0 {
 		err = errors.Errorf("pebble: %d unexpected in-progress compactions", errors.Safe(n))
@@ -867,7 +889,12 @@ func (d *DB) Close() error {
 	for d.mu.cleaner.cleaning {
 		d.mu.cleaner.cond.Wait()
 	}
-
+	// There may still be obsolete tables if an existing async cleaning job
+	// prevented a new cleaning job when a readState was unrefed. If needed,
+	// synchronously delete obsolete files.
+	if len(d.mu.versions.obsoleteTables) > 0 {
+		d.deleteObsoleteFiles(d.mu.nextJobID)
+	}
 	return err
 }
 
@@ -1050,7 +1077,7 @@ func (d *DB) SSTables() [][]TableInfo {
 	// database. It might be worthwhile to unify TableInfo and FileMetadata and
 	// then we could simply return current.Files. Note that RocksDB is doing
 	// something similar to the current code, so perhaps it isn't too bad.
-	srcLevels := readState.current.Files
+	srcLevels := readState.current.Levels
 	var totalTables int
 	for i := range srcLevels {
 		totalTables += len(srcLevels[i])
@@ -1096,7 +1123,7 @@ func (d *DB) EstimateDiskUsage(start, end []byte) (uint64, error) {
 	defer readState.unref()
 
 	var totalSize uint64
-	for level, files := range readState.current.Files {
+	for level, files := range readState.current.Levels {
 		if level > 0 {
 			// We can only use `Overlaps` to restrict `files` at L1+ since at L0 it
 			// expands the range iteratively until it has found a set of files that
@@ -1240,7 +1267,7 @@ func (d *DB) makeRoomForWrite(b *Batch) error {
 				continue
 			}
 		}
-		l0FileCount := len(d.mu.versions.currentVersion().Files[0])
+		l0FileCount := len(d.mu.versions.currentVersion().Levels[0])
 		if d.opts.Experimental.L0SublevelCompactions {
 			l0FileCount = d.mu.versions.currentVersion().L0Sublevels.ReadAmplification()
 		}
