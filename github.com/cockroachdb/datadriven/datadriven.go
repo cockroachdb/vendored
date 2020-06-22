@@ -25,6 +25,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/cockroachdb/errors"
 )
 
 var (
@@ -34,7 +36,17 @@ var (
 			"run. Used to update tests when a change affects many cases; please verify the testfile "+
 			"diffs carefully!",
 	)
+
+	traceLog = flag.Bool(
+		"datadriven-trace", false,
+		"echo the directives and responses from test files.",
+	)
 )
+
+// Verbose returns true iff -trace was passed.
+func Verbose() bool {
+	return *traceLog
+}
 
 // RunTest invokes a data-driven test. The test cases are contained in a
 // separate test file and are dynamically loaded, parsed, and executed by this
@@ -102,17 +114,28 @@ func RunTest(t *testing.T, path string, f func(t *testing.T, d *TestData) string
 	if err != nil {
 		t.Fatal(err)
 	} else if finfo.IsDir() {
-		t.Fatalf("%s is a directly, not a file; consider using datadriven.Walk", path)
+		t.Fatalf("%s is a directory, not a file; consider using datadriven.Walk", path)
 	}
 
-	runTestInternal(t, path, file, f, *rewriteTestFiles)
+	rewriteData := runTestInternal(t, path, file, f, *rewriteTestFiles)
+	if *rewriteTestFiles {
+		if _, err := file.WriteAt(rewriteData, 0); err != nil {
+			t.Fatal(err)
+		}
+		if err := file.Truncate(int64(len(rewriteData))); err != nil {
+			t.Fatal(err)
+		}
+		if err := file.Sync(); err != nil {
+			t.Fatal(err)
+		}
+	}
 }
 
 // RunTestFromString is a version of RunTest which takes the contents of a test
 // directly.
 func RunTestFromString(t *testing.T, input string, f func(t *testing.T, d *TestData) string) {
 	t.Helper()
-	runTestInternal(t, "<string>" /* optionalPath */, strings.NewReader(input), f, *rewriteTestFiles)
+	runTestInternal(t, "<string>" /* sourceName */, strings.NewReader(input), f, *rewriteTestFiles)
 }
 
 func runTestInternal(
@@ -121,7 +144,7 @@ func runTestInternal(
 	reader io.Reader,
 	f func(t *testing.T, d *TestData) string,
 	rewrite bool,
-) {
+) (rewriteOutput []byte) {
 	t.Helper()
 
 	r := newTestDataReader(t, sourceName, reader, rewrite)
@@ -131,23 +154,13 @@ func runTestInternal(
 
 	if r.rewrite != nil {
 		data := r.rewrite.Bytes()
+		// Remove any trailing blank line.
 		if l := len(data); l > 2 && data[l-1] == '\n' && data[l-2] == '\n' {
 			data = data[:l-1]
 		}
-		if dest, ok := reader.(*os.File); ok {
-			if _, err := dest.WriteAt(data, 0); err != nil {
-				t.Fatal(err)
-			}
-			if err := dest.Truncate(int64(len(data))); err != nil {
-				t.Fatal(err)
-			}
-			if err := dest.Sync(); err != nil {
-				t.Fatal(err)
-			}
-		} else {
-			t.Logf("input is not a file; rewritten output is:\n%s", data)
-		}
+		return data
 	}
+	return nil
 }
 
 // runDirectiveOrSubTest runs either a "subtest" directive or an
@@ -284,7 +297,7 @@ func runDirective(t *testing.T, r *testDataReader, f func(*testing.T, *TestData)
 	actual := func() string {
 		defer func() {
 			if r := recover(); r != nil {
-				fmt.Printf("\npanic during %s:\n%s\n", d.Pos, d.Input)
+				t.Logf("\npanic during %s:\n%s\n", d.Pos, d.Input)
 				panic(r)
 			}
 		}()
@@ -315,18 +328,20 @@ func runDirective(t *testing.T, r *testDataReader, f func(*testing.T, *TestData)
 			r.rewrite.WriteString(actual)
 			r.emit("----")
 			r.emit("----")
+			r.emit("")
 		} else {
+			// Here actual already ends in \n so emit adds a blank line.
 			r.emit(actual)
 		}
 	} else if d.Expected != actual {
 		t.Fatalf("\n%s: %s\nexpected:\n%s\nfound:\n%s", d.Pos, d.Input, d.Expected, actual)
-	} else if testing.Verbose() {
+	} else if *traceLog {
 		input := d.Input
 		if input == "" {
 			input = "<no input to command>"
 		}
 		// TODO(tbg): it's awkward to reproduce the args, but it would be helpful.
-		fmt.Printf("\n%s:\n%s [%d args]\n%s\n----\n%s", d.Pos, d.Cmd, len(d.CmdArgs), input, actual)
+		t.Logf("\n%s:\n%s [%d args]\n%s\n----\n%s", d.Pos, d.Cmd, len(d.CmdArgs), input, actual)
 	}
 	return
 }
@@ -379,6 +394,32 @@ func Walk(t *testing.T, path string, f func(t *testing.T, path string)) {
 			Walk(t, filepath.Join(path, file.Name()), f)
 		})
 	}
+}
+
+func ClearResults(path string) error {
+	file, err := os.OpenFile(path, os.O_RDWR, 0644 /* irrelevant */)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = file.Close()
+	}()
+	finfo, err := file.Stat()
+	if err != nil {
+		return err
+	}
+
+	if finfo.IsDir() {
+		return errors.Newf("%s is a directory, not a file", path)
+	}
+
+	runTestInternal(
+		&testing.T{}, path, file,
+		func(t *testing.T, d *TestData) string { return "" },
+		true, /* rewrite */
+	)
+
+	return nil
 }
 
 // Ignore files named .XXXX, XXX~ or #XXX#.
