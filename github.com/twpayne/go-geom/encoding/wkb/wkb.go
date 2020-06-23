@@ -8,6 +8,7 @@ package wkb
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"io"
 
 	"github.com/twpayne/go-geom"
@@ -29,7 +30,14 @@ const (
 )
 
 // Read reads an arbitrary geometry from r.
-func Read(r io.Reader) (geom.T, error) {
+func Read(r io.Reader, opts ...wkbcommon.WKBOption) (geom.T, error) {
+	params := wkbcommon.InitWKBParams(
+		wkbcommon.WKBParams{
+			EmptyPointHandling: wkbcommon.EmptyPointHandlingError,
+		},
+		opts...,
+	)
+
 	wkbByteOrder, err := wkbcommon.ReadByte(r)
 	if err != nil {
 		return nil, err
@@ -70,6 +78,9 @@ func Read(r io.Reader) (geom.T, error) {
 		if err != nil {
 			return nil, err
 		}
+		if params.EmptyPointHandling == wkbcommon.EmptyPointHandlingNaN {
+			return geom.NewPointFlatMaybeEmpty(layout, flatCoords), nil
+		}
 		return geom.NewPointFlat(layout, flatCoords), nil
 	case wkbcommon.LineStringID:
 		flatCoords, err := wkbcommon.ReadFlatCoords1(r, byteOrder, layout.Stride())
@@ -93,7 +104,7 @@ func Read(r io.Reader) (geom.T, error) {
 		}
 		mp := geom.NewMultiPoint(layout)
 		for i := uint32(0); i < n; i++ {
-			g, err := Read(r)
+			g, err := Read(r, opts...)
 			if err != nil {
 				return nil, err
 			}
@@ -116,7 +127,7 @@ func Read(r io.Reader) (geom.T, error) {
 		}
 		mls := geom.NewMultiLineString(layout)
 		for i := uint32(0); i < n; i++ {
-			g, err := Read(r)
+			g, err := Read(r, opts...)
 			if err != nil {
 				return nil, err
 			}
@@ -139,7 +150,7 @@ func Read(r io.Reader) (geom.T, error) {
 		}
 		mp := geom.NewMultiPolygon(layout)
 		for i := uint32(0); i < n; i++ {
-			g, err := Read(r)
+			g, err := Read(r, opts...)
 			if err != nil {
 				return nil, err
 			}
@@ -159,7 +170,7 @@ func Read(r io.Reader) (geom.T, error) {
 		}
 		gc := geom.NewGeometryCollection()
 		for i := uint32(0); i < n; i++ {
-			g, err := Read(r)
+			g, err := Read(r, opts...)
 			if err != nil {
 				return nil, err
 			}
@@ -174,12 +185,19 @@ func Read(r io.Reader) (geom.T, error) {
 }
 
 // Unmarshal unmrshals an arbitrary geometry from a []byte.
-func Unmarshal(data []byte) (geom.T, error) {
-	return Read(bytes.NewBuffer(data))
+func Unmarshal(data []byte, opts ...wkbcommon.WKBOption) (geom.T, error) {
+	return Read(bytes.NewBuffer(data), opts...)
 }
 
 // Write writes an arbitrary geometry to w.
-func Write(w io.Writer, byteOrder binary.ByteOrder, g geom.T) error {
+func Write(w io.Writer, byteOrder binary.ByteOrder, g geom.T, opts ...wkbcommon.WKBOption) error {
+	params := wkbcommon.InitWKBParams(
+		wkbcommon.WKBParams{
+			EmptyPointHandling: wkbcommon.EmptyPointHandlingError,
+		},
+		opts...,
+	)
+
 	var wkbByteOrder byte
 	switch byteOrder {
 	case XDR:
@@ -235,6 +253,16 @@ func Write(w io.Writer, byteOrder binary.ByteOrder, g geom.T) error {
 
 	switch g := g.(type) {
 	case *geom.Point:
+		if g.Empty() {
+			switch params.EmptyPointHandling {
+			case wkbcommon.EmptyPointHandlingNaN:
+				return wkbcommon.WriteEmptyPointAsNaN(w, byteOrder, g.Stride())
+			case wkbcommon.EmptyPointHandlingError:
+				return fmt.Errorf("cannot encode empty Point in WKB")
+			default:
+				return fmt.Errorf("cannot encode empty Point in WKB (unknown option: %d)", wkbcommon.EmptyPointHandlingNaN)
+			}
+		}
 		return wkbcommon.WriteFlatCoords0(w, byteOrder, g.FlatCoords())
 	case *geom.LineString:
 		return wkbcommon.WriteFlatCoords1(w, byteOrder, g.FlatCoords(), g.Stride())
@@ -246,7 +274,7 @@ func Write(w io.Writer, byteOrder binary.ByteOrder, g geom.T) error {
 			return err
 		}
 		for i := 0; i < n; i++ {
-			if err := Write(w, byteOrder, g.Point(i)); err != nil {
+			if err := Write(w, byteOrder, g.Point(i), opts...); err != nil {
 				return err
 			}
 		}
@@ -257,7 +285,7 @@ func Write(w io.Writer, byteOrder binary.ByteOrder, g geom.T) error {
 			return err
 		}
 		for i := 0; i < n; i++ {
-			if err := Write(w, byteOrder, g.LineString(i)); err != nil {
+			if err := Write(w, byteOrder, g.LineString(i), opts...); err != nil {
 				return err
 			}
 		}
@@ -268,7 +296,7 @@ func Write(w io.Writer, byteOrder binary.ByteOrder, g geom.T) error {
 			return err
 		}
 		for i := 0; i < n; i++ {
-			if err := Write(w, byteOrder, g.Polygon(i)); err != nil {
+			if err := Write(w, byteOrder, g.Polygon(i), opts...); err != nil {
 				return err
 			}
 		}
@@ -279,7 +307,7 @@ func Write(w io.Writer, byteOrder binary.ByteOrder, g geom.T) error {
 			return err
 		}
 		for i := 0; i < n; i++ {
-			if err := Write(w, byteOrder, g.Geom(i)); err != nil {
+			if err := Write(w, byteOrder, g.Geom(i), opts...); err != nil {
 				return err
 			}
 		}
@@ -290,9 +318,9 @@ func Write(w io.Writer, byteOrder binary.ByteOrder, g geom.T) error {
 }
 
 // Marshal marshals an arbitrary geometry to a []byte.
-func Marshal(g geom.T, byteOrder binary.ByteOrder) ([]byte, error) {
+func Marshal(g geom.T, byteOrder binary.ByteOrder, opts ...wkbcommon.WKBOption) ([]byte, error) {
 	w := bytes.NewBuffer(nil)
-	if err := Write(w, byteOrder, g); err != nil {
+	if err := Write(w, byteOrder, g, opts...); err != nil {
 		return nil, err
 	}
 	return w.Bytes(), nil
