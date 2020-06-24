@@ -1,4 +1,4 @@
-module github.com/getsentry/sentry-go
+module github.com/cockroachdb/sentry-go
 
 go 1.12
 
@@ -16,13 +16,11 @@ require (
 	github.com/kataras/iris/v12 v12.0.1
 	github.com/labstack/echo/v4 v4.1.11
 	github.com/moul/http2curl v1.0.0 // indirect
-	github.com/onsi/ginkgo v1.10.3 // indirect
-	github.com/onsi/gomega v1.7.1 // indirect
+	github.com/onsi/ginkgo v1.13.0 // indirect
 	github.com/pingcap/errors v0.11.4
 	github.com/pkg/errors v0.8.1
-	github.com/sergi/go-diff v1.0.0 // indirect
+	github.com/sergi/go-diff v1.1.0 // indirect
 	github.com/smartystreets/goconvey v1.6.4 // indirect
-	github.com/ugorji/go v1.1.7 // indirect
 	github.com/urfave/negroni v1.0.0
 	github.com/valyala/fasthttp v1.6.0
 	github.com/xeipuuv/gojsonschema v1.2.0 // indirect

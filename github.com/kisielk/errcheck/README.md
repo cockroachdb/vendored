@@ -8,7 +8,7 @@ errcheck is a program for checking for unchecked errors in go programs.
 
     go get -u github.com/kisielk/errcheck
 
-errcheck requires Go 1.6 or newer and depends on the package go/loader from the golang.org/x/tools repository.
+errcheck requires Go 1.9 or newer and depends on the package go/packages from the golang.org/x/tools repository.
 
 ## Use
 
@@ -46,11 +46,15 @@ be excluded.
 
 The file should contain one function signature per line. The format for function signatures is
 `package.FunctionName` while for methods it's `(package.Receiver).MethodName` for value receivers
-and `(*package.Receiver).MethodName` for pointer receivers.
+and `(*package.Receiver).MethodName` for pointer receivers. If the function name is followed by string of form `(TYPE)`, then
+the the function call is excluded only if the type of the first argument is `TYPE`. It also accepts a special suffix
+`(os.Stdout)` and `(os.Stderr)`, which excludes the function only when the first argument is a literal `os.Stdout` or `os.Stderr`.
 
 An example of an exclude file is:
 
     io/ioutil.ReadFile
+    io.Copy(*bytes.Buffer)
+    io.Copy(os.Stdout)
     (*net/http.Client).Do
 
 The exclude list is combined with an internal list for functions in the Go standard library that
@@ -94,12 +98,9 @@ no arguments.
 
 ## Cgo
 
-Currently errcheck is unable to check packages that `import "C"` due to limitations
-in the importer.
+Currently errcheck is unable to check packages that import "C" due to limitations in the importer when used with versions earlier than Go 1.11.
 
-However, you can use errcheck on packages that depend on those which use cgo. In
-order for this to work you need to `go install` the cgo dependencies before running
-errcheck on the dependent packages.
+However, you can use errcheck on packages that depend on those which use cgo. In order for this to work you need to go install the cgo dependencies before running errcheck on the dependent packages.
 
 See https://github.com/kisielk/errcheck/issues/16 for more details.
 
