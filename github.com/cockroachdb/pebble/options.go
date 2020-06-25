@@ -303,6 +303,11 @@ type Options struct {
 		// TODO(bilal): Experiment with this option to pick a good value.
 		FlushSplitBytes int64
 
+		// The threshold of L0 read-amplification at which compaction concurrency
+		// is enabled. Every multiple of this value enables another concurrent
+		// compaction up to MaxConcurrentCompactions.
+		L0CompactionConcurrency int
+
 		// L0SublevelCompactions enables the use of L0 sublevel-based compaction
 		// picking logic. Defaults to false for now. This logic will become
 		// a non-configurable default once it's better tuned.
@@ -311,6 +316,12 @@ type Options struct {
 		// L0CompactionThreshold and L0StopWritesThreshold to refer to L0
 		// read amplification as opposed to the count of L0 files.
 		L0SublevelCompactions bool
+
+		// DeleteRangeFlushDelay configures how long the database should wait
+		// before forcing a flush of a memtable that contains a range
+		// deletion. Disk space cannot be reclaimed until the range deletion
+		// is flushed. No automatic flush occurs if zero.
+		DeleteRangeFlushDelay time.Duration
 	}
 
 	// Filters is a map from filter policy name to filter policy. It is used for
@@ -324,11 +335,13 @@ type Options struct {
 	// The default value uses the underlying operating system's file system.
 	FS vfs.FS
 
-	// The number of files necessary to trigger an L0 compaction.
+	// The amount of L0 read-amplification necessary to trigger an L0 compaction.
 	L0CompactionThreshold int
 
-	// Hard limit on the number of L0 files. Writes are stopped when this
-	// threshold is reached.
+	// Hard limit on L0 read-amplification. Writes are stopped when this
+	// threshold is reached. If Experimental.L0SublevelCompactions is enabled
+	// this threshold is measured against the number of L0 sublevels. Otherwise
+	// it is measured against the number of files in L0.
 	L0StopWritesThreshold int
 
 	// The maximum number of bytes for LBase. The base level is the level which
@@ -388,8 +401,9 @@ type Options struct {
 	// default is 1 MB/s.
 	MinFlushRate int
 
-	// MaxConcurrentCompactions specifies the maximum number of concurrent compactions. The
-	// default is 1.
+	// MaxConcurrentCompactions specifies the maximum number of concurrent
+	// compactions. The default is 1. Concurrent compactions are only performed
+	// when L0 read-amplification passes the L0CompactionConcurrency threshold.
 	MaxConcurrentCompactions int
 
 	// ReadOnly indicates that the DB should be opened in read-only mode. Writes
@@ -465,6 +479,9 @@ func (o *Options) EnsureDefaults() *Options {
 	}
 	if o.FS == nil {
 		o.FS = vfs.Default
+	}
+	if o.Experimental.L0CompactionConcurrency <= 0 {
+		o.Experimental.L0CompactionConcurrency = 10
 	}
 	if o.L0CompactionThreshold <= 0 {
 		o.L0CompactionThreshold = 4
@@ -585,10 +602,13 @@ func (o *Options) String() string {
 	fmt.Fprintf(&buf, "  cache_size=%d\n", cacheSize)
 	fmt.Fprintf(&buf, "  cleaner=%s\n", o.Cleaner)
 	fmt.Fprintf(&buf, "  comparer=%s\n", o.Comparer.Name)
+	fmt.Fprintf(&buf, "  delete_range_flush_delay=%s\n", o.Experimental.DeleteRangeFlushDelay)
 	fmt.Fprintf(&buf, "  disable_wal=%t\n", o.DisableWAL)
 	fmt.Fprintf(&buf, "  flush_split_bytes=%d\n", o.Experimental.FlushSplitBytes)
+	fmt.Fprintf(&buf, "  l0_compaction_concurrency=%d\n", o.Experimental.L0CompactionConcurrency)
 	fmt.Fprintf(&buf, "  l0_compaction_threshold=%d\n", o.L0CompactionThreshold)
 	fmt.Fprintf(&buf, "  l0_stop_writes_threshold=%d\n", o.L0StopWritesThreshold)
+	fmt.Fprintf(&buf, "  l0_sublevel_compactions=%t\n", o.Experimental.L0SublevelCompactions)
 	fmt.Fprintf(&buf, "  lbase_max_bytes=%d\n", o.LBaseMaxBytes)
 	fmt.Fprintf(&buf, "  max_concurrent_compactions=%d\n", o.MaxConcurrentCompactions)
 	fmt.Fprintf(&buf, "  max_manifest_file_size=%d\n", o.MaxManifestFileSize)
@@ -736,14 +756,20 @@ func (o *Options) Parse(s string, hooks *ParseHooks) error {
 						o.Comparer, err = hooks.NewComparer(value)
 					}
 				}
+			case "delete_range_flush_delay":
+				o.Experimental.DeleteRangeFlushDelay, err = time.ParseDuration(value)
 			case "disable_wal":
 				o.DisableWAL, err = strconv.ParseBool(value)
 			case "flush_split_bytes":
 				o.Experimental.FlushSplitBytes, err = strconv.ParseInt(value, 10, 64)
+			case "l0_compaction_concurrency":
+				o.Experimental.L0CompactionConcurrency, err = strconv.Atoi(value)
 			case "l0_compaction_threshold":
 				o.L0CompactionThreshold, err = strconv.Atoi(value)
 			case "l0_stop_writes_threshold":
 				o.L0StopWritesThreshold, err = strconv.Atoi(value)
+			case "l0_sublevel_compactions":
+				o.Experimental.L0SublevelCompactions, err = strconv.ParseBool(value)
 			case "lbase_max_bytes":
 				o.LBaseMaxBytes, err = strconv.ParseInt(value, 10, 64)
 			case "max_concurrent_compactions":
@@ -889,6 +915,10 @@ func (o *Options) Validate() error {
 	// is no need to check for zero values.
 
 	var buf strings.Builder
+	if o.Experimental.L0CompactionConcurrency < 1 {
+		fmt.Fprintf(&buf, "L0CompactionConcurrency (%d) must be >= 1\n",
+			o.Experimental.L0CompactionConcurrency)
+	}
 	if o.L0StopWritesThreshold < o.L0CompactionThreshold {
 		fmt.Fprintf(&buf, "L0StopWritesThreshold (%d) must be >= L0CompactionThreshold (%d)\n",
 			o.L0StopWritesThreshold, o.L0CompactionThreshold)

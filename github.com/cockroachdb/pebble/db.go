@@ -197,7 +197,8 @@ type DB struct {
 	// updates.
 	logRecycler logRecycler
 
-	closed int32 // updated atomically
+	closed   int32 // updated atomically
+	closedCh chan struct{}
 
 	// The count and size of referenced memtables. This includes memtables
 	// present in DB.mu.mem.queue, as well as memtables that have been flushed
@@ -564,6 +565,16 @@ func (d *DB) commitApply(b *Batch, mem *memTable) error {
 	if err != nil {
 		return err
 	}
+
+	// If the batch contains range tombstones and the database is configured
+	// to flush range deletions, schedule a delayed flush so that disk space
+	// may be reclaimed without additional writes or an explicit flush.
+	if b.countRangeDels > 0 && d.opts.Experimental.DeleteRangeFlushDelay > 0 {
+		d.mu.Lock()
+		d.maybeScheduleDelayedFlush(mem)
+		d.mu.Unlock()
+	}
+
 	if mem.writerUnref() {
 		d.mu.Lock()
 		d.maybeScheduleFlush()
@@ -829,6 +840,7 @@ func (d *DB) Close() error {
 		panic(ErrClosed)
 	}
 	atomic.StoreInt32(&d.closed, 1)
+	close(d.closedCh)
 
 	defer d.opts.Cache.Unref()
 
@@ -1267,11 +1279,11 @@ func (d *DB) makeRoomForWrite(b *Batch) error {
 				continue
 			}
 		}
-		l0FileCount := len(d.mu.versions.currentVersion().Levels[0])
+		l0ReadAmp := len(d.mu.versions.currentVersion().Levels[0])
 		if d.opts.Experimental.L0SublevelCompactions {
-			l0FileCount = d.mu.versions.currentVersion().L0Sublevels.ReadAmplification()
+			l0ReadAmp = d.mu.versions.currentVersion().L0Sublevels.ReadAmplification()
 		}
-		if l0FileCount >= d.opts.L0StopWritesThreshold {
+		if l0ReadAmp >= d.opts.L0StopWritesThreshold {
 			// There are too many level-0 files, so we wait.
 			if !stalled {
 				stalled = true
