@@ -417,13 +417,36 @@ github.com/ianlancetaylor/cgosymbolizer
 github.com/ianlancetaylor/demangle
 # github.com/inconshreveable/mousetrap v1.0.0
 github.com/inconshreveable/mousetrap
+# github.com/jackc/chunkreader v1.0.0
+github.com/jackc/chunkreader
+# github.com/jackc/chunkreader/v2 v2.0.1
+github.com/jackc/chunkreader/v2
+# github.com/jackc/pgconn v1.6.1
+github.com/jackc/pgconn
+github.com/jackc/pgconn/internal/ctxwatch
+github.com/jackc/pgconn/stmtcache
+# github.com/jackc/pgio v1.0.0
+github.com/jackc/pgio
+# github.com/jackc/pgpassfile v1.0.0
+github.com/jackc/pgpassfile
+# github.com/jackc/pgproto3 v1.1.0
+github.com/jackc/pgproto3
+# github.com/jackc/pgproto3/v2 v2.0.2
+github.com/jackc/pgproto3/v2
+# github.com/jackc/pgservicefile v0.0.0-20200307190119-3430c5407db8
+github.com/jackc/pgservicefile
+# github.com/jackc/pgtype v1.3.0
+github.com/jackc/pgtype
 # github.com/jackc/pgx v3.6.2+incompatible
-github.com/jackc/pgx
 github.com/jackc/pgx/chunkreader
-github.com/jackc/pgx/internal/sanitize
 github.com/jackc/pgx/pgio
 github.com/jackc/pgx/pgproto3
-github.com/jackc/pgx/pgtype
+# github.com/jackc/pgx/v4 v4.6.0
+github.com/jackc/pgx/v4
+github.com/jackc/pgx/v4/internal/sanitize
+github.com/jackc/pgx/v4/pgxpool
+# github.com/jackc/puddle v1.1.0
+github.com/jackc/puddle
 # github.com/jaegertracing/jaeger v1.17.0
 github.com/jaegertracing/jaeger/model/json
 # github.com/jcmturner/gofork v1.0.0
@@ -622,7 +645,7 @@ go.opencensus.io/trace
 go.opencensus.io/trace/internal
 go.opencensus.io/trace/propagation
 go.opencensus.io/trace/tracestate
-# golang.org/x/crypto v0.0.0-20200323165209-0ec3e9974c59
+# golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
 golang.org/x/crypto/bcrypt
 golang.org/x/crypto/blowfish
 golang.org/x/crypto/chacha20
@@ -672,12 +695,12 @@ golang.org/x/perf/storage/benchfmt
 # golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 golang.org/x/sync/errgroup
 golang.org/x/sync/syncmap
-# golang.org/x/sys v0.0.0-20200625212154-ddb9806d33ae
+# golang.org/x/sys v0.0.0-20200519105757-fe76b779f299
 golang.org/x/sys/cpu
 golang.org/x/sys/internal/unsafeheader
 golang.org/x/sys/unix
 golang.org/x/sys/windows
-# golang.org/x/text v0.3.2
+# golang.org/x/text v0.3.3
 golang.org/x/text/cases
 golang.org/x/text/collate
 golang.org/x/text/internal
