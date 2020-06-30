@@ -526,6 +526,9 @@ github.com/jcmturner/gofork/encoding/asn1
 github.com/jcmturner/gofork/x/crypto/pbkdf2
 # github.com/jmespath/go-jmespath v0.0.0-20180206201540-c2b33e8439af
 github.com/jmespath/go-jmespath
+# github.com/jordanlewis/gcassert v0.0.0-20200630054945-8ff878e72753
+## explicit
+github.com/jordanlewis/gcassert
 # github.com/kevinburke/go-bindata v3.13.0+incompatible
 ## explicit
 github.com/kevinburke/go-bindata
@@ -724,7 +727,7 @@ github.com/spf13/cobra/doc
 # github.com/spf13/pflag v1.0.5
 ## explicit
 github.com/spf13/pflag
-# github.com/stretchr/testify v1.5.1
+# github.com/stretchr/testify v1.6.1
 ## explicit
 github.com/stretchr/testify/assert
 github.com/stretchr/testify/require
@@ -799,6 +802,9 @@ golang.org/x/exp/rand
 ## explicit
 golang.org/x/lint
 golang.org/x/lint/golint
+# golang.org/x/mod v0.3.0
+## explicit
+golang.org/x/mod/semver
 # golang.org/x/net v0.0.0-20200602114024-627f9648deb9
 ## explicit
 golang.org/x/net/context
@@ -856,7 +862,7 @@ golang.org/x/text/width
 # golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
 ## explicit
 golang.org/x/time/rate
-# golang.org/x/tools v0.0.0-20200509030707-2212a7e161a5
+# golang.org/x/tools v0.0.0-20200626171337-aa94e735be7f
 ## explicit
 golang.org/x/tools/cmd/goyacc
 golang.org/x/tools/cmd/stringer
@@ -916,6 +922,7 @@ golang.org/x/tools/internal/lsp/diff/myers
 golang.org/x/tools/internal/packagesinternal
 golang.org/x/tools/internal/span
 golang.org/x/tools/internal/testenv
+golang.org/x/tools/internal/typesinternal
 golang.org/x/tools/txtar
 # golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543
 golang.org/x/xerrors
@@ -1077,6 +1084,8 @@ gopkg.in/jcmturner/rpc.v1/ndr
 # gopkg.in/yaml.v2 v2.3.0 => github.com/cockroachdb/yaml v0.0.0-20180705215940-0e2822948641
 ## explicit
 gopkg.in/yaml.v2
+# gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c
+gopkg.in/yaml.v3
 # honnef.co/go/tools v0.0.0-20190530104931-1f0868a609b7
 ## explicit
 honnef.co/go/tools/arg
