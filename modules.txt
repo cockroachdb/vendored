@@ -179,7 +179,7 @@ github.com/cockroachdb/cockroach-go/crdb
 github.com/cockroachdb/crlfmt
 github.com/cockroachdb/crlfmt/internal/parser
 github.com/cockroachdb/crlfmt/internal/render
-# github.com/cockroachdb/datadriven v0.0.0-20200708133806-c52af14888bf
+# github.com/cockroachdb/datadriven v0.0.0-20200708140406-a8a63ef9e03e
 ## explicit
 github.com/cockroachdb/datadriven
 # github.com/cockroachdb/errors v1.5.0
