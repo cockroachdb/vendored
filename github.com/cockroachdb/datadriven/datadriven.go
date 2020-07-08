@@ -25,6 +25,9 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/cockroachdb/errors"
+	"github.com/pmezard/go-difflib/difflib"
 )
 
 var (
@@ -34,7 +37,32 @@ var (
 			"run. Used to update tests when a change affects many cases; please verify the testfile "+
 			"diffs carefully!",
 	)
+
+	quietLog = flag.Bool(
+		"datadriven-quiet", true,
+		"avoid echoing the directives and responses from test files.",
+	)
 )
+
+// Verbose returns true iff -datadriven-quiet was not passed.
+func Verbose() bool {
+	return !*quietLog
+}
+
+// In CockroachDB we want to quiesce all the logs across all packages.
+// If we had only a flag to work with, we'd get command line parsing
+// errors on all packages that do not use datadriven. So
+// we make do by also making a command line parameter available.
+func init() {
+	const quietEnvVar = "DATADRIVEN_QUIET_LOG"
+	if str, ok := os.LookupEnv(quietEnvVar); ok {
+		v, err := strconv.ParseBool(str)
+		if err != nil {
+			panic(fmt.Sprintf("error parsing %s: %s", quietEnvVar, err))
+		}
+		*quietLog = v
+	}
+}
 
 // RunTest invokes a data-driven test. The test cases are contained in a
 // separate test file and are dynamically loaded, parsed, and executed by this
@@ -102,17 +130,28 @@ func RunTest(t *testing.T, path string, f func(t *testing.T, d *TestData) string
 	if err != nil {
 		t.Fatal(err)
 	} else if finfo.IsDir() {
-		t.Fatalf("%s is a directly, not a file; consider using datadriven.Walk", path)
+		t.Fatalf("%s is a directory, not a file; consider using datadriven.Walk", path)
 	}
 
-	runTestInternal(t, path, file, f, *rewriteTestFiles)
+	rewriteData := runTestInternal(t, path, file, f, *rewriteTestFiles)
+	if *rewriteTestFiles {
+		if _, err := file.WriteAt(rewriteData, 0); err != nil {
+			t.Fatal(err)
+		}
+		if err := file.Truncate(int64(len(rewriteData))); err != nil {
+			t.Fatal(err)
+		}
+		if err := file.Sync(); err != nil {
+			t.Fatal(err)
+		}
+	}
 }
 
 // RunTestFromString is a version of RunTest which takes the contents of a test
 // directly.
 func RunTestFromString(t *testing.T, input string, f func(t *testing.T, d *TestData) string) {
 	t.Helper()
-	runTestInternal(t, "<string>" /* optionalPath */, strings.NewReader(input), f, *rewriteTestFiles)
+	runTestInternal(t, "<string>" /* sourceName */, strings.NewReader(input), f, *rewriteTestFiles)
 }
 
 func runTestInternal(
@@ -121,7 +160,7 @@ func runTestInternal(
 	reader io.Reader,
 	f func(t *testing.T, d *TestData) string,
 	rewrite bool,
-) {
+) (rewriteOutput []byte) {
 	t.Helper()
 
 	r := newTestDataReader(t, sourceName, reader, rewrite)
@@ -131,23 +170,13 @@ func runTestInternal(
 
 	if r.rewrite != nil {
 		data := r.rewrite.Bytes()
+		// Remove any trailing blank line.
 		if l := len(data); l > 2 && data[l-1] == '\n' && data[l-2] == '\n' {
 			data = data[:l-1]
 		}
-		if dest, ok := reader.(*os.File); ok {
-			if _, err := dest.WriteAt(data, 0); err != nil {
-				t.Fatal(err)
-			}
-			if err := dest.Truncate(int64(len(data))); err != nil {
-				t.Fatal(err)
-			}
-			if err := dest.Sync(); err != nil {
-				t.Fatal(err)
-			}
-		} else {
-			t.Logf("input is not a file; rewritten output is:\n%s", data)
-		}
+		return data
 	}
+	return nil
 }
 
 // runDirectiveOrSubTest runs either a "subtest" directive or an
@@ -284,7 +313,7 @@ func runDirective(t *testing.T, r *testDataReader, f func(*testing.T, *TestData)
 	actual := func() string {
 		defer func() {
 			if r := recover(); r != nil {
-				fmt.Printf("\npanic during %s:\n%s\n", d.Pos, d.Input)
+				t.Logf("\npanic during %s:\n%s\n", d.Pos, d.Input)
 				panic(r)
 			}
 		}()
@@ -315,18 +344,35 @@ func runDirective(t *testing.T, r *testDataReader, f func(*testing.T, *TestData)
 			r.rewrite.WriteString(actual)
 			r.emit("----")
 			r.emit("----")
+			r.emit("")
 		} else {
+			// Here actual already ends in \n so emit adds a blank line.
 			r.emit(actual)
 		}
 	} else if d.Expected != actual {
+		expectedLines := difflib.SplitLines(d.Expected)
+		actualLines := difflib.SplitLines(actual)
+		if len(expectedLines) > 5 {
+			// Print a unified diff if there is a lot of output to compare.
+			diff, err := difflib.GetUnifiedDiffString(difflib.UnifiedDiff{
+				Context: 5,
+				A:       expectedLines,
+				B:       actualLines,
+			})
+			if err == nil {
+				t.Fatalf("output didn't match expected:\n%s", diff)
+				return
+			}
+			t.Logf("Failed to produce diff %v", err)
+		}
 		t.Fatalf("\n%s: %s\nexpected:\n%s\nfound:\n%s", d.Pos, d.Input, d.Expected, actual)
-	} else if testing.Verbose() {
+	} else if !*quietLog {
 		input := d.Input
 		if input == "" {
 			input = "<no input to command>"
 		}
 		// TODO(tbg): it's awkward to reproduce the args, but it would be helpful.
-		fmt.Printf("\n%s:\n%s [%d args]\n%s\n----\n%s", d.Pos, d.Cmd, len(d.CmdArgs), input, actual)
+		t.Logf("\n%s:\n%s [%d args]\n%s\n----\n%s", d.Pos, d.Cmd, len(d.CmdArgs), input, actual)
 	}
 	return
 }
@@ -379,6 +425,32 @@ func Walk(t *testing.T, path string, f func(t *testing.T, path string)) {
 			Walk(t, filepath.Join(path, file.Name()), f)
 		})
 	}
+}
+
+func ClearResults(path string) error {
+	file, err := os.OpenFile(path, os.O_RDWR, 0644 /* irrelevant */)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = file.Close()
+	}()
+	finfo, err := file.Stat()
+	if err != nil {
+		return err
+	}
+
+	if finfo.IsDir() {
+		return errors.Newf("%s is a directory, not a file", path)
+	}
+
+	runTestInternal(
+		&testing.T{}, path, file,
+		func(t *testing.T, d *TestData) string { return "" },
+		true, /* rewrite */
+	)
+
+	return nil
 }
 
 // Ignore files named .XXXX, XXX~ or #XXX#.
@@ -444,14 +516,16 @@ func (td *TestData) ScanArgs(t *testing.T, key string, dests ...interface{}) {
 		}
 	}
 	if arg.Key == "" {
-		t.Fatalf("missing argument: %s", key)
+		td.Fatalf(t, "missing argument: %s", key)
 	}
 	if len(dests) != len(arg.Vals) {
-		t.Fatalf("%s: got %d destinations, but %d values", arg.Key, len(dests), len(arg.Vals))
+		td.Fatalf(t, "%s: got %d destinations, but %d values", arg.Key, len(dests), len(arg.Vals))
 	}
 
 	for i := range dests {
-		arg.Scan(t, i, dests[i])
+		if err := arg.scanErr(i, dests[i]); err != nil {
+			td.Fatalf(t, "%s: failed to scan argument %d: %v", arg.Key, i, err)
+		}
 	}
 }
 
@@ -480,8 +554,15 @@ func (arg CmdArg) String() string {
 
 // Scan attempts to parse the value at index i into the dest.
 func (arg CmdArg) Scan(t *testing.T, i int, dest interface{}) {
+	if err := arg.scanErr(i, dest); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// scanErr is like Scan but returns an error rather than taking a testing.T to fatal.
+func (arg CmdArg) scanErr(i int, dest interface{}) error {
 	if i < 0 || i >= len(arg.Vals) {
-		t.Fatalf("cannot scan index %d of key %s", i, arg.Key)
+		return errors.Errorf("cannot scan index %d of key %s", i, arg.Key)
 	}
 	val := arg.Vals[i]
 	switch dest := dest.(type) {
@@ -490,24 +571,25 @@ func (arg CmdArg) Scan(t *testing.T, i int, dest interface{}) {
 	case *int:
 		n, err := strconv.ParseInt(val, 10, 64)
 		if err != nil {
-			t.Fatal(err)
+			return err
 		}
 		*dest = int(n) // assume 64bit ints
 	case *uint64:
 		n, err := strconv.ParseUint(val, 10, 64)
 		if err != nil {
-			t.Fatal(err)
+			return err
 		}
 		*dest = n
 	case *bool:
 		b, err := strconv.ParseBool(val)
 		if err != nil {
-			t.Fatal(err)
+			return err
 		}
 		*dest = b
 	default:
-		t.Fatalf("unsupported type %T for destination #%d (might be easy to add it)", dest, i+1)
+		return errors.Errorf("unsupported type %T for destination #%d (might be easy to add it)", dest, i+1)
 	}
+	return nil
 }
 
 // Fatalf wraps a fatal testing error with test file position information, so
