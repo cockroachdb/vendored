@@ -292,6 +292,9 @@ type DB struct {
 			flushing bool
 			// The number of ongoing compactions.
 			compactingCount int
+			// The list of deletion hints, suggesting ranges for delete-only
+			// compactions.
+			deletionHints []deleteCompactionHint
 			// The list of manual compactions. The next manual compaction to perform
 			// is at the start of the list. New entries are added to the end.
 			manual []*manualCompaction
@@ -929,7 +932,7 @@ func (d *DB) Compact(
 	maxLevelWithFiles := 1
 	cur := d.mu.versions.currentVersion()
 	for level := 0; level < numLevels; level++ {
-		if len(cur.Overlaps(level, d.cmp, start, end)) > 0 {
+		if !cur.Overlaps(level, d.cmp, start, end).Empty() {
 			maxLevelWithFiles = level + 1
 		}
 	}
@@ -1136,19 +1139,15 @@ func (d *DB) EstimateDiskUsage(start, end []byte) (uint64, error) {
 
 	var totalSize uint64
 	for level, files := range readState.current.Levels {
+		iter := manifest.SliceLevelIterator(files)
 		if level > 0 {
 			// We can only use `Overlaps` to restrict `files` at L1+ since at L0 it
 			// expands the range iteratively until it has found a set of files that
 			// do not overlap any other L0 files outside that set.
-			files = readState.current.Overlaps(level, d.opts.Comparer.Compare, start, end)
+			iter = readState.current.Overlaps(level, d.opts.Comparer.Compare, start, end)
 		}
-		for fileIdx, file := range files {
-			if level > 0 && fileIdx > 0 && fileIdx < len(files)-1 {
-				// The files to the left and the right at least partially overlap
-				// with `file`, which means `file` is fully contained within the
-				// range specified by `[start, end]`.
-				totalSize += file.Size
-			} else if d.opts.Comparer.Compare(start, file.Smallest.UserKey) <= 0 &&
+		for file := iter.First(); file != nil; file = iter.Next() {
+			if d.opts.Comparer.Compare(start, file.Smallest.UserKey) <= 0 &&
 				d.opts.Comparer.Compare(file.Largest.UserKey, end) <= 0 {
 				// The range fully contains the file, so skip looking it up in
 				// table cache/looking at its indexes, and add the full file size.
@@ -1457,10 +1456,14 @@ func (d *DB) getEarliestUnflushedSeqNumLocked() uint64 {
 func (d *DB) getInProgressCompactionInfoLocked(finishing *compaction) (rv []compactionInfo) {
 	for c := range d.mu.compact.inProgress {
 		if len(c.flushing) == 0 && (finishing == nil || c != finishing) {
-			rv = append(rv, compactionInfo{
+			info := compactionInfo{
 				inputs:      c.inputs,
-				outputLevel: c.outputLevel.level,
-			})
+				outputLevel: -1,
+			}
+			if c.outputLevel != nil {
+				info.outputLevel = c.outputLevel.level
+			}
+			rv = append(rv, info)
 		}
 	}
 	return

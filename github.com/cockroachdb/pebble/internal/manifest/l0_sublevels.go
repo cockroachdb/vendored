@@ -15,12 +15,6 @@ import (
 	"github.com/cockroachdb/pebble/internal/base"
 )
 
-// TODO(bilal):
-//  - Integrate compaction picking logic with the rest of pebble.
-//  - Refactor away slicing and indexing for simplicity and stronger correctness
-//    guarantees, especially in extendCandidateToRectangle and
-//    Pick{Base,IntraL0}Compactions.
-
 // Intervals are of the form [start, end) with no gap between intervals. Each
 // file overlaps perfectly with a sequence of intervals. This perfect overlap
 // occurs because the union of file boundary keys is used to pick intervals.
@@ -31,6 +25,10 @@ import (
 // comparisons in the following manner:
 // - intervalKey{k, false} < intervalKey{k, true}
 // - k1 < k2 -> intervalKey{k1, _} < intervalKey{k2, _}.
+//
+// Note that the file's largest key is exclusive if the internal key
+// has a trailer matching the rangedel sentinel key. In this case, we set
+// isLargest to false for end interval computation.
 //
 // For example, consider three files with bounds [a,e], [b,g], and [e,j]. The
 // interval keys produced would be intervalKey{a, false}, intervalKey{b, false},
@@ -237,10 +235,13 @@ func NewL0Sublevels(
 	s := &L0Sublevels{cmp: cmp, formatKey: formatKey}
 	s.filesByAge = files
 	keys := make([]intervalKey, 0, 2*len(files))
-	for i := range s.filesByAge {
-		files[i].l0Index = i
-		keys = append(keys, intervalKey{key: files[i].Smallest.UserKey})
-		keys = append(keys, intervalKey{key: files[i].Largest.UserKey, isLargest: true})
+	for i, f := range s.filesByAge {
+		f.l0Index = i
+		keys = append(keys, intervalKey{key: f.Smallest.UserKey})
+		keys = append(keys, intervalKey{
+			key: f.Largest.UserKey,
+			isLargest: f.Largest.Trailer != base.InternalKeyRangeDeleteSentinel,
+		})
 	}
 	keys = sortAndDedup(keys, cmp)
 	// All interval indices reference s.orderedIntervals.
@@ -265,7 +266,7 @@ func NewL0Sublevels(
 		}
 		f.maxIntervalIndex = sort.Search(len(keys), func(index int) bool {
 			return intervalKeyCompare(
-				cmp, intervalKey{key: f.Largest.UserKey, isLargest: true}, keys[index]) <= 0
+				cmp, intervalKey{key: f.Largest.UserKey, isLargest: f.Largest.Trailer != base.InternalKeyRangeDeleteSentinel}, keys[index]) <= 0
 		})
 		if f.maxIntervalIndex == len(keys) {
 			return nil, errors.Errorf("expected sstable bound to be in interval keys: %s", f.Largest.UserKey)
@@ -310,6 +311,9 @@ func NewL0Sublevels(
 		}
 	}
 	var cumulativeBytes uint64
+	// Multiply flushSplitMaxBytes by the number of sublevels. This prevents
+	// excessive flush splitting when the number of sublevels increases.
+	flushSplitMaxBytes *= int64(len(s.Levels))
 	for i := 0; i < len(s.orderedIntervals); i++ {
 		interval := &s.orderedIntervals[i]
 		if flushSplitMaxBytes > 0 && cumulativeBytes > uint64(flushSplitMaxBytes) &&
@@ -663,7 +667,7 @@ type L0CompactionFiles struct {
 	filesAdded              []*FileMetadata
 }
 
-// Adds the specified file to the LCF.
+// addFile adds the specified file to the LCF.
 func (l *L0CompactionFiles) addFile(f *FileMetadata) {
 	if l.FilesIncluded[f.l0Index] {
 		return
@@ -1234,41 +1238,49 @@ func (s *L0Sublevels) intraL0CompactionUsingSeed(
 }
 
 // ExtendL0ForBaseCompactionTo extends the specified base compaction candidate
-// L0CompactionFiles to cover all L0 files in the specified key interval,
-// by calling extendCandidateToRectangle.
+// L0CompactionFiles to optionally cover more files in L0 without "touching"
+// any of the passed-in keys (i.e. the smallest/largest bounds are exclusive),
+// as including any user keys for those internal keys
+// could require choosing more files in LBase which is undesirable. Unbounded
+// start/end keys are indicated by passing in the InvalidInternalKey.
 func (s *L0Sublevels) ExtendL0ForBaseCompactionTo(
 	smallest, largest InternalKey, candidate *L0CompactionFiles,
 ) bool {
-	firstIntervalIndex := sort.Search(len(s.orderedIntervals), func(i int) bool {
-		// Need to start at >= smallest since if we widen too much we may miss
-		// an Lbase file that overlaps with an L0 file that will get picked in
-		// this widening, which would be bad. This interval will not start with
-		// an immediate successor key.
-		return s.cmp(smallest.UserKey, s.orderedIntervals[i].startKey.key) <= 0
-	})
-	// First interval that starts at or beyond the largest. This interval will not
-	// start with an immediate successor key.
-	var lastIntervalIndex int
-	if largest.Trailer == base.InternalKeyRangeDeleteSentinel {
-		// largest.UserKey is excluded. Do not expand L0 to include it.
+	firstIntervalIndex := 0
+	lastIntervalIndex := len(s.orderedIntervals) - 1
+	if smallest.Kind() != base.InternalKeyKindInvalid {
+		if smallest.Trailer == base.InternalKeyRangeDeleteSentinel {
+			// Starting at smallest.UserKey == interval.startKey is okay.
+			firstIntervalIndex = sort.Search(len(s.orderedIntervals), func(i int) bool {
+				return s.cmp(smallest.UserKey, s.orderedIntervals[i].startKey.key) <= 0
+			})
+		} else {
+			firstIntervalIndex = sort.Search(len(s.orderedIntervals), func(i int) bool {
+				// Need to start at >= smallest since if we widen too much we may miss
+				// an Lbase file that overlaps with an L0 file that will get picked in
+				// this widening, which would be bad. This interval will not start with
+				// an immediate successor key.
+				return s.cmp(smallest.UserKey, s.orderedIntervals[i].startKey.key) < 0
+			})
+		}
+	}
+	if largest.Kind() != base.InternalKeyKindInvalid {
+		// First interval that starts at or beyond the largest. This interval will not
+		// start with an immediate successor key.
 		lastIntervalIndex = sort.Search(len(s.orderedIntervals), func(i int) bool {
 			return s.cmp(largest.UserKey, s.orderedIntervals[i].startKey.key) <= 0
 		})
-	} else {
-		lastIntervalIndex = sort.Search(len(s.orderedIntervals), func(i int) bool {
-			return s.cmp(largest.UserKey, s.orderedIntervals[i].startKey.key) < 0
-		})
-	}
-	// Right now, lastIntervalIndex has a startKey that extends beyond largest.
-	// The previous interval, by definition, has an end key higher than largest.
-	// Iterate back twice to get the last interval that's completely within
-	// [smallest, largest]. Except in the case where we went past the end of the
-	// list; in that case, the last interval to include is the very last
-	// interval in the list.
-	if lastIntervalIndex < len(s.orderedIntervals) {
+		// Right now, lastIntervalIndex has a startKey that extends beyond largest.
+		// The previous interval, by definition, has an end key higher than largest.
+		// Iterate back twice to get the last interval that's completely within
+		// (smallest, largest). Except in the case where we went past the end of the
+		// list; in that case, the last interval to include is the very last
+		// interval in the list.
+		if lastIntervalIndex < len(s.orderedIntervals) {
+			lastIntervalIndex--
+		}
 		lastIntervalIndex--
 	}
-	lastIntervalIndex--
 	if lastIntervalIndex < firstIntervalIndex {
 		return false
 	}
@@ -1298,10 +1310,10 @@ func (s *L0Sublevels) ExtendL0ForBaseCompactionTo(
 // it's in the bounds, then add b-d, then a--d, and so on, to produce this:
 //
 //         _____________
-//    L0.3 |a--d    g-j|      _________
-//    L0.2 |       f--j|      |  r-t  |
-//    L0.1 | b-d  e---j|      |       |
-//    L0.0 |a--d   f--j| l--o |p-----x|
+//    L0.3 |a--d    g-j|
+//    L0.2 |       f--j|         r-t
+//    L0.1 | b-d  e---j|
+//    L0.0 |a--d   f--j| l--o  p-----x
 //
 //    Lbase a-------i     m---------w
 //

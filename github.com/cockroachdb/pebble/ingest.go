@@ -118,7 +118,7 @@ func ingestLoad1(
 		}
 	}
 
-	iter, err := r.NewRangeDelIter()
+	iter, err := r.NewRawRangeDelIter()
 	if err != nil {
 		return nil, err
 	}
@@ -432,7 +432,7 @@ func ingestTargetLevel(
 		}
 
 		// Check boundary overlap.
-		if len(v.Overlaps(level, cmp, meta.Smallest.UserKey, meta.Largest.UserKey)) != 0 {
+		if !v.Overlaps(level, cmp, meta.Smallest.UserKey, meta.Largest.UserKey).Empty() {
 			continue
 		}
 
@@ -445,7 +445,7 @@ func ingestTargetLevel(
 		// negative (else we'd have returned earlier).
 		overlaps := false
 		for c := range compactions {
-			if level != c.outputLevel.level {
+			if c.outputLevel == nil || level != c.outputLevel.level {
 				continue
 			}
 			if cmp(meta.Smallest.UserKey, c.largest.UserKey) <= 0 &&
