@@ -203,8 +203,9 @@ func (d *DB) loadNewFileStats(rs *readState, pending []manifest.NewFileEntry) ([
 func (d *DB) scanReadStateTableStats(rs *readState, fill []collectedStats) ([]collectedStats, []deleteCompactionHint, bool) {
 	moreRemain := false
 	var hints []deleteCompactionHint
-	for l, ff := range rs.current.Levels {
-		for _, f := range ff {
+	for l, levelMetadata := range rs.current.Levels {
+		iter := levelMetadata.Iter()
+		for f := iter.First(); f != nil; f = iter.Next() {
 			// NB: We're not holding d.mu which protects f.Stats, but only the
 			// active stats collection job updates f.Stats for active files,
 			// and we ensure only one goroutine runs it at a time through
@@ -316,7 +317,7 @@ func (d *DB) estimateSizeBeneath(
 	// additional I/O to read the file's index blocks.
 	hintSeqNum = math.MaxUint64
 	for l := level + 1; l < numLevels; l++ {
-		iter := v.Overlaps(l, d.cmp, start, end)
+		iter := v.Overlaps(l, d.cmp, start, end).Iter()
 		for file := iter.First(); file != nil; file = iter.Next() {
 			if d.cmp(start, file.Smallest.UserKey) <= 0 &&
 				d.cmp(file.Largest.UserKey, end) <= 0 {
