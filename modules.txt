@@ -722,7 +722,7 @@ github.com/russross/blackfriday
 # github.com/sasha-s/go-deadlock v0.2.0
 ## explicit
 github.com/sasha-s/go-deadlock
-# github.com/shirou/gopsutil v2.18.12+incompatible
+# github.com/shirou/gopsutil v2.20.6+incompatible
 ## explicit
 github.com/shirou/gopsutil/cpu
 github.com/shirou/gopsutil/disk
@@ -732,9 +732,6 @@ github.com/shirou/gopsutil/load
 github.com/shirou/gopsutil/mem
 github.com/shirou/gopsutil/net
 github.com/shirou/gopsutil/process
-# github.com/shirou/w32 v0.0.0-20160930032740-bb4de0191aa4
-## explicit
-github.com/shirou/w32
 # github.com/shopspring/decimal v1.2.0
 ## explicit
 # github.com/sirupsen/logrus v1.4.2
