@@ -81,6 +81,9 @@ github.com/VividCortex/ewma
 # github.com/abourget/teamcity v0.0.0-00010101000000-000000000000 => github.com/cockroachdb/teamcity v0.0.0-20180905144921-8ca25c33eb11
 ## explicit
 github.com/abourget/teamcity
+# github.com/alexbrainman/sspi v0.0.0-20180613141037-e580b900e9f5
+github.com/alexbrainman/sspi
+github.com/alexbrainman/sspi/negotiate
 # github.com/andy-kimball/arenaskl v0.0.0-20200617143215-f701008588b9
 ## explicit
 github.com/andy-kimball/arenaskl
@@ -496,7 +499,6 @@ github.com/grpc-ecosystem/grpc-gateway/utilities
 ## explicit
 github.com/grpc-ecosystem/grpc-opentracing/go/otgrpc
 # github.com/hashicorp/go-uuid v1.0.2
-## explicit
 github.com/hashicorp/go-uuid
 # github.com/ianlancetaylor/cgosymbolizer v0.0.0-20170921033129-f5072df9c550
 ## explicit
@@ -540,10 +542,51 @@ github.com/jackc/pgx/v4/internal/sanitize
 # github.com/jaegertracing/jaeger v1.17.0
 ## explicit
 github.com/jaegertracing/jaeger/model/json
+# github.com/jcmturner/aescts/v2 v2.0.0
+github.com/jcmturner/aescts/v2
+# github.com/jcmturner/dnsutils/v2 v2.0.0
+github.com/jcmturner/dnsutils/v2
 # github.com/jcmturner/gofork v1.0.0
-## explicit
 github.com/jcmturner/gofork/encoding/asn1
 github.com/jcmturner/gofork/x/crypto/pbkdf2
+# github.com/jcmturner/goidentity/v6 v6.0.1
+github.com/jcmturner/goidentity/v6
+# github.com/jcmturner/gokrb5/v8 v8.2.0
+github.com/jcmturner/gokrb5/v8/asn1tools
+github.com/jcmturner/gokrb5/v8/client
+github.com/jcmturner/gokrb5/v8/config
+github.com/jcmturner/gokrb5/v8/credentials
+github.com/jcmturner/gokrb5/v8/crypto
+github.com/jcmturner/gokrb5/v8/crypto/common
+github.com/jcmturner/gokrb5/v8/crypto/etype
+github.com/jcmturner/gokrb5/v8/crypto/rfc3961
+github.com/jcmturner/gokrb5/v8/crypto/rfc3962
+github.com/jcmturner/gokrb5/v8/crypto/rfc4757
+github.com/jcmturner/gokrb5/v8/crypto/rfc8009
+github.com/jcmturner/gokrb5/v8/gssapi
+github.com/jcmturner/gokrb5/v8/iana
+github.com/jcmturner/gokrb5/v8/iana/addrtype
+github.com/jcmturner/gokrb5/v8/iana/adtype
+github.com/jcmturner/gokrb5/v8/iana/asnAppTag
+github.com/jcmturner/gokrb5/v8/iana/chksumtype
+github.com/jcmturner/gokrb5/v8/iana/errorcode
+github.com/jcmturner/gokrb5/v8/iana/etypeID
+github.com/jcmturner/gokrb5/v8/iana/flags
+github.com/jcmturner/gokrb5/v8/iana/keyusage
+github.com/jcmturner/gokrb5/v8/iana/msgtype
+github.com/jcmturner/gokrb5/v8/iana/nametype
+github.com/jcmturner/gokrb5/v8/iana/patype
+github.com/jcmturner/gokrb5/v8/kadmin
+github.com/jcmturner/gokrb5/v8/keytab
+github.com/jcmturner/gokrb5/v8/krberror
+github.com/jcmturner/gokrb5/v8/messages
+github.com/jcmturner/gokrb5/v8/pac
+github.com/jcmturner/gokrb5/v8/service
+github.com/jcmturner/gokrb5/v8/spnego
+github.com/jcmturner/gokrb5/v8/types
+# github.com/jcmturner/rpc/v2 v2.0.2
+github.com/jcmturner/rpc/v2/mstypes
+github.com/jcmturner/rpc/v2/ndr
 # github.com/jmespath/go-jmespath v0.0.0-20180206201540-c2b33e8439af
 github.com/jmespath/go-jmespath
 # github.com/jordanlewis/gcassert v0.0.0-20200706043056-bf61eb72ee48
@@ -584,11 +627,14 @@ github.com/kr/text
 ## explicit
 github.com/leanovate/gopter
 github.com/leanovate/gopter/prop
-# github.com/lib/pq v1.5.2
+# github.com/lib/pq v1.7.1
 ## explicit
 github.com/lib/pq
 github.com/lib/pq/oid
 github.com/lib/pq/scram
+# github.com/lib/pq/auth/kerberos v0.0.0-20200720160335-984a6aa1ca46
+## explicit
+github.com/lib/pq/auth/kerberos
 # github.com/lightstep/lightstep-tracer-go v0.15.6
 ## explicit
 github.com/lightstep/lightstep-tracer-go
