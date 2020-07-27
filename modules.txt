@@ -462,6 +462,9 @@ github.com/google/go-cmp/cmp/internal/value
 github.com/google/go-github/github
 # github.com/google/go-querystring v1.0.0
 github.com/google/go-querystring/query
+# github.com/google/hilbert v0.0.0-20181122061418-320f2e35a565
+## explicit
+github.com/google/hilbert
 # github.com/google/martian v2.1.0+incompatible
 ## explicit
 # github.com/google/pprof v0.0.0-20190109223431-e84dfd68c163
