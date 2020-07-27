@@ -638,7 +638,7 @@ github.com/kr/text
 ## explicit
 github.com/leanovate/gopter
 github.com/leanovate/gopter/prop
-# github.com/lib/pq v1.7.1
+# github.com/lib/pq v1.8.0
 ## explicit
 github.com/lib/pq
 github.com/lib/pq/oid
