@@ -13,6 +13,7 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/pebble/internal/base"
+	"github.com/cockroachdb/pebble/internal/invariants"
 	"github.com/cockroachdb/pebble/internal/manifest"
 	"github.com/cockroachdb/pebble/internal/record"
 	"github.com/cockroachdb/pebble/vfs"
@@ -266,8 +267,8 @@ func (vs *versionSet) load(dirname string, opts *Options, mu *sync.Mutex) error 
 
 	for i := range vs.metrics.Levels {
 		l := &vs.metrics.Levels[i]
-		l.NumFiles = int64(len(newVersion.Levels[i]))
-		l.Size = uint64(totalSize(newVersion.Levels[i]))
+		l.NumFiles = int64(newVersion.Levels[i].Slice().Len())
+		l.Size = int64(newVersion.Levels[i].Slice().SizeSum())
 	}
 	return nil
 }
@@ -476,11 +477,17 @@ func (vs *versionSet) logAndApply(
 	}
 	for i := range vs.metrics.Levels {
 		l := &vs.metrics.Levels[i]
-		l.NumFiles = int64(len(newVersion.Levels[i]))
-		l.Size = uint64(totalSize(newVersion.Levels[i]))
 		l.Sublevels = 0
 		if l.NumFiles > 0 {
 			l.Sublevels = 1
+		}
+		if invariants.Enabled {
+			if count := int64(newVersion.Levels[i].Slice().Len()); l.NumFiles != count {
+				vs.opts.Logger.Fatalf("versionSet metrics L%d NumFiles = %d, actual count = %d", i, l.NumFiles, count)
+			}
+			if size := int64(newVersion.Levels[i].Slice().SizeSum()); l.Size != size {
+				vs.opts.Logger.Fatalf("versionSet metrics L%d Size = %d, actual size = %d", i, l.Size, size)
+			}
 		}
 	}
 	vs.metrics.Levels[0].Sublevels = int32(len(newVersion.L0Sublevels.Levels))
@@ -524,8 +531,9 @@ func (vs *versionSet) createManifest(
 	snapshot := versionEdit{
 		ComparerName: vs.cmpName,
 	}
-	for level, fileMetadata := range vs.currentVersion().Levels {
-		for _, meta := range fileMetadata {
+	for level, levelMetadata := range vs.currentVersion().Levels {
+		iter := levelMetadata.Iter()
+		for meta := iter.First(); meta != nil; meta = iter.Next() {
 			snapshot.NewFiles = append(snapshot.NewFiles, newFileEntry{
 				Level: level,
 				Meta:  meta,
@@ -597,8 +605,9 @@ func (vs *versionSet) currentVersion() *version {
 func (vs *versionSet) addLiveFileNums(m map[FileNum]struct{}) {
 	current := vs.currentVersion()
 	for v := vs.versions.Front(); true; v = v.Next() {
-		for _, ff := range v.Levels {
-			for _, f := range ff {
+		for _, lm := range v.Levels {
+			iter := lm.Iter()
+			for f := iter.First(); f != nil; f = iter.Next() {
 				m[f.FileNum] = struct{}{}
 			}
 		}
@@ -618,4 +627,18 @@ func (vs *versionSet) addObsoleteLocked(obsolete []FileNum) {
 		}
 	}
 	vs.obsoleteTables = append(vs.obsoleteTables, obsolete...)
+}
+
+func newFileMetrics(newFiles []manifest.NewFileEntry) map[int]*LevelMetrics {
+	m := map[int]*LevelMetrics{}
+	for _, nf := range newFiles {
+		lm := m[nf.Level]
+		if lm == nil {
+			lm = &LevelMetrics{}
+			m[nf.Level] = lm
+		}
+		lm.NumFiles++
+		lm.Size += int64(nf.Meta.Size)
+	}
+	return m
 }

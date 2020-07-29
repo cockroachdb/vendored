@@ -93,8 +93,23 @@ type FileMetadata struct {
 	maxIntervalIndex    int
 }
 
-func (m FileMetadata) String() string {
+func (m *FileMetadata) String() string {
 	return fmt.Sprintf("%s:%s-%s", m.FileNum, m.Smallest, m.Largest)
+}
+
+// Validate validates the metadata for consistency with itself, returning an
+// error if inconsistent.
+func (m *FileMetadata) Validate(cmp Compare, formatKey base.FormatKey) error {
+	if base.InternalCompare(cmp, m.Smallest, m.Largest) > 0 {
+		return errors.Errorf("file %s has inconsistent bounds: %s vs %s",
+			errors.Safe(m.FileNum), m.Smallest.Pretty(formatKey),
+			m.Largest.Pretty(formatKey))
+	}
+	if m.SmallestSeqNum > m.LargestSeqNum {
+		return errors.Errorf("file %s has inconsistent seqnum bounds: %d vs %d",
+			errors.Safe(m.FileNum), m.SmallestSeqNum, m.LargestSeqNum)
+	}
+	return nil
 }
 
 // TableInfo returns a subset of the FileMetadata state formatted as a
@@ -195,6 +210,24 @@ func overlaps(files []*FileMetadata, cmp Compare, start, end []byte) (lower, upp
 
 // NumLevels is the number of levels a Version contains.
 const NumLevels = 7
+
+// NewVersion constructs a new Version with the provided files. It assumes
+// the provided files are already well-ordered. It's intended for testing.
+func NewVersion(
+	cmp Compare,
+	formatKey base.FormatKey,
+	flushSplitBytes int64,
+	files [NumLevels][]*FileMetadata,
+) *Version {
+	var v Version
+	for i := range files {
+		v.Levels[i].files = files[i]
+	}
+	if err := v.InitL0Sublevels(cmp, formatKey, flushSplitBytes); err != nil {
+		panic(err)
+	}
+	return &v
+}
 
 // Version is a collection of file metadata for on-disk tables at various
 // levels. In-memory DBs are written to level-0 tables, and compactions
@@ -367,7 +400,7 @@ func (v *Version) InitL0Sublevels(
 	cmp Compare, formatKey base.FormatKey, flushSplitBytes int64,
 ) error {
 	var err error
-	v.L0Sublevels, err = NewL0Sublevels(v.Levels[0], cmp, formatKey, flushSplitBytes)
+	v.L0Sublevels, err = NewL0Sublevels(v.Levels[0].Slice().Collect(), cmp, formatKey, flushSplitBytes)
 	return err
 }
 
@@ -399,16 +432,18 @@ func (v *Version) Contains(level int, cmp Compare, m *FileMetadata) bool {
 func (v *Version) Overlaps(level int, cmp Compare, start, end []byte) LevelSlice {
 	if level == 0 {
 		// Indices that have been selected as overlapping.
-		selectedIndices := make([]bool, len(v.Levels[level]))
+		l0 := v.Levels[level].Slice()
+		l0Iter := l0.Iter()
+		selectedIndices := make([]bool, l0.Len())
 		numSelected := 0
 		var slice LevelSlice
 		for {
 			restart := false
-			for i, selected := range selectedIndices {
+			for i, meta := 0, l0Iter.First(); meta != nil; i, meta = i+1, l0Iter.Next() {
+				selected := selectedIndices[i]
 				if selected {
 					continue
 				}
-				meta := v.Levels[level][i]
 				smallest := meta.Smallest.UserKey
 				largest := meta.Largest.UserKey
 				if cmp(largest, start) < 0 {
@@ -440,9 +475,9 @@ func (v *Version) Overlaps(level int, cmp Compare, start, end []byte) LevelSlice
 
 			if !restart {
 				slice.files = make([]*FileMetadata, 0, numSelected)
-				for i, selected := range selectedIndices {
-					if selected {
-						slice.files = append(slice.files, v.Levels[level][i])
+				for i, meta := 0, l0Iter.First(); meta != nil; i, meta = i+1, l0Iter.Next() {
+					if selectedIndices[i] {
+						slice.files = append(slice.files, meta)
 					}
 				}
 				slice.end = len(slice.files)
@@ -454,9 +489,9 @@ func (v *Version) Overlaps(level int, cmp Compare, start, end []byte) LevelSlice
 	}
 
 	var slice LevelSlice
-	lower, upper := overlaps(v.Levels[level], cmp, start, end)
+	lower, upper := overlaps(v.Levels[level].files, cmp, start, end)
 	if lower < upper {
-		slice.files = v.Levels[level]
+		slice.files = v.Levels[level].files
 		slice.start = lower
 		slice.end = upper
 	}
@@ -643,10 +678,8 @@ func CheckOrdering(cmp Compare, format base.FormatKey, level Level, files LevelI
 	} else {
 		var prev *FileMetadata
 		for f := files.First(); f != nil; f, prev = files.Next(), f {
-			if base.InternalCompare(cmp, f.Smallest, f.Largest) > 0 {
-				return errors.Errorf("%s file %s has inconsistent bounds: %s vs %s",
-					errors.Safe(level), errors.Safe(f.FileNum),
-					f.Smallest.Pretty(format), f.Largest.Pretty(format))
+			if err := f.Validate(cmp, format); err != nil {
+				return errors.Wrapf(err, "%s ", level)
 			}
 			if prev != nil {
 				if !prev.lessSmallestKey(f, cmp) {

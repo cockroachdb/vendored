@@ -5,7 +5,6 @@
 package pebble
 
 import (
-	"sync/atomic"
 	"time"
 
 	"github.com/cockroachdb/pebble/internal/private"
@@ -17,8 +16,8 @@ import (
 // replay package rather than calling this private hook directly.
 func flushExternalTable(untypedDB interface{}, path string, originalMeta *fileMetadata) error {
 	d := untypedDB.(*DB)
-	if atomic.LoadInt32(&d.closed) != 0 {
-		panic(ErrClosed)
+	if err := d.closed.Load(); err != nil {
+		panic(err)
 	}
 	if d.opts.ReadOnly {
 		return ErrReadOnly
@@ -64,7 +63,12 @@ func flushExternalTable(untypedDB interface{}, path string, originalMeta *fileMe
 		NewFiles: []newFileEntry{newFileEntry{Level: 0, Meta: m}},
 	}
 	metrics := map[int]*LevelMetrics{
-		0: &LevelMetrics{BytesIngested: m.Size, TablesIngested: 1},
+		0: &LevelMetrics{
+			NumFiles:       1,
+			Size:           int64(m.Size),
+			BytesIngested:  m.Size,
+			TablesIngested: 1,
+		},
 	}
 	err := d.mu.versions.logAndApply(jobID, ve, metrics, d.dataDir, func() []compactionInfo {
 		return d.getInProgressCompactionInfoLocked(nil)

@@ -38,7 +38,7 @@ var (
 	// key.
 	ErrNotFound = base.ErrNotFound
 	// ErrClosed is returned when an operation is performed on a closed snapshot
-	// or DB.
+	// or DB. Use errors.Is(err, ErrClosed) to check for this error.
 	ErrClosed = errors.New("pebble: closed")
 	// ErrReadOnly is returned when a write operation is performed on a read-only
 	// database.
@@ -197,7 +197,7 @@ type DB struct {
 	// updates.
 	logRecycler logRecycler
 
-	closed   int32 // updated atomically
+	closed   atomic.Value
 	closedCh chan struct{}
 
 	// The count and size of referenced memtables. This includes memtables
@@ -357,8 +357,8 @@ func (d *DB) Get(key []byte) ([]byte, io.Closer, error) {
 }
 
 func (d *DB) getInternal(key []byte, b *Batch, s *Snapshot) ([]byte, io.Closer, error) {
-	if atomic.LoadInt32(&d.closed) != 0 {
-		panic(ErrClosed)
+	if err := d.closed.Load(); err != nil {
+		panic(err)
 	}
 
 	// Grab and reference the current readState. This prevents the underlying
@@ -520,8 +520,8 @@ func (d *DB) LogData(data []byte, opts *WriteOptions) error {
 //
 // It is safe to modify the contents of the arguments after Apply returns.
 func (d *DB) Apply(batch *Batch, opts *WriteOptions) error {
-	if atomic.LoadInt32(&d.closed) != 0 {
-		panic(ErrClosed)
+	if err := d.closed.Load(); err != nil {
+		panic(err)
 	}
 	if d.opts.ReadOnly {
 		return ErrReadOnly
@@ -664,8 +664,8 @@ var iterAllocPool = sync.Pool{
 func (d *DB) newIterInternal(
 	batchIter internalIterator, batchRangeDelIter internalIterator, s *Snapshot, o *IterOptions,
 ) *Iterator {
-	if atomic.LoadInt32(&d.closed) != 0 {
-		panic(ErrClosed)
+	if err := d.closed.Load(); err != nil {
+		panic(err)
 	}
 
 	// Grab and reference the current readState. This prevents the underlying
@@ -743,8 +743,8 @@ func (d *DB) newIterInternal(
 	mlevels = mlevels[start:]
 
 	levels := buf.levels[:]
-	addLevelIterForFiles := func(files []*manifest.FileMetadata, level manifest.Level) {
-		if len(files) == 0 {
+	addLevelIterForFiles := func(files manifest.LevelIterator, level manifest.Level) {
+		if files.Empty() {
 			return
 		}
 		var li *levelIter
@@ -766,12 +766,13 @@ func (d *DB) newIterInternal(
 	// Add level iterators for the L0 sublevels, iterating from newest to
 	// oldest.
 	for i := len(current.L0Sublevels.Levels) - 1; i >= 0; i-- {
-		addLevelIterForFiles(current.L0Sublevels.Levels[i], manifest.L0Sublevel(i))
+		iter := manifest.NewLevelSlice(current.L0Sublevels.Levels[i]).Iter()
+		addLevelIterForFiles(iter, manifest.L0Sublevel(i))
 	}
 
 	// Add level iterators for the non-empty non-L0 levels.
 	for level := 1; level < len(current.Levels); level++ {
-		addLevelIterForFiles(current.Levels[level], manifest.Level(level))
+		addLevelIterForFiles(current.Levels[level].Iter(), manifest.Level(level))
 	}
 
 	buf.merging.init(&dbi.opts, d.cmp, finalMLevels...)
@@ -817,8 +818,8 @@ func (d *DB) NewIter(o *IterOptions) *Iterator {
 // deleted. Instead, a snapshot prevents deletion of sequence numbers
 // referenced by the snapshot.
 func (d *DB) NewSnapshot() *Snapshot {
-	if atomic.LoadInt32(&d.closed) != 0 {
-		panic(ErrClosed)
+	if err := d.closed.Load(); err != nil {
+		panic(err)
 	}
 
 	d.mu.Lock()
@@ -839,10 +840,10 @@ func (d *DB) NewSnapshot() *Snapshot {
 func (d *DB) Close() error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if atomic.LoadInt32(&d.closed) != 0 {
-		panic(ErrClosed)
+	if err := d.closed.Load(); err != nil {
+		panic(err)
 	}
-	atomic.StoreInt32(&d.closed, 1)
+	d.closed.Store(errors.WithStack(ErrClosed))
 	close(d.closedCh)
 
 	defer d.opts.Cache.Unref()
@@ -917,8 +918,8 @@ func (d *DB) Close() error {
 func (d *DB) Compact(
 	start, end []byte, /* CompactionOptions */
 ) error {
-	if atomic.LoadInt32(&d.closed) != 0 {
-		panic(ErrClosed)
+	if err := d.closed.Load(); err != nil {
+		panic(err)
 	}
 	if d.opts.ReadOnly {
 		return ErrReadOnly
@@ -1021,8 +1022,8 @@ func (d *DB) Flush() error {
 // If no error is returned, the caller can receive from the returned channel in
 // order to wait for the flush to complete.
 func (d *DB) AsyncFlush() (<-chan struct{}, error) {
-	if atomic.LoadInt32(&d.closed) != 0 {
-		panic(ErrClosed)
+	if err := d.closed.Load(); err != nil {
+		panic(err)
 	}
 	if d.opts.ReadOnly {
 		return nil, ErrReadOnly
@@ -1095,19 +1096,22 @@ func (d *DB) SSTables() [][]TableInfo {
 	srcLevels := readState.current.Levels
 	var totalTables int
 	for i := range srcLevels {
-		totalTables += len(srcLevels[i])
+		// TODO(jackson): Use metrics on the LevelMetadata once available
+		// rather than Slice().Len().
+		totalTables += srcLevels[i].Slice().Len()
 	}
 
 	destTables := make([]TableInfo, totalTables)
 	destLevels := make([][]TableInfo, len(srcLevels))
 	for i := range destLevels {
-		srcLevel := srcLevels[i]
-		destLevel := destTables[:len(srcLevel):len(srcLevel)]
-		destTables = destTables[len(srcLevel):]
-		for j := range destLevel {
-			destLevel[j] = srcLevel[j].TableInfo()
+		iter := srcLevels[i].Iter()
+		j := 0
+		for m := iter.First(); m != nil; m = iter.Next() {
+			destTables[j] = m.TableInfo()
+			j++
 		}
-		destLevels[i] = destLevel
+		destLevels[i] = destTables[:j]
+		destTables = destTables[j:]
 	}
 	return destLevels
 }
@@ -1124,8 +1128,8 @@ func (d *DB) SSTables() [][]TableInfo {
 // - There may also exist WAL entries for unflushed keys in this range. This
 //   estimation currently excludes space used for the range in the WAL.
 func (d *DB) EstimateDiskUsage(start, end []byte) (uint64, error) {
-	if atomic.LoadInt32(&d.closed) != 0 {
-		panic(ErrClosed)
+	if err := d.closed.Load(); err != nil {
+		panic(err)
 	}
 	if d.opts.Comparer.Compare(start, end) > 0 {
 		return 0, errors.New("invalid key-range specified (start > end)")
@@ -1278,9 +1282,11 @@ func (d *DB) makeRoomForWrite(b *Batch) error {
 				continue
 			}
 		}
-		l0ReadAmp := len(d.mu.versions.currentVersion().Levels[0])
+		var l0ReadAmp int
 		if d.opts.Experimental.L0SublevelCompactions {
 			l0ReadAmp = d.mu.versions.currentVersion().L0Sublevels.ReadAmplification()
+		} else {
+			l0ReadAmp = d.mu.versions.currentVersion().Levels[0].Slice().Len()
 		}
 		if l0ReadAmp >= d.opts.L0StopWritesThreshold {
 			// There are too many level-0 files, so we wait.
@@ -1457,14 +1463,8 @@ func (d *DB) getInProgressCompactionInfoLocked(finishing *compaction) (rv []comp
 	for c := range d.mu.compact.inProgress {
 		if len(c.flushing) == 0 && (finishing == nil || c != finishing) {
 			info := compactionInfo{
-				inputs:      make([]compactionInput, 0, len(c.inputs)),
+				inputs:      c.inputs,
 				outputLevel: -1,
-			}
-			for _, in := range c.inputs {
-				info.inputs = append(info.inputs, compactionInput{
-					level: in.level,
-					files: manifest.NewLevelSlice(in.files),
-				})
 			}
 			if c.outputLevel != nil {
 				info.outputLevel = c.outputLevel.level
