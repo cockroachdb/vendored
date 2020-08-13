@@ -167,7 +167,7 @@ github.com/cockroachdb/crlfmt/internal/parser
 github.com/cockroachdb/crlfmt/internal/render
 # github.com/cockroachdb/datadriven v0.0.0-20200714090401-bf6692d28da5
 github.com/cockroachdb/datadriven
-# github.com/cockroachdb/errors v1.5.0
+# github.com/cockroachdb/errors v1.5.1
 github.com/cockroachdb/errors
 github.com/cockroachdb/errors/assert
 github.com/cockroachdb/errors/barriers
