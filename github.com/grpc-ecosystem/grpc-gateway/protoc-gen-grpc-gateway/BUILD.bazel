@@ -6,14 +6,15 @@ package(default_visibility = ["//visibility:private"])
 go_library(
     name = "go_default_library",
     srcs = ["main.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway",
     importpath = "github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway",
     deps = [
-        "//codegenerator:go_default_library",
-        "//protoc-gen-grpc-gateway/descriptor:go_default_library",
-        "//protoc-gen-grpc-gateway/internal/gengateway:go_default_library",
-        "@com_github_golang_glog//:go_default_library",
-        "@com_github_golang_protobuf//proto:go_default_library",
-        "@io_bazel_rules_go//proto/wkt:compiler_plugin_go_proto",
+        "//vendor/github.com/golang/glog:go_default_library",
+        "//vendor/github.com/golang/protobuf/proto:go_default_library",
+        "//vendor/github.com/golang/protobuf/protoc-gen-go/plugin:go_default_library",
+        "//vendor/github.com/grpc-ecosystem/grpc-gateway/codegenerator:go_default_library",
+        "//vendor/github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway/descriptor:go_default_library",
+        "//vendor/github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway/internal/gengateway:go_default_library",
     ],
 )
 
