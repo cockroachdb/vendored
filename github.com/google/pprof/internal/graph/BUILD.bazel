@@ -1,0 +1,16 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "dotgraph.go",
+        "graph.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/google/pprof/internal/graph",
+    importpath = "github.com/google/pprof/internal/graph",
+    visibility = ["//vendor/github.com/google/pprof:__subpackages__"],
+    deps = [
+        "//vendor/github.com/google/pprof/internal/measurement:go_default_library",
+        "//vendor/github.com/google/pprof/profile:go_default_library",
+    ],
+)

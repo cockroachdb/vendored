@@ -1,0 +1,22 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "errors.pb.go",
+        "hintdetail.pb.go",
+        "markers.go",
+        "markers.pb.go",
+        "tags.pb.go",
+        "testing.go",
+        "testing.pb.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/cockroachdb/errors/errorspb",
+    importpath = "github.com/cockroachdb/errors/errorspb",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/gogo/protobuf/gogoproto:go_default_library",
+        "//vendor/github.com/gogo/protobuf/proto:go_default_library",
+        "//vendor/github.com/gogo/protobuf/types:go_default_library",
+    ],
+)

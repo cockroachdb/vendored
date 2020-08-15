@@ -1,0 +1,36 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "cli.go",
+        "commands.go",
+        "driver.go",
+        "driver_focus.go",
+        "fetch.go",
+        "flags.go",
+        "flamegraph.go",
+        "interactive.go",
+        "options.go",
+        "svg.go",
+        "tempfile.go",
+        "webhtml.go",
+        "webui.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/google/pprof/internal/driver",
+    importpath = "github.com/google/pprof/internal/driver",
+    visibility = ["//vendor/github.com/google/pprof:__subpackages__"],
+    deps = [
+        "//vendor/github.com/google/pprof/internal/binutils:go_default_library",
+        "//vendor/github.com/google/pprof/internal/graph:go_default_library",
+        "//vendor/github.com/google/pprof/internal/measurement:go_default_library",
+        "//vendor/github.com/google/pprof/internal/plugin:go_default_library",
+        "//vendor/github.com/google/pprof/internal/report:go_default_library",
+        "//vendor/github.com/google/pprof/internal/symbolizer:go_default_library",
+        "//vendor/github.com/google/pprof/internal/transport:go_default_library",
+        "//vendor/github.com/google/pprof/profile:go_default_library",
+        "//vendor/github.com/google/pprof/third_party/d3:go_default_library",
+        "//vendor/github.com/google/pprof/third_party/d3flamegraph:go_default_library",
+        "//vendor/github.com/google/pprof/third_party/svgpan:go_default_library",
+    ],
+)

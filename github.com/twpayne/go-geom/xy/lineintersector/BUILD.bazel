@@ -1,0 +1,23 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "line_intersector.go",
+        "nonrobust_line_intersector.go",
+        "robust_line_intersector.go",
+        "test_data.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/twpayne/go-geom/xy/lineintersector",
+    importpath = "github.com/twpayne/go-geom/xy/lineintersector",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/twpayne/go-geom:go_default_library",
+        "//vendor/github.com/twpayne/go-geom/bigxy:go_default_library",
+        "//vendor/github.com/twpayne/go-geom/xy/internal:go_default_library",
+        "//vendor/github.com/twpayne/go-geom/xy/internal/centralendpoint:go_default_library",
+        "//vendor/github.com/twpayne/go-geom/xy/internal/hcoords:go_default_library",
+        "//vendor/github.com/twpayne/go-geom/xy/lineintersection:go_default_library",
+        "//vendor/github.com/twpayne/go-geom/xy/orientation:go_default_library",
+    ],
+)

@@ -1,0 +1,19 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "contexttags.go",
+        "with_context.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/cockroachdb/errors/contexttags",
+    importpath = "github.com/cockroachdb/errors/contexttags",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/cockroachdb/errors/errbase:go_default_library",
+        "//vendor/github.com/cockroachdb/errors/errorspb:go_default_library",
+        "//vendor/github.com/cockroachdb/errors/safedetails:go_default_library",
+        "//vendor/github.com/cockroachdb/logtags:go_default_library",
+        "//vendor/github.com/gogo/protobuf/proto:go_default_library",
+    ],
+)

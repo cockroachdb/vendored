@@ -1,0 +1,17 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "encryption.go",
+        "keyDerivation.go",
+        "nfold.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/jcmturner/gokrb5/v8/crypto/rfc3961",
+    importpath = "github.com/jcmturner/gokrb5/v8/crypto/rfc3961",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/jcmturner/gokrb5/v8/crypto/common:go_default_library",
+        "//vendor/github.com/jcmturner/gokrb5/v8/crypto/etype:go_default_library",
+    ],
+)

@@ -1,0 +1,17 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "buildtree.go",
+        "parse.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/mibk/dupl/job",
+    importpath = "github.com/mibk/dupl/job",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/mibk/dupl/suffixtree:go_default_library",
+        "//vendor/github.com/mibk/dupl/syntax:go_default_library",
+        "//vendor/github.com/mibk/dupl/syntax/golang:go_default_library",
+    ],
+)

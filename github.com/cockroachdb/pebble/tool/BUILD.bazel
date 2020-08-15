@@ -1,0 +1,33 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "db.go",
+        "find.go",
+        "lsm.go",
+        "lsm_data.go",
+        "manifest.go",
+        "sstable.go",
+        "tool.go",
+        "util.go",
+        "wal.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/cockroachdb/pebble/tool",
+    importpath = "github.com/cockroachdb/pebble/tool",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/cockroachdb/errors:go_default_library",
+        "//vendor/github.com/cockroachdb/pebble:go_default_library",
+        "//vendor/github.com/cockroachdb/pebble/bloom:go_default_library",
+        "//vendor/github.com/cockroachdb/pebble/internal/base:go_default_library",
+        "//vendor/github.com/cockroachdb/pebble/internal/humanize:go_default_library",
+        "//vendor/github.com/cockroachdb/pebble/internal/manifest:go_default_library",
+        "//vendor/github.com/cockroachdb/pebble/internal/private:go_default_library",
+        "//vendor/github.com/cockroachdb/pebble/internal/rangedel:go_default_library",
+        "//vendor/github.com/cockroachdb/pebble/internal/record:go_default_library",
+        "//vendor/github.com/cockroachdb/pebble/sstable:go_default_library",
+        "//vendor/github.com/cockroachdb/pebble/vfs:go_default_library",
+        "//vendor/github.com/spf13/cobra:go_default_library",
+    ],
+)

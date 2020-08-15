@@ -1,0 +1,24 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "APExchange.go",
+        "authenticator.go",
+        "cache.go",
+        "settings.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/jcmturner/gokrb5/v8/service",
+    importpath = "github.com/jcmturner/gokrb5/v8/service",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/jcmturner/goidentity/v6:go_default_library",
+        "//vendor/github.com/jcmturner/gokrb5/v8/client:go_default_library",
+        "//vendor/github.com/jcmturner/gokrb5/v8/config:go_default_library",
+        "//vendor/github.com/jcmturner/gokrb5/v8/credentials:go_default_library",
+        "//vendor/github.com/jcmturner/gokrb5/v8/iana/errorcode:go_default_library",
+        "//vendor/github.com/jcmturner/gokrb5/v8/keytab:go_default_library",
+        "//vendor/github.com/jcmturner/gokrb5/v8/messages:go_default_library",
+        "//vendor/github.com/jcmturner/gokrb5/v8/types:go_default_library",
+    ],
+)
