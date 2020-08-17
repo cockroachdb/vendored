@@ -33,11 +33,11 @@ func sstableKeyCompare(userCmp Compare, a, b InternalKey) int {
 
 func ingestValidateKey(opts *Options, key *InternalKey) error {
 	if key.Kind() == InternalKeyKindInvalid {
-		return errors.Errorf("pebble: external sstable has corrupted key: %s",
+		return base.CorruptionErrorf("pebble: external sstable has corrupted key: %s",
 			key.Pretty(opts.Comparer.FormatKey))
 	}
 	if key.SeqNum() != 0 {
-		return errors.Errorf("pebble: external sstable has non-zero seqnum: %s",
+		return base.CorruptionErrorf("pebble: external sstable has non-zero seqnum: %s",
 			key.Pretty(opts.Comparer.FormatKey))
 	}
 	return nil
@@ -79,10 +79,7 @@ func ingestLoad1(
 	// disallowing removal of an open file. Under MemFS, if we don't populate
 	// meta.Stats here, the file will be loaded into the table cache for
 	// calculating stats before we can remove the original link.
-	if r.Properties.NumRangeDeletions == 0 {
-		meta.Stats.Valid = true
-		meta.Stats.RangeDeletionsBytesEstimate = 0
-	}
+	maybeSetStatsFromProperties(meta, &r.Properties)
 
 	smallestSet, largestSet := false, false
 	empty := true

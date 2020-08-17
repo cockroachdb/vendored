@@ -1,4 +1,5 @@
-# Pebble [![Build Status](https://travis-ci.org/cockroachdb/pebble.svg?branch=master)](https://travis-ci.org/cockroachdb/pebble)
+# Pebble [![Build Status](https://travis-ci.org/cockroachdb/pebble.svg?branch=master)](https://travis-ci.org/cockroachdb/pebble) [![GoDoc](https://godoc.org/github.com/cockroachdb/pebble?status.svg)](https://godoc.org/github.com/cockroachdb/pebble)
+
 #### [Nightly benchmarks](https://cockroachdb.github.io/pebble/)
 
 Pebble is a LevelDB/RocksDB inspired key-value store focused on
@@ -108,3 +109,40 @@ https://github.com/google/leveldb
 Optimizations and inspiration were drawn from RocksDB:
 
 https://github.com/facebook/rocksdb
+
+## Getting Started
+
+### Example Code
+
+```go
+package main
+
+import (
+	"fmt"
+	"log"
+
+	"github.com/cockroachdb/pebble"
+)
+
+func main() {
+	db, err := pebble.Open("demo", &pebble.Options{})
+	if err != nil {
+		log.Fatal(err)
+	}
+	key := []byte("hello")
+	if err := db.Set(key, []byte("world"), pebble.Sync); err != nil {
+		log.Fatal(err)
+	}
+	value, closer, err := db.Get(key)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("%s %s\n", key, value)
+	if err := closer.Close(); err != nil {
+		log.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		log.Fatal(err)
+	}
+}
+```

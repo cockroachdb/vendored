@@ -205,7 +205,7 @@ github.com/cockroachdb/gostdlib/x/tools/internal/semver
 github.com/cockroachdb/gostdlib/x/tools/internal/span
 # github.com/cockroachdb/logtags v0.0.0-20190617123548-eb05cc24525f
 github.com/cockroachdb/logtags
-# github.com/cockroachdb/pebble v0.0.0-20200729202514-cfd19d33cdca
+# github.com/cockroachdb/pebble v0.0.0-20200814004841-77c18adb0ee3
 github.com/cockroachdb/pebble
 github.com/cockroachdb/pebble/bloom
 github.com/cockroachdb/pebble/internal/arenaskl
@@ -782,7 +782,7 @@ golang.org/x/perf/storage/benchfmt
 # golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 golang.org/x/sync/errgroup
 golang.org/x/sync/syncmap
-# golang.org/x/sys v0.0.0-20200728102440-3e129f6d46b1
+# golang.org/x/sys v0.0.0-20200817155316-9781c653f443
 golang.org/x/sys/cpu
 golang.org/x/sys/internal/unsafeheader
 golang.org/x/sys/unix

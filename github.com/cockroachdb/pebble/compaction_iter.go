@@ -9,6 +9,7 @@ import (
 	"sort"
 
 	"github.com/cockroachdb/errors"
+	"github.com/cockroachdb/pebble/internal/base"
 	"github.com/cockroachdb/pebble/internal/bytealloc"
 	"github.com/cockroachdb/pebble/internal/rangedel"
 )
@@ -181,6 +182,7 @@ type compactionIter struct {
 
 func newCompactionIter(
 	cmp Compare,
+	formatKey base.FormatKey,
 	merge Merge,
 	iter internalIterator,
 	snapshots []uint64,
@@ -200,6 +202,7 @@ func newCompactionIter(
 		elideRangeTombstone: elideRangeTombstone,
 	}
 	i.rangeDelFrag.Cmp = cmp
+	i.rangeDelFrag.Format = formatKey
 	i.rangeDelFrag.Emit = i.emitRangeDelChunk
 	return i
 }
@@ -337,10 +340,13 @@ func (i *compactionIter) Next() (*InternalKey, []byte) {
 				}
 				return &i.key, i.value
 			}
+			if i.err != nil {
+				i.err = base.MarkCorruptionError(i.err)
+			}
 			return nil, nil
 
 		default:
-			i.err = errors.Errorf("invalid internal key kind: %d", errors.Safe(i.iterKey.Kind()))
+			i.err = base.CorruptionErrorf("invalid internal key kind: %d", errors.Safe(i.iterKey.Kind()))
 			return nil, nil
 		}
 	}
@@ -492,7 +498,7 @@ func (i *compactionIter) mergeNext(valueMerger ValueMerger) stripeChangeType {
 			}
 
 		default:
-			i.err = errors.Errorf("invalid internal key kind: %d", errors.Safe(i.iterKey.Kind()))
+			i.err = base.CorruptionErrorf("invalid internal key kind: %d", errors.Safe(i.iterKey.Kind()))
 			return sameStripeSkippable
 		}
 	}
@@ -528,7 +534,7 @@ func (i *compactionIter) singleDeleteNext() bool {
 			continue
 
 		default:
-			i.err = errors.Errorf("invalid internal key kind: %d", errors.Safe(i.iterKey.Kind()))
+			i.err = base.CorruptionErrorf("invalid internal key kind: %d", errors.Safe(i.iterKey.Kind()))
 			return false
 		}
 	}

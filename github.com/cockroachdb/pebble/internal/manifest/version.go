@@ -43,12 +43,20 @@ type TableStats struct {
 	// Valid true if stats have been loaded for the table. The rest of the
 	// structure is populated only if true.
 	Valid bool
-	// Estimate of the total disk space that may be reclaimed by compacting
-	// this table's range deletions to the bottom of the LSM. This estimate is
-	// at data-block granularity and is not updated if compactions beneath the
-	// table reduce the amount of reclaimable disk space. It also does not
-	// account for overlapping data in L0 and ignores L0 sublevels, but the
-	// error that introduces is expected to be small.
+	// The total number of entries in the table.
+	NumEntries uint64
+	// The number of point and range deletion entries in the table.
+	NumDeletions uint64
+	// Estimate of the total disk space that may be dropped by this table's
+	// range deletions by compacting them. This estimate is at data-block
+	// granularity and is not updated if compactions beneath the table reduce
+	// the amount of reclaimable disk space. It also does not account for
+	// overlapping data in L0 and ignores L0 sublevels, but the error that
+	// introduces is expected to be small.
+	//
+	// Tables in the bottommost level of the LSM may have a nonzero estimate
+	// if snapshots or move compactions prevented the elision of their range
+	// tombstones.
 	RangeDeletionsBytesEstimate uint64
 }
 
@@ -101,12 +109,12 @@ func (m *FileMetadata) String() string {
 // error if inconsistent.
 func (m *FileMetadata) Validate(cmp Compare, formatKey base.FormatKey) error {
 	if base.InternalCompare(cmp, m.Smallest, m.Largest) > 0 {
-		return errors.Errorf("file %s has inconsistent bounds: %s vs %s",
+		return base.CorruptionErrorf("file %s has inconsistent bounds: %s vs %s",
 			errors.Safe(m.FileNum), m.Smallest.Pretty(formatKey),
 			m.Largest.Pretty(formatKey))
 	}
 	if m.SmallestSeqNum > m.LargestSeqNum {
-		return errors.Errorf("file %s has inconsistent seqnum bounds: %d vs %d",
+		return base.CorruptionErrorf("file %s has inconsistent seqnum bounds: %d vs %d",
 			errors.Safe(m.FileNum), m.SmallestSeqNum, m.LargestSeqNum)
 	}
 	return nil
@@ -400,7 +408,7 @@ func (v *Version) InitL0Sublevels(
 	cmp Compare, formatKey base.FormatKey, flushSplitBytes int64,
 ) error {
 	var err error
-	v.L0Sublevels, err = NewL0Sublevels(v.Levels[0].Slice().Collect(), cmp, formatKey, flushSplitBytes)
+	v.L0Sublevels, err = NewL0Sublevels(&v.Levels[0], cmp, formatKey, flushSplitBytes)
 	return err
 }
 
@@ -505,13 +513,13 @@ func (v *Version) CheckOrdering(cmp Compare, format base.FormatKey) error {
 	for sublevel := len(v.L0Sublevels.Levels) - 1; sublevel >= 0; sublevel-- {
 		iter := NewLevelSlice(v.L0Sublevels.Levels[sublevel]).Iter()
 		if err := CheckOrdering(cmp, format, L0Sublevel(sublevel), iter); err != nil {
-			return errors.Errorf("%s\n%s", err, v.DebugString(format))
+			return base.CorruptionErrorf("%s\n%s", err, v.DebugString(format))
 		}
 	}
 
 	for level, lm := range v.Levels {
 		if err := CheckOrdering(cmp, format, Level(level), lm.Iter()); err != nil {
-			return errors.Errorf("%s\n%s", err, v.DebugString(format))
+			return base.CorruptionErrorf("%s\n%s", err, v.DebugString(format))
 		}
 	}
 	return nil
@@ -669,7 +677,7 @@ func CheckOrdering(cmp Compare, format base.FormatKey, level Level, files LevelI
 			if prev.LargestSeqNum == 0 && f.LargestSeqNum == prev.LargestSeqNum {
 				// Multiple files satisfying case 2 mentioned above.
 			} else if !prev.lessSeqNum(f) {
-				return errors.Errorf("L0 files %s and %s are not properly ordered: <#%d-#%d> vs <#%d-#%d>",
+				return base.CorruptionErrorf("L0 files %s and %s are not properly ordered: <#%d-#%d> vs <#%d-#%d>",
 					errors.Safe(prev.FileNum), errors.Safe(f.FileNum),
 					errors.Safe(prev.SmallestSeqNum), errors.Safe(prev.LargestSeqNum),
 					errors.Safe(f.SmallestSeqNum), errors.Safe(f.LargestSeqNum))
@@ -683,13 +691,13 @@ func CheckOrdering(cmp Compare, format base.FormatKey, level Level, files LevelI
 			}
 			if prev != nil {
 				if !prev.lessSmallestKey(f, cmp) {
-					return errors.Errorf("%s files %s and %s are not properly ordered: [%s-%s] vs [%s-%s]",
+					return base.CorruptionErrorf("%s files %s and %s are not properly ordered: [%s-%s] vs [%s-%s]",
 						errors.Safe(level), errors.Safe(prev.FileNum), errors.Safe(f.FileNum),
 						prev.Smallest.Pretty(format), prev.Largest.Pretty(format),
 						f.Smallest.Pretty(format), f.Largest.Pretty(format))
 				}
 				if base.InternalCompare(cmp, prev.Largest, f.Smallest) >= 0 {
-					return errors.Errorf("%s files %s and %s have overlapping ranges: [%s-%s] vs [%s-%s]",
+					return base.CorruptionErrorf("%s files %s and %s have overlapping ranges: [%s-%s] vs [%s-%s]",
 						errors.Safe(level), errors.Safe(prev.FileNum), errors.Safe(f.FileNum),
 						prev.Smallest.Pretty(format), prev.Largest.Pretty(format),
 						f.Smallest.Pretty(format), f.Largest.Pretty(format))

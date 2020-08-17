@@ -12,13 +12,18 @@ type LevelMetadata struct {
 	files []*FileMetadata
 }
 
+// Len returns the number of files within the level.
+func (lm *LevelMetadata) Len() int {
+	return len(lm.files)
+}
+
 // Iter constructs a LevelIterator over the entire level.
-func (lm LevelMetadata) Iter() LevelIterator {
+func (lm *LevelMetadata) Iter() LevelIterator {
 	return LevelIterator{files: lm.files, end: len(lm.files)}
 }
 
 // Slice constructs a slice containing the entire level.
-func (lm LevelMetadata) Slice() LevelSlice {
+func (lm *LevelMetadata) Slice() LevelSlice {
 	return LevelSlice{files: lm.files, end: len(lm.files)}
 }
 
@@ -47,17 +52,6 @@ type LevelSlice struct {
 	files []*FileMetadata
 	start int
 	end   int
-}
-
-// Collect returns a Go slice of all files in the slice. The returned slice is
-// owned by the LevelSlice. This method is intended to be a temporary adatpter
-// between interfaces, and callers should prefer using the iterator directory
-// when possible.
-//
-// TODO(jackson): Revisit once the conversion of Version.Files to a btree is
-// complete.
-func (ls LevelSlice) Collect() []*FileMetadata {
-	return ls.files[ls.start:ls.end]
 }
 
 // Each invokes fn for each element in the slice.
