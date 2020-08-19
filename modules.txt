@@ -708,6 +708,8 @@ github.com/twpayne/go-geom/xy/orientation
 github.com/twpayne/go-kml
 # github.com/wadey/gocovmerge v0.0.0-20160331181800-b5bfa59ec0ad
 github.com/wadey/gocovmerge
+# github.com/zabawaba99/go-gitignore v0.0.0-20200117185801-39e6bddfb292
+github.com/zabawaba99/go-gitignore
 # go.etcd.io/etcd v0.0.0-00010101000000-000000000000 => github.com/cockroachdb/etcd v0.4.7-0.20200615211340-a17df30d5955
 go.etcd.io/etcd/raft
 go.etcd.io/etcd/raft/confchange
