@@ -205,7 +205,7 @@ github.com/cockroachdb/gostdlib/x/tools/internal/semver
 github.com/cockroachdb/gostdlib/x/tools/internal/span
 # github.com/cockroachdb/logtags v0.0.0-20190617123548-eb05cc24525f
 github.com/cockroachdb/logtags
-# github.com/cockroachdb/pebble v0.0.0-20200817204059-a24bc6c83054
+# github.com/cockroachdb/pebble v0.0.0-20200824180455-875ca32696b6
 github.com/cockroachdb/pebble
 github.com/cockroachdb/pebble/bloom
 github.com/cockroachdb/pebble/internal/arenaskl
@@ -751,7 +751,7 @@ golang.org/x/crypto/ssh/agent
 golang.org/x/crypto/ssh/internal/bcrypt_pbkdf
 golang.org/x/crypto/ssh/knownhosts
 golang.org/x/crypto/ssh/terminal
-# golang.org/x/exp v0.0.0-20200819202907-27b6b2ade93b
+# golang.org/x/exp v0.0.0-20200821190819-94841d0725da
 golang.org/x/exp/rand
 # golang.org/x/lint v0.0.0-20200130185559-910be7a94367
 golang.org/x/lint
@@ -785,7 +785,7 @@ golang.org/x/perf/storage/benchfmt
 # golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 golang.org/x/sync/errgroup
 golang.org/x/sync/syncmap
-# golang.org/x/sys v0.0.0-20200821140526-fda516888d29
+# golang.org/x/sys v0.0.0-20200824131525-c12d262b63d8
 golang.org/x/sys/cpu
 golang.org/x/sys/internal/unsafeheader
 golang.org/x/sys/unix
