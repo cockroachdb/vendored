@@ -455,7 +455,7 @@ github.com/jackc/pgconn/stmtcache
 github.com/jackc/pgio
 # github.com/jackc/pgpassfile v1.0.0
 github.com/jackc/pgpassfile
-# github.com/jackc/pgproto3/v2 v2.0.2
+# github.com/jackc/pgproto3/v2 v2.0.4
 github.com/jackc/pgproto3/v2
 # github.com/jackc/pgservicefile v0.0.0-20200307190119-3430c5407db8
 github.com/jackc/pgservicefile
