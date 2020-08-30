@@ -687,7 +687,7 @@ github.com/spf13/pflag
 # github.com/stretchr/testify v1.6.1
 github.com/stretchr/testify/assert
 github.com/stretchr/testify/require
-# github.com/twpayne/go-geom v1.3.2
+# github.com/twpayne/go-geom v1.3.5
 github.com/twpayne/go-geom
 github.com/twpayne/go-geom/bigxy
 github.com/twpayne/go-geom/encoding/ewkb
@@ -704,7 +704,7 @@ github.com/twpayne/go-geom/xy/internal/hcoords
 github.com/twpayne/go-geom/xy/lineintersection
 github.com/twpayne/go-geom/xy/lineintersector
 github.com/twpayne/go-geom/xy/orientation
-# github.com/twpayne/go-kml v1.5.0
+# github.com/twpayne/go-kml v1.5.1
 github.com/twpayne/go-kml
 # github.com/wadey/gocovmerge v0.0.0-20160331181800-b5bfa59ec0ad
 github.com/wadey/gocovmerge
