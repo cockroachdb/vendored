@@ -5,10 +5,13 @@
 package manifest
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"unsafe"
+
+	"github.com/cockroachdb/pebble/internal/base"
 )
 
 const (
@@ -84,7 +87,7 @@ func mut(n **node) *node {
 	// reference count to be greater than 1, we might be racing
 	// with another call to decRef on this node.
 	c := (*n).clone()
-	(*n).decRef(true /* recursive */)
+	(*n).decRef(true /* recursive */, nil)
 	*n = c
 	return *n
 }
@@ -96,11 +99,29 @@ func (n *node) incRef() {
 
 // decRef releases a reference to the node. If requested, the method
 // will recurse into child nodes and decrease their refcounts as well.
-func (n *node) decRef(recursive bool) {
+// When a node is released, its contained files are dereferenced.
+func (n *node) decRef(recursive bool, obsolete *[]base.FileNum) {
 	if atomic.AddInt32(&n.ref, -1) > 0 {
 		// Other references remain. Can't free.
 		return
 	}
+
+	// Dereference the node's metadata.
+	if recursive {
+		for _, f := range n.items[:n.count] {
+			if atomic.AddInt32(&f.refs, -1) == 0 {
+				// There are two sources of node dereferences: tree mutations
+				// and Version dereferences. Files should only be made obsolete
+				// during Version dereferences, during which `obsolete` will be
+				// non-nil.
+				if obsolete == nil {
+					panic(fmt.Sprintf("file metadata %s dereferenced to zero during tree mutation", f.FileNum))
+				}
+				*obsolete = append(*obsolete, f.FileNum)
+			}
+		}
+	}
+
 	// Clear and release node into memory pool.
 	if n.leaf {
 		ln := nodeToLeaf(n)
@@ -110,7 +131,7 @@ func (n *node) decRef(recursive bool) {
 		// Release child references first, if requested.
 		if recursive {
 			for i := int16(0); i <= n.count; i++ {
-				n.children[i].decRef(true /* recursive */)
+				n.children[i].decRef(true /* recursive */, obsolete)
 			}
 		}
 		*n = node{}
@@ -130,6 +151,10 @@ func (n *node) clone() *node {
 	// triggering the race detector and looking like a data race.
 	c.count = n.count
 	c.items = n.items
+	// Increase the refcount of each contained item.
+	for _, f := range n.items[:n.count] {
+		atomic.AddInt32(&f.refs, 1)
+	}
 	if !c.leaf {
 		// Copy children and increase each refcount.
 		c.children = n.children
@@ -283,17 +308,19 @@ func (n *node) split(i int) (*FileMetadata, *node) {
 }
 
 // insert inserts a item into the subtree rooted at this node, making sure no
-// nodes in the subtree exceed maxItems items. Returns true if an existing item
-// was replaced and false if a item was inserted.
-func (n *node) insert(cmp func(*FileMetadata, *FileMetadata) int, item *FileMetadata) (replaced bool) {
+// nodes in the subtree exceed maxItems items.
+func (n *node) insert(cmp func(*FileMetadata, *FileMetadata) int, item *FileMetadata) {
 	i, found := n.find(cmp, item)
 	if found {
-		n.items[i] = item
-		return true
+		// cmp provides a total ordering of the files within a level.
+		// If we're inserting a metadata that's equal to an existing item
+		// in the tree, we're inserting a file into a level twice.
+		panic(fmt.Sprintf("file key collision: existing metadata %s, inserting %s",
+			n.items[i].FileNum, item.FileNum))
 	}
 	if n.leaf {
 		n.insertAt(i, item, nil)
-		return false
+		return
 	}
 	if n.children[i].count >= maxItems {
 		splitLa, splitNode := mut(&n.children[i]).split(maxItems / 2)
@@ -305,12 +332,14 @@ func (n *node) insert(cmp func(*FileMetadata, *FileMetadata) int, item *FileMeta
 		case cmp > 0:
 			i++ // we want second split node
 		default:
-			n.items[i] = item
-			return true
+			// cmp provides a total ordering of the files within a level.
+			// If we're inserting a metadata that's equal to an existing item
+			// in the tree, we're inserting a file into a level twice.
+			panic(fmt.Sprintf("file key collision: existing metadata %s, inserting %s",
+				n.items[i].FileNum, item.FileNum))
 		}
 	}
-	replaced = mut(&n.children[i]).insert(cmp, item)
-	return replaced
+	mut(&n.children[i]).insert(cmp, item)
 }
 
 // removeMax removes and returns the maximum item from the subtree rooted
@@ -471,7 +500,7 @@ func (n *node) rebalanceOrMerge(i int) {
 		}
 		child.count += mergeChild.count + 1
 
-		mergeChild.decRef(false /* recursive */)
+		mergeChild.decRef(false /* recursive */, nil)
 	}
 }
 
@@ -490,16 +519,17 @@ type btree struct {
 	cmp    func(*FileMetadata, *FileMetadata) int
 }
 
-// Reset removes all items from the btree. In doing so, it allows memory
-// held by the btree to be recycled. Failure to call this method before
-// letting a btree be GCed is safe in that it won't cause a memory leak,
-// but it will prevent btree nodes from being efficiently re-used.
-func (t *btree) Reset() {
+// Release dereferences and clears the root node of the btree, removing all
+// items from the btree. In doing so, it allows memory held by the btree to be
+// recycled. It returns a slice of file numbers of newly obsolete files, if
+// any.
+func (t *btree) Release() (obsolete []base.FileNum) {
 	if t.root != nil {
-		t.root.decRef(true /* recursive */)
+		t.root.decRef(true /* recursive */, &obsolete)
 		t.root = nil
 	}
 	t.length = 0
+	return obsolete
 }
 
 // Clone clones the btree, lazily. It does so in constant time.
@@ -525,13 +555,15 @@ func (t *btree) Clone() btree {
 	return c
 }
 
-// Delete removes a item equal to the passed in item from the tree.
-func (t *btree) Delete(item *FileMetadata) {
+// Delete removes the provided file from the tree.
+// It returns true if the file now has a zero reference count.
+func (t *btree) Delete(item *FileMetadata) (obsolete bool) {
 	if t.root == nil || t.root.count == 0 {
-		return
+		return false
 	}
 	if out := mut(&t.root).remove(t.cmp, item); out != nil {
 		t.length--
+		obsolete = atomic.AddInt32(&out.refs, -1) == 0
 	}
 	if t.root.count == 0 {
 		old := t.root
@@ -540,13 +572,14 @@ func (t *btree) Delete(item *FileMetadata) {
 		} else {
 			t.root = t.root.children[0]
 		}
-		old.decRef(false /* recursive */)
+		old.decRef(false /* recursive */, nil)
 	}
+	return obsolete
 }
 
-// Set adds the given item to the tree. If a item in the tree already
-// equals the given one, it is replaced with the new item.
-func (t *btree) Set(item *FileMetadata) {
+// Insert adds the given item to the tree. If a item in the tree already
+// equals the given one, Insert panics.
+func (t *btree) Insert(item *FileMetadata) {
 	if t.root == nil {
 		t.root = newLeafNode()
 	} else if t.root.count >= maxItems {
@@ -558,9 +591,9 @@ func (t *btree) Set(item *FileMetadata) {
 		newRoot.children[1] = splitNode
 		t.root = newRoot
 	}
-	if replaced := mut(&t.root).insert(t.cmp, item); !replaced {
-		t.length++
-	}
+	atomic.AddInt32(&item.refs, 1)
+	mut(&t.root).insert(t.cmp, item)
+	t.length++
 }
 
 // MakeIter returns a new iterator object. It is not safe to continue using an
@@ -667,6 +700,18 @@ func (is *iterStack) len() int {
 	return int(is.aLen)
 }
 
+func (is *iterStack) clone() iterStack {
+	// If the iterator is using the embedded iterStackArr, we only need to
+	// copy the struct itself.
+	if is.s == nil {
+		return *is
+	}
+	clone := *is
+	clone.s = make([]iterFrame, len(is.s))
+	copy(clone.s, is.s)
+	return clone
+}
+
 func (is *iterStack) reset() {
 	if is.aLen == -1 {
 		is.s = is.s[:0]
@@ -682,6 +727,12 @@ type iterator struct {
 	pos int16
 	cmp func(*FileMetadata, *FileMetadata) int
 	s   iterStack
+}
+
+func (i *iterator) clone() iterator {
+	c := *i
+	c.s = i.s.clone()
+	return c
 }
 
 func (i *iterator) reset() {
