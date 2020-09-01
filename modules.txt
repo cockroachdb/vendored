@@ -167,7 +167,7 @@ github.com/cockroachdb/crlfmt/internal/parser
 github.com/cockroachdb/crlfmt/internal/render
 # github.com/cockroachdb/datadriven v1.0.1-0.20200826112548-92602d883b11
 github.com/cockroachdb/datadriven
-# github.com/cockroachdb/errors v1.7.3
+# github.com/cockroachdb/errors v1.7.4-0.20200901162659-b0f54ae0a5e8
 github.com/cockroachdb/errors
 github.com/cockroachdb/errors/assert
 github.com/cockroachdb/errors/barriers
@@ -228,8 +228,10 @@ github.com/cockroachdb/pebble/internal/record
 github.com/cockroachdb/pebble/sstable
 github.com/cockroachdb/pebble/tool
 github.com/cockroachdb/pebble/vfs
-# github.com/cockroachdb/redact v1.0.2
+# github.com/cockroachdb/redact v1.0.4
 github.com/cockroachdb/redact
+github.com/cockroachdb/redact/internal
+github.com/cockroachdb/redact/internal/fmtsort
 # github.com/cockroachdb/returncheck v0.0.0-20200612231554-92cdbca611dd
 github.com/cockroachdb/returncheck
 # github.com/cockroachdb/sentry-go v0.6.1-cockroachdb.2
