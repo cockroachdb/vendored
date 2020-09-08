@@ -689,7 +689,7 @@ github.com/spf13/pflag
 # github.com/stretchr/testify v1.6.1
 github.com/stretchr/testify/assert
 github.com/stretchr/testify/require
-# github.com/twpayne/go-geom v1.3.5
+# github.com/twpayne/go-geom v1.3.6
 github.com/twpayne/go-geom
 github.com/twpayne/go-geom/bigxy
 github.com/twpayne/go-geom/encoding/ewkb
