@@ -242,6 +242,8 @@ github.com/cockroachdb/stress
 github.com/cockroachdb/ttycolor
 # github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
 github.com/codahale/hdrhistogram
+# github.com/coreos/go-oidc v2.2.1+incompatible
+github.com/coreos/go-oidc
 # github.com/cpuguy83/go-md2man v1.0.10
 github.com/cpuguy83/go-md2man/md2man
 # github.com/dave/dst v0.24.0
@@ -639,6 +641,9 @@ github.com/pkg/browser
 github.com/pkg/errors
 # github.com/pmezard/go-difflib v1.0.0
 github.com/pmezard/go-difflib/difflib
+# github.com/pquerna/cachecontrol v0.0.0-20200819021114-67c6ae64274f
+github.com/pquerna/cachecontrol
+github.com/pquerna/cachecontrol/cacheobject
 # github.com/prometheus/client_golang v1.1.0
 github.com/prometheus/client_golang/prometheus
 github.com/prometheus/client_golang/prometheus/graphite
@@ -1021,6 +1026,10 @@ gopkg.in/jcmturner/gokrb5.v7/types
 # gopkg.in/jcmturner/rpc.v1 v1.1.0
 gopkg.in/jcmturner/rpc.v1/mstypes
 gopkg.in/jcmturner/rpc.v1/ndr
+# gopkg.in/square/go-jose.v2 v2.5.1
+gopkg.in/square/go-jose.v2
+gopkg.in/square/go-jose.v2/cipher
+gopkg.in/square/go-jose.v2/json
 # gopkg.in/yaml.v2 v2.3.0 => github.com/cockroachdb/yaml v0.0.0-20180705215940-0e2822948641
 gopkg.in/yaml.v2
 # gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c
