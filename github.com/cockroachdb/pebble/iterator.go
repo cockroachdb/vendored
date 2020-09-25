@@ -351,6 +351,19 @@ func (i *Iterator) SeekGE(key []byte) bool {
 //   SeekPrefixGE("a@0") -> "a@1"
 //   Next()              -> "a@2"
 //   Next()              -> EOF
+//
+// If you're just looking to iterate over keys with a shared prefix, as
+// defined by the configured comparer, set iterator bounds instead:
+//
+//  iter := db.NewIter(&pebble.IterOptions{
+//    LowerBound: []byte("prefix"),
+//    UpperBound: []byte("prefiy"),
+//  })
+//  for iter.First(); iter.Valid(); iter.Next() {
+//    // Only keys beginning with "prefix" will be visited.
+//  }
+//
+// See Example_prefixiteration for a working example.
 func (i *Iterator) SeekPrefixGE(key []byte) bool {
 	i.err = nil // clear cached iteration error
 

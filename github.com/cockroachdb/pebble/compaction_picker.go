@@ -43,6 +43,29 @@ type compactionPicker interface {
 type compactionInfo struct {
 	inputs      []compactionLevel
 	outputLevel int
+	smallest    InternalKey
+	largest     InternalKey
+}
+
+func (info compactionInfo) String() string {
+	var buf bytes.Buffer
+	var largest int
+	for i, in := range info.inputs {
+		if i > 0 {
+			fmt.Fprintf(&buf, " -> ")
+		}
+		fmt.Fprintf(&buf, "L%d", in.level)
+		in.files.Each(func(m *fileMetadata) {
+			fmt.Fprintf(&buf, " %s", m.FileNum)
+		})
+		if largest < in.level {
+			largest = in.level
+		}
+	}
+	if largest != info.outputLevel || len(info.inputs) == 1 {
+		fmt.Fprintf(&buf, " -> L%d", info.outputLevel)
+	}
+	return buf.String()
 }
 
 type sortCompactionLevelsDecreasingScore []candidateLevelInfo
@@ -102,9 +125,7 @@ type pickedCompaction struct {
 	version *version
 }
 
-func newPickedCompaction(
-	opts *Options, cur *version, startLevel, baseLevel int,
-) *pickedCompaction {
+func newPickedCompaction(opts *Options, cur *version, startLevel, baseLevel int) *pickedCompaction {
 	if startLevel > 0 && startLevel < baseLevel {
 		panic(fmt.Sprintf("invalid compaction: start level %d should not be empty (base level %d)",
 			startLevel, baseLevel))
@@ -135,7 +156,9 @@ func newPickedCompaction(
 	return pc
 }
 
-func newPickedCompactionFromL0(lcf *manifest.L0CompactionFiles, opts *Options, vers *version, baseLevel int, isBase bool) *pickedCompaction {
+func newPickedCompactionFromL0(
+	lcf *manifest.L0CompactionFiles, opts *Options, vers *version, baseLevel int, isBase bool,
+) *pickedCompaction {
 	pc := newPickedCompaction(opts, vers, 0, baseLevel)
 	pc.lcf = lcf
 	if !isBase {
@@ -158,9 +181,13 @@ func newPickedCompactionFromL0(lcf *manifest.L0CompactionFiles, opts *Options, v
 	return pc
 }
 
-func (pc *pickedCompaction) setupInputs() {
+func (pc *pickedCompaction) setupInputs() bool {
 	// Expand the initial inputs to a clean cut.
-	pc.startLevel.files = expandToAtomicUnit(pc.cmp, pc.startLevel.files)
+	var isCompacting bool
+	pc.startLevel.files, isCompacting = expandToAtomicUnit(pc.cmp, pc.startLevel.files)
+	if isCompacting {
+		return false
+	}
 	pc.smallest, pc.largest = manifest.KeyRange(pc.cmp, pc.startLevel.files.Iter())
 
 	// Determine the sstables in the output level which overlap with the input
@@ -168,7 +195,10 @@ func (pc *pickedCompaction) setupInputs() {
 	// this for intra-L0 compactions; outputLevel.files is left empty for those.
 	if pc.startLevel.level != pc.outputLevel.level {
 		pc.outputLevel.files = pc.version.Overlaps(pc.outputLevel.level, pc.cmp, pc.smallest.UserKey, pc.largest.UserKey)
-		pc.outputLevel.files = expandToAtomicUnit(pc.cmp, pc.outputLevel.files)
+		pc.outputLevel.files, isCompacting = expandToAtomicUnit(pc.cmp, pc.outputLevel.files)
+		if isCompacting {
+			return false
+		}
 		pc.smallest, pc.largest = manifest.KeyRange(pc.cmp,
 			pc.startLevel.files.Iter(), pc.outputLevel.files.Iter())
 	}
@@ -240,6 +270,7 @@ func (pc *pickedCompaction) setupInputs() {
 		pc.smallest, pc.largest = manifest.KeyRange(pc.cmp,
 			pc.startLevel.files.Iter(), pc.outputLevel.files.Iter())
 	}
+	return true
 }
 
 // grow grows the number of inputs at c.level without changing the number of
@@ -250,7 +281,10 @@ func (pc *pickedCompaction) grow(sm, la InternalKey) bool {
 		return false
 	}
 	grow0 := pc.version.Overlaps(pc.startLevel.level, pc.cmp, sm.UserKey, la.UserKey)
-	grow0 = expandToAtomicUnit(pc.cmp, grow0)
+	grow0, isCompacting := expandToAtomicUnit(pc.cmp, grow0)
+	if isCompacting {
+		return false
+	}
 	if grow0.Len() <= pc.startLevel.files.Len() {
 		return false
 	}
@@ -259,7 +293,10 @@ func (pc *pickedCompaction) grow(sm, la InternalKey) bool {
 	}
 	sm1, la1 := manifest.KeyRange(pc.cmp, grow0.Iter())
 	grow1 := pc.version.Overlaps(pc.outputLevel.level, pc.cmp, sm1.UserKey, la1.UserKey)
-	grow1 = expandToAtomicUnit(pc.cmp, grow1)
+	grow1, isCompacting = expandToAtomicUnit(pc.cmp, grow1)
+	if isCompacting {
+		return false
+	}
 	if grow1.Len() != pc.outputLevel.files.Len() {
 		return false
 	}
@@ -305,19 +342,27 @@ func (pc *pickedCompaction) grow(sm, la InternalKey) bool {
 // tombstones will be truncated at "b" (the largest key in its atomic
 // compaction unit). In the scenario here, that could result in b#1 becoming
 // visible when it should be deleted.
-func expandToAtomicUnit(cmp Compare, inputs manifest.LevelSlice) manifest.LevelSlice {
+//
+// isCompacting is returned true for any atomic units that contain files that
+// have in-progress compactions, i.e. FileMetadata.Compacting == true.
+func expandToAtomicUnit(
+	cmp Compare, inputs manifest.LevelSlice,
+) (slice manifest.LevelSlice, isCompacting bool) {
 	// NB: Inputs for L0 can't be expanded and *version.Overlaps guarantees
 	// that we get a 'clean cut.' For L0, Overlaps will return a slice without
 	// access to the rest of the L0 files, so it's OK to try to reslice.
 	if inputs.Empty() {
 		// Nothing to expand.
-		return inputs
+		return inputs, false
 	}
 
-	return inputs.Reslice(func(start, end *manifest.LevelIterator) {
+	inputs = inputs.Reslice(func(start, end *manifest.LevelIterator) {
 		iter := start.Clone()
 		iter.Prev()
 		for cur, prev := start.Current(), iter.Current(); prev != nil; cur, prev = start.Prev(), iter.Prev() {
+			if cur.Compacting {
+				isCompacting = true
+			}
 			if cmp(prev.Largest.UserKey, cur.Smallest.UserKey) < 0 {
 				break
 			}
@@ -336,6 +381,9 @@ func expandToAtomicUnit(cmp Compare, inputs manifest.LevelSlice) manifest.LevelS
 		iter = end.Clone()
 		iter.Next()
 		for cur, next := end.Current(), iter.Current(); next != nil; cur, next = end.Next(), iter.Next() {
+			if cur.Compacting {
+				isCompacting = true
+			}
 			if cmp(cur.Largest.UserKey, next.Smallest.UserKey) < 0 {
 				break
 			}
@@ -351,16 +399,21 @@ func expandToAtomicUnit(cmp Compare, inputs manifest.LevelSlice) manifest.LevelS
 			// include next in the compaction.
 		}
 	})
+	inputIter := inputs.Iter()
+	return inputs, isCompacting || inputIter.First().Compacting || inputIter.Last().Compacting
 }
 
 func newCompactionPicker(
-	v *version, opts *Options, inProgressCompactions []compactionInfo,
+	v *version,
+	opts *Options,
+	inProgressCompactions []compactionInfo,
+	levelSizes [numLevels]int64,
 ) compactionPicker {
 	p := &compactionPickerByScore{
 		opts: opts,
 		vers: v,
 	}
-	p.initLevelMaxBytes(inProgressCompactions)
+	p.initLevelMaxBytes(inProgressCompactions, levelSizes)
 	return p
 }
 
@@ -485,7 +538,9 @@ func (p *compactionPickerByScore) estimatedCompactionDebt(l0ExtraSize uint64) ui
 	return compactionDebt
 }
 
-func (p *compactionPickerByScore) initLevelMaxBytes(inProgressCompactions []compactionInfo) {
+func (p *compactionPickerByScore) initLevelMaxBytes(
+	inProgressCompactions []compactionInfo, levelSizes [numLevels]int64,
+) {
 	// The levelMaxBytes calculations here differ from RocksDB in two ways:
 	//
 	// 1. The use of dbSize vs maxLevelSize. RocksDB uses the size of the maximum
@@ -508,12 +563,11 @@ func (p *compactionPickerByScore) initLevelMaxBytes(inProgressCompactions []comp
 	firstNonEmptyLevel := -1
 	var dbSize int64
 	for level := 1; level < numLevels; level++ {
-		levelSize := int64(p.vers.Levels[level].Slice().SizeSum())
-		if levelSize > 0 {
+		if levelSizes[level] > 0 {
 			if firstNonEmptyLevel == -1 {
 				firstNonEmptyLevel = level
 			}
-			dbSize += levelSize
+			dbSize += levelSizes[level]
 		}
 	}
 	for _, c := range inProgressCompactions {
@@ -543,7 +597,7 @@ func (p *compactionPickerByScore) initLevelMaxBytes(inProgressCompactions []comp
 	}
 
 	const levelMultiplier = 10
-	dbSize += int64(p.vers.Levels[0].Slice().SizeSum())
+	dbSize += levelSizes[0]
 	bottomLevelSize := dbSize - dbSize/levelMultiplier
 
 	curLevelSize := bottomLevelSize
@@ -831,9 +885,13 @@ func (p *compactionPickerByScore) pickFile(level, outputLevel int) (manifest.Lev
 // for a forced compaction (identified by FileMetadata.MarkedForCompaction).
 func (p *compactionPickerByScore) pickAuto(env compactionEnv) (pc *pickedCompaction) {
 	// Compaction concurrency is controlled by L0 read-amp. We allow one
-	// additional compaction per L0CompactionConcurrency sublevels. Compaction
-	// concurrency is tied to L0 sublevels as that signal is independent of the
-	// database size.
+	// additional compaction per L0CompactionConcurrency sublevels, as well as
+	// one additional compaction per CompactionDebtConcurrency bytes of
+	// compaction debt. Compaction concurrency is tied to L0 sublevels as that
+	// signal is independent of the database size. We tack on the compaction
+	// debt as a second signal to prevent compaction concurrency from dropping
+	// significantly right after a base compaction finishes, and before those
+	// bytes have been compacted further down the LSM.
 	if n := len(env.inProgressCompactions); n > 0 {
 		var l0ReadAmp int
 		if p.opts.Experimental.L0SublevelCompactions {
@@ -841,7 +899,10 @@ func (p *compactionPickerByScore) pickAuto(env compactionEnv) (pc *pickedCompact
 		} else {
 			l0ReadAmp = p.vers.Levels[0].Slice().Len()
 		}
-		if l0ReadAmp < n*p.opts.Experimental.L0CompactionConcurrency {
+		compactionDebt := int(p.estimatedCompactionDebt(0))
+		ccSignal1 := n *p.opts.Experimental.L0CompactionConcurrency
+		ccSignal2 := n *p.opts.Experimental.CompactionDebtConcurrency
+		if l0ReadAmp < ccSignal1 && compactionDebt < ccSignal2 {
 			return nil
 		}
 	}
@@ -914,7 +975,7 @@ func (p *compactionPickerByScore) pickAuto(env compactionEnv) (pc *pickedCompact
 			pc = pickL0(env, p.opts, p.vers, p.baseLevel)
 			// Fail-safe to protect against compacting the same sstable
 			// concurrently.
-			if pc != nil && !inputAlreadyCompacting(pc) {
+			if pc != nil && !inputRangeAlreadyCompacting(env, pc) {
 				pc.score = info.score
 				// TODO(peter): remove
 				if false {
@@ -933,7 +994,7 @@ func (p *compactionPickerByScore) pickAuto(env compactionEnv) (pc *pickedCompact
 
 		pc := pickAutoHelper(env, p.opts, p.vers, *info, p.baseLevel)
 		// Fail-safe to protect against compacting the same sstable concurrently.
-		if pc != nil && !inputAlreadyCompacting(pc) {
+		if pc != nil && !inputRangeAlreadyCompacting(env, pc) {
 			pc.score = info.score
 			// TODO(peter): remove
 			if false {
@@ -977,7 +1038,7 @@ func (p *compactionPickerByScore) pickAuto(env compactionEnv) (pc *pickedCompact
 			info.file = iter.Take()
 			pc := pickAutoHelper(env, p.opts, p.vers, *info, p.baseLevel)
 			// Fail-safe to protect against compacting the same sstable concurrently.
-			if pc != nil && !inputAlreadyCompacting(pc) {
+			if pc != nil && !inputRangeAlreadyCompacting(env, pc) {
 				pc.score = info.score
 				return pc
 			}
@@ -988,7 +1049,9 @@ func (p *compactionPickerByScore) pickAuto(env compactionEnv) (pc *pickedCompact
 
 // pickElisionOnlyCompaction looks for compactions of sstables in the
 // bottommost level containing obsolete records that may now be dropped.
-func (p *compactionPickerByScore) pickElisionOnlyCompaction(env compactionEnv) (pc *pickedCompaction) {
+func (p *compactionPickerByScore) pickElisionOnlyCompaction(
+	env compactionEnv,
+) (pc *pickedCompaction) {
 	if p.elisionThreshold == nil || (p.elisionCandidate != nil && p.elisionCandidate.Compacting) {
 		var lowestCandidateSeqNum uint64 = math.MaxUint64
 		var lowestCandidate manifest.LevelFile
@@ -1037,13 +1100,17 @@ func (p *compactionPickerByScore) pickElisionOnlyCompaction(env compactionEnv) (
 	// Construct a picked compaction of the elision candidate's atomic
 	// compaction unit.
 	pc = newPickedCompaction(p.opts, p.vers, numLevels-1, numLevels-1)
-	pc.startLevel.files = expandToAtomicUnit(p.opts.Comparer.Compare, p.elisionCandidate.Slice())
+	var isCompacting bool
+	pc.startLevel.files, isCompacting = expandToAtomicUnit(p.opts.Comparer.Compare, p.elisionCandidate.Slice())
+	if isCompacting {
+		return nil
+	}
 
 	p.elisionThreshold = nil
 	p.elisionCandidate = nil
 
 	// Fail-safe to protect against compacting the same sstable concurrently.
-	if !inputAlreadyCompacting(pc) {
+	if !inputRangeAlreadyCompacting(env, pc) {
 		return pc
 	}
 	return nil
@@ -1071,7 +1138,9 @@ func pickAutoHelper(
 		}
 	}
 
-	pc.setupInputs()
+	if !pc.setupInputs() {
+		return nil
+	}
 	return pc
 }
 
@@ -1103,14 +1172,16 @@ func pickL0(env compactionEnv, opts *Options, vers *version, baseLevel int) (pc 
 	// compaction. Note that we pass in L0CompactionThreshold here as opposed to
 	// 1, since choosing a single sublevel intra-L0 compaction is
 	// counterproductive.
-	lcf, err = vers.L0Sublevels.PickIntraL0Compaction(env.earliestUnflushedSeqNum, opts.L0CompactionThreshold)
+	lcf, err = vers.L0Sublevels.PickIntraL0Compaction(env.earliestUnflushedSeqNum, minIntraL0Count)
 	if err != nil {
 		opts.Logger.Infof("error when picking intra-L0 compaction: %s", err)
 		return
 	}
 	if lcf != nil {
 		pc = newPickedCompactionFromL0(lcf, opts, vers, 0, false)
-		pc.setupInputs()
+		if !pc.setupInputs() {
+			return nil
+		}
 		if pc.startLevel.files.Empty() {
 			opts.Logger.Fatalf("empty compaction chosen")
 		}
@@ -1123,14 +1194,6 @@ func pickL0(env compactionEnv, opts *Options, vers *version, baseLevel int) (pc 
 		}
 
 		pc.smallest, pc.largest = manifest.KeyRange(pc.cmp, pc.startLevel.files.Iter())
-		// Output only a single sstable for intra-L0 compactions.
-		// Now that we have the ability to split flushes, we could conceivably
-		// split the output of intra-L0 compactions too. This may be unnecessary
-		// complexity -- the inputs to intra-L0 should be narrow in the key space
-		// (unlike flushes), so writing a single sstable should be ok.
-		pc.maxOutputFileSize = math.MaxUint64
-		pc.maxOverlapBytes = math.MaxUint64
-		pc.maxExpandedBytes = math.MaxUint64
 	}
 	return pc
 }
@@ -1266,7 +1329,7 @@ func (p *compactionPickerByScore) pickManual(
 		panic("pebble: compaction picked unexpected output level")
 	}
 	// Fail-safe to protect against compacting the same sstable concurrently.
-	if inputAlreadyCompacting(pc) {
+	if inputRangeAlreadyCompacting(env, pc) {
 		return nil, true
 	}
 	return pc, false
@@ -1283,7 +1346,9 @@ func pickManualHelper(
 		// Nothing to do
 		return nil
 	}
-	pc.setupInputs()
+	if !pc.setupInputs() {
+		return nil
+	}
 	return pc
 }
 
@@ -1291,13 +1356,58 @@ func (p *compactionPickerByScore) forceBaseLevel1() {
 	p.baseLevel = 1
 }
 
-func inputAlreadyCompacting(pc *pickedCompaction) bool {
+func inputRangeAlreadyCompacting(env compactionEnv, pc *pickedCompaction) bool {
 	for _, cl := range pc.inputs {
 		iter := cl.files.Iter()
 		for f := iter.First(); f != nil; f = iter.Next() {
 			if f.Compacting {
 				return true
 			}
+		}
+	}
+
+	// Look for active compactions outputting to the same region of the key
+	// space in the same output level. Two potential compactions may conflict
+	// without sharing input files if there are no files in the output level
+	// that overlap with the intersection of the compactions' key spaces.
+	//
+	// Consider an active L0->Lbase compaction compacting two L0 files one
+	// [a-f] and the other [t-z] into Lbase.
+	//
+	// L0
+	//     ↦ 000100  ↤                           ↦  000101   ↤
+	// L1
+	//     ↦ 000004  ↤
+	//     a b c d e f g h i j k l m n o p q r s t u v w x y z
+	//
+	// If a new file 000102 [j-p] is flushed while the existing compaction is
+	// still ongoing, new file would not be in any compacting sublevel
+	// intervals and would not overlap with any Lbase files that are also
+	// compacting. However, this compaction cannot be picked because the
+	// compaction's output key space [j-p] would overlap the existing
+	// compaction's output key space [a-z].
+	//
+	// L0
+	//     ↦ 000100* ↤       ↦   000102  ↤       ↦  000101*  ↤
+	// L1
+	//     ↦ 000004* ↤
+	//     a b c d e f g h i j k l m n o p q r s t u v w x y z
+	//
+	// * - currently compacting
+	if pc.outputLevel != nil && pc.outputLevel.level != 0 {
+		for _, c := range env.inProgressCompactions {
+			if pc.outputLevel.level != c.outputLevel {
+				continue
+			}
+			if base.InternalCompare(pc.cmp, c.largest, pc.smallest) < 0 ||
+				base.InternalCompare(pc.cmp, c.smallest, pc.largest) > 0 {
+				continue
+			}
+
+			// The picked compaction and the in-progress compaction c are
+			// outputting to the same region of the key space of the same
+			// level.
+			return true
 		}
 	}
 	return false

@@ -47,15 +47,6 @@ type FilterWriter = base.FilterWriter
 // FilterPolicy exports the base.FilterPolicy type.
 type FilterPolicy = base.FilterPolicy
 
-// TableFormat exports the base.TableFormat type.
-type TableFormat = sstable.TableFormat
-
-// Exported TableFormat constants.
-const (
-	TableFormatRocksDBv2 = sstable.TableFormatRocksDBv2
-	TableFormatLevelDB   = sstable.TableFormatLevelDB
-)
-
 // TablePropertyCollector exports the sstable.TablePropertyCollector type.
 type TablePropertyCollector = sstable.TablePropertyCollector
 
@@ -231,10 +222,11 @@ func (o *LevelOptions) EnsureDefaults() *LevelOptions {
 // apply to the DB at large; per-query options are defined by the IterOptions
 // and WriteOptions types.
 type Options struct {
-	// Sync sstables and the WAL periodically in order to smooth out writes to
-	// disk. This option does not provide any persistency guarantee, but is used
-	// to avoid latency spikes if the OS automatically decides to write out a
-	// large chunk of dirty filesystem buffers.
+	// Sync sstables periodically in order to smooth out writes to disk. This
+	// option does not provide any persistency guarantee, but is used to avoid
+	// latency spikes if the OS automatically decides to write out a large chunk
+	// of dirty filesystem buffers. This option only controls SSTable syncs; WAL
+	// syncs are controlled by WALBytesPerSync.
 	//
 	// The default value is 512KB.
 	BytesPerSync int
@@ -304,9 +296,18 @@ type Options struct {
 		FlushSplitBytes int64
 
 		// The threshold of L0 read-amplification at which compaction concurrency
-		// is enabled. Every multiple of this value enables another concurrent
+		// is enabled (if CompactionDebtConcurrency was not already exceeded).
+		// Every multiple of this value enables another concurrent
 		// compaction up to MaxConcurrentCompactions.
 		L0CompactionConcurrency int
+
+		// CompactionDebtConcurrency controls the threshold of compaction debt
+		// at which additional compaction concurrency slots are added. For every
+		// multiple of this value in compaction debt bytes, an additional
+		// concurrent compaction is added. This works "on top" of
+		// L0CompactionConcurrency, so the higher of the count of compaction
+		// concurrency slots as determined by the two options is chosen.
+		CompactionDebtConcurrency int
 
 		// L0SublevelCompactions enables the use of L0 sublevel-based compaction
 		// picking logic. Defaults to false for now. This logic will become
@@ -393,14 +394,6 @@ type Options struct {
 	// The default merger concatenates values.
 	Merger *Merger
 
-	// MinCompactionRate sets the minimum rate at which compactions occur. The
-	// default is 4 MB/s.
-	MinCompactionRate int
-
-	// MinFlushRate sets the minimum rate at which the MemTables are flushed. The
-	// default is 1 MB/s.
-	MinFlushRate int
-
 	// MaxConcurrentCompactions specifies the maximum number of concurrent
 	// compactions. The default is 1. Concurrent compactions are only performed
 	// when L0 read-amplification passes the L0CompactionConcurrency threshold.
@@ -412,16 +405,21 @@ type Options struct {
 	// disabled.
 	ReadOnly bool
 
-	// TableFormat specifies the format version for writing sstables. The default
-	// is TableFormatRocksDBv2 which creates RocksDB compatible sstables. Use
-	// TableFormatLevelDB to create LevelDB compatible sstable which can be used
-	// by a wider range of tools and libraries.
-	TableFormat TableFormat
-
 	// TablePropertyCollectors is a list of TablePropertyCollector creation
 	// functions. A new TablePropertyCollector is created for each sstable built
 	// and lives for the lifetime of the table.
 	TablePropertyCollectors []func() TablePropertyCollector
+
+	// WALBytesPerSync sets the number of bytes to write to a WAL before calling
+	// Sync on it in the background. Just like with BytesPerSync above, this
+	// helps smooth out disk write latencies, and avoids cases where the OS
+	// writes a lot of buffered data to disk at once. However, this is less
+	// necessary with WALs, as many write operations already pass in
+	// Sync = true.
+	//
+	// The default value is 0, i.e. no background syncing. This matches the
+	// default behaviour in RocksDB.
+	WALBytesPerSync int
 
 	// WALDir specifies the directory to store write-ahead logs (WALs) in. If
 	// empty (the default), WALs will be stored in the same directory as sstables
@@ -452,6 +450,16 @@ type Options struct {
 
 		// A private option disable automatic compactions.
 		disableAutomaticCompactions bool
+
+		// minCompactionRate sets the minimum rate at which compactions occur. The
+		// default is 4 MB/s. Currently disabled as this option has no effect while
+		// private.enablePacing is false.
+		minCompactionRate int
+
+		// minFlushRate sets the minimum rate at which the MemTables are flushed. The
+		// default is 1 MB/s. Currently disabled as this option has no effect while
+		// private.enablePacing is false.
+		minFlushRate int
 	}
 }
 
@@ -479,6 +487,9 @@ func (o *Options) EnsureDefaults() *Options {
 	}
 	if o.Experimental.L0CompactionConcurrency <= 0 {
 		o.Experimental.L0CompactionConcurrency = 10
+	}
+	if o.Experimental.CompactionDebtConcurrency <= 0 {
+		o.Experimental.CompactionDebtConcurrency = 1 << 30 // 1 GB
 	}
 	if o.L0CompactionThreshold <= 0 {
 		o.L0CompactionThreshold = 4
@@ -524,17 +535,17 @@ func (o *Options) EnsureDefaults() *Options {
 	if o.Merger == nil {
 		o.Merger = DefaultMerger
 	}
-	if o.MinCompactionRate == 0 {
-		o.MinCompactionRate = 4 << 20 // 4 MB/s
+	if o.private.minCompactionRate == 0 {
+		o.private.minCompactionRate = 4 << 20 // 4 MB/s
 	}
-	if o.MinFlushRate == 0 {
-		o.MinFlushRate = 1 << 20 // 1 MB/s
+	if o.private.minFlushRate == 0 {
+		o.private.minFlushRate = 1 << 20 // 1 MB/s
 	}
 	if o.MaxConcurrentCompactions <= 0 {
 		o.MaxConcurrentCompactions = 1
 	}
 	if o.FS == nil {
-		o.FS = vfs.WithDiskHealthChecks(vfs.Default, 5 * time.Second,
+		o.FS = vfs.WithDiskHealthChecks(vfs.Default, 5*time.Second,
 			func(name string, duration time.Duration) {
 				o.EventListener.DiskSlow(DiskSlowInfo{
 					Path:     name,
@@ -621,8 +632,8 @@ func (o *Options) String() string {
 	fmt.Fprintf(&buf, "  max_open_files=%d\n", o.MaxOpenFiles)
 	fmt.Fprintf(&buf, "  mem_table_size=%d\n", o.MemTableSize)
 	fmt.Fprintf(&buf, "  mem_table_stop_writes_threshold=%d\n", o.MemTableStopWritesThreshold)
-	fmt.Fprintf(&buf, "  min_compaction_rate=%d\n", o.MinCompactionRate)
-	fmt.Fprintf(&buf, "  min_flush_rate=%d\n", o.MinFlushRate)
+	fmt.Fprintf(&buf, "  min_compaction_rate=%d\n", o.private.minCompactionRate)
+	fmt.Fprintf(&buf, "  min_flush_rate=%d\n", o.private.minFlushRate)
 	fmt.Fprintf(&buf, "  merger=%s\n", o.Merger.Name)
 	fmt.Fprintf(&buf, "  table_property_collectors=[")
 	for i := range o.TablePropertyCollectors {
@@ -635,6 +646,7 @@ func (o *Options) String() string {
 	}
 	fmt.Fprintf(&buf, "]\n")
 	fmt.Fprintf(&buf, "  wal_dir=%s\n", o.WALDir)
+	fmt.Fprintf(&buf, "  wal_bytes_per_sync=%d\n", o.WALBytesPerSync)
 
 	for i := range o.Levels {
 		l := &o.Levels[i]
@@ -792,9 +804,9 @@ func (o *Options) Parse(s string, hooks *ParseHooks) error {
 			case "mem_table_stop_writes_threshold":
 				o.MemTableStopWritesThreshold, err = strconv.Atoi(value)
 			case "min_compaction_rate":
-				o.MinCompactionRate, err = strconv.Atoi(value)
+				o.private.minCompactionRate, err = strconv.Atoi(value)
 			case "min_flush_rate":
-				o.MinFlushRate, err = strconv.Atoi(value)
+				o.private.minFlushRate, err = strconv.Atoi(value)
 			case "merger":
 				switch value {
 				case "nullptr":
@@ -809,9 +821,7 @@ func (o *Options) Parse(s string, hooks *ParseHooks) error {
 			case "table_format":
 				switch value {
 				case "leveldb":
-					o.TableFormat = TableFormatLevelDB
 				case "rocksdbv2":
-					o.TableFormat = TableFormatRocksDBv2
 				default:
 					return errors.Errorf("pebble: unknown table format: %q", errors.Safe(value))
 				}
@@ -819,6 +829,8 @@ func (o *Options) Parse(s string, hooks *ParseHooks) error {
 				// TODO(peter): set o.TablePropertyCollectors
 			case "wal_dir":
 				o.WALDir = value
+			case "wal_bytes_per_sync":
+				o.WALBytesPerSync, err = strconv.Atoi(value)
 			default:
 				if hooks != nil && hooks.SkipUnknown != nil && hooks.SkipUnknown(section+"."+key) {
 					return nil
@@ -932,17 +944,13 @@ func (o *Options) Validate() error {
 		fmt.Fprintf(&buf, "L0StopWritesThreshold (%d) must be >= L0CompactionThreshold (%d)\n",
 			o.L0StopWritesThreshold, o.L0CompactionThreshold)
 	}
-	if o.MemTableSize >= maxMemTableSize {
+	if uint64(o.MemTableSize) >= maxMemTableSize {
 		fmt.Fprintf(&buf, "MemTableSize (%s) must be < %s\n",
 			humanize.Uint64(uint64(o.MemTableSize)), humanize.Uint64(maxMemTableSize))
 	}
 	if o.MemTableStopWritesThreshold < 2 {
 		fmt.Fprintf(&buf, "MemTableStopWritesThreshold (%d) must be >= 2\n",
 			o.MemTableStopWritesThreshold)
-	}
-	switch o.TableFormat {
-	case TableFormatLevelDB:
-		fmt.Fprintf(&buf, "TableFormatLevelDB not supported for DB\n")
 	}
 	if buf.Len() == 0 {
 		return nil
@@ -975,7 +983,7 @@ func (o *Options) MakeWriterOptions(level int) sstable.WriterOptions {
 		if o.Merger != nil {
 			writerOpts.MergerName = o.Merger.Name
 		}
-		writerOpts.TableFormat = o.TableFormat
+		writerOpts.TableFormat = sstable.TableFormatRocksDBv2
 		writerOpts.TablePropertyCollectors = o.TablePropertyCollectors
 	}
 	levelOpts := o.Level(level)

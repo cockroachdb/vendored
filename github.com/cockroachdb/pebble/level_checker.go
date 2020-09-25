@@ -371,7 +371,7 @@ func checkRangeTombstones(c *checkConfig) error {
 	addTombstonesFromLevel := func(files manifest.LevelIterator, lsmLevel int) error {
 		for f := files.First(); f != nil; f = files.Next() {
 			lf := files.Take()
-			atomicUnit := expandToAtomicUnit(c.cmp, lf.Slice())
+			atomicUnit, _ := expandToAtomicUnit(c.cmp, lf.Slice())
 			lower, upper := manifest.KeyRange(c.cmp, atomicUnit.Iter())
 			iterToClose, iter, err := c.newIters(lf, nil, nil)
 			if err != nil {
@@ -565,7 +565,7 @@ func (d *DB) CheckLevels(stats *CheckLevelsStats) error {
 
 	// Determine the seqnum to read at after grabbing the read state (current and
 	// memtables) above.
-	seqNum := atomic.LoadUint64(&d.mu.versions.visibleSeqNum)
+	seqNum := atomic.LoadUint64(&d.mu.versions.atomic.visibleSeqNum)
 
 	checkConfig := &checkConfig{
 		logger:    d.opts.Logger,
@@ -645,13 +645,13 @@ func checkLevelsInternal(c *checkConfig) (err error) {
 		mlevelAlloc = mlevelAlloc[1:]
 	}
 	for level := 1; level < len(current.Levels); level++ {
-		manifestIter := current.Levels[level].Iter()
-		if manifestIter.Empty() {
+		if current.Levels[level].Empty() {
 			continue
 		}
+
 		iterOpts := IterOptions{logger: c.logger}
 		li := &levelIter{}
-		li.init(iterOpts, c.cmp, c.newIters, manifestIter, manifest.Level(level), nil)
+		li.init(iterOpts, c.cmp, c.newIters, current.Levels[level].Iter(), manifest.Level(level), nil)
 		li.initRangeDel(&mlevelAlloc[0].rangeDelIter)
 		li.initSmallestLargestUserKey(&mlevelAlloc[0].smallestUserKey, nil, nil)
 		mlevelAlloc[0].iter = li

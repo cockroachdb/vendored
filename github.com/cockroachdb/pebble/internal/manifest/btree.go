@@ -5,9 +5,9 @@
 package manifest
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"unsafe"
 
@@ -41,27 +41,15 @@ func nodeToLeaf(n *node) *leafNode {
 	return (*leafNode)(unsafe.Pointer(n))
 }
 
-var leafPool = sync.Pool{
-	New: func() interface{} {
-		return new(leafNode)
-	},
-}
-
-var nodePool = sync.Pool{
-	New: func() interface{} {
-		return new(node)
-	},
-}
-
 func newLeafNode() *node {
-	n := leafToNode(leafPool.Get().(*leafNode))
+	n := leafToNode(new(leafNode))
 	n.leaf = true
 	n.ref = 1
 	return n
 }
 
 func newNode() *node {
-	n := nodePool.Get().(*node)
+	n := new(node)
 	n.ref = 1
 	return n
 }
@@ -106,7 +94,7 @@ func (n *node) decRef(recursive bool, obsolete *[]base.FileNum) {
 		return
 	}
 
-	// Dereference the node's metadata.
+	// Dereference the node's metadata and release child references.
 	if recursive {
 		for _, f := range n.items[:n.count] {
 			if atomic.AddInt32(&f.refs, -1) == 0 {
@@ -120,22 +108,11 @@ func (n *node) decRef(recursive bool, obsolete *[]base.FileNum) {
 				*obsolete = append(*obsolete, f.FileNum)
 			}
 		}
-	}
-
-	// Clear and release node into memory pool.
-	if n.leaf {
-		ln := nodeToLeaf(n)
-		*ln = leafNode{}
-		leafPool.Put(ln)
-	} else {
-		// Release child references first, if requested.
-		if recursive {
+		if !n.leaf {
 			for i := int16(0); i <= n.count; i++ {
 				n.children[i].decRef(true /* recursive */, obsolete)
 			}
 		}
-		*n = node{}
-		nodePool.Put(n)
 	}
 }
 
@@ -244,7 +221,9 @@ func (n *node) popFront() (*FileMetadata, *node) {
 // find returns the index where the given item should be inserted into this
 // list. 'found' is true if the item already exists in the list at the given
 // index.
-func (n *node) find(cmp func(*FileMetadata, *FileMetadata) int, item *FileMetadata) (index int, found bool) {
+func (n *node) find(
+	cmp func(*FileMetadata, *FileMetadata) int, item *FileMetadata,
+) (index int, found bool) {
 	// Logic copied from sort.Search. Inlining this gave
 	// an 11% speedup on BenchmarkBTreeDeleteInsert.
 	i, j := 0, int(n.count)
@@ -361,7 +340,9 @@ func (n *node) removeMax() *FileMetadata {
 
 // remove removes a item from the subtree rooted at this node. Returns
 // the item that was removed or nil if no matching item was found.
-func (n *node) remove(cmp func(*FileMetadata, *FileMetadata) int, item *FileMetadata) (out *FileMetadata) {
+func (n *node) remove(
+	cmp func(*FileMetadata, *FileMetadata) int, item *FileMetadata,
+) (out *FileMetadata) {
 	i, found := n.find(cmp, item)
 	if n.leaf {
 		if found {
@@ -519,11 +500,10 @@ type btree struct {
 	cmp    func(*FileMetadata, *FileMetadata) int
 }
 
-// Release dereferences and clears the root node of the btree, removing all
-// items from the btree. In doing so, it allows memory held by the btree to be
-// recycled. It returns a slice of file numbers of newly obsolete files, if
-// any.
-func (t *btree) Release() (obsolete []base.FileNum) {
+// release dereferences and clears the root node of the btree, removing all
+// items from the btree. In doing so, it decrements contained file counts.
+// It returns a slice of file numbers of newly obsolete files, if any.
+func (t *btree) release() (obsolete []base.FileNum) {
 	if t.root != nil {
 		t.root.decRef(true /* recursive */, &obsolete)
 		t.root = nil
@@ -532,8 +512,8 @@ func (t *btree) Release() (obsolete []base.FileNum) {
 	return obsolete
 }
 
-// Clone clones the btree, lazily. It does so in constant time.
-func (t *btree) Clone() btree {
+// clone clones the btree, lazily. It does so in constant time.
+func (t *btree) clone() btree {
 	c := *t
 	if c.root != nil {
 		// Incrementing the reference count on the root node is sufficient to
@@ -555,9 +535,9 @@ func (t *btree) Clone() btree {
 	return c
 }
 
-// Delete removes the provided file from the tree.
+// delete removes the provided file from the tree.
 // It returns true if the file now has a zero reference count.
-func (t *btree) Delete(item *FileMetadata) (obsolete bool) {
+func (t *btree) delete(item *FileMetadata) (obsolete bool) {
 	if t.root == nil || t.root.count == 0 {
 		return false
 	}
@@ -577,9 +557,9 @@ func (t *btree) Delete(item *FileMetadata) (obsolete bool) {
 	return obsolete
 }
 
-// Insert adds the given item to the tree. If a item in the tree already
-// equals the given one, Insert panics.
-func (t *btree) Insert(item *FileMetadata) {
+// insert adds the given item to the tree. If a item in the tree already
+// equals the given one, insert panics.
+func (t *btree) insert(item *FileMetadata) {
 	if t.root == nil {
 		t.root = newLeafNode()
 	} else if t.root.count >= maxItems {
@@ -596,15 +576,15 @@ func (t *btree) Insert(item *FileMetadata) {
 	t.length++
 }
 
-// MakeIter returns a new iterator object. It is not safe to continue using an
+// iter returns a new iterator object. It is not safe to continue using an
 // iterator after modifications are made to the tree. If modifications are made,
 // create a new iterator.
-func (t *btree) MakeIter() iterator {
+func (t *btree) iter() iterator {
 	return iterator{r: t.root, pos: -1, cmp: t.cmp}
 }
 
-// Height returns the height of the tree.
-func (t *btree) Height() int {
+// height returns the height of the tree.
+func (t *btree) height() int {
 	if t.root == nil {
 		return 0
 	}
@@ -615,11 +595,6 @@ func (t *btree) Height() int {
 		h++
 	}
 	return h
-}
-
-// Len returns the number of items currently in the tree.
-func (t *btree) Len() int {
-	return t.length
 }
 
 // String returns a string description of the tree. The format is
@@ -712,6 +687,19 @@ func (is *iterStack) clone() iterStack {
 	return clone
 }
 
+func (is *iterStack) nth(n int) (f iterFrame, ok bool) {
+	if is.aLen == -1 {
+		if n >= len(is.s) {
+			return f, false
+		}
+		return is.s[n], true
+	}
+	if int16(n) >= is.aLen {
+		return f, false
+	}
+	return is.a[n], true
+}
+
 func (is *iterStack) reset() {
 	if is.aLen == -1 {
 		is.s = is.s[:0]
@@ -741,6 +729,124 @@ func (i *iterator) reset() {
 	i.s.reset()
 }
 
+func (i iterator) String() string {
+	var buf bytes.Buffer
+	for n := 0; ; n++ {
+		f, ok := i.s.nth(n)
+		if !ok {
+			break
+		}
+		fmt.Fprintf(&buf, "%p: %02d/%02d\n", f.n, f.pos, f.n.count)
+	}
+	if i.n == nil {
+		fmt.Fprintf(&buf, "<nil>: %02d", i.pos)
+	} else {
+		fmt.Fprintf(&buf, "%p: %02d/%02d", i.n, i.pos, i.n.count)
+	}
+	return buf.String()
+}
+
+func cmpIter(a, b iterator) int {
+	if a.r != b.r {
+		panic("compared iterators from different btrees")
+	}
+
+	// Each iterator has a stack of frames marking the path from the root node
+	// to the current iterator position. We walk both paths formed by the
+	// iterators' stacks simulatenously, descending from the shared root node,
+	// always comparing nodes at the same level in the tree.
+	//
+	// If the iterators' paths ever diverge and point to different nodes, the
+	// iterators are not equal and we use the node positions to evaluate the
+	// comparison.
+	//
+	// If an iterator's stack ends, we stop descending and use its current
+	// node and position for the final comparison. One iterator's stack may
+	// end before another's if one iterator is positioned deeper in the tree.
+	//
+	// a                                b
+	// +------------------------+      +--------------------------+ -
+	// |  Root            pos:5 |   =  |  Root              pos:5 |  |
+	// +------------------------+      +--------------------------+  | stack
+	// |  Root/5          pos:3 |   =  |  Root/5            pos:3 |  | frames
+	// +------------------------+      +--------------------------+  |
+	// |  Root/5/3        pos:9 |   >  |  Root/5/3          pos:1 |  |
+	// +========================+      +==========================+ -
+	// |                        |      |                          |
+	// | a.n: Root/5/3/9 a.pos:2|      | b.n: Root/5/3/1, b.pos:5 |
+	// +------------------------+      +--------------------------+
+
+	// Initialize with the iterator's current node and position. These are
+	// conceptually the most-recent/current frame of the iterator stack.
+	an, apos := a.n, a.pos
+	bn, bpos := b.n, b.pos
+
+	// aok, bok are set while traversing the iterator's path down the B-Tree.
+	// They're declared in the outer scope because they help distinguish the
+	// sentinel case when both iterators' first frame points to the last child
+	// of the root. If an iterator has no other frames in its stack, it's the
+	// end sentinel state which sorts after everything else.
+	var aok, bok bool
+	for i := 0; ; i++ {
+		var af, bf iterFrame
+		af, aok = a.s.nth(i)
+		bf, bok = b.s.nth(i)
+		if !aok || !bok {
+			if aok {
+				// Iterator a, unlike iterator b, still has a frame. Set an,
+				// apos so we compare using the frame from the stack.
+				an, apos = af.n, af.pos
+			}
+			if bok {
+				// Iterator b, unlike iterator a, still has a frame. Set bn,
+				// bpos so we compare using the frame from the stack.
+				bn, bpos = bf.n, bf.pos
+			}
+			break
+		}
+
+		// aok && bok
+		if af.n != bf.n {
+			panic("nonmatching nodes during btree iterator comparison")
+		}
+		switch {
+		case af.pos < bf.pos:
+			return -1
+		case af.pos > bf.pos:
+			return +1
+		default:
+			// Continue up both iterators' stacks (equivalently, down the
+			// B-Tree away from the root).
+		}
+	}
+
+	if aok && bok {
+		panic("expected one or more stacks to have been exhausted")
+	}
+	if an != bn {
+		panic("nonmatching nodes during btree iterator comparison")
+	}
+	switch {
+	case apos < bpos:
+		return -1
+	case apos > bpos:
+		return +1
+	default:
+		switch {
+		case aok:
+			// a is positioned at a leaf child at this position and b is at an
+			// end sentinel state.
+			return -1
+		case bok:
+			// b is positioned at a leaf child at this position and a is at an
+			// end sentinel state.
+			return +1
+		default:
+			return 0
+		}
+	}
+}
+
 func (i *iterator) descend(n *node, pos int16) {
 	i.s.push(iterFrame{n: n, pos: pos})
 	i.n = n.children[pos]
@@ -755,9 +861,9 @@ func (i *iterator) ascend() {
 	i.pos = f.pos
 }
 
-// SeekGE seeks to the first item greater-than or equal to the provided
+// seekGE seeks to the first item greater-than or equal to the provided
 // item.
-func (i *iterator) SeekGE(item *FileMetadata) {
+func (i *iterator) seekGE(item *FileMetadata) {
 	i.reset()
 	if i.n == nil {
 		return
@@ -770,7 +876,7 @@ func (i *iterator) SeekGE(item *FileMetadata) {
 		}
 		if i.n.leaf {
 			if i.pos == i.n.count {
-				i.Next()
+				i.next()
 			}
 			return
 		}
@@ -778,8 +884,8 @@ func (i *iterator) SeekGE(item *FileMetadata) {
 	}
 }
 
-// SeekLT seeks to the first item less-than the provided item.
-func (i *iterator) SeekLT(item *FileMetadata) {
+// seekLT seeks to the first item less-than the provided item.
+func (i *iterator) seekLT(item *FileMetadata) {
 	i.reset()
 	if i.n == nil {
 		return
@@ -788,15 +894,15 @@ func (i *iterator) SeekLT(item *FileMetadata) {
 		pos, found := i.n.find(i.cmp, item)
 		i.pos = int16(pos)
 		if found || i.n.leaf {
-			i.Prev()
+			i.prev()
 			return
 		}
 		i.descend(i.n, i.pos)
 	}
 }
 
-// First seeks to the first item in the btree.
-func (i *iterator) First() {
+// first seeks to the first item in the btree.
+func (i *iterator) first() {
 	i.reset()
 	if i.n == nil {
 		return
@@ -807,8 +913,8 @@ func (i *iterator) First() {
 	i.pos = 0
 }
 
-// Last seeks to the last item in the btree.
-func (i *iterator) Last() {
+// last seeks to the last item in the btree.
+func (i *iterator) last() {
 	i.reset()
 	if i.n == nil {
 		return
@@ -819,9 +925,9 @@ func (i *iterator) Last() {
 	i.pos = i.n.count - 1
 }
 
-// Next positions the iterator to the item immediately following
+// next positions the iterator to the item immediately following
 // its current position.
-func (i *iterator) Next() {
+func (i *iterator) next() {
 	if i.n == nil {
 		return
 	}
@@ -844,9 +950,9 @@ func (i *iterator) Next() {
 	i.pos = 0
 }
 
-// Prev positions the iterator to the item immediately preceding
+// prev positions the iterator to the item immediately preceding
 // its current position.
-func (i *iterator) Prev() {
+func (i *iterator) prev() {
 	if i.n == nil {
 		return
 	}
@@ -870,13 +976,13 @@ func (i *iterator) Prev() {
 	i.pos = i.n.count - 1
 }
 
-// Valid returns whether the iterator is positioned at a valid position.
-func (i *iterator) Valid() bool {
+// valid returns whether the iterator is positioned at a valid position.
+func (i *iterator) valid() bool {
 	return i.pos >= 0 && i.pos < i.n.count
 }
 
-// Cur returns the item at the iterator's current position. It is illegal
-// to call Cur if the iterator is not valid.
-func (i *iterator) Cur() *FileMetadata {
+// cur returns the item at the iterator's current position. It is illegal
+// to call cur if the iterator is not valid.
+func (i *iterator) cur() *FileMetadata {
 	return i.n.items[i.pos]
 }
