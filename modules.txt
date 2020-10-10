@@ -441,7 +441,7 @@ github.com/grpc-ecosystem/grpc-opentracing/go/otgrpc
 github.com/hashicorp/go-uuid
 # github.com/huandu/xstrings v1.3.0
 github.com/huandu/xstrings
-# github.com/ianlancetaylor/cgosymbolizer v0.0.0-20170921033129-f5072df9c550
+# github.com/ianlancetaylor/cgosymbolizer v0.0.0-20201002210021-dda951febc36
 github.com/ianlancetaylor/cgosymbolizer
 # github.com/ianlancetaylor/demangle v0.0.0-20181102032728-5e5cf60278f6
 github.com/ianlancetaylor/demangle
