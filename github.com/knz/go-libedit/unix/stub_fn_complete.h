@@ -5,7 +5,7 @@
 // offer a selection menu. It also does not offer compatibility
 // with readline() (via the completion_type argument).
 
-#include "stub_find_word_to_complete.i"
+#include "stub_find_word_to_complete.h"
 
 static char *multibyte_to_singlebyte(wchar_t *line);
 static wchar_t *singlebyte_to_multibyte(char *line);
