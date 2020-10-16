@@ -1,0 +1,16 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "walk",
+    srcs = [
+        "path_plan9.go",
+        "path_unix.go",
+        "path_windows.go",
+        "symlink.go",
+        "symlink_windows.go",
+        "walk.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/MichaelTJones/walk",
+    importpath = "github.com/MichaelTJones/walk",
+    visibility = ["//visibility:public"],
+)

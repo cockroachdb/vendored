@@ -1,0 +1,25 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "imports",
+    srcs = [
+        "fix.go",
+        "imports.go",
+        "mod.go",
+        "mod_cache.go",
+        "sortimports.go",
+        "zstdlib.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/cockroachdb/gostdlib/x/tools/internal/imports",
+    importpath = "github.com/cockroachdb/gostdlib/x/tools/internal/imports",
+    visibility = ["//vendor/github.com/cockroachdb/gostdlib/x/tools:__subpackages__"],
+    deps = [
+        "//vendor/github.com/cockroachdb/gostdlib/go/format",
+        "//vendor/github.com/cockroachdb/gostdlib/go/printer",
+        "//vendor/github.com/cockroachdb/gostdlib/x/tools/go/ast/astutil",
+        "//vendor/github.com/cockroachdb/gostdlib/x/tools/go/packages",
+        "//vendor/github.com/cockroachdb/gostdlib/x/tools/internal/gopathwalk",
+        "//vendor/github.com/cockroachdb/gostdlib/x/tools/internal/module",
+        "//vendor/github.com/cockroachdb/gostdlib/x/tools/internal/semver",
+    ],
+)

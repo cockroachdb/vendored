@@ -1,0 +1,10 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "asn1tools",
+    srcs = ["tools.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/gopkg.in/jcmturner/gokrb5.v7/asn1tools",
+    importpath = "gopkg.in/jcmturner/gokrb5.v7/asn1tools",
+    visibility = ["//visibility:public"],
+    deps = ["//vendor/github.com/jcmturner/gofork/encoding/asn1"],
+)

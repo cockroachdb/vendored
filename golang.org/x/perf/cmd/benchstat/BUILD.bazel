@@ -1,0 +1,16 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "benchstat_lib",
+    srcs = ["main.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/golang.org/x/perf/cmd/benchstat",
+    importpath = "golang.org/x/perf/cmd/benchstat",
+    visibility = ["//visibility:private"],
+    deps = ["//vendor/golang.org/x/perf/benchstat"],
+)
+
+go_binary(
+    name = "benchstat",
+    embed = [":benchstat_lib"],
+    visibility = ["//visibility:public"],
+)

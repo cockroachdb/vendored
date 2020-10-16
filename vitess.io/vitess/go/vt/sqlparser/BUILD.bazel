@@ -1,0 +1,28 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "sqlparser",
+    srcs = [
+        "analyzer.go",
+        "ast.go",
+        "comments.go",
+        "encodable.go",
+        "impossible_query.go",
+        "normalizer.go",
+        "parsed_query.go",
+        "redact_query.go",
+        "sql.go",
+        "token.go",
+        "tracked_buffer.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/vitess.io/vitess/go/vt/sqlparser",
+    importpath = "vitess.io/vitess/go/vt/sqlparser",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/vitess.io/vitess/go/bytes2",
+        "//vendor/vitess.io/vitess/go/sqltypes",
+        "//vendor/vitess.io/vitess/go/vt/proto/query",
+        "//vendor/vitess.io/vitess/go/vt/proto/vtrpc",
+        "//vendor/vitess.io/vitess/go/vt/vterrors",
+    ],
+)

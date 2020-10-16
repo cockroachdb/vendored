@@ -1,0 +1,36 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "ssa",
+    srcs = [
+        "blockopt.go",
+        "builder.go",
+        "const.go",
+        "create.go",
+        "doc.go",
+        "dom.go",
+        "emit.go",
+        "func.go",
+        "identical.go",
+        "identical_17.go",
+        "lift.go",
+        "lvalue.go",
+        "methods.go",
+        "mode.go",
+        "print.go",
+        "sanity.go",
+        "source.go",
+        "ssa.go",
+        "testmain.go",
+        "util.go",
+        "wrappers.go",
+        "write.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/honnef.co/go/tools/ssa",
+    importpath = "honnef.co/go/tools/ssa",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/golang.org/x/tools/go/ast/astutil",
+        "//vendor/golang.org/x/tools/go/types/typeutil",
+    ],
+)

@@ -1,0 +1,17 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "span",
+    srcs = [
+        "parse.go",
+        "span.go",
+        "token.go",
+        "token111.go",
+        "token112.go",
+        "uri.go",
+        "utf16.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/cockroachdb/gostdlib/x/tools/internal/span",
+    importpath = "github.com/cockroachdb/gostdlib/x/tools/internal/span",
+    visibility = ["//vendor/github.com/cockroachdb/gostdlib/x/tools:__subpackages__"],
+)

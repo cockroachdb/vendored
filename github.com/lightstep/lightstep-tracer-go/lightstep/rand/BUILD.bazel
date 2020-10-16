@@ -1,0 +1,13 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "rand",
+    srcs = [
+        "locked_rand.go",
+        "num_gen.go",
+        "pool.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/lightstep/lightstep-tracer-go/lightstep/rand",
+    importpath = "github.com/lightstep/lightstep-tracer-go/lightstep/rand",
+    visibility = ["//visibility:public"],
+)

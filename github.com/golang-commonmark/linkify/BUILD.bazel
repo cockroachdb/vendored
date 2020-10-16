@@ -1,0 +1,16 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "linkify",
+    srcs = [
+        "charset.go",
+        "email.go",
+        "generated.go",
+        "linkify.go",
+        "url.go",
+        "util.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/golang-commonmark/linkify",
+    importpath = "github.com/golang-commonmark/linkify",
+    visibility = ["//visibility:public"],
+)

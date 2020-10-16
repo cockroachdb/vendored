@@ -12,55 +12,56 @@ go_library(
         "editline_unix.go",
         "version_check.go",
     ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/knz/go-libedit",
     importpath = "github.com/knz/go-libedit",
     visibility = ["//visibility:public"],
     deps = [
-        "//common",
+        "//vendor/github.com/knz/go-libedit/common",
     ] + select({
         "@io_bazel_rules_go//go/platform:aix": [
-            "//other",
+            "//vendor/github.com/knz/go-libedit/other",
         ],
         "@io_bazel_rules_go//go/platform:android": [
-            "//unix",
+            "//vendor/github.com/knz/go-libedit/unix",
         ],
         "@io_bazel_rules_go//go/platform:darwin": [
-            "//unix",
+            "//vendor/github.com/knz/go-libedit/unix",
         ],
         "@io_bazel_rules_go//go/platform:dragonfly": [
-            "//unix",
+            "//vendor/github.com/knz/go-libedit/unix",
         ],
         "@io_bazel_rules_go//go/platform:freebsd": [
-            "//unix",
+            "//vendor/github.com/knz/go-libedit/unix",
         ],
         "@io_bazel_rules_go//go/platform:illumos": [
-            "//other",
+            "//vendor/github.com/knz/go-libedit/other",
         ],
         "@io_bazel_rules_go//go/platform:ios": [
-            "//unix",
+            "//vendor/github.com/knz/go-libedit/unix",
         ],
         "@io_bazel_rules_go//go/platform:js": [
-            "//other",
+            "//vendor/github.com/knz/go-libedit/other",
         ],
         "@io_bazel_rules_go//go/platform:linux": [
-            "//unix",
+            "//vendor/github.com/knz/go-libedit/unix",
         ],
         "@io_bazel_rules_go//go/platform:nacl": [
-            "//other",
+            "//vendor/github.com/knz/go-libedit/other",
         ],
         "@io_bazel_rules_go//go/platform:netbsd": [
-            "//unix",
+            "//vendor/github.com/knz/go-libedit/unix",
         ],
         "@io_bazel_rules_go//go/platform:openbsd": [
-            "//unix",
+            "//vendor/github.com/knz/go-libedit/unix",
         ],
         "@io_bazel_rules_go//go/platform:plan9": [
-            "//other",
+            "//vendor/github.com/knz/go-libedit/other",
         ],
         "@io_bazel_rules_go//go/platform:solaris": [
-            "//other",
+            "//vendor/github.com/knz/go-libedit/other",
         ],
         "@io_bazel_rules_go//go/platform:windows": [
-            "//other",
+            "//vendor/github.com/knz/go-libedit/other",
         ],
         "//conditions:default": [],
     }),

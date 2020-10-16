@@ -12,6 +12,7 @@ go_library(
         "struct.go",
         "table.go",
     ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/google/flatbuffers/go",
     importpath = "github.com/google/flatbuffers/go",
     visibility = ["//visibility:public"],
 )

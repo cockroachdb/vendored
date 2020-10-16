@@ -1,0 +1,16 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "browser",
+    srcs = [
+        "browser.go",
+        "browser_darwin.go",
+        "browser_linux.go",
+        "browser_openbsd.go",
+        "browser_unsupported.go",
+        "browser_windows.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/pkg/browser",
+    importpath = "github.com/pkg/browser",
+    visibility = ["//visibility:public"],
+)

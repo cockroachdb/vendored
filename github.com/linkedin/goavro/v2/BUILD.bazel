@@ -1,0 +1,32 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "goavro",
+    srcs = [
+        "array.go",
+        "binaryReader.go",
+        "boolean.go",
+        "bytes.go",
+        "canonical.go",
+        "codec.go",
+        "doc.go",
+        "enum.go",
+        "fixed.go",
+        "floatingPoint.go",
+        "integer.go",
+        "logical_type.go",
+        "map.go",
+        "name.go",
+        "null.go",
+        "ocf.go",
+        "ocf_reader.go",
+        "ocf_writer.go",
+        "record.go",
+        "text.go",
+        "union.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/linkedin/goavro/v2",
+    importpath = "github.com/linkedin/goavro/v2",
+    visibility = ["//visibility:public"],
+    deps = ["//vendor/github.com/golang/snappy"],
+)

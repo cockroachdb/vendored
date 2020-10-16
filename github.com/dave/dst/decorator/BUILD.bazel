@@ -1,0 +1,27 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "decorator",
+    srcs = [
+        "decorator.go",
+        "decorator-fragment.go",
+        "decorator-fragment-generated.go",
+        "decorator-info-generated.go",
+        "decorator-node-generated.go",
+        "helpers.go",
+        "load.go",
+        "map.go",
+        "restorer.go",
+        "restorer-generated.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/dave/dst/decorator",
+    importpath = "github.com/dave/dst/decorator",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/dave/dst",
+        "//vendor/github.com/dave/dst/decorator/resolver",
+        "//vendor/github.com/dave/dst/decorator/resolver/gopackages",
+        "//vendor/github.com/dave/dst/decorator/resolver/gotypes",
+        "//vendor/golang.org/x/tools/go/packages",
+    ],
+)

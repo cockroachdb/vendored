@@ -1,0 +1,25 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "view",
+    srcs = [
+        "aggregation.go",
+        "aggregation_data.go",
+        "collector.go",
+        "doc.go",
+        "export.go",
+        "view.go",
+        "worker.go",
+        "worker_commands.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/go.opencensus.io/stats/view",
+    importpath = "go.opencensus.io/stats/view",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/go.opencensus.io/exemplar",
+        "//vendor/go.opencensus.io/internal/tagencoding",
+        "//vendor/go.opencensus.io/stats",
+        "//vendor/go.opencensus.io/stats/internal",
+        "//vendor/go.opencensus.io/tag",
+    ],
+)

@@ -1,0 +1,13 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "myers",
+    srcs = ["diff.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/golang.org/x/tools/internal/lsp/diff/myers",
+    importpath = "golang.org/x/tools/internal/lsp/diff/myers",
+    visibility = ["//vendor/golang.org/x/tools:__subpackages__"],
+    deps = [
+        "//vendor/golang.org/x/tools/internal/lsp/diff",
+        "//vendor/golang.org/x/tools/internal/span",
+    ],
+)

@@ -1,0 +1,28 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "errutil",
+    srcs = [
+        "as.go",
+        "assertions.go",
+        "doc.go",
+        "format_error_special.go",
+        "message.go",
+        "redactable.go",
+        "utilities.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/cockroachdb/errors/errutil",
+    importpath = "github.com/cockroachdb/errors/errutil",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/cockroachdb/errors/assert",
+        "//vendor/github.com/cockroachdb/errors/barriers",
+        "//vendor/github.com/cockroachdb/errors/errbase",
+        "//vendor/github.com/cockroachdb/errors/errorspb",
+        "//vendor/github.com/cockroachdb/errors/markers",
+        "//vendor/github.com/cockroachdb/errors/secondary",
+        "//vendor/github.com/cockroachdb/errors/withstack",
+        "//vendor/github.com/cockroachdb/redact",
+        "//vendor/github.com/gogo/protobuf/proto",
+    ],
+)

@@ -1,0 +1,13 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "envoyproxy_validate",
+    srcs = ["envoyproxy_validate.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/pseudomuto/protoc-gen-doc/extensions/envoyproxy_validate",
+    importpath = "github.com/pseudomuto/protoc-gen-doc/extensions/envoyproxy_validate",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/envoyproxy/protoc-gen-validate/validate",
+        "//vendor/github.com/pseudomuto/protoc-gen-doc/extensions",
+    ],
+)

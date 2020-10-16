@@ -1,0 +1,20 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "go_generics_lib",
+    srcs = [
+        "generics.go",
+        "imports.go",
+        "remove.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/mmatczuk/go_generics/cmd/go_generics",
+    importpath = "github.com/mmatczuk/go_generics/cmd/go_generics",
+    visibility = ["//visibility:private"],
+    deps = ["//vendor/github.com/mmatczuk/go_generics/globals"],
+)
+
+go_binary(
+    name = "go_generics",
+    embed = [":go_generics_lib"],
+    visibility = ["//visibility:public"],
+)

@@ -1,0 +1,13 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "bigxy",
+    srcs = ["big_cga.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/twpayne/go-geom/bigxy",
+    importpath = "github.com/twpayne/go-geom/bigxy",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/twpayne/go-geom",
+        "//vendor/github.com/twpayne/go-geom/xy/orientation",
+    ],
+)

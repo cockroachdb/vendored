@@ -1,0 +1,9 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "ctxwatch",
+    srcs = ["context_watcher.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/jackc/pgconn/internal/ctxwatch",
+    importpath = "github.com/jackc/pgconn/internal/ctxwatch",
+    visibility = ["//vendor/github.com/jackc/pgconn:__subpackages__"],
+)

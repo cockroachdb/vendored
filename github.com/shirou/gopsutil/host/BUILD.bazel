@@ -1,0 +1,87 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "host",
+    srcs = [
+        "host.go",
+        "host_darwin.go",
+        "host_darwin_386.go",
+        "host_darwin_amd64.go",
+        "host_darwin_cgo.go",
+        "host_darwin_nocgo.go",
+        "host_fallback.go",
+        "host_freebsd.go",
+        "host_freebsd_386.go",
+        "host_freebsd_amd64.go",
+        "host_freebsd_arm.go",
+        "host_freebsd_arm64.go",
+        "host_linux.go",
+        "host_linux_386.go",
+        "host_linux_amd64.go",
+        "host_linux_arm.go",
+        "host_linux_arm64.go",
+        "host_linux_mips.go",
+        "host_linux_mips64.go",
+        "host_linux_mips64le.go",
+        "host_linux_mipsle.go",
+        "host_linux_ppc64le.go",
+        "host_linux_riscv64.go",
+        "host_linux_s390x.go",
+        "host_openbsd.go",
+        "host_openbsd_amd64.go",
+        "host_posix.go",
+        "host_solaris.go",
+        "host_windows.go",
+        "smc_darwin.c",
+        "smc_darwin.h",
+        "types.go",
+    ],
+    cgo = True,
+    clinkopts = select({
+        "@io_bazel_rules_go//go/platform:darwin": [
+            "-framework IOKit",
+        ],
+        "@io_bazel_rules_go//go/platform:ios": [
+            "-framework IOKit",
+        ],
+        "//conditions:default": [],
+    }),
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/shirou/gopsutil/host",
+    importpath = "github.com/shirou/gopsutil/host",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/shirou/gopsutil/internal/common",
+    ] + select({
+        "@io_bazel_rules_go//go/platform:android": [
+            "//vendor/golang.org/x/sys/unix",
+        ],
+        "@io_bazel_rules_go//go/platform:darwin": [
+            "//vendor/github.com/shirou/gopsutil/process",
+            "//vendor/golang.org/x/sys/unix",
+        ],
+        "@io_bazel_rules_go//go/platform:freebsd": [
+            "//vendor/github.com/shirou/gopsutil/process",
+            "//vendor/golang.org/x/sys/unix",
+        ],
+        "@io_bazel_rules_go//go/platform:ios": [
+            "//vendor/github.com/shirou/gopsutil/process",
+            "//vendor/golang.org/x/sys/unix",
+        ],
+        "@io_bazel_rules_go//go/platform:linux": [
+            "//vendor/golang.org/x/sys/unix",
+        ],
+        "@io_bazel_rules_go//go/platform:openbsd": [
+            "//vendor/github.com/shirou/gopsutil/process",
+            "//vendor/golang.org/x/sys/unix",
+        ],
+        "@io_bazel_rules_go//go/platform:solaris": [
+            "//vendor/golang.org/x/sys/unix",
+        ],
+        "@io_bazel_rules_go//go/platform:windows": [
+            "//vendor/github.com/StackExchange/wmi",
+            "//vendor/github.com/shirou/gopsutil/process",
+            "//vendor/golang.org/x/sys/windows",
+        ],
+        "//conditions:default": [],
+    }),
+)

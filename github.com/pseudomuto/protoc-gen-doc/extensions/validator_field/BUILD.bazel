@@ -1,0 +1,15 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "validator_field",
+    srcs = ["validator_field.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/pseudomuto/protoc-gen-doc/extensions/validator_field",
+    importpath = "github.com/pseudomuto/protoc-gen-doc/extensions/validator_field",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/golang/protobuf/proto",
+        "//vendor/github.com/golang/protobuf/protoc-gen-go/descriptor",
+        "//vendor/github.com/mwitkow/go-proto-validators",
+        "//vendor/github.com/pseudomuto/protoc-gen-doc/extensions",
+    ],
+)

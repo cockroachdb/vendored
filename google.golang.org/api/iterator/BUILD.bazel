@@ -1,0 +1,9 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "iterator",
+    srcs = ["iterator.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/google.golang.org/api/iterator",
+    importpath = "google.golang.org/api/iterator",
+    visibility = ["//visibility:public"],
+)

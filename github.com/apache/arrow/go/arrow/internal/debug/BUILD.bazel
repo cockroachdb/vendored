@@ -1,0 +1,13 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "debug",
+    srcs = [
+        "assert_off.go",
+        "doc.go",
+        "log_off.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/apache/arrow/go/arrow/internal/debug",
+    importpath = "github.com/apache/arrow/go/arrow/internal/debug",
+    visibility = ["//vendor/github.com/apache/arrow/go/arrow:__subpackages__"],
+)

@@ -1,0 +1,31 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "memory",
+    srcs = [
+        "allocator.go",
+        "buffer.go",
+        "checked_allocator.go",
+        "doc.go",
+        "go_allocator.go",
+        "memory.go",
+        "memory_amd64.go",
+        "memory_avx2_amd64.go",
+        "memory_avx2_amd64.s",
+        "memory_js_wasm.go",
+        "memory_sse4_amd64.go",
+        "memory_sse4_amd64.s",
+        "util.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/apache/arrow/go/arrow/memory",
+    importpath = "github.com/apache/arrow/go/arrow/memory",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/apache/arrow/go/arrow/internal/debug",
+    ] + select({
+        "@io_bazel_rules_go//go/platform:amd64": [
+            "//vendor/github.com/apache/arrow/go/arrow/internal/cpu",
+        ],
+        "//conditions:default": [],
+    }),
+)

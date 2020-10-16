@@ -1,0 +1,22 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "goid",
+    srcs = [
+        "goid.go",
+        "goid_go1.3.go",
+        "goid_go1.4.go",
+        "goid_go1.4.s",
+        "goid_go1.5_amd64.go",
+        "goid_go1.5_amd64.s",
+        "goid_go1.5_arm.go",
+        "goid_go1.5_arm.s",
+        "goid_slow.go",
+        "runtime_go1.5.go",
+        "runtime_go1.6.go",
+        "runtime_go1.9.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/petermattis/goid",
+    importpath = "github.com/petermattis/goid",
+    visibility = ["//visibility:public"],
+)

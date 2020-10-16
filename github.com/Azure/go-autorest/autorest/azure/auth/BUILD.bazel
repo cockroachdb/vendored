@@ -1,0 +1,17 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "auth",
+    srcs = ["auth.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/Azure/go-autorest/autorest/azure/auth",
+    importpath = "github.com/Azure/go-autorest/autorest/azure/auth",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/Azure/go-autorest/autorest",
+        "//vendor/github.com/Azure/go-autorest/autorest/adal",
+        "//vendor/github.com/Azure/go-autorest/autorest/azure",
+        "//vendor/github.com/Azure/go-autorest/autorest/azure/cli",
+        "//vendor/github.com/dimchansky/utfbom",
+        "//vendor/golang.org/x/crypto/pkcs12",
+    ],
+)

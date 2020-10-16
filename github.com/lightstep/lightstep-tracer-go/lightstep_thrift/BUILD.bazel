@@ -1,0 +1,15 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "lightstep_thrift",
+    srcs = [
+        "constants.go",
+        "reportingservice.go",
+        "reportingservice_methods.go",
+        "ttypes.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/lightstep/lightstep-tracer-go/lightstep_thrift",
+    importpath = "github.com/lightstep/lightstep-tracer-go/lightstep_thrift",
+    visibility = ["//visibility:public"],
+    deps = ["//vendor/github.com/lightstep/lightstep-tracer-go/thrift_0_9_2/lib/go/thrift"],
+)

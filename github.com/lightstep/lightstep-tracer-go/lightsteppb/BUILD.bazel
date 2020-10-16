@@ -1,0 +1,10 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "lightsteppb",
+    srcs = ["lightstep.pb.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/lightstep/lightstep-tracer-go/lightsteppb",
+    importpath = "github.com/lightstep/lightstep-tracer-go/lightsteppb",
+    visibility = ["//visibility:public"],
+    deps = ["//vendor/github.com/golang/protobuf/proto"],
+)

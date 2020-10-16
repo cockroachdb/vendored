@@ -1,0 +1,15 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "sharedcheck",
+    srcs = ["lint.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/honnef.co/go/tools/internal/sharedcheck",
+    importpath = "honnef.co/go/tools/internal/sharedcheck",
+    visibility = ["//vendor/honnef.co/go/tools:__subpackages__"],
+    deps = [
+        "//vendor/golang.org/x/tools/go/analysis",
+        "//vendor/honnef.co/go/tools/internal/passes/buildssa",
+        "//vendor/honnef.co/go/tools/lint/lintdsl",
+        "//vendor/honnef.co/go/tools/ssa",
+    ],
+)

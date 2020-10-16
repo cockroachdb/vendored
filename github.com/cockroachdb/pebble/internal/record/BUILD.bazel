@@ -1,0 +1,17 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "record",
+    srcs = [
+        "log_writer.go",
+        "record.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/cockroachdb/pebble/internal/record",
+    importpath = "github.com/cockroachdb/pebble/internal/record",
+    visibility = ["//vendor/github.com/cockroachdb/pebble:__subpackages__"],
+    deps = [
+        "//vendor/github.com/cockroachdb/errors",
+        "//vendor/github.com/cockroachdb/pebble/internal/base",
+        "//vendor/github.com/cockroachdb/pebble/internal/crc",
+    ],
+)

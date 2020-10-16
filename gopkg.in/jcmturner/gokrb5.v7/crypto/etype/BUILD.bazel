@@ -1,0 +1,9 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "etype",
+    srcs = ["etype.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/gopkg.in/jcmturner/gokrb5.v7/crypto/etype",
+    importpath = "gopkg.in/jcmturner/gokrb5.v7/crypto/etype",
+    visibility = ["//visibility:public"],
+)

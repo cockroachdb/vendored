@@ -1,0 +1,37 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "pgx",
+    srcs = [
+        "auth_scram.go",
+        "batch.go",
+        "conn.go",
+        "conn_pool.go",
+        "copy_from.go",
+        "copy_to.go",
+        "doc.go",
+        "fastpath.go",
+        "go_stdlib.go",
+        "large_objects.go",
+        "logger.go",
+        "messages.go",
+        "pgpass.go",
+        "query.go",
+        "replication.go",
+        "sql.go",
+        "tx.go",
+        "values.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/jackc/pgx",
+    importpath = "github.com/jackc/pgx",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/jackc/pgx/internal/sanitize",
+        "//vendor/github.com/jackc/pgx/pgio",
+        "//vendor/github.com/jackc/pgx/pgproto3",
+        "//vendor/github.com/jackc/pgx/pgtype",
+        "//vendor/github.com/pkg/errors",
+        "//vendor/golang.org/x/crypto/pbkdf2",
+        "//vendor/golang.org/x/text/secure/precis",
+    ],
+)

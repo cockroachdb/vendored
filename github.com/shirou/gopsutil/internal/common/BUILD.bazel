@@ -1,0 +1,37 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "common",
+    srcs = [
+        "binary.go",
+        "common.go",
+        "common_darwin.go",
+        "common_freebsd.go",
+        "common_linux.go",
+        "common_openbsd.go",
+        "common_unix.go",
+        "common_windows.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/shirou/gopsutil/internal/common",
+    importpath = "github.com/shirou/gopsutil/internal/common",
+    visibility = ["//vendor/github.com/shirou/gopsutil:__subpackages__"],
+    deps = select({
+        "@io_bazel_rules_go//go/platform:darwin": [
+            "//vendor/golang.org/x/sys/unix",
+        ],
+        "@io_bazel_rules_go//go/platform:freebsd": [
+            "//vendor/golang.org/x/sys/unix",
+        ],
+        "@io_bazel_rules_go//go/platform:ios": [
+            "//vendor/golang.org/x/sys/unix",
+        ],
+        "@io_bazel_rules_go//go/platform:openbsd": [
+            "//vendor/golang.org/x/sys/unix",
+        ],
+        "@io_bazel_rules_go//go/platform:windows": [
+            "//vendor/github.com/StackExchange/wmi",
+            "//vendor/golang.org/x/sys/windows",
+        ],
+        "//conditions:default": [],
+    }),
+)

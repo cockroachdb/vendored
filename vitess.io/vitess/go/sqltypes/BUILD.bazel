@@ -1,0 +1,29 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "sqltypes",
+    srcs = [
+        "arithmetic.go",
+        "bind_variables.go",
+        "event_token.go",
+        "plan_value.go",
+        "proto3.go",
+        "query_response.go",
+        "result.go",
+        "testing.go",
+        "type.go",
+        "value.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/vitess.io/vitess/go/sqltypes",
+    importpath = "vitess.io/vitess/go/sqltypes",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/golang/protobuf/proto",
+        "//vendor/vitess.io/vitess/go/bytes2",
+        "//vendor/vitess.io/vitess/go/hack",
+        "//vendor/vitess.io/vitess/go/vt/proto/query",
+        "//vendor/vitess.io/vitess/go/vt/proto/vtgate",
+        "//vendor/vitess.io/vitess/go/vt/proto/vtrpc",
+        "//vendor/vitess.io/vitess/go/vt/vterrors",
+    ],
+)

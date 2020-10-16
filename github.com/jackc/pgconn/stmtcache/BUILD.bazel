@@ -1,0 +1,13 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "stmtcache",
+    srcs = [
+        "lru.go",
+        "stmtcache.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/jackc/pgconn/stmtcache",
+    importpath = "github.com/jackc/pgconn/stmtcache",
+    visibility = ["//visibility:public"],
+    deps = ["//vendor/github.com/jackc/pgconn"],
+)

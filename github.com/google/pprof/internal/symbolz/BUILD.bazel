@@ -1,0 +1,13 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "symbolz",
+    srcs = ["symbolz.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/google/pprof/internal/symbolz",
+    importpath = "github.com/google/pprof/internal/symbolz",
+    visibility = ["//vendor/github.com/google/pprof:__subpackages__"],
+    deps = [
+        "//vendor/github.com/google/pprof/internal/plugin",
+        "//vendor/github.com/google/pprof/profile",
+    ],
+)

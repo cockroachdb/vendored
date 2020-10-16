@@ -1,0 +1,15 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "graphite",
+    srcs = ["bridge.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/prometheus/client_golang/prometheus/graphite",
+    importpath = "github.com/prometheus/client_golang/prometheus/graphite",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/prometheus/client_golang/prometheus",
+        "//vendor/github.com/prometheus/client_model/go",
+        "//vendor/github.com/prometheus/common/expfmt",
+        "//vendor/github.com/prometheus/common/model",
+    ],
+)

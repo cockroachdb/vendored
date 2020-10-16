@@ -1,0 +1,9 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "dnsutils",
+    srcs = ["srv.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/jcmturner/dnsutils/v2",
+    importpath = "github.com/jcmturner/dnsutils/v2",
+    visibility = ["//visibility:public"],
+)

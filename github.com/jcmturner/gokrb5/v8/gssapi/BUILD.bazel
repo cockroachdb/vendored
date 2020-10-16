@@ -1,0 +1,20 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "gssapi",
+    srcs = [
+        "MICToken.go",
+        "contextFlags.go",
+        "gssapi.go",
+        "wrapToken.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/jcmturner/gokrb5/v8/gssapi",
+    importpath = "github.com/jcmturner/gokrb5/v8/gssapi",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/jcmturner/gofork/encoding/asn1",
+        "//vendor/github.com/jcmturner/gokrb5/v8/crypto",
+        "//vendor/github.com/jcmturner/gokrb5/v8/iana/keyusage",
+        "//vendor/github.com/jcmturner/gokrb5/v8/types",
+    ],
+)

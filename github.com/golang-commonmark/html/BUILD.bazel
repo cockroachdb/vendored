@@ -1,0 +1,12 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "html",
+    srcs = [
+        "html.go",
+        "html5_entities.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/golang-commonmark/html",
+    importpath = "github.com/golang-commonmark/html",
+    visibility = ["//visibility:public"],
+)

@@ -1,0 +1,15 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "rand",
+    srcs = [
+        "exp.go",
+        "normal.go",
+        "rand.go",
+        "rng.go",
+        "zipf.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/golang.org/x/exp/rand",
+    importpath = "golang.org/x/exp/rand",
+    visibility = ["//visibility:public"],
+)

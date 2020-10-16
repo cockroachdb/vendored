@@ -1,0 +1,13 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "load",
+    srcs = [
+        "path.go",
+        "pkg.go",
+        "search.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/kisielk/gotool/internal/load",
+    importpath = "github.com/kisielk/gotool/internal/load",
+    visibility = ["//vendor/github.com/kisielk/gotool:__subpackages__"],
+)

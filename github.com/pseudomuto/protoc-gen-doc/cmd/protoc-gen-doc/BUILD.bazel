@@ -1,0 +1,25 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "protoc-gen-doc_lib",
+    srcs = [
+        "flags.go",
+        "main.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/pseudomuto/protoc-gen-doc/cmd/protoc-gen-doc",
+    importpath = "github.com/pseudomuto/protoc-gen-doc/cmd/protoc-gen-doc",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//vendor/github.com/pseudomuto/protoc-gen-doc",
+        "//vendor/github.com/pseudomuto/protoc-gen-doc/extensions/google_api_http",
+        "//vendor/github.com/pseudomuto/protoc-gen-doc/extensions/lyft_validate",
+        "//vendor/github.com/pseudomuto/protoc-gen-doc/extensions/validator_field",
+        "//vendor/github.com/pseudomuto/protokit",
+    ],
+)
+
+go_binary(
+    name = "protoc-gen-doc",
+    embed = [":protoc-gen-doc_lib"],
+    visibility = ["//visibility:public"],
+)

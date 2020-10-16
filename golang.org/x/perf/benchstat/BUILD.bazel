@@ -1,0 +1,21 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "benchstat",
+    srcs = [
+        "data.go",
+        "delta.go",
+        "html.go",
+        "scaler.go",
+        "sort.go",
+        "table.go",
+        "text.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/golang.org/x/perf/benchstat",
+    importpath = "golang.org/x/perf/benchstat",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/golang.org/x/perf/internal/stats",
+        "//vendor/golang.org/x/perf/storage/benchfmt",
+    ],
+)

@@ -1,0 +1,9 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "krberror",
+    srcs = ["error.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/gopkg.in/jcmturner/gokrb5.v7/krberror",
+    importpath = "gopkg.in/jcmturner/gokrb5.v7/krberror",
+    visibility = ["//visibility:public"],
+)

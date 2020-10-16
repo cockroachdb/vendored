@@ -1,0 +1,10 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go-xerial-snappy",
+    srcs = ["snappy.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/eapache/go-xerial-snappy",
+    importpath = "github.com/eapache/go-xerial-snappy",
+    visibility = ["//visibility:public"],
+    deps = ["//vendor/github.com/golang/snappy"],
+)

@@ -1,0 +1,13 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "logtags",
+    srcs = [
+        "buffer.go",
+        "context.go",
+        "tag.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/cockroachdb/logtags",
+    importpath = "github.com/cockroachdb/logtags",
+    visibility = ["//visibility:public"],
+)

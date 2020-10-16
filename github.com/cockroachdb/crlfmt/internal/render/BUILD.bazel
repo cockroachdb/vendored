@@ -1,0 +1,10 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "render",
+    srcs = ["render.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/cockroachdb/crlfmt/internal/render",
+    importpath = "github.com/cockroachdb/crlfmt/internal/render",
+    visibility = ["//vendor/github.com/cockroachdb/crlfmt:__subpackages__"],
+    deps = ["//vendor/github.com/cockroachdb/crlfmt/internal/parser"],
+)

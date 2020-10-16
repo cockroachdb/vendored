@@ -1,0 +1,15 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "markers",
+    srcs = ["markers.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/cockroachdb/errors/markers",
+    importpath = "github.com/cockroachdb/errors/markers",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/cockroachdb/errors/errbase",
+        "//vendor/github.com/cockroachdb/errors/errorspb",
+        "//vendor/github.com/cockroachdb/redact",
+        "//vendor/github.com/gogo/protobuf/proto",
+    ],
+)

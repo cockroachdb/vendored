@@ -1,0 +1,10 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "exp",
+    srcs = ["exp.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/rcrowley/go-metrics/exp",
+    importpath = "github.com/rcrowley/go-metrics/exp",
+    visibility = ["//visibility:public"],
+    deps = ["//vendor/github.com/rcrowley/go-metrics"],
+)

@@ -1,0 +1,16 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go-proto-validators",
+    srcs = [
+        "helper.go",
+        "validator.pb.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/mwitkow/go-proto-validators",
+    importpath = "github.com/mwitkow/go-proto-validators",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/gogo/protobuf/proto",
+        "//vendor/github.com/gogo/protobuf/protoc-gen-gogo/descriptor",
+    ],
+)

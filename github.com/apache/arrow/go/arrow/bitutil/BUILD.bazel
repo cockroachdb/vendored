@@ -1,0 +1,9 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "bitutil",
+    srcs = ["bitutil.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/apache/arrow/go/arrow/bitutil",
+    importpath = "github.com/apache/arrow/go/arrow/bitutil",
+    visibility = ["//visibility:public"],
+)

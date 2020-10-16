@@ -3,6 +3,7 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library")
 go_library(
     name = "common",
     srcs = ["editline.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/knz/go-libedit/common",
     importpath = "github.com/knz/go-libedit/common",
     visibility = ["//visibility:public"],
 )

@@ -1,0 +1,22 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "protokit",
+    srcs = [
+        "comments.go",
+        "context.go",
+        "doc.go",
+        "parser.go",
+        "plugin.go",
+        "types.go",
+        "version.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/pseudomuto/protokit",
+    importpath = "github.com/pseudomuto/protokit",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/golang/protobuf/proto",
+        "//vendor/github.com/golang/protobuf/protoc-gen-go/descriptor",
+        "//vendor/github.com/golang/protobuf/protoc-gen-go/plugin",
+    ],
+)

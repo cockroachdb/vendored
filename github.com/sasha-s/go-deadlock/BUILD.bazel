@@ -1,0 +1,13 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go-deadlock",
+    srcs = [
+        "deadlock.go",
+        "stacktraces.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/sasha-s/go-deadlock",
+    importpath = "github.com/sasha-s/go-deadlock",
+    visibility = ["//visibility:public"],
+    deps = ["//vendor/github.com/petermattis/goid"],
+)

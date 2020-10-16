@@ -1,0 +1,9 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "fastrand",
+    srcs = ["fastrand.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/andy-kimball/arenaskl/internal/fastrand",
+    importpath = "github.com/andy-kimball/arenaskl/internal/fastrand",
+    visibility = ["//vendor/github.com/andy-kimball/arenaskl:__subpackages__"],
+)

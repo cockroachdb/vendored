@@ -1,0 +1,14 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "goidentity",
+    srcs = [
+        "authenticator.go",
+        "identity.go",
+        "user.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/jcmturner/goidentity/v6",
+    importpath = "github.com/jcmturner/goidentity/v6",
+    visibility = ["//visibility:public"],
+    deps = ["//vendor/github.com/hashicorp/go-uuid"],
+)

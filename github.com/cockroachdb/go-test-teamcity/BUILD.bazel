@@ -1,0 +1,15 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "go-test-teamcity_lib",
+    srcs = ["main.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/cockroachdb/go-test-teamcity",
+    importpath = "github.com/cockroachdb/go-test-teamcity",
+    visibility = ["//visibility:private"],
+)
+
+go_binary(
+    name = "go-test-teamcity",
+    embed = [":go-test-teamcity_lib"],
+    visibility = ["//visibility:public"],
+)

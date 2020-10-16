@@ -1,0 +1,12 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "suffixtree",
+    srcs = [
+        "dupl.go",
+        "suffixtree.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/mibk/dupl/suffixtree",
+    importpath = "github.com/mibk/dupl/suffixtree",
+    visibility = ["//visibility:public"],
+)

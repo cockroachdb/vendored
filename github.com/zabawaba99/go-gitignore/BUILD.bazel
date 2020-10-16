@@ -1,0 +1,9 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go-gitignore",
+    srcs = ["ignore.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/zabawaba99/go-gitignore",
+    importpath = "github.com/zabawaba99/go-gitignore",
+    visibility = ["//visibility:public"],
+)

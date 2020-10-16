@@ -1,0 +1,9 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "gotypes",
+    srcs = ["resolver.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/dave/dst/decorator/resolver/gotypes",
+    importpath = "github.com/dave/dst/decorator/resolver/gotypes",
+    visibility = ["//visibility:public"],
+)

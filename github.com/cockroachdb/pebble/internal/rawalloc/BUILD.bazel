@@ -1,0 +1,14 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "rawalloc",
+    srcs = [
+        "rawalloc.go",
+        "rawalloc_32bit.go",
+        "rawalloc_64bit.go",
+        "rawalloc_go1.9.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/cockroachdb/pebble/internal/rawalloc",
+    importpath = "github.com/cockroachdb/pebble/internal/rawalloc",
+    visibility = ["//vendor/github.com/cockroachdb/pebble:__subpackages__"],
+)

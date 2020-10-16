@@ -1,0 +1,14 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "loopclosure",
+    srcs = ["loopclosure.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/golang.org/x/tools/go/analysis/passes/loopclosure",
+    importpath = "golang.org/x/tools/go/analysis/passes/loopclosure",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/golang.org/x/tools/go/analysis",
+        "//vendor/golang.org/x/tools/go/analysis/passes/inspect",
+        "//vendor/golang.org/x/tools/go/ast/inspector",
+    ],
+)

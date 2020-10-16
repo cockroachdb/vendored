@@ -1,0 +1,34 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "client",
+    srcs = [
+        "ASExchange.go",
+        "TGSExchange.go",
+        "cache.go",
+        "client.go",
+        "network.go",
+        "passwd.go",
+        "session.go",
+        "settings.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/gopkg.in/jcmturner/gokrb5.v7/client",
+    importpath = "gopkg.in/jcmturner/gokrb5.v7/client",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/gopkg.in/jcmturner/gokrb5.v7/config",
+        "//vendor/gopkg.in/jcmturner/gokrb5.v7/credentials",
+        "//vendor/gopkg.in/jcmturner/gokrb5.v7/crypto",
+        "//vendor/gopkg.in/jcmturner/gokrb5.v7/crypto/etype",
+        "//vendor/gopkg.in/jcmturner/gokrb5.v7/iana/errorcode",
+        "//vendor/gopkg.in/jcmturner/gokrb5.v7/iana/flags",
+        "//vendor/gopkg.in/jcmturner/gokrb5.v7/iana/keyusage",
+        "//vendor/gopkg.in/jcmturner/gokrb5.v7/iana/nametype",
+        "//vendor/gopkg.in/jcmturner/gokrb5.v7/iana/patype",
+        "//vendor/gopkg.in/jcmturner/gokrb5.v7/kadmin",
+        "//vendor/gopkg.in/jcmturner/gokrb5.v7/keytab",
+        "//vendor/gopkg.in/jcmturner/gokrb5.v7/krberror",
+        "//vendor/gopkg.in/jcmturner/gokrb5.v7/messages",
+        "//vendor/gopkg.in/jcmturner/gokrb5.v7/types",
+    ],
+)

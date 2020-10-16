@@ -1,0 +1,36 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "storage",
+    srcs = [
+        "acl.go",
+        "bucket.go",
+        "copy.go",
+        "doc.go",
+        "go110.go",
+        "iam.go",
+        "invoke.go",
+        "not_go110.go",
+        "notifications.go",
+        "reader.go",
+        "storage.go",
+        "writer.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/cloud.google.com/go/storage",
+    importpath = "cloud.google.com/go/storage",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/cloud.google.com/go/iam",
+        "//vendor/cloud.google.com/go/internal",
+        "//vendor/cloud.google.com/go/internal/optional",
+        "//vendor/cloud.google.com/go/internal/trace",
+        "//vendor/cloud.google.com/go/internal/version",
+        "//vendor/github.com/googleapis/gax-go",
+        "//vendor/google.golang.org/api/googleapi",
+        "//vendor/google.golang.org/api/iterator",
+        "//vendor/google.golang.org/api/option",
+        "//vendor/google.golang.org/api/storage/v1:storage",
+        "//vendor/google.golang.org/api/transport/http",
+        "//vendor/google.golang.org/genproto/googleapis/iam/v1:iam",
+    ],
+)

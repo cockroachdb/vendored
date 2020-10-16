@@ -1,0 +1,9 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "orientation",
+    srcs = ["orientation.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/twpayne/go-geom/xy/orientation",
+    importpath = "github.com/twpayne/go-geom/xy/orientation",
+    visibility = ["//visibility:public"],
+)

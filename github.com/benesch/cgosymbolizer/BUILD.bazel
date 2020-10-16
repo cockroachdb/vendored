@@ -1,0 +1,25 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "cgosymbolizer",
+    srcs = [
+        "cgosymbolizer_darwin.c",
+        "cgosymbolizer_darwin.go",
+        "cgosymbolizer_darwin.h",
+        "cgosymbolizer_linux.go",
+        "doc.go",
+    ],
+    cgo = True,
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/benesch/cgosymbolizer",
+    importpath = "github.com/benesch/cgosymbolizer",
+    visibility = ["//visibility:public"],
+    deps = select({
+        "@io_bazel_rules_go//go/platform:android": [
+            "//vendor/github.com/ianlancetaylor/cgosymbolizer",
+        ],
+        "@io_bazel_rules_go//go/platform:linux": [
+            "//vendor/github.com/ianlancetaylor/cgosymbolizer",
+        ],
+        "//conditions:default": [],
+    }),
+)

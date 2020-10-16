@@ -1,0 +1,9 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "d3flamegraph",
+    srcs = ["d3_flame_graph.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/google/pprof/third_party/d3flamegraph",
+    importpath = "github.com/google/pprof/third_party/d3flamegraph",
+    visibility = ["//visibility:public"],
+)

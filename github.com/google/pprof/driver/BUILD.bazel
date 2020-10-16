@@ -1,0 +1,14 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "driver",
+    srcs = ["driver.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/google/pprof/driver",
+    importpath = "github.com/google/pprof/driver",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/google/pprof/internal/driver",
+        "//vendor/github.com/google/pprof/internal/plugin",
+        "//vendor/github.com/google/pprof/profile",
+    ],
+)

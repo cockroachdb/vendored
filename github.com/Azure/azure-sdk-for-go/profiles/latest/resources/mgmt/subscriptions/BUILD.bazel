@@ -1,0 +1,10 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "subscriptions",
+    srcs = ["models.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/Azure/azure-sdk-for-go/profiles/latest/resources/mgmt/subscriptions",
+    importpath = "github.com/Azure/azure-sdk-for-go/profiles/latest/resources/mgmt/subscriptions",
+    visibility = ["//visibility:public"],
+    deps = ["//vendor/github.com/Azure/azure-sdk-for-go/services/resources/mgmt/2018-06-01/subscriptions"],
+)

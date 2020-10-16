@@ -1,0 +1,15 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "unmarshal",
+    srcs = ["unmarshal.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/golang.org/x/tools/go/analysis/passes/unmarshal",
+    importpath = "golang.org/x/tools/go/analysis/passes/unmarshal",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/golang.org/x/tools/go/analysis",
+        "//vendor/golang.org/x/tools/go/analysis/passes/inspect",
+        "//vendor/golang.org/x/tools/go/ast/inspector",
+        "//vendor/golang.org/x/tools/go/types/typeutil",
+    ],
+)

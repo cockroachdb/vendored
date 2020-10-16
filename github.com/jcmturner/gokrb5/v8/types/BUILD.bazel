@@ -1,0 +1,27 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "types",
+    srcs = [
+        "Authenticator.go",
+        "AuthorizationData.go",
+        "Cryptosystem.go",
+        "HostAddress.go",
+        "KerberosFlags.go",
+        "PAData.go",
+        "PrincipalName.go",
+        "TypedData.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/jcmturner/gokrb5/v8/types",
+    importpath = "github.com/jcmturner/gokrb5/v8/types",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/jcmturner/gofork/encoding/asn1",
+        "//vendor/github.com/jcmturner/gokrb5/v8/asn1tools",
+        "//vendor/github.com/jcmturner/gokrb5/v8/iana",
+        "//vendor/github.com/jcmturner/gokrb5/v8/iana/addrtype",
+        "//vendor/github.com/jcmturner/gokrb5/v8/iana/asnAppTag",
+        "//vendor/github.com/jcmturner/gokrb5/v8/iana/nametype",
+        "//vendor/github.com/jcmturner/gokrb5/v8/iana/patype",
+    ],
+)

@@ -1,0 +1,25 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "iostat",
+    srcs = [
+        "iostat.go",
+        "iostat_darwin.c",
+        "iostat_darwin.go",
+        "iostat_darwin.h",
+        "iostat_linux.go",
+    ],
+    cgo = True,
+    clinkopts = select({
+        "@io_bazel_rules_go//go/platform:darwin": [
+            "-framework CoreFoundation -framework IOKit",
+        ],
+        "@io_bazel_rules_go//go/platform:ios": [
+            "-framework CoreFoundation -framework IOKit",
+        ],
+        "//conditions:default": [],
+    }),
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/lufia/iostat",
+    importpath = "github.com/lufia/iostat",
+    visibility = ["//visibility:public"],
+)

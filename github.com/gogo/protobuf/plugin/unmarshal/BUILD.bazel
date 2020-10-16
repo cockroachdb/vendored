@@ -1,0 +1,15 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "unmarshal",
+    srcs = ["unmarshal.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/gogo/protobuf/plugin/unmarshal",
+    importpath = "github.com/gogo/protobuf/plugin/unmarshal",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/gogo/protobuf/gogoproto",
+        "//vendor/github.com/gogo/protobuf/proto",
+        "//vendor/github.com/gogo/protobuf/protoc-gen-gogo/descriptor",
+        "//vendor/github.com/gogo/protobuf/protoc-gen-gogo/generator",
+    ],
+)

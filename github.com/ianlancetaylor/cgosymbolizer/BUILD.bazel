@@ -1,0 +1,28 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "cgosymbolizer",
+    srcs = [
+        "backtrace.h",
+        "config.h",
+        "dwarf.c",
+        "elf.c",
+        "fileline.c",
+        "internal.h",
+        "macho.c",
+        "mmap.c",
+        "mmapio.c",
+        "pecoff.c",
+        "posix.c",
+        "sort.c",
+        "state.c",
+        "symbolizer.c",
+        "symbolizer.go",
+        "traceback.c",
+        "xcoff.c",
+    ],
+    cgo = True,
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/ianlancetaylor/cgosymbolizer",
+    importpath = "github.com/ianlancetaylor/cgosymbolizer",
+    visibility = ["//visibility:public"],
+)

@@ -1,0 +1,14 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "jsonmessage",
+    srcs = ["jsonmessage.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/docker/docker/pkg/jsonmessage",
+    importpath = "github.com/docker/docker/pkg/jsonmessage",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/Nvveen/Gotty",
+        "//vendor/github.com/docker/docker/pkg/term",
+        "//vendor/github.com/docker/go-units",
+    ],
+)

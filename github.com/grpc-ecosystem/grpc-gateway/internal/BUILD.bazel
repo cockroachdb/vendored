@@ -17,7 +17,12 @@ go_proto_library(
 )
 
 go_library(
-    name = "go_default_library",
-    embed = [":internal_go_proto"],
+    name = "internal",
+    srcs = ["errors.pb.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/grpc-ecosystem/grpc-gateway/internal",
     importpath = "github.com/grpc-ecosystem/grpc-gateway/internal",
+    deps = [
+        "//vendor/github.com/golang/protobuf/proto",
+        "//vendor/github.com/golang/protobuf/ptypes/any",
+    ],
 )

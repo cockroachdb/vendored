@@ -1,0 +1,26 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "stylecheck",
+    srcs = [
+        "analysis.go",
+        "doc.go",
+        "lint.go",
+        "names.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/honnef.co/go/tools/stylecheck",
+    importpath = "honnef.co/go/tools/stylecheck",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/golang.org/x/tools/go/analysis",
+        "//vendor/golang.org/x/tools/go/analysis/passes/inspect",
+        "//vendor/golang.org/x/tools/go/ast/inspector",
+        "//vendor/golang.org/x/tools/go/types/typeutil",
+        "//vendor/honnef.co/go/tools/config",
+        "//vendor/honnef.co/go/tools/facts",
+        "//vendor/honnef.co/go/tools/internal/passes/buildssa",
+        "//vendor/honnef.co/go/tools/lint/lintdsl",
+        "//vendor/honnef.co/go/tools/lint/lintutil",
+        "//vendor/honnef.co/go/tools/ssa",
+    ],
+)

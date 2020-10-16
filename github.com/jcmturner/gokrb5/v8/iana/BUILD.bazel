@@ -1,0 +1,9 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "iana",
+    srcs = ["constants.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/jcmturner/gokrb5/v8/iana",
+    importpath = "github.com/jcmturner/gokrb5/v8/iana",
+    visibility = ["//visibility:public"],
+)

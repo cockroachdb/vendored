@@ -1,0 +1,10 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "gcassert",
+    srcs = ["gcassert.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/jordanlewis/gcassert",
+    importpath = "github.com/jordanlewis/gcassert",
+    visibility = ["//visibility:public"],
+    deps = ["//vendor/golang.org/x/tools/go/packages"],
+)

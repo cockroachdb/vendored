@@ -1,0 +1,26 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "otgrpc",
+    srcs = [
+        "client.go",
+        "errors.go",
+        "options.go",
+        "package.go",
+        "server.go",
+        "shared.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/grpc-ecosystem/grpc-opentracing/go/otgrpc",
+    importpath = "github.com/grpc-ecosystem/grpc-opentracing/go/otgrpc",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/opentracing/opentracing-go",
+        "//vendor/github.com/opentracing/opentracing-go/ext",
+        "//vendor/github.com/opentracing/opentracing-go/log",
+        "//vendor/golang.org/x/net/context",
+        "//vendor/google.golang.org/grpc",
+        "//vendor/google.golang.org/grpc/codes",
+        "//vendor/google.golang.org/grpc/metadata",
+        "//vendor/google.golang.org/grpc/status",
+    ],
+)

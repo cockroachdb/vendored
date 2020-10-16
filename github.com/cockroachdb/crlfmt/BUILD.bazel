@@ -1,0 +1,25 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "crlfmt_lib",
+    srcs = [
+        "diff.go",
+        "main.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/cockroachdb/crlfmt",
+    importpath = "github.com/cockroachdb/crlfmt",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//vendor/github.com/cockroachdb/crlfmt/internal/parser",
+        "//vendor/github.com/cockroachdb/crlfmt/internal/render",
+        "//vendor/github.com/cockroachdb/gostdlib/go/format",
+        "//vendor/github.com/cockroachdb/gostdlib/x/tools/imports",
+        "//vendor/github.com/cockroachdb/ttycolor",
+    ],
+)
+
+go_binary(
+    name = "crlfmt",
+    embed = [":crlfmt_lib"],
+    visibility = ["//visibility:public"],
+)

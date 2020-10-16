@@ -1,0 +1,9 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "msgtype",
+    srcs = ["constants.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/jcmturner/gokrb5/v8/iana/msgtype",
+    importpath = "github.com/jcmturner/gokrb5/v8/iana/msgtype",
+    visibility = ["//visibility:public"],
+)

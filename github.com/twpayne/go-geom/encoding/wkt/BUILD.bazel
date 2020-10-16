@@ -1,0 +1,14 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "wkt",
+    srcs = [
+        "decode.go",
+        "encode.go",
+        "wkt.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/twpayne/go-geom/encoding/wkt",
+    importpath = "github.com/twpayne/go-geom/encoding/wkt",
+    visibility = ["//visibility:public"],
+    deps = ["//vendor/github.com/twpayne/go-geom"],
+)

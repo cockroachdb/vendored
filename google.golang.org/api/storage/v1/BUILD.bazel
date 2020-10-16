@@ -1,0 +1,13 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "storage",
+    srcs = ["storage-gen.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/google.golang.org/api/storage/v1",
+    importpath = "google.golang.org/api/storage/v1",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/google.golang.org/api/gensupport",
+        "//vendor/google.golang.org/api/googleapi",
+    ],
+)

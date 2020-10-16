@@ -1,0 +1,22 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "base",
+    srcs = [
+        "cleaner.go",
+        "comparer.go",
+        "error.go",
+        "filenames.go",
+        "internal.go",
+        "iterator.go",
+        "merger.go",
+        "options.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/cockroachdb/pebble/internal/base",
+    importpath = "github.com/cockroachdb/pebble/internal/base",
+    visibility = ["//vendor/github.com/cockroachdb/pebble:__subpackages__"],
+    deps = [
+        "//vendor/github.com/cockroachdb/errors",
+        "//vendor/github.com/cockroachdb/pebble/vfs",
+    ],
+)

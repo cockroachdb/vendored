@@ -1,0 +1,14 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "zipkincore",
+    srcs = [
+        "GoUnusedProtection__.go",
+        "zipkinCore.go",
+        "zipkinCore-consts.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/openzipkin-contrib/zipkin-go-opentracing/thrift/gen-go/zipkincore",
+    importpath = "github.com/openzipkin-contrib/zipkin-go-opentracing/thrift/gen-go/zipkincore",
+    visibility = ["//visibility:public"],
+    deps = ["//vendor/github.com/apache/thrift/lib/go/thrift"],
+)

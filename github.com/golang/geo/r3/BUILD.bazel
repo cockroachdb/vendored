@@ -1,0 +1,14 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "r3",
+    srcs = [
+        "doc.go",
+        "precisevector.go",
+        "vector.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/golang/geo/r3",
+    importpath = "github.com/golang/geo/r3",
+    visibility = ["//visibility:public"],
+    deps = ["//vendor/github.com/golang/geo/s1"],
+)
