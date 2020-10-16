@@ -1,4 +1,5 @@
 load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("@rules_foreign_cc//tools/build_defs:configure.bzl", "configure_make")
 
 cc_library(
     name = "libedit_unix_cdeps",
@@ -30,6 +31,7 @@ cc_library(
             "shim/**/*.c",
         ]),
     }),
+    copts = ["-DGO_LIBEDIT_NO_BUILD"],
     deps = select({
         "@io_bazel_rules_go//go/platform:android": [
             "//unix/src/c-libedit:c-libedit",
@@ -41,16 +43,20 @@ cc_library(
     }),
 )
 
-cc_library(
-    name = "libedit_cdeps",
-    srcs = glob([
-        "shim/**/*.c",
-        "shim/**/*.h",
-    ]),
-    hdrs = glob([
-        "shim/**/*.h",
-        "shim/**/*.c",
-    ]),
+configure_make(
+    name = "libedit",
+    autoconf = True,
+    configure_env_vars = {
+        "AR": "/usr/bin/ar",  # XXX: What happens if this is left empty?
+    },
+    configure_in_place = True,
+    configure_options = [
+        "--disable-examples",
+        "--disable-shared",
+    ],
+    lib_source = "@libedit//:all",
+    static_libraries = ["libedit.a"],
+    visibility = ["//visibility:public"],
 )
 
 go_library(
