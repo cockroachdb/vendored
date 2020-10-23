@@ -328,7 +328,7 @@ int fn_complete(EditLine *el,
 	    wchar_t *(*dequoting_func)(const wchar_t *),
 	    char *(*quoting_func)(const char *));
 #else
-#include "stub_fn_complete.i"
+#include "stub_fn_complete.h"
 #endif
 
 static const wchar_t break_chars[] = L" \t\n\"\\'`@$><=;|&{(";
