@@ -1,0 +1,32 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "precis",
+    srcs = [
+        "class.go",
+        "context.go",
+        "doc.go",
+        "nickname.go",
+        "options.go",
+        "profile.go",
+        "profiles.go",
+        "tables10.0.0.go",
+        "tables11.0.0.go",
+        "tables12.0.0.go",
+        "tables9.0.0.go",
+        "transformer.go",
+        "trieval.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/golang.org/x/text/secure/precis",
+    importpath = "golang.org/x/text/secure/precis",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/golang.org/x/text/cases",
+        "//vendor/golang.org/x/text/language",
+        "//vendor/golang.org/x/text/runes",
+        "//vendor/golang.org/x/text/secure/bidirule",
+        "//vendor/golang.org/x/text/transform",
+        "//vendor/golang.org/x/text/unicode/norm",
+        "//vendor/golang.org/x/text/width",
+    ],
+)

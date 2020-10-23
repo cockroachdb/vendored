@@ -1,0 +1,10 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "measurement",
+    srcs = ["measurement.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/google/pprof/internal/measurement",
+    importpath = "github.com/google/pprof/internal/measurement",
+    visibility = ["//vendor/github.com/google/pprof:__subpackages__"],
+    deps = ["//vendor/github.com/google/pprof/profile"],
+)

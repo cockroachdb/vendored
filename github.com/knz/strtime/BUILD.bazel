@@ -1,0 +1,20 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "strtime",
+    srcs = [
+        "bsdshim.h",
+        "gmtime_r.c",
+        "strftime.go",
+        "strptime.c",
+        "time.go",
+        "time_nocgo.go",
+        "timelocal.c",
+        "timelocal.h",
+    ],
+    cgo = True,
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/knz/strtime",
+    importpath = "github.com/knz/strtime",
+    visibility = ["//visibility:public"],
+    deps = ["//vendor/github.com/pkg/errors"],
+)

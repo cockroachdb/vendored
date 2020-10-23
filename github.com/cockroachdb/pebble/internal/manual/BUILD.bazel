@@ -1,0 +1,15 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "manual",
+    srcs = [
+        "manual.go",
+        "manual_32bit.go",
+        "manual_64bit.go",
+        "manual_nocgo.go",
+    ],
+    cgo = True,
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/cockroachdb/pebble/internal/manual",
+    importpath = "github.com/cockroachdb/pebble/internal/manual",
+    visibility = ["//vendor/github.com/cockroachdb/pebble:__subpackages__"],
+)

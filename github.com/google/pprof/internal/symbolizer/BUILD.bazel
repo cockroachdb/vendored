@@ -1,0 +1,16 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "symbolizer",
+    srcs = ["symbolizer.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/google/pprof/internal/symbolizer",
+    importpath = "github.com/google/pprof/internal/symbolizer",
+    visibility = ["//vendor/github.com/google/pprof:__subpackages__"],
+    deps = [
+        "//vendor/github.com/google/pprof/internal/binutils",
+        "//vendor/github.com/google/pprof/internal/plugin",
+        "//vendor/github.com/google/pprof/internal/symbolz",
+        "//vendor/github.com/google/pprof/profile",
+        "//vendor/github.com/ianlancetaylor/demangle",
+    ],
+)

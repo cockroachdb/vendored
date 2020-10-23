@@ -1,0 +1,22 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "cache",
+    srcs = [
+        "clockpro.go",
+        "entry.go",
+        "entry_normal.go",
+        "refcnt_normal.go",
+        "robin_hood.go",
+        "value.go",
+        "value_normal.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/cockroachdb/pebble/internal/cache",
+    importpath = "github.com/cockroachdb/pebble/internal/cache",
+    visibility = ["//vendor/github.com/cockroachdb/pebble:__subpackages__"],
+    deps = [
+        "//vendor/github.com/cockroachdb/pebble/internal/base",
+        "//vendor/github.com/cockroachdb/pebble/internal/invariants",
+        "//vendor/github.com/cockroachdb/pebble/internal/manual",
+    ],
+)

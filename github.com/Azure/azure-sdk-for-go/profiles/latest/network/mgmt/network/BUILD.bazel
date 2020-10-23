@@ -1,0 +1,10 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "network",
+    srcs = ["models.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/Azure/azure-sdk-for-go/profiles/latest/network/mgmt/network",
+    importpath = "github.com/Azure/azure-sdk-for-go/profiles/latest/network/mgmt/network",
+    visibility = ["//visibility:public"],
+    deps = ["//vendor/github.com/Azure/azure-sdk-for-go/services/network/mgmt/2019-07-01/network"],
+)

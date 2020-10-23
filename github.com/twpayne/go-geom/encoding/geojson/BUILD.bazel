@@ -1,0 +1,10 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "geojson",
+    srcs = ["geojson.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/twpayne/go-geom/encoding/geojson",
+    importpath = "github.com/twpayne/go-geom/encoding/geojson",
+    visibility = ["//visibility:public"],
+    deps = ["//vendor/github.com/twpayne/go-geom"],
+)

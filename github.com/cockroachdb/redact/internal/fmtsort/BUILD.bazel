@@ -1,0 +1,9 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "fmtsort",
+    srcs = ["sort.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/cockroachdb/redact/internal/fmtsort",
+    importpath = "github.com/cockroachdb/redact/internal/fmtsort",
+    visibility = ["//vendor/github.com/cockroachdb/redact:__subpackages__"],
+)

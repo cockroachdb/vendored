@@ -1,0 +1,26 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "pgconn",
+    srcs = [
+        "auth_scram.go",
+        "config.go",
+        "doc.go",
+        "errors.go",
+        "pgconn.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/jackc/pgconn",
+    importpath = "github.com/jackc/pgconn",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/jackc/chunkreader/v2:chunkreader",
+        "//vendor/github.com/jackc/pgconn/internal/ctxwatch",
+        "//vendor/github.com/jackc/pgio",
+        "//vendor/github.com/jackc/pgpassfile",
+        "//vendor/github.com/jackc/pgproto3/v2:pgproto3",
+        "//vendor/github.com/jackc/pgservicefile",
+        "//vendor/golang.org/x/crypto/pbkdf2",
+        "//vendor/golang.org/x/text/secure/precis",
+        "//vendor/golang.org/x/xerrors",
+    ],
+)

@@ -1,0 +1,10 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "guid",
+    srcs = ["guid.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/Microsoft/go-winio/pkg/guid",
+    importpath = "github.com/Microsoft/go-winio/pkg/guid",
+    visibility = ["//visibility:public"],
+    deps = ["//vendor/golang.org/x/sys/windows"],
+)

@@ -1,0 +1,13 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "loader",
+    srcs = ["loader.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/honnef.co/go/tools/loader",
+    importpath = "honnef.co/go/tools/loader",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/golang.org/x/tools/go/gcexportdata",
+        "//vendor/golang.org/x/tools/go/packages",
+    ],
+)

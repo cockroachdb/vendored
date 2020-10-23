@@ -1,0 +1,51 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "cpu",
+    srcs = [
+        "cpu.go",
+        "cpu_darwin.go",
+        "cpu_darwin_cgo.go",
+        "cpu_darwin_nocgo.go",
+        "cpu_dragonfly.go",
+        "cpu_dragonfly_amd64.go",
+        "cpu_fallback.go",
+        "cpu_freebsd.go",
+        "cpu_freebsd_386.go",
+        "cpu_freebsd_amd64.go",
+        "cpu_freebsd_arm.go",
+        "cpu_freebsd_arm64.go",
+        "cpu_linux.go",
+        "cpu_openbsd.go",
+        "cpu_solaris.go",
+        "cpu_windows.go",
+    ],
+    cgo = True,
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/shirou/gopsutil/cpu",
+    importpath = "github.com/shirou/gopsutil/cpu",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/shirou/gopsutil/internal/common",
+    ] + select({
+        "@io_bazel_rules_go//go/platform:darwin": [
+            "//vendor/golang.org/x/sys/unix",
+        ],
+        "@io_bazel_rules_go//go/platform:dragonfly": [
+            "//vendor/golang.org/x/sys/unix",
+        ],
+        "@io_bazel_rules_go//go/platform:freebsd": [
+            "//vendor/golang.org/x/sys/unix",
+        ],
+        "@io_bazel_rules_go//go/platform:ios": [
+            "//vendor/golang.org/x/sys/unix",
+        ],
+        "@io_bazel_rules_go//go/platform:openbsd": [
+            "//vendor/golang.org/x/sys/unix",
+        ],
+        "@io_bazel_rules_go//go/platform:windows": [
+            "//vendor/github.com/StackExchange/wmi",
+            "//vendor/golang.org/x/sys/windows",
+        ],
+        "//conditions:default": [],
+    }),
+)

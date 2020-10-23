@@ -1,0 +1,24 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "service",
+    srcs = [
+        "APExchange.go",
+        "authenticator.go",
+        "cache.go",
+        "settings.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/jcmturner/gokrb5/v8/service",
+    importpath = "github.com/jcmturner/gokrb5/v8/service",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/jcmturner/goidentity/v6:goidentity",
+        "//vendor/github.com/jcmturner/gokrb5/v8/client",
+        "//vendor/github.com/jcmturner/gokrb5/v8/config",
+        "//vendor/github.com/jcmturner/gokrb5/v8/credentials",
+        "//vendor/github.com/jcmturner/gokrb5/v8/iana/errorcode",
+        "//vendor/github.com/jcmturner/gokrb5/v8/keytab",
+        "//vendor/github.com/jcmturner/gokrb5/v8/messages",
+        "//vendor/github.com/jcmturner/gokrb5/v8/types",
+    ],
+)

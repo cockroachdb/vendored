@@ -1,0 +1,22 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "unused",
+    srcs = [
+        "edge.go",
+        "edge_string.go",
+        "implements.go",
+        "unused.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/honnef.co/go/tools/unused",
+    importpath = "honnef.co/go/tools/unused",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/golang.org/x/tools/go/analysis",
+        "//vendor/honnef.co/go/tools/go/types/typeutil",
+        "//vendor/honnef.co/go/tools/internal/passes/buildssa",
+        "//vendor/honnef.co/go/tools/lint",
+        "//vendor/honnef.co/go/tools/lint/lintdsl",
+        "//vendor/honnef.co/go/tools/ssa",
+    ],
+)

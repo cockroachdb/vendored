@@ -1,32 +1,18 @@
-load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
 
 package(default_visibility = ["//visibility:public"])
 
 go_library(
-    name = "go_default_library",
+    name = "httprule",
     srcs = [
         "compile.go",
         "parse.go",
         "types.go",
     ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway/httprule",
     importpath = "github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway/httprule",
     deps = [
-        "//utilities:go_default_library",
-        "@com_github_golang_glog//:go_default_library",
-    ],
-)
-
-go_test(
-    name = "go_default_test",
-    size = "small",
-    srcs = [
-        "compile_test.go",
-        "parse_test.go",
-        "types_test.go",
-    ],
-    embed = [":go_default_library"],
-    deps = [
-        "//utilities:go_default_library",
-        "@com_github_golang_glog//:go_default_library",
+        "//vendor/github.com/golang/glog",
+        "//vendor/github.com/grpc-ecosystem/grpc-gateway/utilities",
     ],
 )

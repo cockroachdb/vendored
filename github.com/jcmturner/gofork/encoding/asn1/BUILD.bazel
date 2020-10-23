@@ -1,0 +1,13 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "asn1",
+    srcs = [
+        "asn1.go",
+        "common.go",
+        "marshal.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/jcmturner/gofork/encoding/asn1",
+    importpath = "github.com/jcmturner/gofork/encoding/asn1",
+    visibility = ["//visibility:public"],
+)

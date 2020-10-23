@@ -1,0 +1,9 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "aescts_v1",
+    srcs = ["aescts.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/gopkg.in/jcmturner/aescts.v1",
+    importpath = "gopkg.in/jcmturner/aescts.v1",
+    visibility = ["//visibility:public"],
+)

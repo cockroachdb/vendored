@@ -1,0 +1,14 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "internal",
+    srcs = [
+        "format.go",
+        "hooks.go",
+        "print.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/cockroachdb/redact/internal",
+    importpath = "github.com/cockroachdb/redact/internal",
+    visibility = ["//vendor/github.com/cockroachdb/redact:__subpackages__"],
+    deps = ["//vendor/github.com/cockroachdb/redact/internal/fmtsort"],
+)

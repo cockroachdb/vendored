@@ -1,0 +1,25 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "protoc-gen-doc",
+    srcs = [
+        "doc.go",
+        "filters.go",
+        "plugin.go",
+        "renderer.go",
+        "resources.go",
+        "template.go",
+        "version.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/pseudomuto/protoc-gen-doc",
+    importpath = "github.com/pseudomuto/protoc-gen-doc",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/Masterminds/sprig",
+        "//vendor/github.com/golang/protobuf/proto",
+        "//vendor/github.com/golang/protobuf/protoc-gen-go/descriptor",
+        "//vendor/github.com/golang/protobuf/protoc-gen-go/plugin",
+        "//vendor/github.com/pseudomuto/protoc-gen-doc/extensions",
+        "//vendor/github.com/pseudomuto/protokit",
+    ],
+)

@@ -1,0 +1,19 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "collectorpb",
+    srcs = [
+        "collector.go",
+        "collector.pb.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/lightstep/lightstep-tracer-go/collectorpb",
+    importpath = "github.com/lightstep/lightstep-tracer-go/collectorpb",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/golang/protobuf/proto",
+        "//vendor/github.com/golang/protobuf/ptypes/timestamp",
+        "//vendor/golang.org/x/net/context",
+        "//vendor/google.golang.org/genproto/googleapis/api/annotations",
+        "//vendor/google.golang.org/grpc",
+    ],
+)

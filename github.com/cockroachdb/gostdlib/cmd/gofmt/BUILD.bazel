@@ -1,0 +1,22 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "gofmt_lib",
+    srcs = [
+        "doc.go",
+        "gofmt.go",
+        "internal.go",
+        "rewrite.go",
+        "simplify.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/cockroachdb/gostdlib/cmd/gofmt",
+    importpath = "github.com/cockroachdb/gostdlib/cmd/gofmt",
+    visibility = ["//visibility:private"],
+    deps = ["//vendor/github.com/cockroachdb/gostdlib/go/printer"],
+)
+
+go_binary(
+    name = "gofmt",
+    embed = [":gofmt_lib"],
+    visibility = ["//visibility:public"],
+)

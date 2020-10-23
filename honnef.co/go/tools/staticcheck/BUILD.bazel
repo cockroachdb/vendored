@@ -1,0 +1,36 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "staticcheck",
+    srcs = [
+        "analysis.go",
+        "buildtag.go",
+        "doc.go",
+        "knowledge.go",
+        "lint.go",
+        "rules.go",
+        "structtag.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/honnef.co/go/tools/staticcheck",
+    importpath = "honnef.co/go/tools/staticcheck",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/golang.org/x/tools/go/analysis",
+        "//vendor/golang.org/x/tools/go/analysis/passes/inspect",
+        "//vendor/golang.org/x/tools/go/ast/astutil",
+        "//vendor/golang.org/x/tools/go/ast/inspector",
+        "//vendor/honnef.co/go/tools/arg",
+        "//vendor/honnef.co/go/tools/deprecated",
+        "//vendor/honnef.co/go/tools/facts",
+        "//vendor/honnef.co/go/tools/functions",
+        "//vendor/honnef.co/go/tools/internal/passes/buildssa",
+        "//vendor/honnef.co/go/tools/internal/sharedcheck",
+        "//vendor/honnef.co/go/tools/lint",
+        "//vendor/honnef.co/go/tools/lint/lintdsl",
+        "//vendor/honnef.co/go/tools/lint/lintutil",
+        "//vendor/honnef.co/go/tools/printf",
+        "//vendor/honnef.co/go/tools/ssa",
+        "//vendor/honnef.co/go/tools/ssautil",
+        "//vendor/honnef.co/go/tools/staticcheck/vrp",
+    ],
+)

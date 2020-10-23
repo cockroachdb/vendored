@@ -1,0 +1,36 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "driver",
+    srcs = [
+        "cli.go",
+        "commands.go",
+        "driver.go",
+        "driver_focus.go",
+        "fetch.go",
+        "flags.go",
+        "flamegraph.go",
+        "interactive.go",
+        "options.go",
+        "svg.go",
+        "tempfile.go",
+        "webhtml.go",
+        "webui.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/google/pprof/internal/driver",
+    importpath = "github.com/google/pprof/internal/driver",
+    visibility = ["//vendor/github.com/google/pprof:__subpackages__"],
+    deps = [
+        "//vendor/github.com/google/pprof/internal/binutils",
+        "//vendor/github.com/google/pprof/internal/graph",
+        "//vendor/github.com/google/pprof/internal/measurement",
+        "//vendor/github.com/google/pprof/internal/plugin",
+        "//vendor/github.com/google/pprof/internal/report",
+        "//vendor/github.com/google/pprof/internal/symbolizer",
+        "//vendor/github.com/google/pprof/internal/transport",
+        "//vendor/github.com/google/pprof/profile",
+        "//vendor/github.com/google/pprof/third_party/d3",
+        "//vendor/github.com/google/pprof/third_party/d3flamegraph",
+        "//vendor/github.com/google/pprof/third_party/svgpan",
+    ],
+)

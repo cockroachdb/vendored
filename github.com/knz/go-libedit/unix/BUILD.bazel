@@ -31,6 +31,7 @@ cc_library(
             "shim/**/*.c",
         ]),
     }),
+    copts = ["-DGO_LIBEDIT_NO_BUILD"],
     deps = select({
         "@io_bazel_rules_go//go/platform:android": [
             "//unix/src/c-libedit:c-libedit",
@@ -40,7 +41,6 @@ cc_library(
         ],
         "//conditions:default": [],
     }),
-    copts = ["-DGO_LIBEDIT_NO_BUILD"],
 )
 
 configure_make(
@@ -130,34 +130,42 @@ go_library(
     }),
     copts = select({
         "@io_bazel_rules_go//go/platform:android": [
-            "-Iunix/src -Iunix/src/c-libedit -Iunix/src/c-libedit/editline -Iunix/src/c-libedit/linux-build -D_GNU_SOURCE",
             "-Wno-unused-result -Wno-pointer-sign",
-        ],
-        "@io_bazel_rules_go//go/platform:darwin": [
-            "-Iunix/shim",
-        ],
-        "@io_bazel_rules_go//go/platform:dragonfly": [
-            "-Iunix/shim",
-        ],
-        "@io_bazel_rules_go//go/platform:freebsd": [
-            "-Iunix/shim",
-        ],
-        "@io_bazel_rules_go//go/platform:ios": [
-            "-Iunix/shim",
         ],
         "@io_bazel_rules_go//go/platform:linux": [
-            "-Iunix/src -Iunix/src/c-libedit -Iunix/src/c-libedit/editline -Iunix/src/c-libedit/linux-build -D_GNU_SOURCE",
             "-Wno-unused-result -Wno-pointer-sign",
-        ],
-        "@io_bazel_rules_go//go/platform:netbsd": [
-            "-Iunix/shim",
-        ],
-        "@io_bazel_rules_go//go/platform:openbsd": [
-            "-Iunix/shim",
         ],
         "//conditions:default": [],
     }),
+    cppopts = select({
+        "@io_bazel_rules_go//go/platform:android": [
+            "-Ivendor/github.com/knz/go-libedit/unix/src -Ivendor/github.com/knz/go-libedit/unix/src/c-libedit -Ivendor/github.com/knz/go-libedit/unix/src/c-libedit/editline -Ivendor/github.com/knz/go-libedit/unix/src/c-libedit/linux-build -D_GNU_SOURCE",
+        ],
+        "@io_bazel_rules_go//go/platform:darwin": [
+            "-Ivendor/github.com/knz/go-libedit/unix/shim",
+        ],
+        "@io_bazel_rules_go//go/platform:dragonfly": [
+            "-Ivendor/github.com/knz/go-libedit/unix/shim",
+        ],
+        "@io_bazel_rules_go//go/platform:freebsd": [
+            "-Ivendor/github.com/knz/go-libedit/unix/shim",
+        ],
+        "@io_bazel_rules_go//go/platform:ios": [
+            "-Ivendor/github.com/knz/go-libedit/unix/shim",
+        ],
+        "@io_bazel_rules_go//go/platform:linux": [
+            "-Ivendor/github.com/knz/go-libedit/unix/src -Ivendor/github.com/knz/go-libedit/unix/src/c-libedit -Ivendor/github.com/knz/go-libedit/unix/src/c-libedit/editline -Ivendor/github.com/knz/go-libedit/unix/src/c-libedit/linux-build -D_GNU_SOURCE",
+        ],
+        "@io_bazel_rules_go//go/platform:netbsd": [
+            "-Ivendor/github.com/knz/go-libedit/unix/shim",
+        ],
+        "@io_bazel_rules_go//go/platform:openbsd": [
+            "-Ivendor/github.com/knz/go-libedit/unix/shim",
+        ],
+        "//conditions:default": [],
+    }),
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/knz/go-libedit/unix",
     importpath = "github.com/knz/go-libedit/unix",
     visibility = ["//visibility:public"],
-    deps = ["//common"],
+    deps = ["//vendor/github.com/knz/go-libedit/common"],
 )

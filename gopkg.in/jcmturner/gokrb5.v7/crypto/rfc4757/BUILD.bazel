@@ -1,0 +1,18 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "rfc4757",
+    srcs = [
+        "checksum.go",
+        "encryption.go",
+        "keyDerivation.go",
+        "msgtype.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/gopkg.in/jcmturner/gokrb5.v7/crypto/rfc4757",
+    importpath = "gopkg.in/jcmturner/gokrb5.v7/crypto/rfc4757",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/golang.org/x/crypto/md4",
+        "//vendor/gopkg.in/jcmturner/gokrb5.v7/crypto/etype",
+    ],
+)

@@ -1,0 +1,104 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "kerberos",
+    srcs = [
+        "krb.go",
+        "krb_unix.go",
+        "krb_windows.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/lib/pq/auth/kerberos",
+    importpath = "github.com/lib/pq/auth/kerberos",
+    visibility = ["//visibility:public"],
+    deps = select({
+        "@io_bazel_rules_go//go/platform:aix": [
+            "//vendor/github.com/jcmturner/gokrb5/v8/client",
+            "//vendor/github.com/jcmturner/gokrb5/v8/config",
+            "//vendor/github.com/jcmturner/gokrb5/v8/credentials",
+            "//vendor/github.com/jcmturner/gokrb5/v8/spnego",
+        ],
+        "@io_bazel_rules_go//go/platform:android": [
+            "//vendor/github.com/jcmturner/gokrb5/v8/client",
+            "//vendor/github.com/jcmturner/gokrb5/v8/config",
+            "//vendor/github.com/jcmturner/gokrb5/v8/credentials",
+            "//vendor/github.com/jcmturner/gokrb5/v8/spnego",
+        ],
+        "@io_bazel_rules_go//go/platform:darwin": [
+            "//vendor/github.com/jcmturner/gokrb5/v8/client",
+            "//vendor/github.com/jcmturner/gokrb5/v8/config",
+            "//vendor/github.com/jcmturner/gokrb5/v8/credentials",
+            "//vendor/github.com/jcmturner/gokrb5/v8/spnego",
+        ],
+        "@io_bazel_rules_go//go/platform:dragonfly": [
+            "//vendor/github.com/jcmturner/gokrb5/v8/client",
+            "//vendor/github.com/jcmturner/gokrb5/v8/config",
+            "//vendor/github.com/jcmturner/gokrb5/v8/credentials",
+            "//vendor/github.com/jcmturner/gokrb5/v8/spnego",
+        ],
+        "@io_bazel_rules_go//go/platform:freebsd": [
+            "//vendor/github.com/jcmturner/gokrb5/v8/client",
+            "//vendor/github.com/jcmturner/gokrb5/v8/config",
+            "//vendor/github.com/jcmturner/gokrb5/v8/credentials",
+            "//vendor/github.com/jcmturner/gokrb5/v8/spnego",
+        ],
+        "@io_bazel_rules_go//go/platform:illumos": [
+            "//vendor/github.com/jcmturner/gokrb5/v8/client",
+            "//vendor/github.com/jcmturner/gokrb5/v8/config",
+            "//vendor/github.com/jcmturner/gokrb5/v8/credentials",
+            "//vendor/github.com/jcmturner/gokrb5/v8/spnego",
+        ],
+        "@io_bazel_rules_go//go/platform:ios": [
+            "//vendor/github.com/jcmturner/gokrb5/v8/client",
+            "//vendor/github.com/jcmturner/gokrb5/v8/config",
+            "//vendor/github.com/jcmturner/gokrb5/v8/credentials",
+            "//vendor/github.com/jcmturner/gokrb5/v8/spnego",
+        ],
+        "@io_bazel_rules_go//go/platform:js": [
+            "//vendor/github.com/jcmturner/gokrb5/v8/client",
+            "//vendor/github.com/jcmturner/gokrb5/v8/config",
+            "//vendor/github.com/jcmturner/gokrb5/v8/credentials",
+            "//vendor/github.com/jcmturner/gokrb5/v8/spnego",
+        ],
+        "@io_bazel_rules_go//go/platform:linux": [
+            "//vendor/github.com/jcmturner/gokrb5/v8/client",
+            "//vendor/github.com/jcmturner/gokrb5/v8/config",
+            "//vendor/github.com/jcmturner/gokrb5/v8/credentials",
+            "//vendor/github.com/jcmturner/gokrb5/v8/spnego",
+        ],
+        "@io_bazel_rules_go//go/platform:nacl": [
+            "//vendor/github.com/jcmturner/gokrb5/v8/client",
+            "//vendor/github.com/jcmturner/gokrb5/v8/config",
+            "//vendor/github.com/jcmturner/gokrb5/v8/credentials",
+            "//vendor/github.com/jcmturner/gokrb5/v8/spnego",
+        ],
+        "@io_bazel_rules_go//go/platform:netbsd": [
+            "//vendor/github.com/jcmturner/gokrb5/v8/client",
+            "//vendor/github.com/jcmturner/gokrb5/v8/config",
+            "//vendor/github.com/jcmturner/gokrb5/v8/credentials",
+            "//vendor/github.com/jcmturner/gokrb5/v8/spnego",
+        ],
+        "@io_bazel_rules_go//go/platform:openbsd": [
+            "//vendor/github.com/jcmturner/gokrb5/v8/client",
+            "//vendor/github.com/jcmturner/gokrb5/v8/config",
+            "//vendor/github.com/jcmturner/gokrb5/v8/credentials",
+            "//vendor/github.com/jcmturner/gokrb5/v8/spnego",
+        ],
+        "@io_bazel_rules_go//go/platform:plan9": [
+            "//vendor/github.com/jcmturner/gokrb5/v8/client",
+            "//vendor/github.com/jcmturner/gokrb5/v8/config",
+            "//vendor/github.com/jcmturner/gokrb5/v8/credentials",
+            "//vendor/github.com/jcmturner/gokrb5/v8/spnego",
+        ],
+        "@io_bazel_rules_go//go/platform:solaris": [
+            "//vendor/github.com/jcmturner/gokrb5/v8/client",
+            "//vendor/github.com/jcmturner/gokrb5/v8/config",
+            "//vendor/github.com/jcmturner/gokrb5/v8/credentials",
+            "//vendor/github.com/jcmturner/gokrb5/v8/spnego",
+        ],
+        "@io_bazel_rules_go//go/platform:windows": [
+            "//vendor/github.com/alexbrainman/sspi",
+            "//vendor/github.com/alexbrainman/sspi/negotiate",
+        ],
+        "//conditions:default": [],
+    }),
+)

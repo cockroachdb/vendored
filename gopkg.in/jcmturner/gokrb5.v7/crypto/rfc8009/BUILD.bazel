@@ -1,0 +1,19 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "rfc8009",
+    srcs = [
+        "encryption.go",
+        "keyDerivation.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/gopkg.in/jcmturner/gokrb5.v7/crypto/rfc8009",
+    importpath = "gopkg.in/jcmturner/gokrb5.v7/crypto/rfc8009",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/golang.org/x/crypto/pbkdf2",
+        "//vendor/gopkg.in/jcmturner/aescts.v1:aescts_v1",
+        "//vendor/gopkg.in/jcmturner/gokrb5.v7/crypto/common",
+        "//vendor/gopkg.in/jcmturner/gokrb5.v7/crypto/etype",
+        "//vendor/gopkg.in/jcmturner/gokrb5.v7/iana/etypeID",
+    ],
+)

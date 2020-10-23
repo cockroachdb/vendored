@@ -1,0 +1,13 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "google_api_http",
+    srcs = ["google_api_http.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/pseudomuto/protoc-gen-doc/extensions/google_api_http",
+    importpath = "github.com/pseudomuto/protoc-gen-doc/extensions/google_api_http",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/pseudomuto/protoc-gen-doc/extensions",
+        "//vendor/google.golang.org/genproto/googleapis/api/annotations",
+    ],
+)

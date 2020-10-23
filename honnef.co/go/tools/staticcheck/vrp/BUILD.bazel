@@ -1,0 +1,19 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "vrp",
+    srcs = [
+        "channel.go",
+        "int.go",
+        "slice.go",
+        "string.go",
+        "vrp.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/honnef.co/go/tools/staticcheck/vrp",
+    importpath = "honnef.co/go/tools/staticcheck/vrp",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/honnef.co/go/tools/lint",
+        "//vendor/honnef.co/go/tools/ssa",
+    ],
+)

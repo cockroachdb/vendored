@@ -1,0 +1,68 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "disk",
+    srcs = [
+        "disk.go",
+        "disk_darwin.go",
+        "disk_darwin_cgo.go",
+        "disk_darwin_nocgo.go",
+        "disk_fallback.go",
+        "disk_freebsd.go",
+        "disk_freebsd_386.go",
+        "disk_freebsd_amd64.go",
+        "disk_freebsd_arm.go",
+        "disk_freebsd_arm64.go",
+        "disk_linux.go",
+        "disk_openbsd.go",
+        "disk_openbsd_386.go",
+        "disk_openbsd_amd64.go",
+        "disk_solaris.go",
+        "disk_unix.go",
+        "disk_windows.go",
+        "iostat_darwin.c",
+        "iostat_darwin.h",
+    ],
+    cgo = True,
+    clinkopts = select({
+        "@io_bazel_rules_go//go/platform:darwin": [
+            "-framework CoreFoundation -framework IOKit",
+        ],
+        "@io_bazel_rules_go//go/platform:ios": [
+            "-framework CoreFoundation -framework IOKit",
+        ],
+        "//conditions:default": [],
+    }),
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/shirou/gopsutil/disk",
+    importpath = "github.com/shirou/gopsutil/disk",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/shirou/gopsutil/internal/common",
+    ] + select({
+        "@io_bazel_rules_go//go/platform:android": [
+            "//vendor/golang.org/x/sys/unix",
+        ],
+        "@io_bazel_rules_go//go/platform:darwin": [
+            "//vendor/golang.org/x/sys/unix",
+        ],
+        "@io_bazel_rules_go//go/platform:freebsd": [
+            "//vendor/golang.org/x/sys/unix",
+        ],
+        "@io_bazel_rules_go//go/platform:ios": [
+            "//vendor/golang.org/x/sys/unix",
+        ],
+        "@io_bazel_rules_go//go/platform:linux": [
+            "//vendor/golang.org/x/sys/unix",
+        ],
+        "@io_bazel_rules_go//go/platform:openbsd": [
+            "//vendor/golang.org/x/sys/unix",
+        ],
+        "@io_bazel_rules_go//go/platform:solaris": [
+            "//vendor/golang.org/x/sys/unix",
+        ],
+        "@io_bazel_rules_go//go/platform:windows": [
+            "//vendor/golang.org/x/sys/windows",
+        ],
+        "//conditions:default": [],
+    }),
+)

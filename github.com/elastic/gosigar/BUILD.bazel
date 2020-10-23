@@ -1,0 +1,46 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "gosigar",
+    srcs = [
+        "concrete_sigar.go",
+        "sigar_darwin.go",
+        "sigar_format.go",
+        "sigar_freebsd.go",
+        "sigar_interface.go",
+        "sigar_linux.go",
+        "sigar_linux_common.go",
+        "sigar_openbsd.go",
+        "sigar_stub.go",
+        "sigar_unix.go",
+        "sigar_util.go",
+        "sigar_windows.go",
+    ],
+    cgo = True,
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/elastic/gosigar",
+    importpath = "github.com/elastic/gosigar",
+    visibility = ["//visibility:public"],
+    deps = select({
+        "@io_bazel_rules_go//go/platform:android": [
+            "//vendor/golang.org/x/sys/unix",
+        ],
+        "@io_bazel_rules_go//go/platform:darwin": [
+            "//vendor/golang.org/x/sys/unix",
+        ],
+        "@io_bazel_rules_go//go/platform:freebsd": [
+            "//vendor/golang.org/x/sys/unix",
+        ],
+        "@io_bazel_rules_go//go/platform:ios": [
+            "//vendor/golang.org/x/sys/unix",
+        ],
+        "@io_bazel_rules_go//go/platform:linux": [
+            "//vendor/golang.org/x/sys/unix",
+        ],
+        "@io_bazel_rules_go//go/platform:windows": [
+            "//vendor/github.com/StackExchange/wmi",
+            "//vendor/github.com/elastic/gosigar/sys/windows",
+            "//vendor/github.com/pkg/errors",
+        ],
+        "//conditions:default": [],
+    }),
+)

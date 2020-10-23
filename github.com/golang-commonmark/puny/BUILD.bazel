@@ -1,0 +1,9 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "puny",
+    srcs = ["puny.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/golang-commonmark/puny",
+    importpath = "github.com/golang-commonmark/puny",
+    visibility = ["//visibility:public"],
+)

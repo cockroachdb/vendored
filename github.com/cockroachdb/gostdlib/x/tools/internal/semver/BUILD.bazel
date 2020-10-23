@@ -1,0 +1,9 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "semver",
+    srcs = ["semver.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/cockroachdb/gostdlib/x/tools/internal/semver",
+    importpath = "github.com/cockroachdb/gostdlib/x/tools/internal/semver",
+    visibility = ["//vendor/github.com/cockroachdb/gostdlib/x/tools:__subpackages__"],
+)

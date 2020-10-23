@@ -1,0 +1,13 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "gopackages",
+    srcs = ["resolver.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/dave/dst/decorator/resolver/gopackages",
+    importpath = "github.com/dave/dst/decorator/resolver/gopackages",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/dave/dst/decorator/resolver",
+        "//vendor/golang.org/x/tools/go/packages",
+    ],
+)

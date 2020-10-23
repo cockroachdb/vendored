@@ -1,0 +1,30 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "arrow",
+    srcs = [
+        "compare.go",
+        "datatype.go",
+        "datatype_binary.go",
+        "datatype_fixedwidth.go",
+        "datatype_nested.go",
+        "datatype_null.go",
+        "datatype_numeric.gen.go",
+        "doc.go",
+        "schema.go",
+        "type_string.go",
+        "type_traits_boolean.go",
+        "type_traits_decimal128.go",
+        "type_traits_float16.go",
+        "type_traits_interval.go",
+        "type_traits_numeric.gen.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/apache/arrow/go/arrow",
+    importpath = "github.com/apache/arrow/go/arrow",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/apache/arrow/go/arrow/bitutil",
+        "//vendor/github.com/apache/arrow/go/arrow/decimal128",
+        "//vendor/github.com/apache/arrow/go/arrow/float16",
+    ],
+)

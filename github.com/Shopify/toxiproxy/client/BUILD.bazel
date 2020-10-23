@@ -1,0 +1,9 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "client",
+    srcs = ["client.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/Shopify/toxiproxy/client",
+    importpath = "github.com/Shopify/toxiproxy/client",
+    visibility = ["//visibility:public"],
+)

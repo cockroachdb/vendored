@@ -1,0 +1,9 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "slackutilsx",
+    srcs = ["slackutilsx.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/nlopes/slack/slackutilsx",
+    importpath = "github.com/nlopes/slack/slackutilsx",
+    visibility = ["//visibility:public"],
+)

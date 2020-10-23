@@ -1,0 +1,14 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go-metro",
+    srcs = [
+        "metro128.go",
+        "metro64.go",
+        "metro_amd64.s",
+        "metro_stub.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/dgryski/go-metro",
+    importpath = "github.com/dgryski/go-metro",
+    visibility = ["//visibility:public"],
+)

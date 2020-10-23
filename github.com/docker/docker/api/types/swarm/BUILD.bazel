@@ -1,0 +1,26 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "swarm",
+    srcs = [
+        "common.go",
+        "config.go",
+        "container.go",
+        "network.go",
+        "node.go",
+        "runtime.go",
+        "secret.go",
+        "service.go",
+        "swarm.go",
+        "task.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/docker/docker/api/types/swarm",
+    importpath = "github.com/docker/docker/api/types/swarm",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/docker/docker/api/types/container",
+        "//vendor/github.com/docker/docker/api/types/mount",
+        "//vendor/github.com/docker/docker/api/types/network",
+        "//vendor/github.com/docker/docker/api/types/swarm/runtime",
+    ],
+)

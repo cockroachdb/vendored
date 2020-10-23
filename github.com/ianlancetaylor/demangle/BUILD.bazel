@@ -1,0 +1,12 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "demangle",
+    srcs = [
+        "ast.go",
+        "demangle.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/ianlancetaylor/demangle",
+    importpath = "github.com/ianlancetaylor/demangle",
+    visibility = ["//visibility:public"],
+)

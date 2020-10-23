@@ -1,0 +1,19 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "analysistest",
+    srcs = ["analysistest.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/golang.org/x/tools/go/analysis/analysistest",
+    importpath = "golang.org/x/tools/go/analysis/analysistest",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/golang.org/x/tools/go/analysis",
+        "//vendor/golang.org/x/tools/go/analysis/internal/checker",
+        "//vendor/golang.org/x/tools/go/packages",
+        "//vendor/golang.org/x/tools/internal/lsp/diff",
+        "//vendor/golang.org/x/tools/internal/lsp/diff/myers",
+        "//vendor/golang.org/x/tools/internal/span",
+        "//vendor/golang.org/x/tools/internal/testenv",
+        "//vendor/golang.org/x/tools/txtar",
+    ],
+)

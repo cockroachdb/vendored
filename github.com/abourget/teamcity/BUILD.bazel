@@ -1,0 +1,16 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "teamcity",
+    srcs = [
+        "build.go",
+        "changes.go",
+        "client.go",
+        "jsontime.go",
+        "problems.go",
+        "tests.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/abourget/teamcity",
+    importpath = "github.com/abourget/teamcity",
+    visibility = ["//visibility:public"],
+)

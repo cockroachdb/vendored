@@ -1,0 +1,13 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "centralendpoint",
+    srcs = ["intersector.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/twpayne/go-geom/xy/internal/centralendpoint",
+    importpath = "github.com/twpayne/go-geom/xy/internal/centralendpoint",
+    visibility = ["//vendor/github.com/twpayne/go-geom/xy:__subpackages__"],
+    deps = [
+        "//vendor/github.com/twpayne/go-geom",
+        "//vendor/github.com/twpayne/go-geom/xy/internal",
+    ],
+)

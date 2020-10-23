@@ -1,0 +1,16 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "modvendor_lib",
+    srcs = ["main.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/goware/modvendor",
+    importpath = "github.com/goware/modvendor",
+    visibility = ["//visibility:private"],
+    deps = ["//vendor/github.com/mattn/go-zglob"],
+)
+
+go_binary(
+    name = "modvendor",
+    embed = [":modvendor_lib"],
+    visibility = ["//visibility:public"],
+)

@@ -1,0 +1,9 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "patype",
+    srcs = ["constants.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/jcmturner/gokrb5/v8/iana/patype",
+    importpath = "github.com/jcmturner/gokrb5/v8/iana/patype",
+    visibility = ["//visibility:public"],
+)

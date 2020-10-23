@@ -1,0 +1,22 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "apd",
+    srcs = [
+        "condition.go",
+        "const.go",
+        "context.go",
+        "decimal.go",
+        "doc.go",
+        "error.go",
+        "form_string.go",
+        "format.go",
+        "loop.go",
+        "round.go",
+        "table.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/cockroachdb/apd/v2",
+    importpath = "github.com/cockroachdb/apd/v2",
+    visibility = ["//visibility:public"],
+    deps = ["//vendor/github.com/pkg/errors"],
+)

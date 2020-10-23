@@ -1,0 +1,19 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "shadow_lib",
+    srcs = ["main.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/golang.org/x/tools/go/analysis/passes/shadow/cmd/shadow",
+    importpath = "golang.org/x/tools/go/analysis/passes/shadow/cmd/shadow",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//vendor/golang.org/x/tools/go/analysis/passes/shadow",
+        "//vendor/golang.org/x/tools/go/analysis/singlechecker",
+    ],
+)
+
+go_binary(
+    name = "shadow",
+    embed = [":shadow_lib"],
+    visibility = ["//visibility:public"],
+)

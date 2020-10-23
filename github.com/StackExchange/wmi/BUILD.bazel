@@ -1,0 +1,19 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "wmi",
+    srcs = [
+        "swbemservices.go",
+        "wmi.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/StackExchange/wmi",
+    importpath = "github.com/StackExchange/wmi",
+    visibility = ["//visibility:public"],
+    deps = select({
+        "@io_bazel_rules_go//go/platform:windows": [
+            "//vendor/github.com/go-ole/go-ole",
+            "//vendor/github.com/go-ole/go-ole/oleutil",
+        ],
+        "//conditions:default": [],
+    }),
+)

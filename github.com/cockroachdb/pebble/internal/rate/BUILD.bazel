@@ -1,0 +1,10 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "rate",
+    srcs = ["rate.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/cockroachdb/pebble/internal/rate",
+    importpath = "github.com/cockroachdb/pebble/internal/rate",
+    visibility = ["//vendor/github.com/cockroachdb/pebble:__subpackages__"],
+    deps = ["//vendor/github.com/cockroachdb/errors"],
+)

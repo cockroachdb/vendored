@@ -1,0 +1,28 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "errbase",
+    srcs = [
+        "adapters.go",
+        "decode.go",
+        "encode.go",
+        "format_error.go",
+        "format_simple.go",
+        "formatter.go",
+        "migrations.go",
+        "opaque.go",
+        "safe_details.go",
+        "unwrap.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/cockroachdb/errors/errbase",
+    importpath = "github.com/cockroachdb/errors/errbase",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/cockroachdb/errors/errorspb",
+        "//vendor/github.com/cockroachdb/redact",
+        "//vendor/github.com/gogo/protobuf/proto",
+        "//vendor/github.com/gogo/protobuf/types",
+        "//vendor/github.com/kr/pretty",
+        "//vendor/github.com/pkg/errors",
+    ],
+)

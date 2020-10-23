@@ -1,0 +1,9 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "intern",
+    srcs = ["intern.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/cockroachdb/pebble/internal/intern",
+    importpath = "github.com/cockroachdb/pebble/internal/intern",
+    visibility = ["//vendor/github.com/cockroachdb/pebble:__subpackages__"],
+)

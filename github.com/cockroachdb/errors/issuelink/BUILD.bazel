@@ -1,0 +1,20 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "issuelink",
+    srcs = [
+        "issuelink.go",
+        "unimplemented_error.go",
+        "with_issuelink.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/cockroachdb/errors/issuelink",
+    importpath = "github.com/cockroachdb/errors/issuelink",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/cockroachdb/errors/errbase",
+        "//vendor/github.com/cockroachdb/errors/markers",
+        "//vendor/github.com/cockroachdb/errors/stdstrings",
+        "//vendor/github.com/cockroachdb/redact",
+        "//vendor/github.com/gogo/protobuf/proto",
+    ],
+)

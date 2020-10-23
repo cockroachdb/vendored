@@ -1,0 +1,18 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "config",
+    srcs = [
+        "error.go",
+        "hosts.go",
+        "krb5conf.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/jcmturner/gokrb5/v8/config",
+    importpath = "github.com/jcmturner/gokrb5/v8/config",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/jcmturner/dnsutils/v2:dnsutils",
+        "//vendor/github.com/jcmturner/gofork/encoding/asn1",
+        "//vendor/github.com/jcmturner/gokrb5/v8/iana/etypeID",
+    ],
+)

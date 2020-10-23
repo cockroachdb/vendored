@@ -1,0 +1,9 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "decimal128",
+    srcs = ["decimal128.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/apache/arrow/go/arrow/decimal128",
+    importpath = "github.com/apache/arrow/go/arrow/decimal128",
+    visibility = ["//visibility:public"],
+)

@@ -1,0 +1,23 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "redact",
+    srcs = [
+        "api.go",
+        "builder.go",
+        "doc.go",
+        "make_format.go",
+        "markers.go",
+        "markers_internal_constants.go",
+        "markers_internal_escape.go",
+        "markers_internal_print.go",
+        "markers_internal_printer.go",
+        "markers_internal_types.go",
+        "markers_print.go",
+        "wrappers.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/cockroachdb/redact",
+    importpath = "github.com/cockroachdb/redact",
+    visibility = ["//visibility:public"],
+    deps = ["//vendor/github.com/cockroachdb/redact/internal"],
+)

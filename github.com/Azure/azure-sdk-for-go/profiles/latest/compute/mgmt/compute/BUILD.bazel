@@ -1,0 +1,10 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "compute",
+    srcs = ["models.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/Azure/azure-sdk-for-go/profiles/latest/compute/mgmt/compute",
+    importpath = "github.com/Azure/azure-sdk-for-go/profiles/latest/compute/mgmt/compute",
+    visibility = ["//visibility:public"],
+    deps = ["//vendor/github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-07-01/compute"],
+)

@@ -1,0 +1,10 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "keytab",
+    srcs = ["keytab.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/gopkg.in/jcmturner/gokrb5.v7/keytab",
+    importpath = "gopkg.in/jcmturner/gokrb5.v7/keytab",
+    visibility = ["//visibility:public"],
+    deps = ["//vendor/gopkg.in/jcmturner/gokrb5.v7/types"],
+)

@@ -1,0 +1,23 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "windows",
+    srcs = [
+        "doc.go",
+        "ntquery.go",
+        "privileges.go",
+        "syscall_windows.go",
+        "version.go",
+        "zsyscall_windows.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/elastic/gosigar/sys/windows",
+    importpath = "github.com/elastic/gosigar/sys/windows",
+    visibility = ["//visibility:public"],
+    deps = select({
+        "@io_bazel_rules_go//go/platform:windows": [
+            "//vendor/github.com/pkg/errors",
+            "//vendor/golang.org/x/sys/windows",
+        ],
+        "//conditions:default": [],
+    }),
+)

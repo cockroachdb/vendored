@@ -1,0 +1,10 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "bloom",
+    srcs = ["bloom.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/cockroachdb/pebble/bloom",
+    importpath = "github.com/cockroachdb/pebble/bloom",
+    visibility = ["//visibility:public"],
+    deps = ["//vendor/github.com/cockroachdb/pebble/internal/base"],
+)

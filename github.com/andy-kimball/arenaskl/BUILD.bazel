@@ -1,0 +1,15 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "arenaskl",
+    srcs = [
+        "arena.go",
+        "iterator.go",
+        "node.go",
+        "skl.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/andy-kimball/arenaskl",
+    importpath = "github.com/andy-kimball/arenaskl",
+    visibility = ["//visibility:public"],
+    deps = ["//vendor/github.com/andy-kimball/arenaskl/internal/fastrand"],
+)

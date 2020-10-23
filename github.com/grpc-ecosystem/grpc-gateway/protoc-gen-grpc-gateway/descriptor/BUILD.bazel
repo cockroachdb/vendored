@@ -1,9 +1,9 @@
-load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
 
 package(default_visibility = ["//visibility:public"])
 
 go_library(
-    name = "go_default_library",
+    name = "descriptor",
     srcs = [
         "grpc_api_configuration.go",
         "grpc_api_service.go",
@@ -11,34 +11,17 @@ go_library(
         "services.go",
         "types.go",
     ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway/descriptor",
     importpath = "github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway/descriptor",
     deps = [
-        "//internal/casing:go_default_library",
-        "//protoc-gen-grpc-gateway/httprule:go_default_library",
-        "@com_github_ghodss_yaml//:go_default_library",
-        "@com_github_golang_glog//:go_default_library",
-        "@com_github_golang_protobuf//jsonpb:go_default_library_gen",
-        "@com_github_golang_protobuf//proto:go_default_library",
-        "@go_googleapis//google/api:annotations_go_proto",
-        "@io_bazel_rules_go//proto/wkt:compiler_plugin_go_proto",
-        "@io_bazel_rules_go//proto/wkt:descriptor_go_proto",
-    ],
-)
-
-go_test(
-    name = "go_default_test",
-    size = "small",
-    srcs = [
-        "grpc_api_configuration_test.go",
-        "registry_test.go",
-        "services_test.go",
-        "types_test.go",
-    ],
-    embed = [":go_default_library"],
-    deps = [
-        "//protoc-gen-grpc-gateway/httprule:go_default_library",
-        "@com_github_golang_protobuf//proto:go_default_library",
-        "@io_bazel_rules_go//proto/wkt:compiler_plugin_go_proto",
-        "@io_bazel_rules_go//proto/wkt:descriptor_go_proto",
+        "//vendor/github.com/ghodss/yaml",
+        "//vendor/github.com/golang/glog",
+        "//vendor/github.com/golang/protobuf/jsonpb",
+        "//vendor/github.com/golang/protobuf/proto",
+        "//vendor/github.com/golang/protobuf/protoc-gen-go/descriptor",
+        "//vendor/github.com/golang/protobuf/protoc-gen-go/plugin",
+        "//vendor/github.com/grpc-ecosystem/grpc-gateway/internal/casing",
+        "//vendor/github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway/httprule",
+        "//vendor/google.golang.org/genproto/googleapis/api/annotations",
     ],
 )

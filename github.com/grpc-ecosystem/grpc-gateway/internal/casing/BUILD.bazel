@@ -1,8 +1,9 @@
 load("@io_bazel_rules_go//go:def.bzl", "go_library")
 
 go_library(
-    name = "go_default_library",
+    name = "casing",
     srcs = ["camel.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/grpc-ecosystem/grpc-gateway/internal/casing",
     importpath = "github.com/grpc-ecosystem/grpc-gateway/internal/casing",
     visibility = ["//:__subpackages__"],
 )

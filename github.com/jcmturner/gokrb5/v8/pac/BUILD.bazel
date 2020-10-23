@@ -1,0 +1,29 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "pac",
+    srcs = [
+        "client_claims.go",
+        "client_info.go",
+        "credentials_info.go",
+        "device_claims.go",
+        "device_info.go",
+        "kerb_validation_info.go",
+        "pac_type.go",
+        "s4u_delegation_info.go",
+        "signature_data.go",
+        "supplemental_cred.go",
+        "upn_dns_info.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/jcmturner/gokrb5/v8/pac",
+    importpath = "github.com/jcmturner/gokrb5/v8/pac",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/jcmturner/gokrb5/v8/crypto",
+        "//vendor/github.com/jcmturner/gokrb5/v8/iana/chksumtype",
+        "//vendor/github.com/jcmturner/gokrb5/v8/iana/keyusage",
+        "//vendor/github.com/jcmturner/gokrb5/v8/types",
+        "//vendor/github.com/jcmturner/rpc/v2/mstypes",
+        "//vendor/github.com/jcmturner/rpc/v2/ndr",
+    ],
+)

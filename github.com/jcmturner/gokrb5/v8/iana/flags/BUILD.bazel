@@ -1,0 +1,9 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "flags",
+    srcs = ["constants.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/jcmturner/gokrb5/v8/iana/flags",
+    importpath = "github.com/jcmturner/gokrb5/v8/iana/flags",
+    visibility = ["//visibility:public"],
+)

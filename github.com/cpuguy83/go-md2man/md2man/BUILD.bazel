@@ -1,0 +1,13 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "md2man",
+    srcs = [
+        "md2man.go",
+        "roff.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/cpuguy83/go-md2man/md2man",
+    importpath = "github.com/cpuguy83/go-md2man/md2man",
+    visibility = ["//visibility:public"],
+    deps = ["//vendor/github.com/russross/blackfriday"],
+)

@@ -1,0 +1,23 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "windows",
+    srcs = [
+        "ansi_reader.go",
+        "ansi_writer.go",
+        "console.go",
+        "windows.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/docker/docker/pkg/term/windows",
+    importpath = "github.com/docker/docker/pkg/term/windows",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/Azure/go-ansiterm",
+        "//vendor/github.com/sirupsen/logrus",
+    ] + select({
+        "@io_bazel_rules_go//go/platform:windows": [
+            "//vendor/github.com/Azure/go-ansiterm/winterm",
+        ],
+        "//conditions:default": [],
+    }),
+)

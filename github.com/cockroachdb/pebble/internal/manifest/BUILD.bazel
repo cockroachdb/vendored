@@ -1,0 +1,21 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "manifest",
+    srcs = [
+        "btree.go",
+        "l0_sublevels.go",
+        "level.go",
+        "level_metadata.go",
+        "version.go",
+        "version_edit.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/cockroachdb/pebble/internal/manifest",
+    importpath = "github.com/cockroachdb/pebble/internal/manifest",
+    visibility = ["//vendor/github.com/cockroachdb/pebble:__subpackages__"],
+    deps = [
+        "//vendor/github.com/cockroachdb/errors",
+        "//vendor/github.com/cockroachdb/pebble/internal/base",
+        "//vendor/github.com/cockroachdb/pebble/vfs",
+    ],
+)

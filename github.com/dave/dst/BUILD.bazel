@@ -1,0 +1,21 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "dst",
+    srcs = [
+        "clone.go",
+        "clone-generated.go",
+        "decorations.go",
+        "decorations-node-generated.go",
+        "decorations-types-generated.go",
+        "dst.go",
+        "print.go",
+        "readme.go",
+        "resolve.go",
+        "scope.go",
+        "walk.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/dave/dst",
+    importpath = "github.com/dave/dst",
+    visibility = ["//visibility:public"],
+)

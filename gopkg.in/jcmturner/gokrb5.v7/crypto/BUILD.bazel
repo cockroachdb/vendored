@@ -1,0 +1,30 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "crypto",
+    srcs = [
+        "aes128-cts-hmac-sha1-96.go",
+        "aes128-cts-hmac-sha256-128.go",
+        "aes256-cts-hmac-sha1-96.go",
+        "aes256-cts-hmac-sha384-192.go",
+        "crypto.go",
+        "des3-cbc-sha1-kd.go",
+        "rc4-hmac.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/gopkg.in/jcmturner/gokrb5.v7/crypto",
+    importpath = "gopkg.in/jcmturner/gokrb5.v7/crypto",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/golang.org/x/crypto/md4",
+        "//vendor/gopkg.in/jcmturner/gokrb5.v7/crypto/common",
+        "//vendor/gopkg.in/jcmturner/gokrb5.v7/crypto/etype",
+        "//vendor/gopkg.in/jcmturner/gokrb5.v7/crypto/rfc3961",
+        "//vendor/gopkg.in/jcmturner/gokrb5.v7/crypto/rfc3962",
+        "//vendor/gopkg.in/jcmturner/gokrb5.v7/crypto/rfc4757",
+        "//vendor/gopkg.in/jcmturner/gokrb5.v7/crypto/rfc8009",
+        "//vendor/gopkg.in/jcmturner/gokrb5.v7/iana/chksumtype",
+        "//vendor/gopkg.in/jcmturner/gokrb5.v7/iana/etypeID",
+        "//vendor/gopkg.in/jcmturner/gokrb5.v7/iana/patype",
+        "//vendor/gopkg.in/jcmturner/gokrb5.v7/types",
+    ],
+)

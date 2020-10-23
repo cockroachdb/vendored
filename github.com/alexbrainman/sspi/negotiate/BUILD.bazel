@@ -1,0 +1,15 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "negotiate",
+    srcs = ["negotiate.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/alexbrainman/sspi/negotiate",
+    importpath = "github.com/alexbrainman/sspi/negotiate",
+    visibility = ["//visibility:public"],
+    deps = select({
+        "@io_bazel_rules_go//go/platform:windows": [
+            "//vendor/github.com/alexbrainman/sspi",
+        ],
+        "//conditions:default": [],
+    }),
+)

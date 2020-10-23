@@ -1,0 +1,20 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "binutils",
+    srcs = [
+        "addr2liner.go",
+        "addr2liner_llvm.go",
+        "addr2liner_nm.go",
+        "binutils.go",
+        "disasm.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/google/pprof/internal/binutils",
+    importpath = "github.com/google/pprof/internal/binutils",
+    visibility = ["//vendor/github.com/google/pprof:__subpackages__"],
+    deps = [
+        "//vendor/github.com/google/pprof/internal/elfexec",
+        "//vendor/github.com/google/pprof/internal/plugin",
+        "//vendor/github.com/ianlancetaylor/demangle",
+    ],
+)

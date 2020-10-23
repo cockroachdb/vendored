@@ -1,0 +1,22 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "stats",
+    srcs = [
+        "alg.go",
+        "beta.go",
+        "deltadist.go",
+        "dist.go",
+        "mathx.go",
+        "normaldist.go",
+        "package.go",
+        "sample.go",
+        "tdist.go",
+        "ttest.go",
+        "udist.go",
+        "utest.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/golang.org/x/perf/internal/stats",
+    importpath = "golang.org/x/perf/internal/stats",
+    visibility = ["//vendor/golang.org/x/perf:__subpackages__"],
+)

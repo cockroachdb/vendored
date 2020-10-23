@@ -1,0 +1,14 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "invariants",
+    srcs = [
+        "off.go",
+        "on.go",
+        "race_off.go",
+        "race_on.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/cockroachdb/pebble/internal/invariants",
+    importpath = "github.com/cockroachdb/pebble/internal/invariants",
+    visibility = ["//vendor/github.com/cockroachdb/pebble:__subpackages__"],
+)

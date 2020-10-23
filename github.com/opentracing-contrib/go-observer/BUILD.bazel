@@ -1,0 +1,10 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go-observer",
+    srcs = ["observer.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/opentracing-contrib/go-observer",
+    importpath = "github.com/opentracing-contrib/go-observer",
+    visibility = ["//visibility:public"],
+    deps = ["//vendor/github.com/opentracing/opentracing-go"],
+)

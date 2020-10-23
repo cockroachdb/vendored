@@ -1,0 +1,19 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "report",
+    srcs = [
+        "report.go",
+        "source.go",
+        "source_html.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/google/pprof/internal/report",
+    importpath = "github.com/google/pprof/internal/report",
+    visibility = ["//vendor/github.com/google/pprof:__subpackages__"],
+    deps = [
+        "//vendor/github.com/google/pprof/internal/graph",
+        "//vendor/github.com/google/pprof/internal/measurement",
+        "//vendor/github.com/google/pprof/internal/plugin",
+        "//vendor/github.com/google/pprof/profile",
+    ],
+)

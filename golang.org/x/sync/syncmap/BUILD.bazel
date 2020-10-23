@@ -1,0 +1,13 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "syncmap",
+    srcs = [
+        "go19.go",
+        "map.go",
+        "pre_go19.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/golang.org/x/sync/syncmap",
+    importpath = "golang.org/x/sync/syncmap",
+    visibility = ["//visibility:public"],
+)

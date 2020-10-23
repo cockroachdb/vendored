@@ -1,0 +1,10 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "bytealloc",
+    srcs = ["bytealloc.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/cockroachdb/pebble/internal/bytealloc",
+    importpath = "github.com/cockroachdb/pebble/internal/bytealloc",
+    visibility = ["//vendor/github.com/cockroachdb/pebble:__subpackages__"],
+    deps = ["//vendor/github.com/cockroachdb/pebble/internal/rawalloc"],
+)

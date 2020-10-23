@@ -1,0 +1,18 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "wire",
+    srcs = [
+        "carrier.go",
+        "gen.go",
+        "wire.pb.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/openzipkin-contrib/zipkin-go-opentracing/wire",
+    importpath = "github.com/openzipkin-contrib/zipkin-go-opentracing/wire",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/gogo/protobuf/proto",
+        "//vendor/github.com/openzipkin-contrib/zipkin-go-opentracing/flag",
+        "//vendor/github.com/openzipkin-contrib/zipkin-go-opentracing/types",
+    ],
+)

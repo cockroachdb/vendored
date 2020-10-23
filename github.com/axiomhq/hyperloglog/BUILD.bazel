@@ -1,0 +1,16 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "hyperloglog",
+    srcs = [
+        "compressed.go",
+        "hyperloglog.go",
+        "registers.go",
+        "sparse.go",
+        "utils.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/axiomhq/hyperloglog",
+    importpath = "github.com/axiomhq/hyperloglog",
+    visibility = ["//visibility:public"],
+    deps = ["//vendor/github.com/dgryski/go-metro"],
+)

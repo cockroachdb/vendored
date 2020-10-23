@@ -1,0 +1,9 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "txtar",
+    srcs = ["archive.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/golang.org/x/tools/txtar",
+    importpath = "golang.org/x/tools/txtar",
+    visibility = ["//visibility:public"],
+)

@@ -1,0 +1,12 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "printer",
+    srcs = [
+        "nodes.go",
+        "printer.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/cockroachdb/gostdlib/go/printer",
+    importpath = "github.com/cockroachdb/gostdlib/go/printer",
+    visibility = ["//visibility:public"],
+)

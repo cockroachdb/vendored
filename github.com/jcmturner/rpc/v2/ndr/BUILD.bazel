@@ -1,0 +1,20 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "ndr",
+    srcs = [
+        "arrays.go",
+        "decoder.go",
+        "error.go",
+        "header.go",
+        "pipe.go",
+        "primitives.go",
+        "rawbytes.go",
+        "strings.go",
+        "tags.go",
+        "union.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/jcmturner/rpc/v2/ndr",
+    importpath = "github.com/jcmturner/rpc/v2/ndr",
+    visibility = ["//visibility:public"],
+)

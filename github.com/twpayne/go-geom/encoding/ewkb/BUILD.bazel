@@ -1,0 +1,16 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "ewkb",
+    srcs = [
+        "ewkb.go",
+        "sql.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/twpayne/go-geom/encoding/ewkb",
+    importpath = "github.com/twpayne/go-geom/encoding/ewkb",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/twpayne/go-geom",
+        "//vendor/github.com/twpayne/go-geom/encoding/wkbcommon",
+    ],
+)

@@ -1,0 +1,9 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "packagesdriver",
+    srcs = ["sizes.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/cockroachdb/gostdlib/x/tools/go/internal/packagesdriver",
+    importpath = "github.com/cockroachdb/gostdlib/x/tools/go/internal/packagesdriver",
+    visibility = ["//vendor/github.com/cockroachdb/gostdlib/x/tools/go:__subpackages__"],
+)

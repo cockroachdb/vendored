@@ -1,0 +1,20 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "kadmin",
+    srcs = [
+        "changepasswddata.go",
+        "message.go",
+        "passwd.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/gopkg.in/jcmturner/gokrb5.v7/kadmin",
+    importpath = "gopkg.in/jcmturner/gokrb5.v7/kadmin",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/jcmturner/gofork/encoding/asn1",
+        "//vendor/gopkg.in/jcmturner/gokrb5.v7/crypto",
+        "//vendor/gopkg.in/jcmturner/gokrb5.v7/krberror",
+        "//vendor/gopkg.in/jcmturner/gokrb5.v7/messages",
+        "//vendor/gopkg.in/jcmturner/gokrb5.v7/types",
+    ],
+)

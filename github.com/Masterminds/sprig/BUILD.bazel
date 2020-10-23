@@ -1,0 +1,33 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "sprig",
+    srcs = [
+        "crypto.go",
+        "date.go",
+        "defaults.go",
+        "dict.go",
+        "doc.go",
+        "functions.go",
+        "list.go",
+        "network.go",
+        "numeric.go",
+        "reflect.go",
+        "regex.go",
+        "semver.go",
+        "strings.go",
+        "url.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/Masterminds/sprig",
+    importpath = "github.com/Masterminds/sprig",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/Masterminds/goutils",
+        "//vendor/github.com/Masterminds/semver",
+        "//vendor/github.com/google/uuid",
+        "//vendor/github.com/huandu/xstrings",
+        "//vendor/github.com/imdario/mergo",
+        "//vendor/github.com/mitchellh/copystructure",
+        "//vendor/golang.org/x/crypto/scrypt",
+    ],
+)

@@ -1,0 +1,18 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "datadriven",
+    srcs = [
+        "datadriven.go",
+        "line_parser.go",
+        "line_scanner.go",
+        "test_data_reader.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/cockroachdb/datadriven",
+    importpath = "github.com/cockroachdb/datadriven",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/cockroachdb/errors",
+        "//vendor/github.com/pmezard/go-difflib/difflib",
+    ],
+)

@@ -1,0 +1,15 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go-kml",
+    srcs = [
+        "kml.go",
+        "kml22gx.gen.go",
+        "kml22gx.go",
+        "ogckml22.gen.go",
+        "ogckml22.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/twpayne/go-kml",
+    importpath = "github.com/twpayne/go-kml",
+    visibility = ["//visibility:public"],
+)

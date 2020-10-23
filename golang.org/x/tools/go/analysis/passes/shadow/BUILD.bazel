@@ -1,0 +1,14 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "shadow",
+    srcs = ["shadow.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/golang.org/x/tools/go/analysis/passes/shadow",
+    importpath = "golang.org/x/tools/go/analysis/passes/shadow",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/golang.org/x/tools/go/analysis",
+        "//vendor/golang.org/x/tools/go/analysis/passes/inspect",
+        "//vendor/golang.org/x/tools/go/ast/inspector",
+    ],
+)

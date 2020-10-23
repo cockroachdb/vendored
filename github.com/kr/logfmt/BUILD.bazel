@@ -1,0 +1,13 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "logfmt",
+    srcs = [
+        "decode.go",
+        "scanner.go",
+        "unquote.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/kr/logfmt",
+    importpath = "github.com/kr/logfmt",
+    visibility = ["//visibility:public"],
+)

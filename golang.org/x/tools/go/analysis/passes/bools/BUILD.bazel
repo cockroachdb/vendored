@@ -1,0 +1,15 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "bools",
+    srcs = ["bools.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/golang.org/x/tools/go/analysis/passes/bools",
+    importpath = "golang.org/x/tools/go/analysis/passes/bools",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/golang.org/x/tools/go/analysis",
+        "//vendor/golang.org/x/tools/go/analysis/passes/inspect",
+        "//vendor/golang.org/x/tools/go/analysis/passes/internal/analysisutil",
+        "//vendor/golang.org/x/tools/go/ast/inspector",
+    ],
+)

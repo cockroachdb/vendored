@@ -1,0 +1,12 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "geohash",
+    srcs = [
+        "geohash.go",
+        "util.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/pierrre/geohash",
+    importpath = "github.com/pierrre/geohash",
+    visibility = ["//visibility:public"],
+)

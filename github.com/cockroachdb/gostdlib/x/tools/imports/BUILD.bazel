@@ -1,0 +1,10 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "imports",
+    srcs = ["forward.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/cockroachdb/gostdlib/x/tools/imports",
+    importpath = "github.com/cockroachdb/gostdlib/x/tools/imports",
+    visibility = ["//visibility:public"],
+    deps = ["//vendor/github.com/cockroachdb/gostdlib/x/tools/internal/imports"],
+)

@@ -1,0 +1,23 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "mstypes",
+    srcs = [
+        "claims.go",
+        "common.go",
+        "filetime.go",
+        "group_membership.go",
+        "kerb_sid_and_attributes.go",
+        "reader.go",
+        "rpc_unicode_string.go",
+        "sid.go",
+        "user_session_key.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/jcmturner/rpc/v2/mstypes",
+    importpath = "github.com/jcmturner/rpc/v2/mstypes",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/jcmturner/rpc/v2/ndr",
+        "//vendor/golang.org/x/net/http2/hpack",
+    ],
+)

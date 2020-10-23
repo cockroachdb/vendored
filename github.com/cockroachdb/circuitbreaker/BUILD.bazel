@@ -1,0 +1,19 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "circuitbreaker",
+    srcs = [
+        "breakerevent_string.go",
+        "circuitbreaker.go",
+        "client.go",
+        "panel.go",
+        "window.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/cockroachdb/circuitbreaker",
+    importpath = "github.com/cockroachdb/circuitbreaker",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/cenkalti/backoff",
+        "//vendor/github.com/facebookgo/clock",
+    ],
+)
