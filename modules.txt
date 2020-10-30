@@ -167,7 +167,7 @@ github.com/cockroachdb/crlfmt/internal/parser
 github.com/cockroachdb/crlfmt/internal/render
 # github.com/cockroachdb/datadriven v1.0.1-0.20201022032720-3e27adf87325
 github.com/cockroachdb/datadriven
-# github.com/cockroachdb/errors v1.7.5
+# github.com/cockroachdb/errors v1.8.0
 github.com/cockroachdb/errors
 github.com/cockroachdb/errors/assert
 github.com/cockroachdb/errors/barriers
@@ -323,7 +323,7 @@ github.com/go-ole/go-ole
 github.com/go-ole/go-ole/oleutil
 # github.com/go-sql-driver/mysql v1.5.0
 github.com/go-sql-driver/mysql
-# github.com/gogo/protobuf v1.3.1 => github.com/cockroachdb/gogoproto v1.2.1-0.20190102194534-ca10b809dba0
+# github.com/gogo/protobuf v1.3.1
 github.com/gogo/protobuf/gogoproto
 github.com/gogo/protobuf/jsonpb
 github.com/gogo/protobuf/plugin/compare
@@ -370,7 +370,7 @@ github.com/golang/geo/s1
 github.com/golang/geo/s2
 # github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 github.com/golang/glog
-# github.com/golang/protobuf v1.4.2
+# github.com/golang/protobuf v1.4.3
 github.com/golang/protobuf/descriptor
 github.com/golang/protobuf/jsonpb
 github.com/golang/protobuf/proto
@@ -387,7 +387,7 @@ github.com/golang/snappy
 github.com/google/btree
 # github.com/google/flatbuffers v1.11.0
 github.com/google/flatbuffers/go
-# github.com/google/go-cmp v0.4.0
+# github.com/google/go-cmp v0.5.0
 github.com/google/go-cmp/cmp
 github.com/google/go-cmp/cmp/cmpopts
 github.com/google/go-cmp/cmp/internal/diff
@@ -414,7 +414,7 @@ github.com/google/pprof/profile
 github.com/google/pprof/third_party/d3
 github.com/google/pprof/third_party/d3flamegraph
 github.com/google/pprof/third_party/svgpan
-# github.com/google/uuid v1.1.1
+# github.com/google/uuid v1.1.2
 github.com/google/uuid
 # github.com/googleapis/gax-go v2.0.2+incompatible
 github.com/googleapis/gax-go
@@ -424,7 +424,7 @@ github.com/gorhill/cronexpr
 github.com/gorilla/websocket
 # github.com/goware/modvendor v0.3.0
 github.com/goware/modvendor
-# github.com/grpc-ecosystem/grpc-gateway v1.13.0 => github.com/cockroachdb/grpc-gateway v1.14.6-0.20200519165156-52697fc4a249
+# github.com/grpc-ecosystem/grpc-gateway v1.16.0 => github.com/cockroachdb/grpc-gateway v1.14.6-0.20200519165156-52697fc4a249
 github.com/grpc-ecosystem/grpc-gateway/codegenerator
 github.com/grpc-ecosystem/grpc-gateway/internal
 github.com/grpc-ecosystem/grpc-gateway/internal/casing
@@ -717,7 +717,7 @@ github.com/twpayne/go-kml
 github.com/wadey/gocovmerge
 # github.com/zabawaba99/go-gitignore v0.0.0-20200117185801-39e6bddfb292
 github.com/zabawaba99/go-gitignore
-# go.etcd.io/etcd v0.0.0-00010101000000-000000000000 => github.com/cockroachdb/etcd v0.4.7-0.20200615211340-a17df30d5955
+# go.etcd.io/etcd v0.0.0-00010101000000-000000000000 => github.com/cockroachdb/etcd v0.4.7-0.20201030172626-327328454bad
 go.etcd.io/etcd/raft
 go.etcd.io/etcd/raft/confchange
 go.etcd.io/etcd/raft/quorum
@@ -765,7 +765,7 @@ golang.org/x/lint
 golang.org/x/lint/golint
 # golang.org/x/mod v0.3.1-0.20200828183125-ce943fd02449
 golang.org/x/mod/semver
-# golang.org/x/net v0.0.0-20200602114024-627f9648deb9
+# golang.org/x/net v0.0.0-20201029221708-28c70e62bb1d
 golang.org/x/net/context
 golang.org/x/net/context/ctxhttp
 golang.org/x/net/html
@@ -792,12 +792,12 @@ golang.org/x/perf/storage/benchfmt
 # golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
 golang.org/x/sync/errgroup
 golang.org/x/sync/syncmap
-# golang.org/x/sys v0.0.0-20201022201747-fb209a7c41cd
+# golang.org/x/sys v0.0.0-20201029080932-201ba4db2418
 golang.org/x/sys/cpu
 golang.org/x/sys/internal/unsafeheader
 golang.org/x/sys/unix
 golang.org/x/sys/windows
-# golang.org/x/text v0.3.3
+# golang.org/x/text v0.3.4
 golang.org/x/text/cases
 golang.org/x/text/collate
 golang.org/x/text/internal
@@ -813,7 +813,7 @@ golang.org/x/text/transform
 golang.org/x/text/unicode/bidi
 golang.org/x/text/unicode/norm
 golang.org/x/text/width
-# golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
+# golang.org/x/time v0.0.0-20191024005414-555d28b269f0
 golang.org/x/time/rate
 # golang.org/x/tools v0.0.0-20200702044944-0cc1aa72b347
 golang.org/x/tools/cmd/goyacc
@@ -876,7 +876,7 @@ golang.org/x/tools/internal/span
 golang.org/x/tools/internal/testenv
 golang.org/x/tools/internal/typesinternal
 golang.org/x/tools/txtar
-# golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543
+# golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1
 golang.org/x/xerrors
 golang.org/x/xerrors/internal
 # google.golang.org/api v0.1.0
