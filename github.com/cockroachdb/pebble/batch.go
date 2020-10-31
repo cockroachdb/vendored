@@ -184,6 +184,7 @@ type Batch struct {
 	// memtables.
 	data           []byte
 	cmp            Compare
+	formatKey      base.FormatKey
 	abbreviatedKey AbbreviatedKey
 
 	memTableSize uint32
@@ -195,6 +196,10 @@ type Batch struct {
 	// The count of records in the batch. This count will be stored in the batch
 	// data whenever Repr() is called.
 	count uint64
+
+	// The count of range deletions in the batch. Updated every time a range
+	// deletion is added.
+	countRangeDels uint64
 
 	// A deferredOp struct, stored in the Batch so that a pointer can be returned
 	// from the *Deferred() methods rather than a value.
@@ -247,6 +252,7 @@ func newBatch(db *DB) *Batch {
 func newIndexedBatch(db *DB, comparer *Comparer) *Batch {
 	i := indexedBatchPool.Get().(*indexedBatch)
 	i.batch.cmp = comparer.Compare
+	i.batch.formatKey = comparer.FormatKey
 	i.batch.abbreviatedKey = comparer.AbbreviatedKey
 	i.batch.db = db
 	i.batch.index = &i.index
@@ -271,20 +277,12 @@ func (b *Batch) release() {
 	// complains.
 	b.Reset()
 	b.cmp = nil
+	b.formatKey = nil
 	b.abbreviatedKey = nil
-	b.memTableSize = 0
-
-	b.deferredOp = DeferredBatchOp{}
-	b.tombstones = nil
-	b.flushable = nil
-	b.commit = sync.WaitGroup{}
-	b.commitErr = nil
-	atomic.StoreUint32(&b.applied, 0)
 
 	if b.index == nil {
 		batchPool.Put(b)
 	} else {
-		b.index.Reset()
 		b.index, b.rangeDelIndex = nil, nil
 		indexedBatchPool.Put((*indexedBatch)(unsafe.Pointer(b)))
 	}
@@ -296,12 +294,16 @@ func (b *Batch) refreshMemTableSize() {
 		return
 	}
 
+	b.countRangeDels = 0
 	for r := b.Reader(); ; {
-		_, key, value, ok := r.Next()
+		kind, key, value, ok := r.Next()
 		if !ok {
 			break
 		}
 		b.memTableSize += memTableEntrySize(len(key), len(value))
+		if kind == InternalKeyKindRangeDelete {
+			b.countRangeDels++
+		}
 	}
 }
 
@@ -313,7 +315,7 @@ func (b *Batch) Apply(batch *Batch, _ *WriteOptions) error {
 		return nil
 	}
 	if len(batch.data) < batchHeaderLen {
-		return errors.New("pebble: invalid batch")
+		return base.CorruptionErrorf("pebble: invalid batch")
 	}
 
 	offset := len(b.data)
@@ -333,6 +335,9 @@ func (b *Batch) Apply(batch *Batch, _ *WriteOptions) error {
 			kind, key, value, ok := iter.Next()
 			if !ok {
 				break
+			}
+			if kind == InternalKeyKindRangeDelete {
+				b.countRangeDels++
 			}
 			if b.index != nil {
 				var err error
@@ -594,6 +599,7 @@ func (b *Batch) DeleteRange(start, end []byte, _ *WriteOptions) error {
 // with the end key.
 func (b *Batch) DeleteRangeDeferred(startLen, endLen int) *DeferredBatchOp {
 	b.prepareDeferredKeyValueRecord(startLen, endLen, InternalKeyKindRangeDelete)
+	b.countRangeDels++
 	if b.index != nil {
 		b.tombstones = nil
 		// Range deletions are rare, so we lazily allocate the index for them.
@@ -642,7 +648,7 @@ func (b *Batch) Repr() []byte {
 // Batch is no longer in use.
 func (b *Batch) SetRepr(data []byte) error {
 	if len(data) < batchHeaderLen {
-		return errors.New("invalid batch")
+		return base.CorruptionErrorf("invalid batch")
 	}
 	b.data = data
 	b.count = uint64(binary.LittleEndian.Uint32(b.countData()))
@@ -690,7 +696,8 @@ func (b *Batch) newRangeDelIter(o *IterOptions) internalIterator {
 	// tombstone is added to the batch.
 	if b.tombstones == nil {
 		frag := &rangedel.Fragmenter{
-			Cmp: b.cmp,
+			Cmp:    b.cmp,
+			Format: b.formatKey,
 			Emit: func(fragmented []rangedel.Tombstone) {
 				b.tombstones = append(b.tombstones, fragmented...)
 			},
@@ -743,12 +750,21 @@ func (b *Batch) init(cap int) {
 	b.data = b.data[:batchHeaderLen]
 }
 
-// Reset clears the underlying byte slice and effectively empties the batch for
-// reuse. Used in cases where Batch is only being used to build a batch, and
-// where the end result is a Repr() call, not a Commit call or a Close call.
-// Commits and Closes take care of releasing resources when appropriate.
+// Reset resets the batch for reuse. The underlying byte slice (that is
+// returned by Repr()) is not modified. It is only necessary to call this
+// method if a batch is explicitly being reused. Close automatically takes are
+// of releasing resources when appropriate for batches that are internally
+// being reused.
 func (b *Batch) Reset() {
 	b.count = 0
+	b.countRangeDels = 0
+	b.memTableSize = 0
+	b.deferredOp = DeferredBatchOp{}
+	b.tombstones = nil
+	b.flushable = nil
+	b.commit = sync.WaitGroup{}
+	b.commitErr = nil
+	atomic.StoreUint32(&b.applied, 0)
 	if b.data != nil {
 		if cap(b.data) > batchMaxRetainedSize {
 			// If the capacity of the buffer is larger than our maximum
@@ -761,6 +777,10 @@ func (b *Batch) Reset() {
 			b.data = b.data[:batchHeaderLen]
 			b.setSeqNum(0)
 		}
+	}
+	if b.index != nil {
+		b.index.Init(&b.data, b.cmp, b.abbreviatedKey)
+		b.rangeDelIndex = nil
 	}
 }
 
@@ -778,7 +798,7 @@ func (b *Batch) countData() []byte {
 
 func (b *Batch) grow(n int) {
 	newSize := len(b.data) + n
-	if newSize >= maxBatchSize {
+	if uint64(newSize) >= maxBatchSize {
 		panic(ErrBatchTooLarge)
 	}
 	if newSize > cap(b.data) {
@@ -799,8 +819,11 @@ func (b *Batch) setSeqNum(seqNum uint64) {
 
 // SeqNum returns the batch sequence number which is applied to the first
 // record in the batch. The sequence number is incremented for each subsequent
-// record.
+// record. It returns zero if the batch is empty.
 func (b *Batch) SeqNum() uint64 {
+	if len(b.data) == 0 {
+		b.init(batchHeaderLen)
+	}
 	return binary.LittleEndian.Uint64(b.seqNumData())
 }
 
@@ -820,27 +843,30 @@ func (b *Batch) Count() uint32 {
 // Reader returns a BatchReader for the current batch contents. If the batch is
 // mutated, the new entries will not be visible to the reader.
 func (b *Batch) Reader() BatchReader {
+	if len(b.data) == 0 {
+		b.init(batchHeaderLen)
+	}
 	return b.data[batchHeaderLen:]
 }
 
 func batchDecodeStr(data []byte) (odata []byte, s []byte, ok bool) {
 	var v uint32
 	var n int
-	src := (*[5]uint8)(unsafe.Pointer(&data[0]))
-	if a := (*src)[0]; a < 128 {
+	ptr := unsafe.Pointer(&data[0])
+	if a := *((*uint8)(ptr)); a < 128 {
 		v = uint32(a)
 		n = 1
-	} else if a, b := a&0x7f, (*src)[1]; b < 128 {
+	} else if a, b := a&0x7f, *((*uint8)(unsafe.Pointer(uintptr(ptr) + 1))); b < 128 {
 		v = uint32(b)<<7 | uint32(a)
 		n = 2
-	} else if b, c := b&0x7f, (*src)[2]; c < 128 {
+	} else if b, c := b&0x7f, *((*uint8)(unsafe.Pointer(uintptr(ptr) + 2))); c < 128 {
 		v = uint32(c)<<14 | uint32(b)<<7 | uint32(a)
 		n = 3
-	} else if c, d := c&0x7f, (*src)[3]; d < 128 {
+	} else if c, d := c&0x7f, *((*uint8)(unsafe.Pointer(uintptr(ptr) + 3))); d < 128 {
 		v = uint32(d)<<21 | uint32(c)<<14 | uint32(b)<<7 | uint32(a)
 		n = 4
 	} else {
-		d, e := d&0x7f, (*src)[4]
+		d, e := d&0x7f, *((*uint8)(unsafe.Pointer(uintptr(ptr) + 4)))
 		v = uint32(e)<<28 | uint32(d)<<21 | uint32(c)<<14 | uint32(b)<<7 | uint32(a)
 		n = 5
 	}
@@ -858,6 +884,9 @@ type BatchReader []byte
 // MakeBatchReader constructs a BatchReader from a batch representation. The
 // header (containing the batch count and seqnum) is ignored.
 func MakeBatchReader(repr []byte) BatchReader {
+	if len(repr) <= batchHeaderLen {
+		return nil
+	}
 	return repr[batchHeaderLen:]
 }
 
@@ -966,7 +995,7 @@ func (i *batchIter) Value() []byte {
 	offset, _, keyEnd := i.iter.KeyInfo()
 	data := i.batch.data
 	if len(data[offset:]) == 0 {
-		i.err = errors.New("corrupted batch")
+		i.err = base.CorruptionErrorf("corrupted batch")
 		return nil
 	}
 
@@ -1015,8 +1044,9 @@ type flushableBatchEntry struct {
 // flushableBatch wraps an existing batch and provides the interfaces needed
 // for making the batch flushable (i.e. able to mimic a memtable).
 type flushableBatch struct {
-	cmp  Compare
-	data []byte
+	cmp       Compare
+	formatKey base.FormatKey
+	data      []byte
 
 	// The base sequence number for the entries in the batch. This is the same
 	// value as Batch.seqNum() and is cached here for performance.
@@ -1045,9 +1075,10 @@ var _ flushable = (*flushableBatch)(nil)
 // of the batch data.
 func newFlushableBatch(batch *Batch, comparer *Comparer) *flushableBatch {
 	b := &flushableBatch{
-		data:    batch.data,
-		cmp:     comparer.Compare,
-		offsets: make([]flushableBatchEntry, 0, batch.Count()),
+		data:      batch.data,
+		cmp:       comparer.Compare,
+		formatKey: comparer.FormatKey,
+		offsets:   make([]flushableBatchEntry, 0, batch.Count()),
 	}
 	if b.data != nil {
 		// Note that this sequence number is not correct when this batch has not
@@ -1096,7 +1127,8 @@ func newFlushableBatch(batch *Batch, comparer *Comparer) *flushableBatch {
 
 	if len(rangeDelOffsets) > 0 {
 		frag := &rangedel.Fragmenter{
-			Cmp: b.cmp,
+			Cmp:    b.cmp,
+			Format: b.formatKey,
 			Emit: func(fragmented []rangedel.Tombstone) {
 				b.tombstones = append(b.tombstones, fragmented...)
 			},
@@ -1349,12 +1381,12 @@ func (i *flushableBatchIter) Key() *InternalKey {
 func (i *flushableBatchIter) Value() []byte {
 	p := i.data[i.offsets[i.index].offset:]
 	if len(p) == 0 {
-		i.err = errors.New("corrupted batch")
+		i.err = base.CorruptionErrorf("corrupted batch")
 		return nil
 	}
 	kind := InternalKeyKind(p[0])
 	if kind > InternalKeyKindMax {
-		i.err = errors.New("corrupted batch")
+		i.err = base.CorruptionErrorf("corrupted batch")
 		return nil
 	}
 	var value []byte
@@ -1364,7 +1396,7 @@ func (i *flushableBatchIter) Value() []byte {
 		keyEnd := i.offsets[i.index].keyEnd
 		_, value, ok = batchDecodeStr(i.data[keyEnd:])
 		if !ok {
-			i.err = errors.New("corrupted batch")
+			i.err = base.CorruptionErrorf("corrupted batch")
 			return nil
 		}
 	}
@@ -1448,12 +1480,12 @@ func (i flushFlushableBatchIter) Prev() (*InternalKey, []byte) {
 func (i flushFlushableBatchIter) valueSize() uint64 {
 	p := i.data[i.offsets[i.index].offset:]
 	if len(p) == 0 {
-		i.err = errors.New("corrupted batch")
+		i.err = base.CorruptionErrorf("corrupted batch")
 		return 0
 	}
 	kind := InternalKeyKind(p[0])
 	if kind > InternalKeyKindMax {
-		i.err = errors.New("corrupted batch")
+		i.err = base.CorruptionErrorf("corrupted batch")
 		return 0
 	}
 	var length uint64
@@ -1462,7 +1494,7 @@ func (i flushFlushableBatchIter) valueSize() uint64 {
 		keyEnd := i.offsets[i.index].keyEnd
 		v, n := binary.Uvarint(i.data[keyEnd:])
 		if n <= 0 {
-			i.err = errors.New("corrupted batch")
+			i.err = base.CorruptionErrorf("corrupted batch")
 			return 0
 		}
 		length = v + uint64(n)

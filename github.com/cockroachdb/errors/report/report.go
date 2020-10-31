@@ -22,6 +22,7 @@ import (
 	"github.com/cockroachdb/errors/domains"
 	"github.com/cockroachdb/errors/errbase"
 	"github.com/cockroachdb/errors/withstack"
+	"github.com/cockroachdb/redact"
 	"github.com/cockroachdb/sentry-go"
 )
 
@@ -111,13 +112,24 @@ func BuildSentryReport(err error) (event *sentry.Event, extraDetails map[string]
 	}
 	module := string(domains.GetDomain(err))
 
-	// For the summary, we collect the innermost source context.
-	//	file, line, fn, hasOneLineSource := withstack.GetOneLineSource(err)
+	// firstDetailLine is the first detail string encountered.
+	// This is added as decoration to the first Exception
+	// payload (either from the error object or synthetic)
+	// so as to populate the Sentry report title.
+	var firstDetailLine string
 
 	// longMsgBuf will become the Message field, which contains the full
 	// structure of the error with cross-references to "Exception" and
 	// "Additional data" fields.
 	var longMsgBuf strings.Builder
+	redactedErrStr := redact.Sprint(err).Redact()
+	if redactedErrStr != redactedMarker {
+		if f, l, _, ok := withstack.GetOneLineSource(err); ok {
+			fmt.Fprintf(&longMsgBuf, "%s:%d: ", f, l)
+		}
+		firstDetailLine = redactedErrStr.StripMarkers()
+		fmt.Fprintf(&longMsgBuf, "%v\n--\n", firstDetailLine)
+	}
 
 	// sep is used to separate the entries in the longMsgBuf / Message
 	// payload.
@@ -142,12 +154,6 @@ func BuildSentryReport(err error) (event *sentry.Event, extraDetails map[string]
 	// leafErrorType is the type name of the leaf error.
 	// This is used as fallback when no Exception payload is generated.
 	var leafErrorType string
-
-	// firstDetailLine is the first detail string encountered.
-	// This is added as decoration to the first Exception
-	// payload (either from the error object or synthetic)
-	// so as to populate the Sentry report title.
-	var firstDetailLine string
 
 	// Iterate from the last (innermost) to first (outermost) error
 	// layer. We iterate in this order because we want to describe the
@@ -269,7 +275,7 @@ func BuildSentryReport(err error) (event *sentry.Event, extraDetails map[string]
 			stKey := fmt.Sprintf("%d: details", extraNum)
 			var extraStr bytes.Buffer
 			for _, d := range details[i].SafeDetails {
-				fmt.Fprintln(&extraStr, d)
+				fmt.Fprintln(&extraStr, strings.ReplaceAll(d, "\n", "\n   "))
 			}
 			extras[stKey] = extraStr.String()
 			fmt.Fprintf(&longMsgBuf, " (%d)", extraNum)
@@ -348,8 +354,13 @@ func BuildSentryReport(err error) (event *sentry.Event, extraDetails map[string]
 	return event, extras
 }
 
+var redactedMarker = redact.RedactableString(redact.RedactedMarker())
+
 // ReportError reports the given error to Sentry. The caller is responsible for
-// checking whether telemetry is enabled.
+// checking whether telemetry is enabled, and calling the sentry.Flush()
+// function to wait for the report to be uploaded. (By default,
+// Sentry submits reports asynchronously.)
+//
 // Note: an empty 'eventID' can be returned which signifies that the error was
 // not reported. This can occur when Sentry client hasn't been properly
 // configured or Sentry client decided to not report the error (due to

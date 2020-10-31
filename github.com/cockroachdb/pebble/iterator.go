@@ -9,6 +9,7 @@ import (
 	"io"
 
 	"github.com/cockroachdb/errors"
+	"github.com/cockroachdb/pebble/internal/base"
 )
 
 type iterPos int8
@@ -20,6 +21,15 @@ const (
 )
 
 var errReversePrefixIteration = errors.New("pebble: unsupported reverse prefix iteration")
+
+// IteratorMetrics holds per-iterator metrics.
+type IteratorMetrics struct {
+	// The read amplification experienced by this iterator. This is the sum of
+	// the memtables, the L0 sublevels and the non-empty Ln levels. Higher read
+	// amplification generally results in slower reads, though allowing higher
+	// read amplification can also result in faster writes.
+	ReadAmp int
+}
 
 // Iterator iterates over a DB's key/value pairs in key order.
 //
@@ -103,12 +113,12 @@ func (i *Iterator) findNextEntry() bool {
 				i.mergeNext(key, valueMerger)
 			}
 			if i.err == nil {
-				i.value, i.valueCloser, i.err = valueMerger.Finish()
+				i.value, i.valueCloser, i.err = valueMerger.Finish(true /* includesBase */)
 			}
 			return i.err == nil
 
 		default:
-			i.err = errors.Errorf("pebble: invalid internal key kind: %d", errors.Safe(key.Kind()))
+			i.err = base.CorruptionErrorf("pebble: invalid internal key kind: %d", errors.Safe(key.Kind()))
 			return false
 		}
 	}
@@ -159,7 +169,7 @@ func (i *Iterator) findPrevEntry() bool {
 				// We've iterated to the previous user key.
 				i.pos = iterPosPrev
 				if valueMerger != nil {
-					i.value, i.valueCloser, i.err = valueMerger.Finish()
+					i.value, i.valueCloser, i.err = valueMerger.Finish(true /* includesBase */)
 				}
 				return i.err == nil
 			}
@@ -214,7 +224,7 @@ func (i *Iterator) findPrevEntry() bool {
 			continue
 
 		default:
-			i.err = errors.Errorf("pebble: invalid internal key kind: %d", errors.Safe(key.Kind()))
+			i.err = base.CorruptionErrorf("pebble: invalid internal key kind: %d", errors.Safe(key.Kind()))
 			return false
 		}
 	}
@@ -222,7 +232,7 @@ func (i *Iterator) findPrevEntry() bool {
 	if i.valid {
 		i.pos = iterPosPrev
 		if valueMerger != nil {
-			i.value, i.valueCloser, i.err = valueMerger.Finish()
+			i.value, i.valueCloser, i.err = valueMerger.Finish(true /* includesBase */)
 		}
 		return i.err == nil
 	}
@@ -291,7 +301,7 @@ func (i *Iterator) mergeNext(key InternalKey, valueMerger ValueMerger) {
 			continue
 
 		default:
-			i.err = errors.Errorf("pebble: invalid internal key kind: %d", errors.Safe(key.Kind()))
+			i.err = base.CorruptionErrorf("pebble: invalid internal key kind: %d", errors.Safe(key.Kind()))
 			return
 		}
 	}
@@ -305,6 +315,8 @@ func (i *Iterator) SeekGE(key []byte) bool {
 	i.prefix = nil
 	if lowerBound := i.opts.GetLowerBound(); lowerBound != nil && i.cmp(key, lowerBound) < 0 {
 		key = lowerBound
+	} else if upperBound := i.opts.GetUpperBound(); upperBound != nil && i.cmp(key, upperBound) > 0 {
+		key = upperBound
 	}
 
 	i.iterKey, i.iterValue = i.iter.SeekGE(key)
@@ -341,6 +353,19 @@ func (i *Iterator) SeekGE(key []byte) bool {
 //   SeekPrefixGE("a@0") -> "a@1"
 //   Next()              -> "a@2"
 //   Next()              -> EOF
+//
+// If you're just looking to iterate over keys with a shared prefix, as
+// defined by the configured comparer, set iterator bounds instead:
+//
+//  iter := db.NewIter(&pebble.IterOptions{
+//    LowerBound: []byte("prefix"),
+//    UpperBound: []byte("prefiy"),
+//  })
+//  for iter.First(); iter.Valid(); iter.Next() {
+//    // Only keys beginning with "prefix" will be visited.
+//  }
+//
+// See Example_prefixiteration for a working example.
 func (i *Iterator) SeekPrefixGE(key []byte) bool {
 	i.err = nil // clear cached iteration error
 
@@ -360,6 +385,12 @@ func (i *Iterator) SeekPrefixGE(key []byte) bool {
 			return false
 		}
 		key = lowerBound
+	} else if upperBound := i.opts.GetUpperBound(); upperBound != nil && i.cmp(key, upperBound) > 0 {
+		if n := i.split(upperBound); !bytes.Equal(i.prefix, upperBound[:n]) {
+			i.err = errors.New("pebble: SeekPrefixGE supplied with key outside of upper bound")
+			return false
+		}
+		key = upperBound
 	}
 
 	i.iterKey, i.iterValue = i.iter.SeekPrefixGE(i.prefix, key)
@@ -372,8 +403,10 @@ func (i *Iterator) SeekPrefixGE(key []byte) bool {
 func (i *Iterator) SeekLT(key []byte) bool {
 	i.err = nil // clear cached iteration error
 	i.prefix = nil
-	if upperBound := i.opts.GetUpperBound(); upperBound != nil && i.cmp(key, upperBound) >= 0 {
+	if upperBound := i.opts.GetUpperBound(); upperBound != nil && i.cmp(key, upperBound) > 0 {
 		key = upperBound
+	} else if lowerBound := i.opts.GetLowerBound(); lowerBound != nil && i.cmp(key, lowerBound) < 0 {
+		key = lowerBound
 	}
 
 	i.iterKey, i.iterValue = i.iter.SeekLT(key)
@@ -556,4 +589,15 @@ func (i *Iterator) SetBounds(lower, upper []byte) {
 	i.opts.LowerBound = lower
 	i.opts.UpperBound = upper
 	i.iter.SetBounds(lower, upper)
+}
+
+// Metrics returns per-iterator metrics.
+func (i *Iterator) Metrics() IteratorMetrics {
+	m := IteratorMetrics{
+		ReadAmp: 1,
+	}
+	if mi, ok := i.iter.(*mergingIter); ok {
+		m.ReadAmp = len(mi.levels)
+	}
+	return m
 }

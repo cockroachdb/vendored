@@ -6,7 +6,6 @@ package pebble
 
 import (
 	"sort"
-	"sync/atomic"
 	"time"
 
 	"github.com/cockroachdb/errors"
@@ -34,11 +33,11 @@ func sstableKeyCompare(userCmp Compare, a, b InternalKey) int {
 
 func ingestValidateKey(opts *Options, key *InternalKey) error {
 	if key.Kind() == InternalKeyKindInvalid {
-		return errors.Errorf("pebble: external sstable has corrupted key: %s",
+		return base.CorruptionErrorf("pebble: external sstable has corrupted key: %s",
 			key.Pretty(opts.Comparer.FormatKey))
 	}
 	if key.SeqNum() != 0 {
-		return errors.Errorf("pebble: external sstable has non-zero seqnum: %s",
+		return base.CorruptionErrorf("pebble: external sstable has non-zero seqnum: %s",
 			key.Pretty(opts.Comparer.FormatKey))
 	}
 	return nil
@@ -80,10 +79,7 @@ func ingestLoad1(
 	// disallowing removal of an open file. Under MemFS, if we don't populate
 	// meta.Stats here, the file will be loaded into the table cache for
 	// calculating stats before we can remove the original link.
-	if r.Properties.NumRangeDeletions == 0 {
-		meta.Stats.Valid = true
-		meta.Stats.RangeDeletionsBytesEstimate = 0
-	}
+	maybeSetStatsFromProperties(meta, &r.Properties)
 
 	smallestSet, largestSet := false, false
 	empty := true
@@ -118,7 +114,7 @@ func ingestLoad1(
 		}
 	}
 
-	iter, err := r.NewRangeDelIter()
+	iter, err := r.NewRawRangeDelIter()
 	if err != nil {
 		return nil, err
 	}
@@ -397,15 +393,15 @@ func ingestTargetLevel(
 	targetLevel := 0
 
 	// Do we overlap with keys in L0?
-	for i := 0; i < len(v.Levels[0]); i++ {
-		meta0 := v.Levels[0][i]
+	iter := v.Levels[0].Iter()
+	for meta0 := iter.First(); meta0 != nil; meta0 = iter.Next() {
 		c1 := sstableKeyCompare(cmp, meta.Smallest, meta0.Largest)
 		c2 := sstableKeyCompare(cmp, meta.Largest, meta0.Smallest)
 		if c1 > 0 || c2 < 0 {
 			continue
 		}
 
-		iter, rangeDelIter, err := newIters(meta0, nil, nil)
+		iter, rangeDelIter, err := newIters(iter.Take(), nil, nil)
 		if err != nil {
 			return 0, err
 		}
@@ -421,7 +417,7 @@ func ingestTargetLevel(
 
 	level := baseLevel
 	for ; level < numLevels; level++ {
-		levelIter := newLevelIter(iterOps, cmp, newIters, v.Levels[level], manifest.Level(level), nil)
+		levelIter := newLevelIter(iterOps, cmp, newIters, v.Levels[level].Iter(), manifest.Level(level), nil)
 		var rangeDelIter internalIterator
 		// Pass in a non-nil pointer to rangeDelIter so that levelIter.findFileGE sets it up for the target file.
 		levelIter.initRangeDel(&rangeDelIter)
@@ -432,7 +428,7 @@ func ingestTargetLevel(
 		}
 
 		// Check boundary overlap.
-		if len(v.Overlaps(level, cmp, meta.Smallest.UserKey, meta.Largest.UserKey)) != 0 {
+		if !v.Overlaps(level, cmp, meta.Smallest.UserKey, meta.Largest.UserKey).Empty() {
 			continue
 		}
 
@@ -445,7 +441,7 @@ func ingestTargetLevel(
 		// negative (else we'd have returned earlier).
 		overlaps := false
 		for c := range compactions {
-			if level != c.outputLevel {
+			if c.outputLevel == nil || level != c.outputLevel.level {
 				continue
 			}
 			if cmp(meta.Smallest.UserKey, c.largest.UserKey) <= 0 &&
@@ -467,6 +463,14 @@ func ingestTargetLevel(
 // flushed. The ingested sstable files are moved into the DB and must reside on
 // the same filesystem as the DB. Sstables can be created for ingestion using
 // sstable.Writer. On success, Ingest removes the input paths.
+//
+// All sstables *must* be Sync()'d by the caller after all bytes are written
+// and before its file handle is closed; failure to do so could violate
+// durability or lead to corrupted on-disk state. This method cannot, in a
+// platform-and-FS-agnostic way, ensure that all sstables in the input are
+// properly synced to disk. Opening new file handles and Sync()-ing them
+// does not always guarantee durability; see the discussion here on that:
+// https://github.com/cockroachdb/pebble/pull/835#issuecomment-663075379
 //
 // Ingestion loads each sstable into the lowest level of the LSM which it
 // doesn't overlap (see ingestTargetLevel). If an sstable overlaps a memtable,
@@ -496,8 +500,8 @@ func ingestTargetLevel(
 // https://github.com/cockroachdb/pebble/issues/25 for an idea for how to fix
 // this hiccup.
 func (d *DB) Ingest(paths []string) error {
-	if atomic.LoadInt32(&d.closed) != 0 {
-		panic(ErrClosed)
+	if err := d.closed.Load(); err != nil {
+		panic(err)
 	}
 	if d.opts.ReadOnly {
 		return ErrReadOnly
@@ -669,6 +673,8 @@ func (d *DB) ingestApply(jobID int, meta []*fileMetadata) (*versionEdit, error) 
 			levelMetrics = &LevelMetrics{}
 			metrics[f.Level] = levelMetrics
 		}
+		levelMetrics.NumFiles++
+		levelMetrics.Size += int64(m.Size)
 		levelMetrics.BytesIngested += m.Size
 		levelMetrics.TablesIngested++
 	}

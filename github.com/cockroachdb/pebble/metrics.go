@@ -38,7 +38,7 @@ type LevelMetrics struct {
 	// The total number of files in the level.
 	NumFiles int64
 	// The total size in bytes of the files in the level.
-	Size uint64
+	Size int64
 	// The level's compaction score.
 	Score float64
 	// The number of incoming bytes from other levels read during
@@ -74,6 +74,8 @@ type LevelMetrics struct {
 
 // Add updates the counter metrics for the level.
 func (m *LevelMetrics) Add(u *LevelMetrics) {
+	m.NumFiles += u.NumFiles
+	m.Size += u.Size
 	m.BytesIn += u.BytesIn
 	m.BytesIngested += u.BytesIngested
 	m.BytesMoved += u.BytesMoved
@@ -100,7 +102,7 @@ func (m *LevelMetrics) WriteAmp() float64 {
 func (m *LevelMetrics) format(buf *bytes.Buffer, score string) {
 	fmt.Fprintf(buf, "%9d %7s %7s %7s %7s %7s %7s %7s %7s %7s %7s %7d %7.1f\n",
 		m.NumFiles,
-		humanize.IEC.Uint64(m.Size),
+		humanize.IEC.Int64(m.Size),
 		score,
 		humanize.IEC.Uint64(m.BytesIn),
 		humanize.IEC.Uint64(m.BytesIngested),
@@ -129,6 +131,10 @@ type Metrics struct {
 		// An estimate of the number of bytes that need to be compacted for the LSM
 		// to reach a stable state.
 		EstimatedDebt uint64
+		// Number of bytes present in sstables being written by in-progress
+		// compactions. This value will be zero if there are no in-progress
+		// compactions.
+		InProgressBytes int64
 	}
 
 	Flush struct {
@@ -181,6 +187,14 @@ type Metrics struct {
 	}
 }
 
+func (m *Metrics) levelSizes() [numLevels]int64 {
+	var sizes [numLevels]int64
+	for i := 0; i < len(sizes); i++ {
+		sizes[i] = m.Levels[i].Size
+	}
+	return sizes
+}
+
 // ReadAmp returns the current read amplification of the database.
 // It's computed as the number of sublevels in L0 + the number of non-empty
 // levels below L0.
@@ -190,6 +204,23 @@ func (m *Metrics) ReadAmp() int {
 		ramp += l.Sublevels
 	}
 	return int(ramp)
+}
+
+// Total returns the sum of the per-level metrics and WAL metrics.
+func (m *Metrics) Total() LevelMetrics {
+	var total LevelMetrics
+	for level := 0; level < numLevels; level++ {
+		l := &m.Levels[level]
+		total.Add(l)
+		total.Sublevels += l.Sublevels
+	}
+	// Compute total bytes-in as the bytes written to the WAL + bytes ingested.
+	total.BytesIn = m.WAL.BytesWritten + total.BytesIngested
+	// Add the total bytes-in to the total bytes-flushed. This is to account for
+	// the bytes written to the log and bytes written externally and then
+	// ingested.
+	total.BytesFlushed += total.BytesIn
+	return total
 }
 
 const notApplicable = "-"
@@ -259,10 +290,8 @@ func (m *Metrics) String() string {
 		l.format(&buf, score)
 		total.Add(l)
 		total.Sublevels += l.Sublevels
-		total.NumFiles += l.NumFiles
-		total.Size += l.Size
 	}
-	// Compute total bytes-in as the bytes written to the WAL + bytes ingested
+	// Compute total bytes-in as the bytes written to the WAL + bytes ingested.
 	total.BytesIn = m.WAL.BytesWritten + total.BytesIngested
 	// Add the total bytes-in to the total bytes-flushed. This is to account for
 	// the bytes written to the log and bytes written externally and then
@@ -272,10 +301,11 @@ func (m *Metrics) String() string {
 	total.format(&buf, "-")
 
 	fmt.Fprintf(&buf, "  flush %9d\n", m.Flush.Count)
-	fmt.Fprintf(&buf, "compact %9d %7s %7s  (size == estimated-debt)\n",
+	fmt.Fprintf(&buf, "compact %9d %7s %7s %7s  (size == estimated-debt, in = in-progress-bytes)\n",
 		m.Compact.Count,
 		humanize.IEC.Uint64(m.Compact.EstimatedDebt),
-		"")
+		"",
+		humanize.IEC.Int64(m.Compact.InProgressBytes))
 	fmt.Fprintf(&buf, " memtbl %9d %7s\n",
 		m.MemTable.Count,
 		humanize.IEC.Uint64(m.MemTable.Size))

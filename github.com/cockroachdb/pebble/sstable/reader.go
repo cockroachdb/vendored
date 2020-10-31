@@ -26,7 +26,7 @@ import (
 	"github.com/golang/snappy"
 )
 
-var errCorruptIndexEntry = errors.New("pebble/table: corrupt index entry")
+var errCorruptIndexEntry = base.CorruptionErrorf("pebble/table: corrupt index entry")
 
 const (
 	// Constants for dynamic readahead of data blocks. Note that the size values
@@ -35,8 +35,8 @@ const (
 	minFileReadsForReadahead = 2
 	// TODO(bilal): Have the initial size value be a factor of the block size,
 	// as opposed to a hardcoded value.
-	initialReadaheadSize     = 64 << 10 /* 64KB */
-	maxReadaheadSize         = 512 << 10 /* 512KB */
+	initialReadaheadSize = 64 << 10  /* 64KB */
+	maxReadaheadSize     = 256 << 10 /* 256KB */
 )
 
 // decodeBlockHandle returns the block handle encoded at the start of src, as
@@ -160,6 +160,19 @@ func (i *singleLevelIterator) init(r *Reader, lower, upper []byte) error {
 	}
 	i.dataRS.size = initialReadaheadSize
 	return nil
+}
+
+// setupForCompaction sets up the singleLevelIterator for use with compactionIter.
+// Currently, it skips readahead ramp-up. It should be called after init is called.
+func (i *singleLevelIterator) setupForCompaction() {
+	if i.reader.fs != nil {
+		f, err := i.reader.fs.Open(i.reader.filename, vfs.SequentialReadsOption)
+		if err == nil {
+			// Given that this iterator is for a compaction, we can assume that it
+			// will be read sequentially and we can skip the readahead ramp-up.
+			i.dataRS.sequentialFile = f
+		}
+	}
 }
 
 func (i *singleLevelIterator) resetForReuse() singleLevelIterator {
@@ -419,13 +432,17 @@ func (i *singleLevelIterator) skipForward() (*InternalKey, []byte) {
 			i.data.invalidate()
 			break
 		}
-		if i.loadBlock() {
-			if key, val := i.data.First(); key != nil {
-				if i.blockUpper != nil && i.cmp(key.UserKey, i.blockUpper) >= 0 {
-					return nil, nil
-				}
-				return key, val
+		if !i.loadBlock() {
+			if i.err != nil {
+				break
 			}
+			continue
+		}
+		if key, val := i.data.First(); key != nil {
+			if i.blockUpper != nil && i.cmp(key.UserKey, i.blockUpper) >= 0 {
+				return nil, nil
+			}
+			return key, val
 		}
 	}
 	return nil, nil
@@ -437,16 +454,20 @@ func (i *singleLevelIterator) skipBackward() (*InternalKey, []byte) {
 			i.data.invalidate()
 			break
 		}
-		if i.loadBlock() {
-			key, val := i.data.Last()
-			if key == nil {
-				return nil, nil
+		if !i.loadBlock() {
+			if i.err != nil {
+				break
 			}
-			if i.blockLower != nil && i.cmp(key.UserKey, i.blockLower) < 0 {
-				return nil, nil
-			}
-			return key, val
+			continue
 		}
+		key, val := i.data.Last()
+		if key == nil {
+			return nil, nil
+		}
+		if i.blockLower != nil && i.cmp(key.UserKey, i.blockLower) < 0 {
+			return nil, nil
+		}
+		return key, val
 	}
 	return nil, nil
 }
@@ -490,6 +511,10 @@ func (i *singleLevelIterator) Close() error {
 	}
 	err = firstError(err, i.data.Close())
 	err = firstError(err, i.index.Close())
+	if i.dataRS.sequentialFile != nil {
+		err = firstError(err, i.dataRS.sequentialFile.Close())
+		i.dataRS.sequentialFile = nil
+	}
 	err = firstError(err, i.err)
 	*i = i.resetForReuse()
 	singleLevelIterPool.Put(i)
@@ -564,10 +589,14 @@ func (i *compactionIterator) skipForward(key *InternalKey, val []byte) (*Interna
 			if key, _ := i.index.Next(); key == nil {
 				break
 			}
-			if i.loadBlock() {
-				if key, val = i.data.First(); key != nil {
+			if !i.loadBlock() {
+				if i.err != nil {
 					break
 				}
+				continue
+			}
+			if key, val = i.data.First(); key != nil {
+				break
 			}
 		}
 	}
@@ -601,7 +630,7 @@ func (i *twoLevelIterator) loadIndex() bool {
 	}
 	h, n := decodeBlockHandle(i.topLevelIndex.Value())
 	if n == 0 || n != len(i.topLevelIndex.Value()) {
-		i.err = errors.New("pebble/table: corrupt top level index entry")
+		i.err = base.CorruptionErrorf("pebble/table: corrupt top level index entry")
 		return false
 	}
 	indexBlock, err := i.reader.readBlock(h, nil /* transform */, nil /* readaheadState */)
@@ -783,6 +812,9 @@ func (i *twoLevelIterator) Prev() (*InternalKey, []byte) {
 
 func (i *twoLevelIterator) skipForward() (*InternalKey, []byte) {
 	for {
+		if i.err != nil {
+			return nil, nil
+		}
 		if i.singleLevelIterator.valid() {
 			// The iterator is positioned at valid record in the current data block
 			// which implies the previous positioning call reached the upper bound.
@@ -804,6 +836,9 @@ func (i *twoLevelIterator) skipForward() (*InternalKey, []byte) {
 
 func (i *twoLevelIterator) skipBackward() (*InternalKey, []byte) {
 	for {
+		if i.err != nil {
+			return nil, nil
+		}
 		if i.singleLevelIterator.valid() {
 			// The iterator is positioned at valid record in the current data block
 			// which implies the previous positioning call reached the lower bound.
@@ -833,6 +868,10 @@ func (i *twoLevelIterator) Close() error {
 	err = firstError(err, i.data.Close())
 	err = firstError(err, i.index.Close())
 	err = firstError(err, i.topLevelIndex.Close())
+	if i.dataRS.sequentialFile != nil {
+		err = firstError(err, i.dataRS.sequentialFile.Close())
+		i.dataRS.sequentialFile = nil
+	}
 	err = firstError(err, i.err)
 	*i = twoLevelIterator{
 		singleLevelIterator: i.singleLevelIterator.resetForReuse(),
@@ -934,23 +973,66 @@ type readaheadState struct {
 	// operation. Reads after this limit can benefit from a new call to
 	// Prefetch.
 	limit int64
+	// sequentialFile holds a file descriptor to the same underlying File,
+	// except with fadvise(FADV_SEQUENTIAL) called on it to take advantage of
+	// OS-level readahead. Initialized when the iterator has been consistently
+	// reading blocks in a sequential access pattern. Once this is non-nil,
+	// the other variables in readaheadState don't matter much as we defer
+	// to OS-level readahead.
+	sequentialFile vfs.File
+}
+
+func (rs *readaheadState) recordCacheHit(offset, blockLength int64) {
+	currentReadEnd := offset + blockLength
+	if rs.sequentialFile != nil {
+		// Using OS-level readahead instead, so do nothing.
+		return
+	}
+	if rs.numReads >= minFileReadsForReadahead {
+		if currentReadEnd >= rs.limit && offset <= rs.limit+maxReadaheadSize {
+			// This is a read that would have resulted in a readahead, had it
+			// not been a cache hit.
+			rs.limit = currentReadEnd
+			return
+		}
+		if currentReadEnd < rs.limit-rs.prevSize || offset > rs.limit+maxReadaheadSize {
+			// We read too far away from rs.limit to benefit from readahead in
+			// any scenario. Reset all variables.
+			rs.numReads = 1
+			rs.limit = currentReadEnd
+			rs.size = initialReadaheadSize
+			rs.prevSize = 0
+			return
+		}
+		// Reads in the range [rs.limit - rs.prevSize, rs.limit] end up
+		// here. This is a read that is potentially benefitting from a past
+		// readahead.
+		return
+	}
+	if currentReadEnd >= rs.limit && offset <= rs.limit+maxReadaheadSize {
+		// Blocks are being read sequentially and would benefit from readahead
+		// down the line.
+		rs.numReads++
+		return
+	}
+	// We read too far ahead of the last read, or before it. This indicates
+	// a random read, where readahead is not desirable. Reset all variables.
+	rs.numReads = 1
+	rs.limit = currentReadEnd
+	rs.size = initialReadaheadSize
+	rs.prevSize = 0
 }
 
 // maybeReadahead updates state and determines whether to issue a readahead /
 // prefetch call for a block read at offset for blockLength bytes.
 // Returns a size value (greater than 0) that should be prefetched if readahead
 // would be beneficial.
-//
-// TODO(bilal): This method is only called when there's a cache miss. Reads
-// from the cache are completely invisible to the logic here and the state
-// variables in readaheadState. This is a big reason why the
-// readahead window in this method needs to be optimistic (that reading ahead
-// will generally help) by always extending the window to
-// rs.limit + maxReadaheadSize, to adjust for blocks that appear to be skipped
-// but were actually read from the cache. Update this method or add another
-// method to properly account for cache hits.
 func (rs *readaheadState) maybeReadahead(offset, blockLength int64) int64 {
 	currentReadEnd := offset + blockLength
+	if rs.sequentialFile != nil {
+		// Using OS-level readahead instead, so do nothing.
+		return 0
+	}
 	if rs.numReads >= minFileReadsForReadahead {
 		// The minimum threshold of sequential reads to justify reading ahead
 		// has been reached.
@@ -963,7 +1045,7 @@ func (rs *readaheadState) maybeReadahead(offset, blockLength int64) int64 {
 		// readahead may not be beneficial with a small readahead size, but over
 		// time the readahead size would increase exponentially to make it
 		// beneficial.
-		if currentReadEnd >= rs.limit && offset <= rs.limit + maxReadaheadSize {
+		if currentReadEnd >= rs.limit && offset <= rs.limit+maxReadaheadSize {
 			// We are doing a read in the interval ahead of
 			// the last readahead range. In the diagrams below, ++++ is the last
 			// readahead range, ==== is the range represented by
@@ -997,7 +1079,7 @@ func (rs *readaheadState) maybeReadahead(offset, blockLength int64) int64 {
 			}
 			return rs.prevSize
 		}
-		if currentReadEnd < rs.limit - rs.prevSize || offset > rs.limit + maxReadaheadSize {
+		if currentReadEnd < rs.limit-rs.prevSize || offset > rs.limit+maxReadaheadSize {
 			// The above conditional has rs.limit > rs.prevSize to confirm that
 			// rs.limit - rs.prevSize would not underflow.
 			// We read too far away from rs.limit to benefit from readahead in
@@ -1039,7 +1121,7 @@ func (rs *readaheadState) maybeReadahead(offset, blockLength int64) int64 {
 		rs.numReads++
 		return 0
 	}
-	if currentReadEnd >= rs.limit && offset <= rs.limit + maxReadaheadSize {
+	if currentReadEnd >= rs.limit && offset <= rs.limit+maxReadaheadSize {
 		// Blocks are being read sequentially and would benefit from readahead
 		// down the line.
 		//
@@ -1088,6 +1170,7 @@ func (c Comparers) readerApply(r *Reader) {
 	}
 	if comparer, ok := c[r.Properties.ComparerName]; ok {
 		r.Compare = comparer.Compare
+		r.FormatKey = comparer.FormatKey
 		r.Split = comparer.Split
 	}
 }
@@ -1135,6 +1218,20 @@ func (c *cacheOpts) writerApply(w *Writer) {
 	}
 }
 
+// FileReopenOpt is specified if this reader is allowed to reopen additional
+// file descriptors for this file. Used to take advantage of OS-level readahead.
+type FileReopenOpt struct {
+	FS       vfs.FS
+	Filename string
+}
+
+func (f FileReopenOpt) readerApply(r *Reader) {
+	if r.fs == nil {
+		r.fs = f.FS
+		r.filename = f.Filename
+	}
+}
+
 // rawTombstonesOpt is a Reader open option for specifying that range
 // tombstones returned by Reader.NewRangeDelIter() should not be
 // fragmented. Used by debug tools to get a raw view of the tombstones
@@ -1157,6 +1254,8 @@ func init() {
 // Reader is a table reader.
 type Reader struct {
 	file              vfs.File
+	fs                vfs.FS
+	filename          string
 	cacheID           uint64
 	fileNum           base.FileNum
 	rawTombstones     bool
@@ -1170,6 +1269,7 @@ type Reader struct {
 	footerBH          BlockHandle
 	opts              ReaderOptions
 	Compare           Compare
+	FormatKey         base.FormatKey
 	Split             Split
 	mergerOK          bool
 	tableFilter       *tableFilterReader
@@ -1281,6 +1381,7 @@ func (r *Reader) NewCompactionIter(bytesIterated *uint64) (Iterator, error) {
 		if err != nil {
 			return nil, err
 		}
+		i.setupForCompaction()
 		return &twoLevelCompactionIterator{
 			twoLevelIterator: i,
 			bytesIterated:    bytesIterated,
@@ -1291,16 +1392,17 @@ func (r *Reader) NewCompactionIter(bytesIterated *uint64) (Iterator, error) {
 	if err != nil {
 		return nil, err
 	}
+	i.setupForCompaction()
 	return &compactionIterator{
 		singleLevelIterator: i,
 		bytesIterated:       bytesIterated,
 	}, nil
 }
 
-// NewRangeDelIter returns an internal iterator for the contents of the
-// range-del block for the table. Returns nil if the table does not contain any
-// range deletions.
-func (r *Reader) NewRangeDelIter() (base.InternalIterator, error) {
+// NewRawRangeDelIter returns an internal iterator for the contents of the
+// range-del block for the table. Returns nil if the table does not contain
+// any range deletions.
+func (r *Reader) NewRawRangeDelIter() (base.InternalIterator, error) {
 	if r.rangeDelBH.Length == 0 {
 		return nil, nil
 	}
@@ -1328,20 +1430,46 @@ func (r *Reader) readRangeDel() (cache.Handle, error) {
 }
 
 // readBlock reads and decompresses a block from disk into memory.
-func (r *Reader) readBlock(bh BlockHandle, transform blockTransform, raState *readaheadState) (cache.Handle, error) {
+func (r *Reader) readBlock(
+	bh BlockHandle, transform blockTransform, raState *readaheadState,
+) (cache.Handle, error) {
 	if h := r.opts.Cache.Get(r.cacheID, r.fileNum, bh.Offset); h.Get() != nil {
+		if raState != nil {
+			raState.recordCacheHit(int64(bh.Offset), int64(bh.Length+blockTrailerLen))
+		}
 		return h, nil
 	}
+	file := r.file
 
 	if raState != nil {
-		if readaheadSize := raState.maybeReadahead(int64(bh.Offset), int64(bh.Length + blockTrailerLen)); readaheadSize > 0 {
-			_ = vfs.Prefetch(r.file, bh.Offset, uint64(readaheadSize))
+		if raState.sequentialFile != nil {
+			file = raState.sequentialFile
+		} else if readaheadSize := raState.maybeReadahead(int64(bh.Offset), int64(bh.Length+blockTrailerLen)); readaheadSize > 0 {
+			if readaheadSize >= maxReadaheadSize {
+				// We've reached the maximum readahead size. Beyond this
+				// point, rely on OS-level readahead. Note that we can only
+				// reopen a new file handle with this optimization if
+				// r.fs != nil. This reader must have been created with the
+				// FileReopenOpt for this field to be set.
+				if r.fs != nil {
+					f, err := r.fs.Open(r.filename, vfs.SequentialReadsOption)
+					if err == nil {
+						// Use this new file handle for all sequential reads by
+						// this iterator going forward.
+						raState.sequentialFile = f
+						file = f
+					}
+				}
+			}
+			if raState.sequentialFile != nil {
+				_ = vfs.Prefetch(r.file, bh.Offset, uint64(readaheadSize))
+			}
 		}
 	}
 
 	v := r.opts.Cache.Alloc(int(bh.Length + blockTrailerLen))
 	b := v.Buf()
-	if _, err := r.file.ReadAt(b, int64(bh.Offset)); err != nil {
+	if _, err := file.ReadAt(b, int64(bh.Offset)); err != nil {
 		r.opts.Cache.Free(v)
 		return cache.Handle{}, err
 	}
@@ -1350,7 +1478,9 @@ func (r *Reader) readBlock(bh BlockHandle, transform blockTransform, raState *re
 	checksum1 := crc.New(b[:bh.Length+1]).Value()
 	if checksum0 != checksum1 {
 		r.opts.Cache.Free(v)
-		return cache.Handle{}, errors.New("pebble/table: invalid table (checksum mismatch)")
+		return cache.Handle{}, base.CorruptionErrorf(
+			"pebble/table: invalid table %s (checksum mismatch at %d/%d)",
+			errors.Safe(r.fileNum), errors.Safe(bh.Offset), errors.Safe(bh.Length))
 	}
 
 	typ := b[bh.Length]
@@ -1364,7 +1494,7 @@ func (r *Reader) readBlock(bh BlockHandle, transform blockTransform, raState *re
 		decodedLen, err := snappy.DecodedLen(b)
 		if err != nil {
 			r.opts.Cache.Free(v)
-			return cache.Handle{}, err
+			return cache.Handle{}, base.MarkCorruptionError(err)
 		}
 		decoded := r.opts.Cache.Alloc(decodedLen)
 		decodedBuf := decoded.Buf()
@@ -1372,18 +1502,18 @@ func (r *Reader) readBlock(bh BlockHandle, transform blockTransform, raState *re
 		r.opts.Cache.Free(v)
 		if err != nil {
 			r.opts.Cache.Free(decoded)
-			return cache.Handle{}, err
+			return cache.Handle{}, base.MarkCorruptionError(err)
 		}
 		if len(result) != 0 &&
 			(len(result) != len(decodedBuf) || &result[0] != &decodedBuf[0]) {
 			r.opts.Cache.Free(decoded)
-			return cache.Handle{}, errors.Errorf("pebble/table: snappy decoded into unexpected buffer: %p != %p",
+			return cache.Handle{}, base.CorruptionErrorf("pebble/table: snappy decoded into unexpected buffer: %p != %p",
 				errors.Safe(result), errors.Safe(decodedBuf))
 		}
 		v, b = decoded, decodedBuf
 	default:
 		r.opts.Cache.Free(v)
-		return cache.Handle{}, errors.Errorf("pebble/table: unknown block compression: %d", errors.Safe(typ))
+		return cache.Handle{}, base.CorruptionErrorf("pebble/table: unknown block compression: %d", errors.Safe(typ))
 	}
 
 	if transform != nil {
@@ -1429,7 +1559,8 @@ func (r *Reader) transformRangeDelV1(b []byte) ([]byte, error) {
 		restartInterval: 1,
 	}
 	frag := rangedel.Fragmenter{
-		Cmp: r.Compare,
+		Cmp:    r.Compare,
+		Format: r.FormatKey,
 		Emit: func(fragmented []rangedel.Tombstone) {
 			for i := range fragmented {
 				t := &fragmented[i]
@@ -1456,7 +1587,7 @@ func (r *Reader) readMetaindex(metaindexBH BlockHandle) error {
 	defer b.Release()
 
 	if uint64(len(data)) != metaindexBH.Length {
-		return errors.Errorf("pebble/table: unexpected metaindex block size: %d vs %d",
+		return base.CorruptionErrorf("pebble/table: unexpected metaindex block size: %d vs %d",
 			errors.Safe(len(data)), errors.Safe(metaindexBH.Length))
 	}
 
@@ -1469,7 +1600,7 @@ func (r *Reader) readMetaindex(metaindexBH BlockHandle) error {
 	for valid := i.First(); valid; valid = i.Next() {
 		bh, n := decodeBlockHandle(i.Value())
 		if n == 0 {
-			return errors.New("pebble/table: invalid table (bad filter block handle)")
+			return base.CorruptionErrorf("pebble/table: invalid table (bad filter block handle)")
 		}
 		meta[string(i.Key().UserKey)] = bh
 	}
@@ -1515,7 +1646,7 @@ func (r *Reader) readMetaindex(metaindexBH BlockHandle) error {
 				case TableFilter:
 					r.tableFilter = newTableFilterReader(fp)
 				default:
-					return errors.Errorf("unknown filter type: %v", errors.Safe(t.ftype))
+					return base.CorruptionErrorf("unknown filter type: %v", errors.Safe(t.ftype))
 				}
 
 				done = true
@@ -1747,6 +1878,7 @@ func NewReader(f vfs.File, o ReaderOptions, extraOpts ...ReaderOption) (*Reader,
 
 	if r.Properties.ComparerName == "" || o.Comparer.Name == r.Properties.ComparerName {
 		r.Compare = o.Comparer.Compare
+		r.FormatKey = o.Comparer.FormatKey
 		r.Split = o.Comparer.Split
 	}
 

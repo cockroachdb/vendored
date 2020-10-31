@@ -255,6 +255,7 @@ type LogWriter struct {
 	block *block
 	free  struct {
 		sync.Mutex
+		// Condition variable used to signal a block is freed.
 		cond      sync.Cond
 		blocks    []*block
 		allocated int
@@ -415,11 +416,20 @@ func (w *LogWriter) flushLoop(context.Context) {
 		data := w.block.buf[w.block.flushed:written]
 		w.block.flushed = written
 
+		// If flusher has an error, we propagate it to waiters. Note in spite of
+		// error we consume the pending list above to free blocks for writers.
+		if f.err != nil {
+			f.syncQ.pop(head, tail, f.err)
+			continue
+		}
 		f.Unlock()
-
 		synced, err := w.flushPending(data, pending, head, tail)
-
 		f.Lock()
+		f.err = err
+		if f.err != nil {
+			f.syncQ.clearBlocked()
+			continue
+		}
 
 		if synced && f.minSyncInterval != nil {
 			// A sync was performed. Make sure we've waited for the min sync
@@ -435,14 +445,6 @@ func (w *LogWriter) flushLoop(context.Context) {
 					syncTimer.Reset(min)
 				}
 			}
-		}
-
-		f.err = err
-		if f.err != nil {
-			// TODO(peter): There might be new waiters that we should propagate f.err
-			// to. Because f.err is now set, we only have to perform a single extra
-			// clearing of those waiters as no new ones can arrive via SyncRecord().
-			return
 		}
 	}
 }
@@ -528,8 +530,14 @@ func (w *LogWriter) queueBlock() {
 }
 
 // Close flushes and syncs any unwritten data and closes the writer.
+// Where required, external synchronisation is provided by commitPipeline.mu.
 func (w *LogWriter) Close() error {
 	f := &w.flusher
+
+	// Emit an EOF trailer signifying the end of this log. This helps readers
+	// differentiate between a corrupted entry in the middle of a log from
+	// garbage at the tail from a recycled log file.
+	w.emitEOFTrailer()
 
 	// Signal the flush loop to close.
 	f.Lock()
@@ -562,6 +570,7 @@ func (w *LogWriter) Close() error {
 
 // WriteRecord writes a complete record. Returns the offset just past the end
 // of the record.
+// External synchronisation provided by commitPipeline.mu.
 func (w *LogWriter) WriteRecord(p []byte) (int64, error) {
 	return w.SyncRecord(p, nil, nil)
 }
@@ -570,6 +579,7 @@ func (w *LogWriter) WriteRecord(p []byte) (int64, error) {
 // asynchronously persisted to the underlying writer and done will be called on
 // the wait group upon completion. Returns the offset just past the end of the
 // record.
+// External synchronisation provided by commitPipeline.mu.
 func (w *LogWriter) SyncRecord(p []byte, wg *sync.WaitGroup, err *error) (int64, error) {
 	if w.err != nil {
 		return -1, w.err
@@ -603,8 +613,21 @@ func (w *LogWriter) SyncRecord(p []byte, wg *sync.WaitGroup, err *error) (int64,
 }
 
 // Size returns the current size of the file.
+// External synchronisation provided by commitPipeline.mu.
 func (w *LogWriter) Size() int64 {
 	return w.blockNum*blockSize + int64(w.block.written)
+}
+
+func (w *LogWriter) emitEOFTrailer() {
+	// Write a recyclable chunk header with a different log number.  Readers
+	// will treat the header as EOF when the log number does not match.
+	b := w.block
+	i := b.written
+	binary.LittleEndian.PutUint32(b.buf[i+0:i+4], 0) // CRC
+	binary.LittleEndian.PutUint16(b.buf[i+4:i+6], 0) // Size
+	b.buf[i+6] = recyclableFullChunkType
+	binary.LittleEndian.PutUint32(b.buf[i+7:i+11], w.logNum+1) // Log number
+	atomic.StoreInt32(&b.written, i+int32(recyclableHeaderSize))
 }
 
 func (w *LogWriter) emitFragment(n int, p []byte) []byte {

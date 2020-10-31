@@ -112,6 +112,10 @@ type FS interface {
 
 	// PathDir returns all but the last element of path, typically the path's directory.
 	PathDir(path string) string
+
+	// GetFreeSpace returns the amount of free disk space for the filesystem
+	// where path is any file or directory within that filesystem.
+	GetFreeSpace(path string) (uint64, error)
 }
 
 // Default is a FS implementation backed by the underlying operating system's
@@ -191,13 +195,33 @@ type randomReadsOption struct{}
 
 // RandomReadsOption is an OpenOption that optimizes opened file handle for
 // random reads, by calling  fadvise() with POSIX_FADV_RANDOM on Linux systems
-// to disable readahead. Only works when specified to defaultFS.
+// to disable readahead.
 var RandomReadsOption OpenOption = &randomReadsOption{}
 
 // Apply implements the OpenOption interface.
 func (randomReadsOption) Apply(f File) {
-	if osFile, ok := f.(*os.File); ok {
-		_ = fadviseRandom(osFile.Fd())
+	type fd interface {
+		Fd() uintptr
+	}
+	if fdFile, ok := f.(fd); ok {
+		_ = fadviseRandom(fdFile.Fd())
+	}
+}
+
+type sequentialReadsOption struct{}
+
+// SequentialReadsOption is an OpenOption that optimizes opened file handle for
+// sequential reads, by calling fadvise() with POSIX_FADV_SEQUENTIAL on Linux
+// systems to enable readahead.
+var SequentialReadsOption OpenOption = &sequentialReadsOption{}
+
+// Apply implements the OpenOption interface.
+func (sequentialReadsOption) Apply(f File) {
+	type fd interface {
+		Fd() uintptr
+	}
+	if fdFile, ok := f.(fd); ok {
+		_ = fadviseSequential(fdFile.Fd())
 	}
 }
 
@@ -251,7 +275,7 @@ func LinkOrCopy(fs FS, oldname, newname string) error {
 	if err == nil {
 		return nil
 	}
-	// Whitelist a handful of errors which we know won't be fixed by copying the
+	// Permit a handful of errors which we know won't be fixed by copying the
 	// file. Note that we don't check for the specifics of the error code as it
 	// isn't easy to do so in a portable manner. On Unix we'd have to check for
 	// LinkError.Err == syscall.EXDEV. On Windows we'd have to check for

@@ -79,7 +79,7 @@ Check the contents of the MANIFEST files.
 
 func (m *manifestT) printLevels(v *manifest.Version) {
 	for level := range v.Levels {
-		if level == 0 && v.L0Sublevels != nil && len(v.Levels[level]) > 0 {
+		if level == 0 && v.L0Sublevels != nil && !v.Levels[level].Empty() {
 			for sublevel := len(v.L0Sublevels.Levels) - 1; sublevel >= 0; sublevel-- {
 				fmt.Fprintf(stdout, "--- L0.%d ---\n", sublevel)
 				for _, f := range v.L0Sublevels.Levels[sublevel] {
@@ -92,8 +92,8 @@ func (m *manifestT) printLevels(v *manifest.Version) {
 			continue
 		}
 		fmt.Fprintf(stdout, "--- L%d ---\n", level)
-		for j := range v.Levels[level] {
-			f := v.Levels[level][j]
+		iter := v.Levels[level].Iter()
+		for f := iter.First(); f != nil; f = iter.Next() {
 			fmt.Fprintf(stdout, "  %s:%d", f.FileNum, f.Size)
 			formatSeqNumRange(stdout, f.SmallestSeqNum, f.LargestSeqNum)
 			formatKeyRange(stdout, m.fmtKey, &f.Smallest, &f.Largest)
@@ -131,7 +131,10 @@ func (m *manifestT) runDump(cmd *cobra.Command, args []string) {
 					fmt.Fprintf(stdout, "%s\n", err)
 					break
 				}
-				bve.Accumulate(&ve)
+				if err := bve.Accumulate(&ve); err != nil {
+					fmt.Fprintf(stdout, "%s\n", err)
+					break
+				}
 
 				empty := true
 				fmt.Fprintf(stdout, "%d\n", offset)
@@ -242,7 +245,11 @@ func (m *manifestT) runCheck(cmd *cobra.Command, args []string) {
 					break
 				}
 				var bve manifest.BulkVersionEdit
-				bve.Accumulate(&ve)
+				if err := bve.Accumulate(&ve); err != nil {
+					fmt.Fprintf(stderr, "%s\n", err)
+					ok = false
+					return
+				}
 
 				empty := true
 				if ve.ComparerName != "" {

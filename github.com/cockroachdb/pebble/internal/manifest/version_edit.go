@@ -8,7 +8,6 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"io"
 	"sort"
 	"sync/atomic"
@@ -20,7 +19,7 @@ import (
 // TODO(peter): describe the MANIFEST file format, independently of the C++
 // project.
 
-var errCorruptManifest = errors.New("pebble: corrupt manifest")
+var errCorruptManifest = base.CorruptionErrorf("pebble: corrupt manifest")
 
 type byteReader interface {
 	io.ByteReader
@@ -233,7 +232,7 @@ func (v *VersionEdit) Decode(r io.Reader) error {
 					switch customTag {
 					case customTagNeedsCompaction:
 						if len(field) != 1 {
-							return errors.New("new-file4: need-compaction field wrong size")
+							return base.CorruptionErrorf("new-file4: need-compaction field wrong size")
 						}
 						markedForCompaction = (field[0] == 1)
 
@@ -241,15 +240,15 @@ func (v *VersionEdit) Decode(r io.Reader) error {
 						var n int
 						creationTime, n = binary.Uvarint(field)
 						if n != len(field) {
-							return errors.New("new-file4: invalid file creation time")
+							return base.CorruptionErrorf("new-file4: invalid file creation time")
 						}
 
 					case customTagPathID:
-						return errors.New("new-file4: path-id field not supported")
+						return base.CorruptionErrorf("new-file4: path-id field not supported")
 
 					default:
 						if (customTag & customTagNonSafeIgnoreMask) != 0 {
-							return errors.Errorf("new-file4: custom field not supported: %d", customTag)
+							return base.CorruptionErrorf("new-file4: custom field not supported: %d", customTag)
 						}
 					}
 				}
@@ -276,7 +275,7 @@ func (v *VersionEdit) Decode(r io.Reader) error {
 			v.ObsoletePrevLogNum = n
 
 		case tagColumnFamily, tagColumnFamilyAdd, tagColumnFamilyDrop, tagMaxColumnFamily:
-			return errors.New("column families are not supported")
+			return base.CorruptionErrorf("column families are not supported")
 
 		default:
 			return errCorruptManifest
@@ -436,7 +435,7 @@ type BulkVersionEdit struct {
 
 // Accumulate adds the file addition and deletions in the specified version
 // edit to the bulk edit's internal state.
-func (b *BulkVersionEdit) Accumulate(ve *VersionEdit) {
+func (b *BulkVersionEdit) Accumulate(ve *VersionEdit) error {
 	for df := range ve.DeletedFiles {
 		dmap := b.Deleted[df.Level]
 		if dmap == nil {
@@ -451,11 +450,12 @@ func (b *BulkVersionEdit) Accumulate(ve *VersionEdit) {
 		// VersionEdit at the same level (though files can move across levels).
 		if dmap := b.Deleted[nf.Level]; dmap != nil {
 			if _, ok := dmap[nf.Meta.FileNum]; ok {
-				panic(fmt.Sprintf("file deleted %d before it was inserted\n", nf.Meta.FileNum))
+				return base.CorruptionErrorf("file deleted %d before it was inserted\n", nf.Meta.FileNum)
 			}
 		}
 		b.Added[nf.Level] = append(b.Added[nf.Level], nf.Meta)
 	}
+	return nil
 }
 
 // Apply applies the delta b to the current version to produce a new
@@ -501,11 +501,11 @@ func (b *BulkVersionEdit) Apply(
 			if curr == nil {
 				continue
 			}
-			files := curr.Levels[level]
-			v.Levels[level] = files
+			levelMetadata := curr.Levels[level]
+			v.Levels[level] = levelMetadata
 			// We still have to bump the ref count for all files.
-			for i := range files {
-				atomic.AddInt32(&files[i].refs, 1)
+			for i := range levelMetadata.files {
+				atomic.AddInt32(&levelMetadata.files[i].refs, 1)
 			}
 			continue
 		}
@@ -513,17 +513,17 @@ func (b *BulkVersionEdit) Apply(
 		// Some edits on this level.
 		var currFiles []*FileMetadata
 		if curr != nil {
-			currFiles = curr.Levels[level]
+			currFiles = curr.Levels[level].files
 		}
 		addedFiles := b.Added[level]
 		deletedMap := b.Deleted[level]
 		n := len(currFiles) + len(addedFiles)
 		if n == 0 {
-			return nil, nil, errors.Errorf(
+			return nil, nil, base.CorruptionErrorf(
 				"pebble: internal error: No current or added files but have deleted files: %d",
 				errors.Safe(len(deletedMap)))
 		}
-		v.Levels[level] = make([]*FileMetadata, 0, n)
+		v.Levels[level].files = make([]*FileMetadata, 0, n)
 		// We have 2 lists of files, currFiles and addedFiles either of which (but not both) can
 		// be empty.
 		// - currFiles is internally consistent, since it comes from curr.
@@ -553,14 +553,14 @@ func (b *BulkVersionEdit) Apply(
 						continue
 					}
 					atomic.AddInt32(&f.refs, 1)
-					v.Levels[level] = append(v.Levels[level], f)
+					v.Levels[level].files = append(v.Levels[level].files, f)
 				}
 			}
-			SortBySeqNum(v.Levels[level])
+			SortBySeqNum(v.Levels[level].files)
 			if err := v.InitL0Sublevels(cmp, formatKey, flushSplitBytes); err != nil {
 				return nil, nil, errors.Wrap(err, "pebble: internal error")
 			}
-			if err := CheckOrdering(cmp, formatKey, Level(0), v.Levels[level]); err != nil {
+			if err := CheckOrdering(cmp, formatKey, Level(0), v.Levels[level].Iter()); err != nil {
 				return nil, nil, errors.Wrap(err, "pebble: internal error")
 			}
 			continue
@@ -599,10 +599,10 @@ func (b *BulkVersionEdit) Apply(
 				}
 				removeZombie(cf.FileNum)
 				atomic.AddInt32(&cf.refs, 1)
-				v.Levels[level] = append(v.Levels[level], cf)
+				v.Levels[level].files = append(v.Levels[level].files, cf)
 			}
 			currFiles = currFiles[j:]
-			numFiles := len(v.Levels[level])
+			numFiles := len(v.Levels[level].files)
 			if numFiles > 0 {
 				// We expect k to typically be large, and we can avoid doing consistency
 				// checks of the files within that set of k, since they are already mutually
@@ -612,16 +612,16 @@ func (b *BulkVersionEdit) Apply(
 				// its predecessor either came from currFiles or addedFiles, and both are ones
 				// which we need to check against f for consistency (since we have not checked
 				// addedFiles for internal consistency).
-				if base.InternalCompare(cmp, v.Levels[level][numFiles-1].Largest, f.Smallest) >= 0 {
-					cf := v.Levels[level][numFiles-1]
-					return nil, nil, errors.Errorf(
+				if base.InternalCompare(cmp, v.Levels[level].files[numFiles-1].Largest, f.Smallest) >= 0 {
+					cf := v.Levels[level].files[numFiles-1]
+					return nil, nil, base.CorruptionErrorf(
 						"pebble: internal error: L%d files %s and %s have overlapping ranges: [%s-%s] vs [%s-%s]",
 						errors.Safe(level), errors.Safe(cf.FileNum), errors.Safe(f.FileNum),
 						cf.Smallest.Pretty(formatKey), cf.Largest.Pretty(formatKey),
 						f.Smallest.Pretty(formatKey), f.Largest.Pretty(formatKey))
 				}
 			}
-			v.Levels[level] = append(v.Levels[level], f)
+			v.Levels[level].files = append(v.Levels[level].files, f)
 		}
 		// Add any remaining files in currFiles that are after all the added files.
 		for i := range currFiles {
@@ -632,7 +632,7 @@ func (b *BulkVersionEdit) Apply(
 			}
 			removeZombie(f.FileNum)
 			atomic.AddInt32(&f.refs, 1)
-			v.Levels[level] = append(v.Levels[level], f)
+			v.Levels[level].files = append(v.Levels[level].files, f)
 		}
 	}
 	return v, zombies, nil

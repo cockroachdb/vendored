@@ -65,6 +65,7 @@ body {
 #container {
     height: 100vh;
     width: 100%;
+    overflow-y: scroll;
 }
 
 #header {
@@ -248,6 +249,7 @@ let version = {
             levelHeights[0] = sublevelHeight;
         }
         levelOffsets = generateLevelOffsets();
+        vis.style("height", levelOffsets[6] + 100);
     },
 
     onCheckboxChange: function(value) {
@@ -308,7 +310,10 @@ let version = {
             this.sublevels.push([]);
         }
         for (let file of this.levels[0]) {
-            let sublevel = data.Edits[this.index].Sublevels[file];
+            let sublevel = null;
+            for (let i = index; i >= 0 && (sublevel === null || sublevel === undefined); i--) {
+                sublevel = data.Edits[i].Sublevels[file];
+            }
             this.sublevels[sublevel].push(file);
         }
 

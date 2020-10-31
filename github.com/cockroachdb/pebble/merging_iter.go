@@ -31,6 +31,7 @@ type mergingIterLevel struct {
 	// below.
 	smallestUserKey, largestUserKey  []byte
 	isLargestUserKeyRangeDelSentinel bool
+	isSyntheticIterBoundsKey         bool
 
 	// tombstone caches the tombstone rangeDelIter is currently pointed at. If
 	// tombstone.Empty() is true, there are no further tombstones within the
@@ -366,7 +367,33 @@ func (m *mergingIter) switchToMinHeap() {
 		if l == cur {
 			continue
 		}
-		if l.iterKey == nil || l.iterKey.Kind() == base.InternalKeyKindRangeDelete {
+
+		// If the iterator is exhausted, it may be out of bounds if range
+		// deletions modified our search key as we descended. we need to
+		// reposition it within the search bounds. If the current key is a
+		// range tombstone, the iterator might still be exhausted but at a
+		// sstable boundary sentinel. It would be okay to reposition an
+		// interator like this only through successive Next calls, except that
+		// it would violate the levelIter's invariants by causing it to return
+		// a key before the lower bound.
+		//
+		//           bounds = [ f, _ )
+		// L0:   [ b ]          [ f*                   z ]
+		// L1: [ a           |----|        k        y ]
+		// L2:    [  c  (d) ] [ e      g     m ]
+		// L3:             [                    x ]
+		//
+		// * - current key   [] - table bounds () - heap item
+		//
+		// In the above diagram, the L2 iterator is positioned at a sstable
+		// boundary (d) outside the lower bound (f). It arrived here from a
+		// seek whose seek-key was modified by a range tombstone. If we called
+		// Next on the L2 iterator, it would return e, violating its lower
+		// bound.  Instead, we seek it to >= f and Next from there.
+
+		if l.iterKey == nil || (m.lower != nil && l.isSyntheticIterBoundsKey &&
+			l.iterKey.Trailer == InternalKeyRangeDeleteSentinel &&
+			m.heap.cmp(l.iterKey.UserKey, m.lower) <= 0) {
 			if m.lower != nil {
 				l.iterKey, l.iterValue = l.iter.SeekGE(m.lower)
 			} else {
@@ -415,7 +442,33 @@ func (m *mergingIter) switchToMaxHeap() {
 		if l == cur {
 			continue
 		}
-		if l.iterKey == nil || l.iterKey.Kind() == base.InternalKeyKindRangeDelete {
+
+		// If the iterator is exhausted, it may be out of bounds if range
+		// deletions modified our search key as we descended. we need to
+		// reposition it within the search bounds. If the current key is a
+		// range tombstone, the iterator might still be exhausted but at a
+		// sstable boundary sentinel. It would be okay to reposition an
+		// interator like this only through successive Prev calls, except that
+		// it would violate the levelIter's invariants by causing it to return
+		// a key beyond the upper bound.
+		//
+		//           bounds = [ _, g )
+		// L0:   [ b ]          [ f*                   z ]
+		// L1: [ a                |-------| k       y ]
+		// L2:    [  c   d  ]        h [(i)    m ]
+		// L3:             [  e                  x ]
+		//
+		// * - current key   [] - table bounds () - heap item
+		//
+		// In the above diagram, the L2 iterator is positioned at a sstable
+		// boundary (i) outside the upper bound (g). It arrived here from a
+		// seek whose seek-key was modified by a range tombstone. If we called
+		// Prev on the L2 iterator, it would return h, violating its upper
+		// bound.  Instead, we seek it to < g, and Prev from there.
+
+		if l.iterKey == nil || (m.upper != nil && l.isSyntheticIterBoundsKey &&
+			l.iterKey.Trailer == InternalKeyRangeDeleteSentinel &&
+			m.heap.cmp(l.iterKey.UserKey, m.upper) >= 0) {
 			if m.upper != nil {
 				l.iterKey, l.iterValue = l.iter.SeekLT(m.upper)
 			} else {
@@ -560,6 +613,9 @@ func (m *mergingIter) isNextEntryDeleted(item *mergingIterItem) bool {
 func (m *mergingIter) findNextEntry() (*InternalKey, []byte) {
 	for m.heap.len() > 0 && m.err == nil {
 		item := &m.heap.items[0]
+		if m.levels[item.index].isSyntheticIterBoundsKey {
+			break
+		}
 		if m.isNextEntryDeleted(item) {
 			continue
 		}
@@ -702,6 +758,9 @@ func (m *mergingIter) isPrevEntryDeleted(item *mergingIterItem) bool {
 func (m *mergingIter) findPrevEntry() (*InternalKey, []byte) {
 	for m.heap.len() > 0 && m.err == nil {
 		item := &m.heap.items[0]
+		if m.levels[item.index].isSyntheticIterBoundsKey {
+			break
+		}
 		if m.isPrevEntryDeleted(item) {
 			continue
 		}

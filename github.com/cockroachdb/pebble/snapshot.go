@@ -4,7 +4,10 @@
 
 package pebble
 
-import "io"
+import (
+	"io"
+	"math"
+)
 
 // Snapshot provides a read-only point-in-time view of the DB state.
 type Snapshot struct {
@@ -45,16 +48,22 @@ func (s *Snapshot) NewIter(o *IterOptions) *Iterator {
 	return s.db.newIterInternal(nil /* batchIter */, nil /* batchRangeDelIter */, s, o)
 }
 
-// Close closes the snapshot, releasing its resources. Close must be
-// called. Failure to do so while result in a tiny memory leak, and a large
-// leak of resources on disk due to the entries the snapshot is preventing from
-// being deleted.
+// Close closes the snapshot, releasing its resources. Close must be called.
+// Failure to do so will result in a tiny memory leak and a large leak of
+// resources on disk due to the entries the snapshot is preventing from being
+// deleted.
 func (s *Snapshot) Close() error {
 	if s.db == nil {
 		panic(ErrClosed)
 	}
 	s.db.mu.Lock()
 	s.db.mu.snapshots.remove(s)
+
+	// If s was the previous earliest snapshot, we might be able to reclaim
+	// disk space by dropping obsolete records that were pinned by s.
+	if e := s.db.mu.snapshots.earliest(); e > s.seqNum {
+		s.db.maybeScheduleCompactionPicker(pickElisionOnly)
+	}
 	s.db.mu.Unlock()
 	s.db = nil
 	return nil
@@ -71,6 +80,14 @@ func (l *snapshotList) init() {
 
 func (l *snapshotList) empty() bool {
 	return l.root.next == &l.root
+}
+
+func (l *snapshotList) earliest() uint64 {
+	v := uint64(math.MaxUint64)
+	if !l.empty() {
+		v = l.root.next.seqNum
+	}
+	return v
 }
 
 func (l *snapshotList) toSlice() []uint64 {
