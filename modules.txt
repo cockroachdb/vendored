@@ -59,7 +59,7 @@ github.com/Microsoft/go-winio
 github.com/Microsoft/go-winio/pkg/guid
 # github.com/Nvveen/Gotty v0.0.0-20120604004816-cd527374f1e5
 github.com/Nvveen/Gotty
-# github.com/PuerkitoBio/goquery v1.5.0
+# github.com/PuerkitoBio/goquery v1.5.1
 github.com/PuerkitoBio/goquery
 # github.com/Shopify/sarama v1.22.2-0.20190604114437-cd910a683f9f
 github.com/Shopify/sarama
@@ -715,6 +715,10 @@ github.com/twpayne/go-geom/xy/orientation
 github.com/twpayne/go-kml
 # github.com/wadey/gocovmerge v0.0.0-20160331181800-b5bfa59ec0ad
 github.com/wadey/gocovmerge
+# github.com/xdg/scram v0.0.0-20180814205039-7eeb5667e42c
+github.com/xdg/scram
+# github.com/xdg/stringprep v1.0.0
+github.com/xdg/stringprep
 # github.com/zabawaba99/go-gitignore v0.0.0-20200117185801-39e6bddfb292
 github.com/zabawaba99/go-gitignore
 # go.etcd.io/etcd v0.0.0-00010101000000-000000000000 => github.com/cockroachdb/etcd v0.4.7-0.20200615211340-a17df30d5955
@@ -738,7 +742,7 @@ go.opencensus.io/trace
 go.opencensus.io/trace/internal
 go.opencensus.io/trace/propagation
 go.opencensus.io/trace/tracestate
-# golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
+# golang.org/x/crypto v0.0.0-20201016220609-9e8e0b390897
 golang.org/x/crypto/bcrypt
 golang.org/x/crypto/blowfish
 golang.org/x/crypto/chacha20
