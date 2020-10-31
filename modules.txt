@@ -591,11 +591,17 @@ github.com/twpayne/go-geom/encoding/wkb
 github.com/twpayne/go-geom/encoding/wkbcommon
 github.com/twpayne/go-geom/encoding/wkbhex
 github.com/twpayne/go-geom/encoding/wkt
+github.com/twpayne/go-geom/sorting
+github.com/twpayne/go-geom/transform
+github.com/twpayne/go-geom/xy
 github.com/twpayne/go-geom/xy/internal
 github.com/twpayne/go-geom/xy/internal/centralendpoint
 github.com/twpayne/go-geom/xy/internal/hcoords
+github.com/twpayne/go-geom/xy/internal/raycrossing
+github.com/twpayne/go-geom/xy/internal/robustdeterminate
 github.com/twpayne/go-geom/xy/lineintersection
 github.com/twpayne/go-geom/xy/lineintersector
+github.com/twpayne/go-geom/xy/location
 github.com/twpayne/go-geom/xy/orientation
 # github.com/twpayne/go-kml v1.5.0
 github.com/twpayne/go-kml
