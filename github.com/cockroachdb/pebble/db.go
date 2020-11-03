@@ -741,9 +741,7 @@ func (d *DB) newIterInternal(
 	start := len(mlevels)
 	current := readState.current
 	for sl := 0; sl < len(current.L0Sublevels.Levels); sl++ {
-		if !current.L0Sublevels.Levels[sl].Empty() {
-			mlevels = append(mlevels, mergingIterLevel{})
-		}
+		mlevels = append(mlevels, mergingIterLevel{})
 	}
 	for level := 1; level < len(current.Levels); level++ {
 		if current.Levels[level].Empty() {
@@ -755,10 +753,7 @@ func (d *DB) newIterInternal(
 	mlevels = mlevels[start:]
 
 	levels := buf.levels[:]
-	addLevelIterForFiles := func(files manifest.LevelSlice, level manifest.Level) {
-		if files.Empty() {
-			return
-		}
+	addLevelIterForFiles := func(files manifest.LevelIterator, level manifest.Level) {
 		var li *levelIter
 		if len(levels) > 0 {
 			li = &levels[0]
@@ -767,7 +762,7 @@ func (d *DB) newIterInternal(
 			li = &levelIter{}
 		}
 
-		li.init(dbi.opts, d.cmp, d.newIters, files.Iter(), level, nil)
+		li.init(dbi.opts, d.cmp, d.newIters, files, level, nil)
 		li.initRangeDel(&mlevels[0].rangeDelIter)
 		li.initSmallestLargestUserKey(&mlevels[0].smallestUserKey, &mlevels[0].largestUserKey,
 			&mlevels[0].isLargestUserKeyRangeDelSentinel)
@@ -779,12 +774,15 @@ func (d *DB) newIterInternal(
 	// Add level iterators for the L0 sublevels, iterating from newest to
 	// oldest.
 	for i := len(current.L0Sublevels.Levels) - 1; i >= 0; i-- {
-		addLevelIterForFiles(current.L0Sublevels.Levels[i], manifest.L0Sublevel(i))
+		addLevelIterForFiles(current.L0Sublevels.Levels[i].Iter(), manifest.L0Sublevel(i))
 	}
 
 	// Add level iterators for the non-empty non-L0 levels.
 	for level := 1; level < len(current.Levels); level++ {
-		addLevelIterForFiles(current.Levels[level].Slice(), manifest.Level(level))
+		if current.Levels[level].Empty() {
+			continue
+		}
+		addLevelIterForFiles(current.Levels[level].Iter(), manifest.Level(level))
 	}
 
 	buf.merging.init(&dbi.opts, d.cmp, finalMLevels...)
@@ -945,7 +943,8 @@ func (d *DB) Compact(
 	maxLevelWithFiles := 1
 	cur := d.mu.versions.currentVersion()
 	for level := 0; level < numLevels; level++ {
-		if !cur.Overlaps(level, d.cmp, start, end).Empty() {
+		overlaps := cur.Overlaps(level, d.cmp, start, end)
+		if !overlaps.Empty() {
 			maxLevelWithFiles = level + 1
 		}
 	}
@@ -1100,14 +1099,14 @@ type sstablesOptions struct {
 }
 
 // SSTablesOption set optional parameter used by `DB.SSTables`.
-type SSTablesOption func (*sstablesOptions)
+type SSTablesOption func(*sstablesOptions)
 
 // WithProperties enable return sstable properties in each TableInfo.
 //
 // NOTE: if most of the sstable properties need to be read from disk,
 // this options may make method `SSTables` quite slow.
 func WithProperties() SSTablesOption {
-	return func (opt *sstablesOptions) {
+	return func(opt *sstablesOptions) {
 		opt.withProperties = true
 	}
 }
@@ -1198,7 +1197,8 @@ func (d *DB) EstimateDiskUsage(start, end []byte) (uint64, error) {
 			// We can only use `Overlaps` to restrict `files` at L1+ since at L0 it
 			// expands the range iteratively until it has found a set of files that
 			// do not overlap any other L0 files outside that set.
-			iter = readState.current.Overlaps(level, d.opts.Comparer.Compare, start, end).Iter()
+			overlaps := readState.current.Overlaps(level, d.opts.Comparer.Compare, start, end)
+			iter = overlaps.Iter()
 		}
 		for file := iter.First(); file != nil; file = iter.Next() {
 			if d.opts.Comparer.Compare(start, file.Smallest.UserKey) <= 0 &&

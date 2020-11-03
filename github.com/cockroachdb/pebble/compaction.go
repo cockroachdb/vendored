@@ -688,7 +688,8 @@ func (c *compaction) setupInuseKeyRanges() {
 	// levels.
 	var input []userKeyRange
 	for ; level < numLevels; level++ {
-		iter := c.version.Overlaps(level, c.cmp, c.smallest.UserKey, c.largest.UserKey).Iter()
+		overlaps := c.version.Overlaps(level, c.cmp, c.smallest.UserKey, c.largest.UserKey)
+		iter := overlaps.Iter()
 		for m := iter.First(); m != nil; m = iter.Next() {
 			input = append(input, userKeyRange{m.Smallest.UserKey, m.Largest.UserKey})
 		}
@@ -911,7 +912,7 @@ func (c *compaction) newInputIter(newIters tableNewIters) (_ internalIterator, r
 	newRangeDelIter := func(
 		f manifest.LevelFile, _ *IterOptions, bytesIterated *uint64,
 	) (internalIterator, internalIterator, error) {
-		iter, rangeDelIter, err := newIters(f, nil /* iter options */, &c.bytesIterated)
+		iter, rangeDelIter, err := newIters(f.FileMetadata, nil /* iter options */, &c.bytesIterated)
 		if err == nil {
 			// TODO(peter): It is mildly wasteful to open the point iterator only to
 			// immediately close it. One way to solve this would be to add new
@@ -1010,7 +1011,7 @@ func (c *compaction) newInputIter(newIters tableNewIters) (_ internalIterator, r
 	} else {
 		iter := c.startLevel.files.Iter()
 		for f := iter.First(); f != nil; f = iter.Next() {
-			iter, rangeDelIter, err := newIters(iter.Take(), nil /* iter options */, &c.bytesIterated)
+			iter, rangeDelIter, err := newIters(iter.Current(), nil /* iter options */, &c.bytesIterated)
 			if err != nil {
 				return nil, errors.Wrapf(err, "pebble: could not open table %s", errors.Safe(f.FileNum))
 			}
@@ -1667,8 +1668,9 @@ func checkDeleteCompactionHints(
 		// The hint h will be resolved and dropped, regardless of whether
 		// there are any tables that can be deleted.
 		for l := h.tombstoneLevel + 1; l < numLevels; l++ {
-			overlaps := v.Overlaps(l, cmp, h.start, h.end).Iter()
-			for m := overlaps.First(); m != nil; m = overlaps.Next() {
+			overlaps := v.Overlaps(l, cmp, h.start, h.end)
+			iter := overlaps.Iter()
+			for m := iter.First(); m != nil; m = iter.Next() {
 				if m.Compacting || !h.canDelete(cmp, m, snapshots) || files[m] {
 					continue
 				}
@@ -2029,7 +2031,6 @@ func (d *DB) runCompaction(
 		meta.Size = writerMeta.Size
 		meta.SmallestSeqNum = writerMeta.SmallestSeqNum
 		meta.LargestSeqNum = writerMeta.LargestSeqNum
-		meta.MarkedForCompaction = writerMeta.MarkedForCompaction
 		// If the file didn't contain any range deletions, we can fill its
 		// table stats now, avoiding unnecessarily loading the table later.
 		maybeSetStatsFromProperties(meta, &writerMeta.Properties)

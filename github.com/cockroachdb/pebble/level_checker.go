@@ -373,7 +373,7 @@ func checkRangeTombstones(c *checkConfig) error {
 			lf := files.Take()
 			atomicUnit, _ := expandToAtomicUnit(c.cmp, lf.Slice())
 			lower, upper := manifest.KeyRange(c.cmp, atomicUnit.Iter())
-			iterToClose, iter, err := c.newIters(lf, nil, nil)
+			iterToClose, iter, err := c.newIters(lf.FileMetadata, nil, nil)
 			if err != nil {
 				return err
 			}
@@ -622,7 +622,7 @@ func checkLevelsInternal(c *checkConfig) (err error) {
 		mlevels = append(mlevels, simpleMergingIterLevel{})
 	}
 	for level := 1; level < len(current.Levels); level++ {
-		if current.Levels[level].Slice().Empty() {
+		if current.Levels[level].Empty() {
 			continue
 		}
 		mlevels = append(mlevels, simpleMergingIterLevel{})
