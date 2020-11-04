@@ -8,8 +8,9 @@ go_library(
     visibility = ["//vendor/honnef.co/go/tools:__subpackages__"],
     deps = [
         "//vendor/golang.org/x/tools/go/analysis",
-        "//vendor/honnef.co/go/tools/internal/passes/buildssa",
+        "//vendor/honnef.co/go/tools/code",
+        "//vendor/honnef.co/go/tools/internal/passes/buildir",
+        "//vendor/honnef.co/go/tools/ir",
         "//vendor/honnef.co/go/tools/lint/lintdsl",
-        "//vendor/honnef.co/go/tools/ssa",
     ],
 )
