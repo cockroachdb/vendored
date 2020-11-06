@@ -1,0 +1,14 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "raycrossing",
+    srcs = ["ray-crossing-counter.go"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/twpayne/go-geom/xy/internal/raycrossing",
+    importpath = "github.com/twpayne/go-geom/xy/internal/raycrossing",
+    visibility = ["//vendor/github.com/twpayne/go-geom/xy:__subpackages__"],
+    deps = [
+        "//vendor/github.com/twpayne/go-geom",
+        "//vendor/github.com/twpayne/go-geom/xy/internal/robustdeterminate",
+        "//vendor/github.com/twpayne/go-geom/xy/location",
+    ],
+)
