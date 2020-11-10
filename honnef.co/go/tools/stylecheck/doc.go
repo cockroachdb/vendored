@@ -1,18 +1,20 @@
 package stylecheck
 
-var docST1000 = `Incorrect or missing package comment
+import "honnef.co/go/tools/lint"
 
-Packages must have a package comment that is formatted according to
+var Docs = map[string]*lint.Documentation{
+	"ST1000": {
+		Title: `Incorrect or missing package comment`,
+		Text: `Packages must have a package comment that is formatted according to
 the guidelines laid out in
-https://github.com/golang/go/wiki/CodeReviewComments#package-comments.
+https://github.com/golang/go/wiki/CodeReviewComments#package-comments.`,
+		Since:      "2019.1",
+		NonDefault: true,
+	},
 
-Available since
-    2019.1, non-default
-`
-
-var docST1001 = `Dot imports are discouraged
-
-Dot imports that aren't in external test packages are discouraged.
+	"ST1001": {
+		Title: `Dot imports are discouraged`,
+		Text: `Dot imports that aren't in external test packages are discouraged.
 
 The dot_import_whitelist option can be used to whitelist certain
 imports.
@@ -35,36 +37,29 @@ Quoting Go Code Review Comments:
     it is not. Except for this one case, do not use import . in your
     programs. It makes the programs much harder to read because it is
     unclear whether a name like Quux is a top-level identifier in the
-    current package or in an imported package.
+    current package or in an imported package.`,
+		Since:   "2019.1",
+		Options: []string{"dot_import_whitelist"},
+	},
 
-Available since
-    2019.1
-
-Options
-    dot_import_whitelist
-`
-
-var docST1003 = `Poorly chosen identifier
-
-Identifiers, such as variable and package names, follow certain rules.
+	"ST1003": {
+		Title: `Poorly chosen identifier`,
+		Text: `Identifiers, such as variable and package names, follow certain rules.
 
 See the following links for details:
 
-    http://golang.org/doc/effective_go.html#package-names
-    http://golang.org/doc/effective_go.html#mixed-caps
-    https://github.com/golang/go/wiki/CodeReviewComments#initialisms
-    https://github.com/golang/go/wiki/CodeReviewComments#variable-names
+- https://golang.org/doc/effective_go.html#package-names
+- https://golang.org/doc/effective_go.html#mixed-caps
+- https://github.com/golang/go/wiki/CodeReviewComments#initialisms
+- https://github.com/golang/go/wiki/CodeReviewComments#variable-names`,
+		Since:      "2019.1",
+		NonDefault: true,
+		Options:    []string{"initialisms"},
+	},
 
-Available since
-    2019.1, non-default
-
-Options
-    initialisms
-`
-
-var docST1005 = `Incorrectly formatted error string
-
-Error strings follow a set of guidelines to ensure uniformity and good
+	"ST1005": {
+		Title: `Incorrectly formatted error string`,
+		Text: `Error strings follow a set of guidelines to ensure uniformity and good
 composability.
 
 Quoting Go Code Review Comments:
@@ -74,15 +69,13 @@ Quoting Go Code Review Comments:
     usually printed following other context. That is, use
     fmt.Errorf("something bad") not fmt.Errorf("Something bad"), so
     that log.Printf("Reading %s: %v", filename, err) formats without a
-    spurious capital letter mid-message.
+    spurious capital letter mid-message.`,
+		Since: "2019.1",
+	},
 
-Available since
-    2019.1
-`
-
-var docST1006 = `Poorly chosen receiver name
-
-Quoting Go Code Review Comments:
+	"ST1006": {
+		Title: `Poorly chosen receiver name`,
+		Text: `Quoting Go Code Review Comments:
 
     The name of a method's receiver should be a reflection of its
     identity; often a one or two letter abbreviation of its type
@@ -94,77 +87,145 @@ Quoting Go Code Review Comments:
     documentary purpose. It can be very short as it will appear on
     almost every line of every method of the type; familiarity admits
     brevity. Be consistent, too: if you call the receiver "c" in one
-    method, don't call it "cl" in another.
+    method, don't call it "cl" in another.`,
+		Since: "2019.1",
+	},
 
-Available since
-    2019.1
-`
+	"ST1008": {
+		Title: `A function's error value should be its last return value`,
+		Text:  `A function's error value should be its last return value.`,
+		Since: `2019.1`,
+	},
 
-var docST1008 = `A function's error value should be its last return value
-
-A function's error value should be its last return value.
-
-Available since
-    2019.1
-`
-
-var docST1011 = `Poorly chosen name for variable of type time.Duration
-
-time.Duration values represent an amount of time, which is represented
+	"ST1011": {
+		Title: `Poorly chosen name for variable of type time.Duration`,
+		Text: `time.Duration values represent an amount of time, which is represented
 as a count of nanoseconds. An expression like 5 * time.Microsecond
 yields the value 5000. It is therefore not appropriate to suffix a
 variable of type time.Duration with any time unit, such as Msec or
-Milli.
+Milli.`,
+		Since: `2019.1`,
+	},
 
-Available since
-    2019.1
-`
+	"ST1012": {
+		Title: `Poorly chosen name for error variable`,
+		Text: `Error variables that are part of an API should be called errFoo or
+ErrFoo.`,
+		Since: "2019.1",
+	},
 
-var docST1012 = `Poorly chosen name for error variable
-
-Error variables that are part of an API should be called errFoo or
-ErrFoo.
-
-Available since
-    2019.1
-`
-
-var docST1013 = `Should use constants for HTTP error codes, not magic numbers
-
-HTTP has a tremendous number of status codes. While some of those are
+	"ST1013": {
+		Title: `Should use constants for HTTP error codes, not magic numbers`,
+		Text: `HTTP has a tremendous number of status codes. While some of those are
 well known (200, 400, 404, 500), most of them are not. The net/http
 package provides constants for all status codes that are part of the
 various specifications. It is recommended to use these constants
 instead of hard-coding magic numbers, to vastly improve the
-readability of your code.
+readability of your code.`,
+		Since:   "2019.1",
+		Options: []string{"http_status_code_whitelist"},
+	},
 
-Available since
-    2019.1
+	"ST1015": {
+		Title: `A switch's default case should be the first or last case`,
+		Since: "2019.1",
+	},
 
-Options
-    http_status_code_whitelist
-`
+	"ST1016": {
+		Title:      `Use consistent method receiver names`,
+		Since:      "2019.1",
+		NonDefault: true,
+	},
 
-var docST1015 = `A switch's default case should be the first or last case
+	"ST1017": {
+		Title: `Don't use Yoda conditions`,
+		Text: `Yoda conditions are conditions of the kind 'if 42 == x', where the
+literal is on the left side of the comparison. These are a common
+idiom in languages in which assignment is an expression, to avoid bugs
+of the kind 'if (x = 42)'. In Go, which doesn't allow for this kind of
+bug, we prefer the more idiomatic 'if x == 42'.`,
+		Since: "2019.2",
+	},
 
-Available since
-    2019.1
-`
+	"ST1018": {
+		Title: `Avoid zero-width and control characters in string literals`,
+		Since: "2019.2",
+	},
 
-var docST1016 = `Use consistent method receiver names
+	"ST1019": {
+		Title: `Importing the same package multiple times`,
+		Text: `Go allows importing the same package multiple times, as long as
+different import aliases are being used. That is, the following
+bit of code is valid:
 
-Available since
-    2019.1, non-default
-`
+import (
+    "fmt"
+    fumpt "fmt"
+    format "fmt"
+    _ "fmt"
+)
 
-var docST1017 = `Don't use Yoda conditions
+However, this is very rarely done on purpose. Usually, it is a
+sign of code that got refactored, accidentally adding duplicate
+import statements. It is also a rarely known feature, which may
+contribute to confusion.
 
-Available since
-    Unreleased
-`
+Do note that sometimes, this feature may be used
+intentionally (see for example
+https://github.com/golang/go/commit/3409ce39bfd7584523b7a8c150a310cea92d879d)
+– if you want to allow this pattern in your code base, you're
+advised to disable this check.`,
+		Since: "2020.1",
+	},
 
-var docST1018 = `Avoid zero-width and control characters in string literals
+	"ST1020": {
+		Title: "The documentation of an exported function should start with the function's name",
+		Text: `Doc comments work best as complete sentences, which
+allow a wide variety of automated presentations. The first sentence
+should be a one-sentence summary that starts with the name being
+declared.
 
-Available since
-    Unreleased
-`
+If every doc comment begins with the name of the item it describes,
+you can use the doc subcommand of the go tool and run the output
+through grep.
+
+See https://golang.org/doc/effective_go.html#commentary for more
+information on how to write good documentation.`,
+		Since:      "2020.1",
+		NonDefault: true,
+	},
+
+	"ST1021": {
+		Title: "The documentation of an exported type should start with type's name",
+		Text: `Doc comments work best as complete sentences, which
+allow a wide variety of automated presentations. The first sentence
+should be a one-sentence summary that starts with the name being
+declared.
+
+If every doc comment begins with the name of the item it describes,
+you can use the doc subcommand of the go tool and run the output
+through grep.
+
+See https://golang.org/doc/effective_go.html#commentary for more
+information on how to write good documentation.`,
+		Since:      "2020.1",
+		NonDefault: true,
+	},
+
+	"ST1022": {
+		Title: "The documentation of an exported variable or constant should start with variable's name",
+		Text: `Doc comments work best as complete sentences, which
+allow a wide variety of automated presentations. The first sentence
+should be a one-sentence summary that starts with the name being
+declared.
+
+If every doc comment begins with the name of the item it describes,
+you can use the doc subcommand of the go tool and run the output
+through grep.
+
+See https://golang.org/doc/effective_go.html#commentary for more
+information on how to write good documentation.`,
+		Since:      "2020.1",
+		NonDefault: true,
+	},
+}
