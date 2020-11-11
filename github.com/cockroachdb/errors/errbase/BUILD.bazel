@@ -4,6 +4,7 @@ go_library(
     name = "errbase",
     srcs = [
         "adapters.go",
+        "adapters_errno.go",
         "decode.go",
         "encode.go",
         "format_error.go",
