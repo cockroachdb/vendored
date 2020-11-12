@@ -4,7 +4,7 @@ go_library(
     name = "unused",
     srcs = [
         "edge.go",
-        "edge_string.go",
+        "edgekind_string.go",
         "implements.go",
         "unused.go",
     ],
