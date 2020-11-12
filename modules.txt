@@ -200,7 +200,7 @@ github.com/cockroachdb/crlfmt/internal/render
 # github.com/cockroachdb/datadriven v1.0.1-0.20201022032720-3e27adf87325
 ## explicit
 github.com/cockroachdb/datadriven
-# github.com/cockroachdb/errors v1.7.5
+# github.com/cockroachdb/errors v1.8.1
 ## explicit
 github.com/cockroachdb/errors
 github.com/cockroachdb/errors/assert
@@ -213,6 +213,7 @@ github.com/cockroachdb/errors/errutil
 github.com/cockroachdb/errors/hintdetail
 github.com/cockroachdb/errors/issuelink
 github.com/cockroachdb/errors/markers
+github.com/cockroachdb/errors/oserror
 github.com/cockroachdb/errors/report
 github.com/cockroachdb/errors/safedetails
 github.com/cockroachdb/errors/secondary
