@@ -1028,7 +1028,6 @@ golang.org/x/tools/go/analysis/singlechecker
 golang.org/x/tools/go/analysis/unitchecker
 golang.org/x/tools/go/ast/astutil
 golang.org/x/tools/go/ast/inspector
-golang.org/x/tools/go/buildutil
 golang.org/x/tools/go/cfg
 golang.org/x/tools/go/gcexportdata
 golang.org/x/tools/go/internal/gcimporter
@@ -1218,7 +1217,7 @@ gopkg.in/yaml.v2
 gopkg.in/yaml.v3
 # gotest.tools v2.2.0+incompatible
 ## explicit
-# honnef.co/go/tools v0.0.1-2019.2.3
+# honnef.co/go/tools v0.0.1-2019.2.3 => honnef.co/go/tools v0.0.0-20190530104931-1f0868a609b7
 ## explicit
 honnef.co/go/tools/arg
 honnef.co/go/tools/cmd/staticcheck
@@ -1264,3 +1263,4 @@ vitess.io/vitess/go/vt/vterrors
 # gopkg.in/yaml.v2 => github.com/cockroachdb/yaml v0.0.0-20180705215940-0e2822948641
 # github.com/knz/go-libedit => github.com/otan-cockroach/go-libedit v1.10.2-0.20201030151939-7cced08450e7
 # go.etcd.io/etcd/pkg/v3 => go.etcd.io/etcd/pkg/v3 v3.0.0-20201109164711-01844fd28560
+# honnef.co/go/tools => honnef.co/go/tools v0.0.0-20190530104931-1f0868a609b7

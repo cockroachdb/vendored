@@ -32,7 +32,6 @@ import (
 	"honnef.co/go/tools/version"
 
 	"golang.org/x/tools/go/analysis"
-	"golang.org/x/tools/go/buildutil"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -104,6 +103,7 @@ func FlagSet(name string) *flag.FlagSet {
 	flags := flag.NewFlagSet("", flag.ExitOnError)
 	flags.Usage = usage(name, flags)
 	flags.String("tags", "", "List of `build tags`")
+	flags.String("ignore", "", "Deprecated: use linter directives instead")
 	flags.Bool("tests", true, "Include tests")
 	flags.Bool("version", false, "Print version and exit")
 	flags.Bool("show-ignored", false, "Don't filter ignored problems")
@@ -112,8 +112,6 @@ func FlagSet(name string) *flag.FlagSet {
 
 	flags.String("debug.cpuprofile", "", "Write CPU profile to `file`")
 	flags.String("debug.memprofile", "", "Write memory profile to `file`")
-	flags.Bool("debug.version", false, "Print detailed version information about this program")
-	flags.Bool("debug.no-compile-errors", false, "Don't print compile errors")
 
 	checks := list{"inherit"}
 	fail := list{"all"}
@@ -142,6 +140,7 @@ func findCheck(cs []*analysis.Analyzer, check string) (*analysis.Analyzer, bool)
 
 func ProcessFlagSet(cs []*analysis.Analyzer, cums []lint.CumulativeChecker, fs *flag.FlagSet) {
 	tags := fs.Lookup("tags").Value.(flag.Getter).Get().(string)
+	ignore := fs.Lookup("ignore").Value.(flag.Getter).Get().(string)
 	tests := fs.Lookup("tests").Value.(flag.Getter).Get().(bool)
 	goVersion := fs.Lookup("go").Value.(flag.Getter).Get().(int)
 	formatter := fs.Lookup("f").Value.(flag.Getter).Get().(string)
@@ -151,8 +150,6 @@ func ProcessFlagSet(cs []*analysis.Analyzer, cums []lint.CumulativeChecker, fs *
 
 	cpuProfile := fs.Lookup("debug.cpuprofile").Value.(flag.Getter).Get().(string)
 	memProfile := fs.Lookup("debug.memprofile").Value.(flag.Getter).Get().(string)
-	debugVersion := fs.Lookup("debug.version").Value.(flag.Getter).Get().(bool)
-	debugNoCompile := fs.Lookup("debug.no-compile-errors").Value.(flag.Getter).Get().(bool)
 
 	cfg := config.Config{}
 	cfg.Checks = *fs.Lookup("checks").Value.(*list)
@@ -179,23 +176,9 @@ func ProcessFlagSet(cs []*analysis.Analyzer, cums []lint.CumulativeChecker, fs *
 		pprof.StartCPUProfile(f)
 	}
 
-	if debugVersion {
-		version.Verbose()
-		exit(0)
-	}
-
 	if printVersion {
 		version.Print()
 		exit(0)
-	}
-
-	// Validate that the tags argument is well-formed. go/packages
-	// doesn't detect malformed build flags and returns unhelpful
-	// errors.
-	tf := buildutil.TagsFlag{}
-	if err := tf.Set(tags); err != nil {
-		fmt.Fprintln(os.Stderr, fmt.Errorf("invalid value %q for flag -tags: %s", tags, err))
-		exit(1)
 	}
 
 	if explain != "" {
@@ -218,8 +201,9 @@ func ProcessFlagSet(cs []*analysis.Analyzer, cums []lint.CumulativeChecker, fs *
 	}
 
 	ps, err := Lint(cs, cums, fs.Args(), &Options{
-		Tags:      tags,
+		Tags:      strings.Fields(tags),
 		LintTests: tests,
+		Ignores:   ignore,
 		GoVersion: goVersion,
 		Config:    cfg,
 	})
@@ -258,9 +242,6 @@ func ProcessFlagSet(cs []*analysis.Analyzer, cums []lint.CumulativeChecker, fs *
 
 	total = len(ps)
 	for _, p := range ps {
-		if p.Check == "compile" && debugNoCompile {
-			continue
-		}
 		if p.Severity == lint.Ignored && !showIgnored {
 			continue
 		}
@@ -278,14 +259,14 @@ func ProcessFlagSet(cs []*analysis.Analyzer, cums []lint.CumulativeChecker, fs *
 	if errors > 0 {
 		exit(1)
 	}
-	exit(0)
 }
 
 type Options struct {
 	Config config.Config
 
-	Tags      string
+	Tags      []string
 	LintTests bool
+	Ignores   string
 	GoVersion int
 }
 
@@ -330,28 +311,25 @@ func Lint(cs []*analysis.Analyzer, cums []lint.CumulativeChecker, paths []string
 	if opt.LintTests {
 		cfg.Tests = true
 	}
-	if opt.Tags != "" {
-		cfg.BuildFlags = append(cfg.BuildFlags, "-tags", opt.Tags)
-	}
 
 	printStats := func() {
 		// Individual stats are read atomically, but overall there
 		// is no synchronisation. For printing rough progress
 		// information, this doesn't matter.
-		switch atomic.LoadUint32(&l.Stats.State) {
+		switch atomic.LoadUint64(&l.Stats.State) {
 		case lint.StateInitializing:
 			fmt.Fprintln(os.Stderr, "Status: initializing")
 		case lint.StateGraph:
 			fmt.Fprintln(os.Stderr, "Status: loading package graph")
 		case lint.StateProcessing:
 			fmt.Fprintf(os.Stderr, "Packages: %d/%d initial, %d/%d total; Workers: %d/%d; Problems: %d\n",
-				atomic.LoadUint32(&l.Stats.ProcessedInitialPackages),
-				atomic.LoadUint32(&l.Stats.InitialPackages),
-				atomic.LoadUint32(&l.Stats.ProcessedPackages),
-				atomic.LoadUint32(&l.Stats.TotalPackages),
-				atomic.LoadUint32(&l.Stats.ActiveWorkers),
-				atomic.LoadUint32(&l.Stats.TotalWorkers),
-				atomic.LoadUint32(&l.Stats.Problems),
+				atomic.LoadUint64(&l.Stats.ProcessedInitialPackages),
+				atomic.LoadUint64(&l.Stats.InitialPackages),
+				atomic.LoadUint64(&l.Stats.ProcessedPackages),
+				atomic.LoadUint64(&l.Stats.TotalPackages),
+				atomic.LoadUint64(&l.Stats.ActiveWorkers),
+				atomic.LoadUint64(&l.Stats.TotalWorkers),
+				atomic.LoadUint64(&l.Stats.Problems),
 			)
 		case lint.StateCumulative:
 			fmt.Fprintln(os.Stderr, "Status: processing cumulative checkers")

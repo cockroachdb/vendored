@@ -13,7 +13,6 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//vendor/golang.org/x/tools/go/analysis",
-        "//vendor/golang.org/x/tools/go/buildutil",
         "//vendor/golang.org/x/tools/go/packages",
         "//vendor/honnef.co/go/tools/config",
         "//vendor/honnef.co/go/tools/internal/cache",

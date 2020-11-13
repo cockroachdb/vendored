@@ -19,7 +19,6 @@ go_library(
         "//vendor/golang.org/x/tools/go/analysis/passes/inspect",
         "//vendor/golang.org/x/tools/go/ast/astutil",
         "//vendor/golang.org/x/tools/go/ast/inspector",
-        "//vendor/golang.org/x/tools/go/types/typeutil",
         "//vendor/honnef.co/go/tools/arg",
         "//vendor/honnef.co/go/tools/deprecated",
         "//vendor/honnef.co/go/tools/facts",
