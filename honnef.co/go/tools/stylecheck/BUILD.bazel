@@ -19,6 +19,7 @@ go_library(
         "//vendor/honnef.co/go/tools/config",
         "//vendor/honnef.co/go/tools/facts",
         "//vendor/honnef.co/go/tools/internal/passes/buildssa",
+        "//vendor/honnef.co/go/tools/lint",
         "//vendor/honnef.co/go/tools/lint/lintdsl",
         "//vendor/honnef.co/go/tools/lint/lintutil",
         "//vendor/honnef.co/go/tools/ssa",

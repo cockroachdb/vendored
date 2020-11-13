@@ -877,13 +877,13 @@ github.com/wadey/gocovmerge
 # github.com/zabawaba99/go-gitignore v0.0.0-20200117185801-39e6bddfb292
 ## explicit
 github.com/zabawaba99/go-gitignore
-# go.etcd.io/etcd v0.0.0-00010101000000-000000000000 => github.com/cockroachdb/etcd v0.4.7-0.20200615211340-a17df30d5955
+# go.etcd.io/etcd/raft/v3 v3.0.0-20201109164711-01844fd28560
 ## explicit
-go.etcd.io/etcd/raft
-go.etcd.io/etcd/raft/confchange
-go.etcd.io/etcd/raft/quorum
-go.etcd.io/etcd/raft/raftpb
-go.etcd.io/etcd/raft/tracker
+go.etcd.io/etcd/raft/v3
+go.etcd.io/etcd/raft/v3/confchange
+go.etcd.io/etcd/raft/v3/quorum
+go.etcd.io/etcd/raft/v3/raftpb
+go.etcd.io/etcd/raft/v3/tracker
 # go.opencensus.io v0.18.0
 go.opencensus.io
 go.opencensus.io/exemplar
@@ -1028,6 +1028,7 @@ golang.org/x/tools/go/analysis/singlechecker
 golang.org/x/tools/go/analysis/unitchecker
 golang.org/x/tools/go/ast/astutil
 golang.org/x/tools/go/ast/inspector
+golang.org/x/tools/go/buildutil
 golang.org/x/tools/go/cfg
 golang.org/x/tools/go/gcexportdata
 golang.org/x/tools/go/internal/gcimporter
@@ -1217,7 +1218,7 @@ gopkg.in/yaml.v2
 gopkg.in/yaml.v3
 # gotest.tools v2.2.0+incompatible
 ## explicit
-# honnef.co/go/tools v0.0.0-20190530104931-1f0868a609b7
+# honnef.co/go/tools v0.0.1-2019.2.3
 ## explicit
 honnef.co/go/tools/arg
 honnef.co/go/tools/cmd/staticcheck
@@ -1261,5 +1262,5 @@ vitess.io/vitess/go/vt/vterrors
 # github.com/abourget/teamcity => github.com/cockroachdb/teamcity v0.0.0-20180905144921-8ca25c33eb11
 # vitess.io/vitess => github.com/cockroachdb/vitess v2.2.0-rc.1.0.20180830030426-1740ce8b3188+incompatible
 # gopkg.in/yaml.v2 => github.com/cockroachdb/yaml v0.0.0-20180705215940-0e2822948641
-# go.etcd.io/etcd => github.com/cockroachdb/etcd v0.4.7-0.20200615211340-a17df30d5955
 # github.com/knz/go-libedit => github.com/otan-cockroach/go-libedit v1.10.2-0.20201030151939-7cced08450e7
+# go.etcd.io/etcd/pkg/v3 => go.etcd.io/etcd/pkg/v3 v3.0.0-20201109164711-01844fd28560
