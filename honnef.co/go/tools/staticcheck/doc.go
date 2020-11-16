@@ -1,39 +1,37 @@
 package staticcheck
 
-var docSA1000 = `Invalid regular expression
+import "honnef.co/go/tools/lint"
 
-Available since
-    2017.1
-`
+var Docs = map[string]*lint.Documentation{
+	"SA1000": {
+		Title: `Invalid regular expression`,
+		Since: "2017.1",
+	},
 
-var docSA1001 = `Invalid template
+	"SA1001": {
+		Title: `Invalid template`,
+		Since: "2017.1",
+	},
 
-Available since
-    2017.1
-`
+	"SA1002": {
+		Title: `Invalid format in time.Parse`,
+		Since: "2017.1",
+	},
 
-var docSA1002 = `Invalid format in time.Parse
-
-Available since
-    2017.1
-`
-
-var docSA1003 = `Unsupported argument to functions in encoding/binary
-
-The encoding/binary package can only serialize types with known sizes.
+	"SA1003": {
+		Title: `Unsupported argument to functions in encoding/binary`,
+		Text: `The encoding/binary package can only serialize types with known sizes.
 This precludes the use of the int and uint types, as their sizes
 differ on different architectures. Furthermore, it doesn't support
 serializing maps, channels, strings, or functions.
 
-Before Go 1.8, bool wasn't supported, either.
+Before Go 1.8, bool wasn't supported, either.`,
+		Since: "2017.1",
+	},
 
-Available since
-    2017.1
-`
-
-var docSA1004 = `Suspiciously small untyped constant in time.Sleep
-
-The time.Sleep function takes a time.Duration as its only argument.
+	"SA1004": {
+		Title: `Suspiciously small untyped constant in time.Sleep`,
+		Text: `The time.Sleep function takes a time.Duration as its only argument.
 Durations are expressed in nanoseconds. Thus, calling time.Sleep(1)
 will sleep for 1 nanosecond. This is a common source of bugs, as sleep
 functions in other languages often accept seconds or milliseconds.
@@ -43,16 +41,14 @@ large durations. These can be combined with arithmetic to express
 arbitrary durations, for example '5 * time.Second' for 5 seconds.
 
 If you truly meant to sleep for a tiny amount of time, use
-'n * time.Nanosecond' to signal to staticcheck that you did mean to sleep
-for some amount of nanoseconds.
+'n * time.Nanosecond' to signal to Staticcheck that you did mean to sleep
+for some amount of nanoseconds.`,
+		Since: "2017.1",
+	},
 
-Available since
-    2017.1
-`
-
-var docSA1005 = `Invalid first argument to exec.Command
-
-os/exec runs programs directly (using variants of the fork and exec
+	"SA1005": {
+		Title: `Invalid first argument to exec.Command`,
+		Text: `os/exec runs programs directly (using variants of the fork and exec
 system calls on Unix systems). This shouldn't be confused with running
 a command in a shell. The shell will allow for features such as input
 redirection, pipes, and general scripting. The shell is also
@@ -69,15 +65,13 @@ If you want to run a command in a shell, consider using something like
 the following – but be aware that not all systems, particularly
 Windows, will have a /bin/sh program:
 
-    exec.Command("/bin/sh", "-c", "ls | grep Awesome")
+    exec.Command("/bin/sh", "-c", "ls | grep Awesome")`,
+		Since: "2017.1",
+	},
 
-Available since
-    2017.1
-`
-
-var docSA1006 = `Printf with dynamic first argument and no further arguments
-
-Using fmt.Printf with a dynamic first argument can lead to unexpected
+	"SA1006": {
+		Title: `Printf with dynamic first argument and no further arguments`,
+		Text: `Using fmt.Printf with a dynamic first argument can lead to unexpected
 output. The first argument is a format string, where certain character
 combinations have special meaning. If, for example, a user were to
 enter a string such as
@@ -95,21 +89,18 @@ it would lead to the following output:
 Similarly, forming the first parameter via string concatenation with
 user input should be avoided for the same reason. When printing user
 input, either use a variant of fmt.Print, or use the %s Printf verb
-and pass the string as an argument.
+and pass the string as an argument.`,
+		Since: "2017.1",
+	},
 
-Available since
-    2017.1
-`
+	"SA1007": {
+		Title: `Invalid URL in net/url.Parse`,
+		Since: "2017.1",
+	},
 
-var docSA1007 = `Invalid URL in net/url.Parse
-
-Available since
-    2017.1
-`
-
-var docSA1008 = `Non-canonical key in http.Header map
-
-Keys in http.Header maps are canonical, meaning they follow a specific
+	"SA1008": {
+		Title: `Non-canonical key in http.Header map`,
+		Text: `Keys in http.Header maps are canonical, meaning they follow a specific
 combination of uppercase and lowercase letters. Methods such as
 http.Header.Add and http.Header.Del convert inputs into this canonical
 form before manipulating the map.
@@ -128,119 +119,98 @@ demonstrates one such inconsistency:
     // map[Etag:[5678] etag:[1234]]
 
 The easiest way of obtaining the canonical form of a key is to use
-http.CanonicalHeaderKey.
+http.CanonicalHeaderKey.`,
+		Since: "2017.1",
+	},
 
-Available since
-    2017.1
-`
+	"SA1010": {
+		Title: `(*regexp.Regexp).FindAll called with n == 0, which will always return zero results`,
+		Text: `If n >= 0, the function returns at most n matches/submatches. To
+return all results, specify a negative number.`,
+		Since: "2017.1",
+	},
 
-var docSA1010 = `(*regexp.Regexp).FindAll called with n == 0, which will always return zero results
+	"SA1011": {
+		Title: `Various methods in the strings package expect valid UTF-8, but invalid input is provided`,
+		Since: "2017.1",
+	},
 
-If n >= 0, the function returns at most n matches/submatches. To
-return all results, specify a negative number.
+	"SA1012": {
+		Title: `A nil context.Context is being passed to a function, consider using context.TODO instead`,
+		Since: "2017.1",
+	},
 
-Available since
-    2017.1
-`
+	"SA1013": {
+		Title: `io.Seeker.Seek is being called with the whence constant as the first argument, but it should be the second`,
+		Since: "2017.1",
+	},
 
-var docSA1011 = `Various methods in the strings package expect valid UTF-8, but invalid input is provided
+	"SA1014": {
+		Title: `Non-pointer value passed to Unmarshal or Decode`,
+		Since: "2017.1",
+	},
 
-Available since
-    2017.1
-`
+	"SA1015": {
+		Title: `Using time.Tick in a way that will leak. Consider using time.NewTicker, and only use time.Tick in tests, commands and endless functions`,
+		Since: "2017.1",
+	},
 
-var docSA1012 = `A nil context.Context is being passed to a function, consider using context.TODO instead
-
-Available since
-    2017.1
-`
-
-var docSA1013 = `io.Seeker.Seek is being called with the whence constant as the first argument, but it should be the second
-
-Available since
-    2017.1
-`
-
-var docSA1014 = `Non-pointer value passed to Unmarshal or Decode
-
-Available since
-    2017.1
-`
-
-var docSA1015 = `Using time.Tick in a way that will leak. Consider using time.NewTicker, and only use time.Tick in tests, commands and endless functions
-
-Available since
-    2017.1
-`
-
-var docSA1016 = `Trapping a signal that cannot be trapped
-
-Not all signals can be intercepted by a process. Speficially, on
+	"SA1016": {
+		Title: `Trapping a signal that cannot be trapped`,
+		Text: `Not all signals can be intercepted by a process. Speficially, on
 UNIX-like systems, the syscall.SIGKILL and syscall.SIGSTOP signals are
 never passed to the process, but instead handled directly by the
-kernel. It is therefore pointless to try and handle these signals.
+kernel. It is therefore pointless to try and handle these signals.`,
+		Since: "2017.1",
+	},
 
-Available since
-    2017.1
-`
-
-var docSA1017 = `Channels used with os/signal.Notify should be buffered
-
-The os/signal package uses non-blocking channel sends when delivering
+	"SA1017": {
+		Title: `Channels used with os/signal.Notify should be buffered`,
+		Text: `The os/signal package uses non-blocking channel sends when delivering
 signals. If the receiving end of the channel isn't ready and the
 channel is either unbuffered or full, the signal will be dropped. To
 avoid missing signals, the channel should be buffered and of the
 appropriate size. For a channel used for notification of just one
-signal value, a buffer of size 1 is sufficient.
+signal value, a buffer of size 1 is sufficient.`,
+		Since: "2017.1",
+	},
 
-Available since
-    2017.1
-`
+	"SA1018": {
+		Title: `strings.Replace called with n == 0, which does nothing`,
+		Text: `With n == 0, zero instances will be replaced. To replace all
+instances, use a negative number, or use strings.ReplaceAll.`,
+		Since: "2017.1",
+	},
 
-var docSA1018 = `strings.Replace called with n == 0, which does nothing
+	"SA1019": {
+		Title: `Using a deprecated function, variable, constant or field`,
+		Since: "2017.1",
+	},
 
-With n == 0, zero instances will be replaced. To replace all
-instances, use a negative number, or use strings.ReplaceAll.
+	"SA1020": {
+		Title: `Using an invalid host:port pair with a net.Listen-related function`,
+		Since: "2017.1",
+	},
 
-Available since
-    2017.1
-`
-
-var docSA1019 = `Using a deprecated function, variable, constant or field
-
-Available since
-    2017.1
-`
-
-var docSA1020 = `Using an invalid host:port pair with a net.Listen-related function
-
-Available since
-    2017.1
-`
-
-var docSA1021 = `Using bytes.Equal to compare two net.IP
-
-A net.IP stores an IPv4 or IPv6 address as a slice of bytes. The
+	"SA1021": {
+		Title: `Using bytes.Equal to compare two net.IP`,
+		Text: `A net.IP stores an IPv4 or IPv6 address as a slice of bytes. The
 length of the slice for an IPv4 address, however, can be either 4 or
 16 bytes long, using different ways of representing IPv4 addresses. In
 order to correctly compare two net.IPs, the net.IP.Equal method should
-be used, as it takes both representations into account.
+be used, as it takes both representations into account.`,
+		Since: "2017.1",
+	},
 
-Available since
-    2017.1
-`
+	"SA1023": {
+		Title: `Modifying the buffer in an io.Writer implementation`,
+		Text:  `Write must not modify the slice data, even temporarily.`,
+		Since: "2017.1",
+	},
 
-var docSA1023 = `Modifying the buffer in an io.Writer implementation
-
-Write must not modify the slice data, even temporarily.
-
-Available since
-    2017.1
-`
-
-var docSA1024 = `A string cutset contains duplicate characters
-
-The strings.TrimLeft and strings.TrimRight functions take cutsets, not
+	"SA1024": {
+		Title: `A string cutset contains duplicate characters`,
+		Text: `The strings.TrimLeft and strings.TrimRight functions take cutsets, not
 prefixes. A cutset is treated as a set of characters to remove from a
 string. For example,
 
@@ -249,47 +219,60 @@ string. For example,
 will result in the string "word" – any characters that are 1, 2, 3 or
 4 are cut from the left of the string.
 
-In order to remove one string from another, use strings.TrimPrefix instead.
+In order to remove one string from another, use strings.TrimPrefix instead.`,
+		Since: "2017.1",
+	},
 
-Available since
-    2017.1
-`
+	"SA1025": {
+		Title: `It is not possible to use (*time.Timer).Reset's return value correctly`,
+		Since: "2019.1",
+	},
 
-var docSA1025 = `It is not possible to use (*time.Timer).Reset's return value correctly
+	"SA1026": {
+		Title: `Cannot marshal channels or functions`,
+		Since: "2019.2",
+	},
 
-Available since
-    2019.1
-`
-
-var docSA1026 = `Cannot marshal channels or functions
-
-Available since
-    Unreleased
-`
-
-var docSA1027 = `Atomic access to 64-bit variable must be 64-bit aligned
-
-On ARM, x86-32, and 32-bit MIPS, it is the caller's responsibility to
+	"SA1027": {
+		Title: `Atomic access to 64-bit variable must be 64-bit aligned`,
+		Text: `On ARM, x86-32, and 32-bit MIPS, it is the caller's responsibility to
 arrange for 64-bit alignment of 64-bit words accessed atomically. The
 first word in a variable or in an allocated struct, array, or slice
 can be relied upon to be 64-bit aligned.
 
 You can use the structlayout tool to inspect the alignment of fields
-in a struct.
+in a struct.`,
+		Since: "2019.2",
+	},
 
-Available since
-    Unreleased
-`
+	"SA1028": {
+		Title: `sort.Slice can only be used on slices`,
+		Text:  `The first argument of sort.Slice must be a slice.`,
+		Since: "2020.1",
+	},
 
-var docSA2000 = `sync.WaitGroup.Add called inside the goroutine, leading to a race condition
+	"SA1029": {
+		Title: `Inappropriate key in call to context.WithValue`,
+		Text: `The provided key must be comparable and should not be
+of type string or any other built-in type to avoid collisions between
+packages using context. Users of WithValue should define their own
+types for keys.
 
-Available since
-    2017.1
-`
+To avoid allocating when assigning to an interface{},
+context keys often have concrete type struct{}. Alternatively,
+exported context key variables' static type should be a pointer or
+interface.`,
+		Since: "2020.1",
+	},
 
-var docSA2001 = `Empty critical section, did you mean to defer the unlock?
+	"SA2000": {
+		Title: `sync.WaitGroup.Add called inside the goroutine, leading to a race condition`,
+		Since: "2017.1",
+	},
 
-Empty critical sections of the kind
+	"SA2001": {
+		Title: `Empty critical section, did you mean to defer the unlock?`,
+		Text: `Empty critical sections of the kind
 
     mu.Lock()
     mu.Unlock()
@@ -304,166 +287,138 @@ form of signaling to wait on another goroutine. Many times, there are
 simpler ways of achieving the same effect. When that isn't the case,
 the code should be amply commented to avoid confusion. Combining such
 comments with a //lint:ignore directive can be used to suppress this
-rare false positive.
+rare false positive.`,
+		Since: "2017.1",
+	},
 
-Available since
-    2017.1
-`
+	"SA2002": {
+		Title: `Called testing.T.FailNow or SkipNow in a goroutine, which isn't allowed`,
+		Since: "2017.1",
+	},
 
-var docSA2002 = `Called testing.T.FailNow or SkipNow in a goroutine, which isn't allowed
+	"SA2003": {
+		Title: `Deferred Lock right after locking, likely meant to defer Unlock instead`,
+		Since: "2017.1",
+	},
 
-Available since
-    2017.1
-`
-
-var docSA2003 = `Deferred Lock right after locking, likely meant to defer Unlock instead
-
-Available since
-    2017.1
-`
-
-var docSA3000 = `TestMain doesn't call os.Exit, hiding test failures
-
-Test executables (and in turn 'go test') exit with a non-zero status
+	"SA3000": {
+		Title: `TestMain doesn't call os.Exit, hiding test failures`,
+		Text: `Test executables (and in turn 'go test') exit with a non-zero status
 code if any tests failed. When specifying your own TestMain function,
 it is your responsibility to arrange for this, by calling os.Exit with
 the correct code. The correct code is returned by (*testing.M).Run, so
 the usual way of implementing TestMain is to end it with
-os.Exit(m.Run()).
+os.Exit(m.Run()).`,
+		Since: "2017.1",
+	},
 
-Available since
-    2017.1
-`
-
-var docSA3001 = `Assigning to b.N in benchmarks distorts the results
-
-The testing package dynamically sets b.N to improve the reliability of
+	"SA3001": {
+		Title: `Assigning to b.N in benchmarks distorts the results`,
+		Text: `The testing package dynamically sets b.N to improve the reliability of
 benchmarks and uses it in computations to determine the duration of a
 single operation. Benchmark code must not alter b.N as this would
-falsify results.
+falsify results.`,
+		Since: "2017.1",
+	},
 
-Available since
-    2017.1
-`
+	"SA4000": {
+		Title: `Boolean expression has identical expressions on both sides`,
+		Since: "2017.1",
+	},
 
-var docSA4000 = `Boolean expression has identical expressions on both sides
+	"SA4001": {
+		Title: `&*x gets simplified to x, it does not copy x`,
+		Since: "2017.1",
+	},
 
-Available since
-    2017.1
-`
+	"SA4002": {
+		Title: `Comparing strings with known different sizes has predictable results`,
+		Since: "2017.1",
+	},
 
-var docSA4001 = `&*x gets simplified to x, it does not copy x
+	"SA4003": {
+		Title: `Comparing unsigned values against negative values is pointless`,
+		Since: "2017.1",
+	},
 
-Available since
-    2017.1
-`
+	"SA4004": {
+		Title: `The loop exits unconditionally after one iteration`,
+		Since: "2017.1",
+	},
 
-var docSA4002 = `Comparing strings with known different sizes has predictable results
+	"SA4005": {
+		Title: `Field assignment that will never be observed. Did you mean to use a pointer receiver?`,
+		Since: "2017.1",
+	},
 
-Available since
-    2017.1
-`
+	"SA4006": {
+		Title: `A value assigned to a variable is never read before being overwritten. Forgotten error check or dead code?`,
+		Since: "2017.1",
+	},
 
-var docSA4003 = `Comparing unsigned values against negative values is pointless
+	"SA4008": {
+		Title: `The variable in the loop condition never changes, are you incrementing the wrong variable?`,
+		Since: "2017.1",
+	},
 
-Available since
-    2017.1
-`
+	"SA4009": {
+		Title: `A function argument is overwritten before its first use`,
+		Since: "2017.1",
+	},
 
-var docSA4004 = `The loop exits unconditionally after one iteration
+	"SA4010": {
+		Title: `The result of append will never be observed anywhere`,
+		Since: "2017.1",
+	},
 
-Available since
-    2017.1
-`
+	"SA4011": {
+		Title: `Break statement with no effect. Did you mean to break out of an outer loop?`,
+		Since: "2017.1",
+	},
 
-//lint:ignore U1000 This check is currently disabled
-var docSA4005 = `Field assignment that will never be observed. Did you mean to use a pointer receiver?
+	"SA4012": {
+		Title: `Comparing a value against NaN even though no value is equal to NaN`,
+		Since: "2017.1",
+	},
 
-Available since
-    2017.1
-`
+	"SA4013": {
+		Title: `Negating a boolean twice (!!b) is the same as writing b. This is either redundant, or a typo.`,
+		Since: "2017.1",
+	},
 
-var docSA4006 = `A value assigned to a variable is never read before being overwritten. Forgotten error check or dead code?
+	"SA4014": {
+		Title: `An if/else if chain has repeated conditions and no side-effects; if the condition didn't match the first time, it won't match the second time, either`,
+		Since: "2017.1",
+	},
 
-Available since
-    2017.1
-`
+	"SA4015": {
+		Title: `Calling functions like math.Ceil on floats converted from integers doesn't do anything useful`,
+		Since: "2017.1",
+	},
 
-var docSA4008 = `The variable in the loop condition never changes, are you incrementing the wrong variable?
+	"SA4016": {
+		Title: `Certain bitwise operations, such as x ^ 0, do not do anything useful`,
+		Since: "2017.1",
+	},
 
-Available since
-    2017.1
-`
+	"SA4017": {
+		Title: `A pure function's return value is discarded, making the call pointless`,
+		Since: "2017.1",
+	},
 
-var docSA4009 = `A function argument is overwritten before its first use
+	"SA4018": {
+		Title: `Self-assignment of variables`,
+		Since: "2017.1",
+	},
 
-Available since
-    2017.1
-`
+	"SA4019": {
+		Title: `Multiple, identical build constraints in the same file`,
+		Since: "2017.1",
+	},
 
-var docSA4010 = `The result of append will never be observed anywhere
-
-Available since
-    2017.1
-`
-
-var docSA4011 = `Break statement with no effect. Did you mean to break out of an outer loop?
-
-Available since
-    2017.1
-`
-
-var docSA4012 = `Comparing a value against NaN even though no value is equal to NaN
-
-Available since
-    2017.1
-`
-
-var docSA4013 = `Negating a boolean twice (!!b) is the same as writing b. This is either redundant, or a typo.
-
-Available since
-    2017.1
-`
-
-var docSA4014 = `An if/else if chain has repeated conditions and no side-effects; if the condition didn't match the first time, it won't match the second time, either
-
-Available since
-    2017.1
-`
-
-var docSA4015 = `Calling functions like math.Ceil on floats converted from integers doesn't do anything useful
-
-Available since
-    2017.1
-`
-
-var docSA4016 = `Certain bitwise operations, such as x ^ 0, do not do anything useful
-
-Available since
-    2017.1
-`
-
-var docSA4017 = `A pure function's return value is discarded, making the call pointless
-
-Available since
-    2017.1
-`
-
-var docSA4018 = `Self-assignment of variables
-
-Available since
-    2017.1
-`
-
-var docSA4019 = `Multiple, identical build constraints in the same file
-
-Available since
-    2017.1
-`
-
-var docSA4020 = `Unreachable case clause in a type switch
-
-In a type switch like the following
+	"SA4020": {
+		Title: `Unreachable case clause in a type switch`,
+		Text: `In a type switch like the following
 
     type T struct{}
     func (T) Read(b []byte) (int, error) { return 0, nil }
@@ -498,7 +453,7 @@ Another example:
 Even though T has a Close method and thus implements io.ReadCloser,
 io.Reader will always match first. The method set of io.Reader is a
 subset of io.ReadCloser. Thus it is impossible to match the second
-case without mtching the first case.
+case without matching the first case.
 
 
 Structurally equivalent interfaces
@@ -528,55 +483,52 @@ the following type switch will have an unreachable case clause:
     }
 
 T will always match before V because they are structurally equivalent
-and therefore doSomething()'s return value implements both.
+and therefore doSomething()'s return value implements both.`,
+		Since: "2019.2",
+	},
 
-Available since
-    Unreleased
-`
+	"SA4021": {
+		Title: `x = append(y) is equivalent to x = y`,
+		Since: "2019.2",
+	},
 
-var docSA4021 = `x = append(y) is equivalent to x = y
+	"SA4022": {
+		Title: `Comparing the address of a variable against nil`,
+		Text:  `Code such as 'if &x == nil' is meaningless, because taking the address of a variable always yields a non-nil pointer.`,
+		Since: "2020.1",
+	},
 
-Available since
-    Unreleased
-`
+	"SA5000": {
+		Title: `Assignment to nil map`,
+		Since: "2017.1",
+	},
 
-var docSA5000 = `Assignment to nil map
+	"SA5001": {
+		Title: `Defering Close before checking for a possible error`,
+		Since: "2017.1",
+	},
 
-Available since
-    2017.1
-`
+	"SA5002": {
+		Title: `The empty for loop (for {}) spins and can block the scheduler`,
+		Since: "2017.1",
+	},
 
-var docSA5001 = `Defering Close before checking for a possible error
-
-Available since
-    2017.1
-`
-
-var docSA5002 = `The empty for loop (for {}) spins and can block the scheduler
-
-Available since
-    2017.1
-`
-
-var docSA5003 = `Defers in infinite loops will never execute
-
-Defers are scoped to the surrounding function, not the surrounding
+	"SA5003": {
+		Title: `Defers in infinite loops will never execute`,
+		Text: `Defers are scoped to the surrounding function, not the surrounding
 block. In a function that never returns, i.e. one containing an
-infinite loop, defers will never execute.
+infinite loop, defers will never execute.`,
+		Since: "2017.1",
+	},
 
-Available since
-    2017.1
-`
+	"SA5004": {
+		Title: `for { select { ... with an empty default branch spins`,
+		Since: "2017.1",
+	},
 
-var docSA5004 = `for { select { ... with an empty default branch spins
-
-Available since
-    2017.1
-`
-
-var docSA5005 = `The finalizer references the finalized object, preventing garbage collection
-
-A finalizer is a function associated with an object that runs when the
+	"SA5005": {
+		Title: `The finalizer references the finalized object, preventing garbage collection`,
+		Text: `A finalizer is a function associated with an object that runs when the
 garbage collector is ready to collect said object, that is when the
 object is no longer referenced by anything.
 
@@ -586,22 +538,18 @@ collector from collecting the object. The finalizer will never run,
 and the object will never be collected, leading to a memory leak. That
 is why the finalizer should instead use its first argument to operate
 on the object. That way, the number of references can temporarily go
-to zero before the object is being passed to the finalizer.
+to zero before the object is being passed to the finalizer.`,
+		Since: "2017.1",
+	},
 
-Available since
-    2017.1
-`
+	"SA5006": {
+		Title: `Slice index out of bounds`,
+		Since: "2017.1",
+	},
 
-//lint:ignore U1000 This check is currently disabled
-var docSA5006 = `Slice index out of bounds
-
-Available since
-    2017.1
-`
-
-var docSA5007 = `Infinite recursive call
-
-A function that calls itself recursively needs to have an exit
+	"SA5007": {
+		Title: `Infinite recursive call`,
+		Text: `A function that calls itself recursively needs to have an exit
 condition. Otherwise it will recurse forever, until the system runs
 out of memory.
 
@@ -609,33 +557,119 @@ This issue can be caused by simple bugs such as forgetting to add an
 exit condition. It can also happen "on purpose". Some languages have
 tail call optimization which makes certain infinite recursive calls
 safe to use. Go, however, does not implement TCO, and as such a loop
-should be used instead.
+should be used instead.`,
+		Since: "2017.1",
+	},
 
-Available since
-    2017.1
-`
+	"SA5008": {
+		Title: `Invalid struct tag`,
+		Since: "2019.2",
+	},
 
-var docSA5008 = `Invalid struct tag
+	"SA5009": {
+		Title: `Invalid Printf call`,
+		Since: "2019.2",
+	},
 
-Available since
-    Unreleased
-`
+	"SA5010": {
+		Title: `Impossible type assertion`,
 
-var docSA5009 = `Invalid Printf call
+		Text: `Some type assertions can be statically proven to be
+impossible. This is the case when the method sets of both
+arguments of the type assertion conflict with each other, for
+example by containing the same method with different
+signatures.
 
-Available since
-    Unreleased
-`
+The Go compiler already applies this check when asserting from an
+interface value to a concrete type. If the concrete type misses
+methods from the interface, or if function signatures don't match,
+then the type assertion can never succeed.
 
-var docSA6000 = `Using regexp.Match or related in a loop, should use regexp.Compile
+This check applies the same logic when asserting from one interface to
+another. If both interface types contain the same method but with
+different signatures, then the type assertion can never succeed,
+either.`,
 
-Available since
-    2017.1
-`
+		Since: "2020.1",
+	},
 
-var docSA6001 = `Missing an optimization opportunity when indexing maps by byte slices
+	"SA5011": {
+		Title: `Possible nil pointer dereference`,
 
-Map keys must be comparable, which precludes the use of byte slices.
+		Text: `A pointer is being dereferenced unconditionally, while
+also being checked against nil in another place. This suggests that
+the pointer may be nil and dereferencing it may panic. This is
+commonly a result of improperly ordered code or missing return
+statements. Consider the following examples:
+
+    func fn(x *int) {
+        fmt.Println(*x)
+
+        // This nil check is equally important for the previous dereference
+        if x != nil {
+            foo(*x)
+        }
+    }
+
+    func TestFoo(t *testing.T) {
+        x := compute()
+        if x == nil {
+            t.Errorf("nil pointer received")
+        }
+
+        // t.Errorf does not abort the test, so if x is nil, the next line will panic.
+        foo(*x)
+    }
+
+Staticcheck tries to deduce which functions abort control flow.
+For example, it is aware that a function will not continue
+execution after a call to panic or log.Fatal. However, sometimes
+this detection fails, in particular in the presence of
+conditionals. Consider the following example:
+
+    func Log(msg string, level int) {
+        fmt.Println(msg)
+        if level == levelFatal {
+            os.Exit(1)
+        }
+    }
+
+    func Fatal(msg string) {
+        Log(msg, levelFatal)
+    }
+
+    func fn(x *int) {
+        if x == nil {
+            Fatal("unexpected nil pointer")
+        }
+        fmt.Println(*x)
+    }
+
+Staticcheck will flag the dereference of x, even though it is perfectly
+safe. Staticcheck is not able to deduce that a call to
+Fatal will exit the program. For the time being, the easiest
+workaround is to modify the definition of Fatal like so:
+
+    func Fatal(msg string) {
+        Log(msg, levelFatal)
+        panic("unreachable")
+    }
+
+We also hard-code functions from common logging packages such as
+logrus. Please file an issue if we're missing support for a
+popular package.`,
+		Since: "2020.1",
+	},
+
+	"SA6000": {
+		Title: `Using regexp.Match or related in a loop, should use regexp.Compile`,
+		Since: "2017.1",
+	},
+
+	"SA6001": {
+		Title: `Missing an optimization opportunity when indexing maps by byte slices`,
+
+		Text: `Map keys must be comparable, which precludes the use of byte slices.
 This usually leads to using string keys and converting byte slices to
 strings.
 
@@ -658,15 +692,13 @@ because the first version needs to copy and allocate, while the second
 one does not.
 
 For some history on this optimization, check out commit
-f5f5a8b6209f84961687d993b93ea0d397f5d5bf in the Go repository.
+f5f5a8b6209f84961687d993b93ea0d397f5d5bf in the Go repository.`,
+		Since: "2017.1",
+	},
 
-Available since
-    2017.1
-`
-
-var docSA6002 = `Storing non-pointer values in sync.Pool allocates memory
-
-A sync.Pool is used to avoid unnecessary allocations and reduce the
+	"SA6002": {
+		Title: `Storing non-pointer values in sync.Pool allocates memory`,
+		Text: `A sync.Pool is used to avoid unnecessary allocations and reduce the
 amount of work the garbage collector has to do.
 
 When passing a value that is not a pointer to a function that accepts
@@ -677,15 +709,13 @@ an array). In order to avoid the extra allocation, one should store a
 pointer to the slice instead.
 
 See the comments on https://go-review.googlesource.com/c/go/+/24371
-that discuss this problem.
+that discuss this problem.`,
+		Since: "2017.1",
+	},
 
-Available since
-    2017.1
-`
-
-var docSA6003 = `Converting a string to a slice of runes before ranging over it
-
-You may want to loop over the runes in a string. Instead of converting
+	"SA6003": {
+		Title: `Converting a string to a slice of runes before ranging over it`,
+		Text: `You may want to loop over the runes in a string. Instead of converting
 the string to a slice of runes and looping over that, you can loop
 over the string itself. That is,
 
@@ -701,15 +731,13 @@ and avoid unnecessary memory allocations.
 Do note that if you are interested in the indices, ranging over a
 string and over a slice of runes will yield different indices. The
 first one yields byte offsets, while the second one yields indices in
-the slice of runes.
+the slice of runes.`,
+		Since: "2017.1",
+	},
 
-Available since
-    2017.1
-`
-
-var docSA6005 = `Inefficient string comparison with strings.ToLower or strings.ToUpper
-
-Converting two strings to the same case and comparing them like so
+	"SA6005": {
+		Title: `Inefficient string comparison with strings.ToLower or strings.ToUpper`,
+		Text: `Converting two strings to the same case and comparing them like so
 
     if strings.ToLower(s1) == strings.ToLower(s2) {
         ...
@@ -727,33 +755,29 @@ strings and can return as soon as the first non-matching character has
 been found.
 
 For a more in-depth explanation of this issue, see
-https://blog.digitalocean.com/how-to-efficiently-compare-strings-in-go/
+https://blog.digitalocean.com/how-to-efficiently-compare-strings-in-go/`,
+		Since: "2019.2",
+	},
 
-Available since
-    Unreleased
-`
+	"SA9001": {
+		Title: `Defers in range loops may not run when you expect them to`,
+		Since: "2017.1",
+	},
 
-var docSA9001 = `Defers in range loops may not run when you expect them to
+	"SA9002": {
+		Title: `Using a non-octal os.FileMode that looks like it was meant to be in octal.`,
+		Since: "2017.1",
+	},
 
-Available since
-    2017.1
-`
+	"SA9003": {
+		Title: `Empty body in an if or else branch`,
+		Since: "2017.1",
+	},
 
-var docSA9002 = `Using a non-octal os.FileMode that looks like it was meant to be in octal.
+	"SA9004": {
+		Title: `Only the first constant has an explicit type`,
 
-Available since
-    2017.1
-`
-
-var docSA9003 = `Empty body in an if or else branch
-
-Available since
-    2017.1
-`
-
-var docSA9004 = `Only the first constant has an explicit type
-
-In a constant declaration such as the following:
+		Text: `In a constant declaration such as the following:
 
     const (
         First byte = 1
@@ -838,22 +862,19 @@ This code will output
     an enum
     2
 
-as EnumSecond has no explicit type, and thus defaults to int.
+as EnumSecond has no explicit type, and thus defaults to int.`,
+		Since: "2019.1",
+	},
 
-Available since
-    2019.1
-`
-
-var docSA9005 = `Trying to marshal a struct with no public fields nor custom marshaling
-
-The encoding/json and encoding/xml packages only operate on exported
+	"SA9005": {
+		Title: `Trying to marshal a struct with no public fields nor custom marshaling`,
+		Text: `The encoding/json and encoding/xml packages only operate on exported
 fields in structs, not unexported ones. It is usually an error to try
 to (un)marshal structs that only consist of unexported fields.
 
 This check will not flag calls involving types that define custom
 marshaling behavior, e.g. via MarshalJSON methods. It will also not
-flag empty structs.
-
-Available since
-    Unreleased
-`
+flag empty structs.`,
+		Since: "2019.2",
+	},
+}

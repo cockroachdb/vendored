@@ -1,26 +1,70 @@
 package config
 
 import (
+	"bytes"
 	"fmt"
+	"go/ast"
+	"go/token"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 	"golang.org/x/tools/go/analysis"
 )
 
+// Dir looks at a list of absolute file names, which should make up a
+// single package, and returns the path of the directory that may
+// contain a staticcheck.conf file. It returns the empty string if no
+// such directory could be determined, for example because all files
+// were located in Go's build cache.
+func Dir(files []string) string {
+	if len(files) == 0 {
+		return ""
+	}
+	cache, err := os.UserCacheDir()
+	if err != nil {
+		cache = ""
+	}
+	var path string
+	for _, p := range files {
+		// FIXME(dh): using strings.HasPrefix isn't technically
+		// correct, but it should be good enough for now.
+		if cache != "" && strings.HasPrefix(p, cache) {
+			// File in the build cache of the standard Go build system
+			continue
+		}
+		path = p
+		break
+	}
+
+	if path == "" {
+		// The package only consists of generated files.
+		return ""
+	}
+
+	dir := filepath.Dir(path)
+	return dir
+}
+
+func dirAST(files []*ast.File, fset *token.FileSet) string {
+	names := make([]string, len(files))
+	for i, f := range files {
+		names[i] = fset.PositionFor(f.Pos(), true).Filename
+	}
+	return Dir(names)
+}
+
 var Analyzer = &analysis.Analyzer{
 	Name: "config",
 	Doc:  "loads configuration for the current package tree",
 	Run: func(pass *analysis.Pass) (interface{}, error) {
-		if len(pass.Files) == 0 {
+		dir := dirAST(pass.Files, pass.Fset)
+		if dir == "" {
 			cfg := DefaultConfig
 			return &cfg, nil
 		}
-		// FIXME(dh): this may yield the wrong path for generated files in the build cache
-		path := pass.Fset.PositionFor(pass.Files[0].Pos(), true).Filename
-		dir := filepath.Dir(path)
 		cfg, err := Load(dir)
 		if err != nil {
 			return nil, fmt.Errorf("error loading staticcheck.conf: %s", err)
@@ -101,8 +145,19 @@ type Config struct {
 	HTTPStatusCodeWhitelist []string `toml:"http_status_code_whitelist"`
 }
 
+func (c Config) String() string {
+	buf := &bytes.Buffer{}
+
+	fmt.Fprintf(buf, "Checks: %#v\n", c.Checks)
+	fmt.Fprintf(buf, "Initialisms: %#v\n", c.Initialisms)
+	fmt.Fprintf(buf, "DotImportWhitelist: %#v\n", c.DotImportWhitelist)
+	fmt.Fprintf(buf, "HTTPStatusCodeWhitelist: %#v", c.HTTPStatusCodeWhitelist)
+
+	return buf.String()
+}
+
 var DefaultConfig = Config{
-	Checks: []string{"all", "-ST1000", "-ST1003", "-ST1016"},
+	Checks: []string{"all", "-ST1000", "-ST1003", "-ST1016", "-ST1020", "-ST1021", "-ST1022"},
 	Initialisms: []string{
 		"ACL", "API", "ASCII", "CPU", "CSS", "DNS",
 		"EOF", "GUID", "HTML", "HTTP", "HTTPS", "ID",
@@ -110,20 +165,20 @@ var DefaultConfig = Config{
 		"SMTP", "SQL", "SSH", "TCP", "TLS", "TTL",
 		"UDP", "UI", "GID", "UID", "UUID", "URI",
 		"URL", "UTF8", "VM", "XML", "XMPP", "XSRF",
-		"XSS", "SIP", "RTP",
+		"XSS", "SIP", "RTP", "AMQP", "DB", "TS",
 	},
 	DotImportWhitelist:      []string{},
 	HTTPStatusCodeWhitelist: []string{"200", "400", "404", "500"},
 }
 
-const configName = "staticcheck.conf"
+const ConfigName = "staticcheck.conf"
 
 func parseConfigs(dir string) ([]Config, error) {
 	var out []Config
 
 	// TODO(dh): consider stopping at the GOPATH/module boundary
 	for dir != "" {
-		f, err := os.Open(filepath.Join(dir, configName))
+		f, err := os.Open(filepath.Join(dir, ConfigName))
 		if os.IsNotExist(err) {
 			ndir := filepath.Dir(dir)
 			if ndir == dir {

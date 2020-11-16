@@ -1,0 +1,17 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "pattern",
+    srcs = [
+        "convert.go",
+        "doc.go",
+        "lexer.go",
+        "match.go",
+        "parser.go",
+        "pattern.go",
+    ],
+    importmap = "github.com/cockroachdb/cockroach/vendor/honnef.co/go/tools/pattern",
+    importpath = "honnef.co/go/tools/pattern",
+    visibility = ["//visibility:public"],
+    deps = ["//vendor/honnef.co/go/tools/lint"],
+)

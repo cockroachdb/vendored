@@ -23,7 +23,9 @@ import (
 	"runtime/pprof"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
+	"time"
 
 	"honnef.co/go/tools/config"
 	"honnef.co/go/tools/internal/cache"
@@ -32,6 +34,7 @@ import (
 	"honnef.co/go/tools/version"
 
 	"golang.org/x/tools/go/analysis"
+	"golang.org/x/tools/go/buildutil"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -103,7 +106,6 @@ func FlagSet(name string) *flag.FlagSet {
 	flags := flag.NewFlagSet("", flag.ExitOnError)
 	flags.Usage = usage(name, flags)
 	flags.String("tags", "", "List of `build tags`")
-	flags.String("ignore", "", "Deprecated: use linter directives instead")
 	flags.Bool("tests", true, "Include tests")
 	flags.Bool("version", false, "Print version and exit")
 	flags.Bool("show-ignored", false, "Don't filter ignored problems")
@@ -112,6 +114,10 @@ func FlagSet(name string) *flag.FlagSet {
 
 	flags.String("debug.cpuprofile", "", "Write CPU profile to `file`")
 	flags.String("debug.memprofile", "", "Write memory profile to `file`")
+	flags.Bool("debug.version", false, "Print detailed version information about this program")
+	flags.Bool("debug.no-compile-errors", false, "Don't print compile errors")
+	flags.String("debug.measure-analyzers", "", "Write analysis measurements to `file`. `file` will be opened for appending if it already exists.")
+	flags.Uint("debug.repeat-analyzers", 0, "Run analyzers `num` times")
 
 	checks := list{"inherit"}
 	fail := list{"all"}
@@ -140,7 +146,6 @@ func findCheck(cs []*analysis.Analyzer, check string) (*analysis.Analyzer, bool)
 
 func ProcessFlagSet(cs []*analysis.Analyzer, cums []lint.CumulativeChecker, fs *flag.FlagSet) {
 	tags := fs.Lookup("tags").Value.(flag.Getter).Get().(string)
-	ignore := fs.Lookup("ignore").Value.(flag.Getter).Get().(string)
 	tests := fs.Lookup("tests").Value.(flag.Getter).Get().(bool)
 	goVersion := fs.Lookup("go").Value.(flag.Getter).Get().(int)
 	formatter := fs.Lookup("f").Value.(flag.Getter).Get().(string)
@@ -150,6 +155,26 @@ func ProcessFlagSet(cs []*analysis.Analyzer, cums []lint.CumulativeChecker, fs *
 
 	cpuProfile := fs.Lookup("debug.cpuprofile").Value.(flag.Getter).Get().(string)
 	memProfile := fs.Lookup("debug.memprofile").Value.(flag.Getter).Get().(string)
+	debugVersion := fs.Lookup("debug.version").Value.(flag.Getter).Get().(bool)
+	debugNoCompile := fs.Lookup("debug.no-compile-errors").Value.(flag.Getter).Get().(bool)
+	debugRepeat := fs.Lookup("debug.repeat-analyzers").Value.(flag.Getter).Get().(uint)
+
+	var measureAnalyzers func(analysis *analysis.Analyzer, pkg *lint.Package, d time.Duration)
+	if path := fs.Lookup("debug.measure-analyzers").Value.(flag.Getter).Get().(string); path != "" {
+		f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		mu := &sync.Mutex{}
+		measureAnalyzers = func(analysis *analysis.Analyzer, pkg *lint.Package, d time.Duration) {
+			mu.Lock()
+			defer mu.Unlock()
+			if _, err := fmt.Fprintf(f, "%s\t%s\t%d\n", analysis.Name, pkg.ID, d.Nanoseconds()); err != nil {
+				log.Println("error writing analysis measurements:", err)
+			}
+		}
+	}
 
 	cfg := config.Config{}
 	cfg.Checks = *fs.Lookup("checks").Value.(*list)
@@ -176,9 +201,23 @@ func ProcessFlagSet(cs []*analysis.Analyzer, cums []lint.CumulativeChecker, fs *
 		pprof.StartCPUProfile(f)
 	}
 
+	if debugVersion {
+		version.Verbose()
+		exit(0)
+	}
+
 	if printVersion {
 		version.Print()
 		exit(0)
+	}
+
+	// Validate that the tags argument is well-formed. go/packages
+	// doesn't detect malformed build flags and returns unhelpful
+	// errors.
+	tf := buildutil.TagsFlag{}
+	if err := tf.Set(tags); err != nil {
+		fmt.Fprintln(os.Stderr, fmt.Errorf("invalid value %q for flag -tags: %s", tags, err))
+		exit(1)
 	}
 
 	if explain != "" {
@@ -201,11 +240,12 @@ func ProcessFlagSet(cs []*analysis.Analyzer, cums []lint.CumulativeChecker, fs *
 	}
 
 	ps, err := Lint(cs, cums, fs.Args(), &Options{
-		Tags:      strings.Fields(tags),
-		LintTests: tests,
-		Ignores:   ignore,
-		GoVersion: goVersion,
-		Config:    cfg,
+		Tags:                     tags,
+		LintTests:                tests,
+		GoVersion:                goVersion,
+		Config:                   cfg,
+		PrintAnalyzerMeasurement: measureAnalyzers,
+		RepeatAnalyzers:          debugRepeat,
 	})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -229,6 +269,7 @@ func ProcessFlagSet(cs []*analysis.Analyzer, cums []lint.CumulativeChecker, fs *
 		total    int
 		errors   int
 		warnings int
+		ignored  int
 	)
 
 	fail := *fs.Lookup("fail").Value.(*list)
@@ -242,7 +283,11 @@ func ProcessFlagSet(cs []*analysis.Analyzer, cums []lint.CumulativeChecker, fs *
 
 	total = len(ps)
 	for _, p := range ps {
+		if p.Check == "compile" && debugNoCompile {
+			continue
+		}
 		if p.Severity == lint.Ignored && !showIgnored {
+			ignored++
 			continue
 		}
 		if shouldExit[p.Check] {
@@ -254,20 +299,22 @@ func ProcessFlagSet(cs []*analysis.Analyzer, cums []lint.CumulativeChecker, fs *
 		f.Format(p)
 	}
 	if f, ok := f.(format.Statter); ok {
-		f.Stats(total, errors, warnings)
+		f.Stats(total, errors, warnings, ignored)
 	}
 	if errors > 0 {
 		exit(1)
 	}
+	exit(0)
 }
 
 type Options struct {
 	Config config.Config
 
-	Tags      []string
-	LintTests bool
-	Ignores   string
-	GoVersion int
+	Tags                     string
+	LintTests                bool
+	GoVersion                int
+	PrintAnalyzerMeasurement func(analysis *analysis.Analyzer, pkg *lint.Package, d time.Duration)
+	RepeatAnalyzers          uint
 }
 
 func computeSalt() ([]byte, error) {
@@ -306,30 +353,35 @@ func Lint(cs []*analysis.Analyzer, cums []lint.CumulativeChecker, paths []string
 		CumulativeCheckers: cums,
 		GoVersion:          opt.GoVersion,
 		Config:             opt.Config,
+		RepeatAnalyzers:    opt.RepeatAnalyzers,
 	}
+	l.Stats.PrintAnalyzerMeasurement = opt.PrintAnalyzerMeasurement
 	cfg := &packages.Config{}
 	if opt.LintTests {
 		cfg.Tests = true
+	}
+	if opt.Tags != "" {
+		cfg.BuildFlags = append(cfg.BuildFlags, "-tags", opt.Tags)
 	}
 
 	printStats := func() {
 		// Individual stats are read atomically, but overall there
 		// is no synchronisation. For printing rough progress
 		// information, this doesn't matter.
-		switch atomic.LoadUint64(&l.Stats.State) {
+		switch atomic.LoadUint32(&l.Stats.State) {
 		case lint.StateInitializing:
 			fmt.Fprintln(os.Stderr, "Status: initializing")
 		case lint.StateGraph:
 			fmt.Fprintln(os.Stderr, "Status: loading package graph")
 		case lint.StateProcessing:
 			fmt.Fprintf(os.Stderr, "Packages: %d/%d initial, %d/%d total; Workers: %d/%d; Problems: %d\n",
-				atomic.LoadUint64(&l.Stats.ProcessedInitialPackages),
-				atomic.LoadUint64(&l.Stats.InitialPackages),
-				atomic.LoadUint64(&l.Stats.ProcessedPackages),
-				atomic.LoadUint64(&l.Stats.TotalPackages),
-				atomic.LoadUint64(&l.Stats.ActiveWorkers),
-				atomic.LoadUint64(&l.Stats.TotalWorkers),
-				atomic.LoadUint64(&l.Stats.Problems),
+				atomic.LoadUint32(&l.Stats.ProcessedInitialPackages),
+				atomic.LoadUint32(&l.Stats.InitialPackages),
+				atomic.LoadUint32(&l.Stats.ProcessedPackages),
+				atomic.LoadUint32(&l.Stats.TotalPackages),
+				atomic.LoadUint32(&l.Stats.ActiveWorkers),
+				atomic.LoadUint32(&l.Stats.TotalWorkers),
+				atomic.LoadUint32(&l.Stats.Problems),
 			)
 		case lint.StateCumulative:
 			fmt.Fprintln(os.Stderr, "Status: processing cumulative checkers")
@@ -346,7 +398,8 @@ func Lint(cs []*analysis.Analyzer, cums []lint.CumulativeChecker, paths []string
 		}()
 	}
 
-	return l.Lint(cfg, paths)
+	ps, err := l.Lint(cfg, paths)
+	return ps, err
 }
 
 var posRe = regexp.MustCompile(`^(.+?):(\d+)(?::(\d+)?)?$`)
@@ -367,4 +420,25 @@ func parsePos(pos string) token.Position {
 		Line:     line,
 		Column:   col,
 	}
+}
+
+func InitializeAnalyzers(docs map[string]*lint.Documentation, analyzers map[string]*analysis.Analyzer) map[string]*analysis.Analyzer {
+	out := make(map[string]*analysis.Analyzer, len(analyzers))
+	for k, v := range analyzers {
+		vc := *v
+		out[k] = &vc
+
+		vc.Name = k
+		doc, ok := docs[k]
+		if !ok {
+			panic(fmt.Sprintf("missing documentation for check %s", k))
+		}
+		vc.Doc = doc.String()
+		if vc.Flags.Usage == nil {
+			fs := flag.NewFlagSet("", flag.PanicOnError)
+			fs.Var(NewVersionFlag(), "go", "Target Go version")
+			vc.Flags = *fs
+		}
+	}
+	return out
 }
