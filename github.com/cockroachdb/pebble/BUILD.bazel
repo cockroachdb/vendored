@@ -46,6 +46,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//vendor/github.com/cockroachdb/errors",
+        "//vendor/github.com/cockroachdb/errors/oserror",
         "//vendor/github.com/cockroachdb/pebble/internal/arenaskl",
         "//vendor/github.com/cockroachdb/pebble/internal/base",
         "//vendor/github.com/cockroachdb/pebble/internal/batchskl",

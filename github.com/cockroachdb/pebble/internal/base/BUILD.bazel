@@ -17,6 +17,7 @@ go_library(
     visibility = ["//vendor/github.com/cockroachdb/pebble:__subpackages__"],
     deps = [
         "//vendor/github.com/cockroachdb/errors",
+        "//vendor/github.com/cockroachdb/errors/oserror",
         "//vendor/github.com/cockroachdb/pebble/vfs",
     ],
 )
