@@ -18,6 +18,7 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/errors/oserror"
+	"github.com/cockroachdb/pebble/internal/invariants"
 )
 
 const sep = "/"
@@ -395,6 +396,7 @@ func (y *MemFS) ReuseForWrite(oldname, newname string) (File, error) {
 	}
 	y.mu.Lock()
 	defer y.mu.Unlock()
+
 	mf := f.(*memFile)
 	mf.read = false
 	mf.write = true
@@ -664,6 +666,14 @@ func (f *memFile) Write(p []byte) (int, error) {
 		f.n.mu.data = append(f.n.mu.data[:f.wpos], p...)
 	}
 	f.wpos += len(p)
+
+	if invariants.Enabled {
+		// Mutate the input buffer to flush out bugs in Pebble which expect the
+		// input buffer to be unmodified.
+		for i := range p {
+			p[i] ^= 0xff
+		}
+	}
 	return len(p), nil
 }
 
@@ -689,5 +699,11 @@ func (f *memFile) Sync() error {
 			f.n.mu.Unlock()
 		}
 	}
+	return nil
+}
+
+// Flush is a no-op and present only to prevent buffering at higher levels
+// (e.g. it prevents sstable.Writer from using a bufio.Writer).
+func (f *memFile) Flush() error {
 	return nil
 }
