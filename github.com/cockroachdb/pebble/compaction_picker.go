@@ -218,26 +218,26 @@ func (pc *pickedCompaction) setupInputs() {
 		// to include files that "touch" it.
 		smallestBaseKey := base.InvalidInternalKey
 		largestBaseKey := base.InvalidInternalKey
-		{
+		if pc.outputLevel.files.Empty() {
 			baseIter := pc.version.Levels[pc.outputLevel.level].Iter()
-			sm := baseIter.SeekLT(pc.cmp, pc.smallest.UserKey)
-			if sm != nil {
-				// NB: In a case like the following example, SeekLT(b) would
-				// return 000005 which is okay as it does not actually contain the
-				// user key `b`.
-				//
-				// L6:
-				// 000005: [a#5,SET-b#RANGEDELSENTINEL]
-				// 000006: [b#4,SET-c#5,SET]
+			if sm := baseIter.SeekLT(pc.cmp, pc.smallest.UserKey); sm != nil {
 				smallestBaseKey = sm.Largest
 			}
-			la := baseIter.SeekGE(pc.cmp, pc.largest.UserKey)
-			for la != nil && pc.cmp(la.Largest.UserKey, pc.largest.UserKey) == 0 {
-				la = baseIter.Next()
-			}
-			if la != nil {
+			if la := baseIter.SeekGE(pc.cmp, pc.largest.UserKey); la != nil {
 				largestBaseKey = la.Smallest
 			}
+		} else {
+			// NB: We use Reslice to access the underlying level's files, but
+			// we discard the returned slice. The pc.outputLevel.files slice
+			// is not modified.
+			_ = pc.outputLevel.files.Reslice(func(start, end *manifest.LevelIterator) {
+				if sm := start.Prev(); sm != nil {
+					smallestBaseKey = sm.Largest
+				}
+				if la := end.Next(); la != nil {
+					largestBaseKey = la.Smallest
+				}
+			})
 		}
 
 		oldLcf := *pc.lcf
@@ -869,8 +869,8 @@ func (p *compactionPickerByScore) pickAuto(env compactionEnv) (pc *pickedCompact
 			l0ReadAmp = p.vers.Levels[0].Slice().Len()
 		}
 		compactionDebt := int(p.estimatedCompactionDebt(0))
-		ccSignal1 := n *p.opts.Experimental.L0CompactionConcurrency
-		ccSignal2 := n *p.opts.Experimental.CompactionDebtConcurrency
+		ccSignal1 := n * p.opts.Experimental.L0CompactionConcurrency
+		ccSignal2 := n * p.opts.Experimental.CompactionDebtConcurrency
 		if l0ReadAmp < ccSignal1 && compactionDebt < ccSignal2 {
 			return nil
 		}
