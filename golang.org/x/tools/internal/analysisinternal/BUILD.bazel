@@ -6,5 +6,8 @@ go_library(
     importmap = "github.com/cockroachdb/cockroach/vendor/golang.org/x/tools/internal/analysisinternal",
     importpath = "golang.org/x/tools/internal/analysisinternal",
     visibility = ["//vendor/golang.org/x/tools:__subpackages__"],
-    deps = ["//vendor/golang.org/x/tools/go/ast/astutil"],
+    deps = [
+        "//vendor/golang.org/x/tools/go/ast/astutil",
+        "//vendor/golang.org/x/tools/internal/lsp/fuzzy",
+    ],
 )
