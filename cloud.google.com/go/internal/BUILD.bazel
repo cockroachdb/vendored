@@ -10,7 +10,7 @@ go_library(
     importpath = "cloud.google.com/go/internal",
     visibility = ["//vendor/cloud.google.com/go:__subpackages__"],
     deps = [
-        "//vendor/github.com/googleapis/gax-go",
+        "//vendor/github.com/googleapis/gax-go/v2:gax-go",
         "//vendor/google.golang.org/api/googleapi",
         "//vendor/google.golang.org/grpc/status",
     ],

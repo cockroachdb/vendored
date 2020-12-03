@@ -17,5 +17,7 @@ go_library(
         "//vendor/google.golang.org/grpc",
         "//vendor/google.golang.org/grpc/codes",
         "//vendor/google.golang.org/grpc/status",
+        "//vendor/google.golang.org/protobuf/reflect/protoreflect",
+        "//vendor/google.golang.org/protobuf/runtime/protoimpl",
     ],
 )

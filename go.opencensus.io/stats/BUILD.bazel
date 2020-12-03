@@ -14,7 +14,7 @@ go_library(
     importpath = "go.opencensus.io/stats",
     visibility = ["//visibility:public"],
     deps = [
-        "//vendor/go.opencensus.io/exemplar",
+        "//vendor/go.opencensus.io/metric/metricdata",
         "//vendor/go.opencensus.io/stats/internal",
         "//vendor/go.opencensus.io/tag",
     ],

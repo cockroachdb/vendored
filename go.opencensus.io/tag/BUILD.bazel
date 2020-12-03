@@ -8,6 +8,7 @@ go_library(
         "key.go",
         "map.go",
         "map_codec.go",
+        "metadata.go",
         "profile_19.go",
         "profile_not19.go",
         "validate.go",
@@ -15,5 +16,4 @@ go_library(
     importmap = "github.com/cockroachdb/cockroach/vendor/go.opencensus.io/tag",
     importpath = "go.opencensus.io/tag",
     visibility = ["//visibility:public"],
-    deps = ["//vendor/go.opencensus.io/exemplar"],
 )

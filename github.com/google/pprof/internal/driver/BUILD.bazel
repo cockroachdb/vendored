@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "cli.go",
         "commands.go",
+        "config.go",
         "driver.go",
         "driver_focus.go",
         "fetch.go",
@@ -12,6 +13,7 @@ go_library(
         "flamegraph.go",
         "interactive.go",
         "options.go",
+        "settings.go",
         "svg.go",
         "tempfile.go",
         "webhtml.go",

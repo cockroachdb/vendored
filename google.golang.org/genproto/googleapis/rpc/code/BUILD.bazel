@@ -6,5 +6,9 @@ go_library(
     importmap = "github.com/cockroachdb/cockroach/vendor/google.golang.org/genproto/googleapis/rpc/code",
     importpath = "google.golang.org/genproto/googleapis/rpc/code",
     visibility = ["//visibility:public"],
-    deps = ["//vendor/github.com/golang/protobuf/proto"],
+    deps = [
+        "//vendor/github.com/golang/protobuf/proto",
+        "//vendor/google.golang.org/protobuf/reflect/protoreflect",
+        "//vendor/google.golang.org/protobuf/runtime/protoimpl",
+    ],
 )
