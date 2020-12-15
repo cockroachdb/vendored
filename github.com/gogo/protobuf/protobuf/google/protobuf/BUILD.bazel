@@ -1,0 +1,76 @@
+load("@rules_proto//proto:defs.bzl", "proto_library")
+package(default_visibility=["//visibility:public"])
+
+proto_library(
+    name = "any_proto",
+    srcs = ["any.proto"],
+    strip_import_prefix = "/vendor/github.com/gogo/protobuf/protobuf/",
+)
+
+proto_library(
+    name = "api_proto",
+    srcs = ["api.proto"],
+    deps = [
+        ":source_context_proto",
+        ":type_proto",
+    ],
+    strip_import_prefix = "/vendor/github.com/gogo/protobuf/protobuf/",
+)
+
+proto_library(
+    name = "descriptor_proto",
+    srcs = ["descriptor.proto"],
+    strip_import_prefix = "/vendor/github.com/gogo/protobuf/protobuf/",
+)
+
+proto_library(
+    name = "duration_proto",
+    srcs = ["duration.proto"],
+    strip_import_prefix = "/vendor/github.com/gogo/protobuf/protobuf/",
+)
+
+proto_library(
+    name = "empty_proto",
+    srcs = ["empty.proto"],
+    strip_import_prefix = "/vendor/github.com/gogo/protobuf/protobuf/",
+)
+
+proto_library(
+    name = "field_mask_proto",
+    srcs = ["field_mask.proto"],
+    strip_import_prefix = "/vendor/github.com/gogo/protobuf/protobuf/",
+)
+
+proto_library(
+    name = "source_context_proto",
+    srcs = ["source_context.proto"],
+    strip_import_prefix = "/vendor/github.com/gogo/protobuf/protobuf/",
+)
+
+proto_library(
+    name = "struct_proto",
+    srcs = ["struct.proto"],
+    strip_import_prefix = "/vendor/github.com/gogo/protobuf/protobuf/",
+)
+
+proto_library(
+    name = "timestamp_proto",
+    srcs = ["timestamp.proto"],
+    strip_import_prefix = "/vendor/github.com/gogo/protobuf/protobuf/",
+)
+
+proto_library(
+    name = "type_proto",
+    srcs = ["type.proto"],
+    deps = [
+        ":any_proto",
+        ":source_context_proto",
+    ],
+    strip_import_prefix = "/vendor/github.com/gogo/protobuf/protobuf/",
+)
+
+proto_library(
+    name = "wrappers_proto",
+    srcs = ["wrappers.proto"],
+    strip_import_prefix = "/vendor/github.com/gogo/protobuf/protobuf/",
+)

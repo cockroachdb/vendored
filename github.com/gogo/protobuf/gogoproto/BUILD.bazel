@@ -1,4 +1,5 @@
 load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("//pkg/build:util.bzl", "proto_lib")
 
 go_library(
     name = "gogoproto",
@@ -14,4 +15,11 @@ go_library(
         "//vendor/github.com/gogo/protobuf/proto",
         "//vendor/github.com/gogo/protobuf/protoc-gen-gogo/descriptor",
     ],
+)
+
+proto_lib(
+    name = "gogo_proto",
+    srcs = ["gogo.proto"],
+    strip_import_prefix = "/vendor/github.com/gogo/protobuf/",
+    visibility = ["//visibility:public"],
 )
