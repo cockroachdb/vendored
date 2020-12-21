@@ -243,7 +243,7 @@ github.com/cockroachdb/gostdlib/x/tools/internal/span
 # github.com/cockroachdb/logtags v0.0.0-20190617123548-eb05cc24525f
 ## explicit
 github.com/cockroachdb/logtags
-# github.com/cockroachdb/pebble v0.0.0-20201119153812-62f2e316b532
+# github.com/cockroachdb/pebble v0.0.0-20201221143129-4b1164f6ed2d
 ## explicit
 github.com/cockroachdb/pebble
 github.com/cockroachdb/pebble/bloom
@@ -260,6 +260,7 @@ github.com/cockroachdb/pebble/internal/invariants
 github.com/cockroachdb/pebble/internal/manifest
 github.com/cockroachdb/pebble/internal/manual
 github.com/cockroachdb/pebble/internal/private
+github.com/cockroachdb/pebble/internal/randvar
 github.com/cockroachdb/pebble/internal/rangedel
 github.com/cockroachdb/pebble/internal/rate
 github.com/cockroachdb/pebble/internal/rawalloc
@@ -920,7 +921,7 @@ golang.org/x/crypto/ssh/agent
 golang.org/x/crypto/ssh/internal/bcrypt_pbkdf
 golang.org/x/crypto/ssh/knownhosts
 golang.org/x/crypto/ssh/terminal
-# golang.org/x/exp v0.0.0-20201008143054-e3b2a7f2fdc7
+# golang.org/x/exp v0.0.0-20201221025956-e89b829e73ea
 ## explicit
 golang.org/x/exp/rand
 # golang.org/x/lint v0.0.0-20200130185559-910be7a94367
@@ -960,7 +961,7 @@ golang.org/x/perf/storage/benchfmt
 ## explicit
 golang.org/x/sync/errgroup
 golang.org/x/sync/syncmap
-# golang.org/x/sys v0.0.0-20201119102817-f84b799fce68
+# golang.org/x/sys v0.0.0-20201221093633-bc327ba9c2f0
 ## explicit
 golang.org/x/sys/cpu
 golang.org/x/sys/internal/unsafeheader

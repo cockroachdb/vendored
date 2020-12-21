@@ -57,6 +57,7 @@ go_library(
         "//vendor/github.com/cockroachdb/pebble/internal/manifest",
         "//vendor/github.com/cockroachdb/pebble/internal/manual",
         "//vendor/github.com/cockroachdb/pebble/internal/private",
+        "//vendor/github.com/cockroachdb/pebble/internal/randvar",
         "//vendor/github.com/cockroachdb/pebble/internal/rangedel",
         "//vendor/github.com/cockroachdb/pebble/internal/rate",
         "//vendor/github.com/cockroachdb/pebble/internal/rawalloc",
@@ -64,5 +65,6 @@ go_library(
         "//vendor/github.com/cockroachdb/pebble/sstable",
         "//vendor/github.com/cockroachdb/pebble/vfs",
         "//vendor/github.com/cockroachdb/redact",
+        "//vendor/golang.org/x/exp/rand",
     ],
 )
