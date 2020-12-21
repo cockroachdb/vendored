@@ -1,4 +1,5 @@
 load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("@rules_proto//proto:defs.bzl", "proto_library")
 
 go_library(
     name = "gogoproto",
@@ -13,5 +14,17 @@ go_library(
     deps = [
         "//vendor/github.com/gogo/protobuf/proto",
         "//vendor/github.com/gogo/protobuf/protoc-gen-gogo/descriptor",
+    ],
+)
+
+# keep
+proto_library(
+    name = "gogo_proto",
+    srcs = ["gogo.proto"],
+    strip_import_prefix = "/vendor/github.com/gogo/protobuf",
+    visibility = ["//visibility:public"],
+    deps = [
+        "@com_google_protobuf//:any_proto",
+        "@com_google_protobuf//:descriptor_proto",
     ],
 )

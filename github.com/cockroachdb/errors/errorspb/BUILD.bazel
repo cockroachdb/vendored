@@ -1,4 +1,5 @@
 load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("@rules_proto//proto:defs.bzl", "proto_library")
 
 go_library(
     name = "errorspb",
@@ -17,5 +18,19 @@ go_library(
     deps = [
         "//vendor/github.com/gogo/protobuf/proto",
         "//vendor/github.com/gogo/protobuf/types",
+    ],
+)
+
+# keep
+proto_library(
+    name = "errorspb_proto",
+    srcs = [
+        "errors.proto",
+    ],
+    strip_import_prefix = "/vendor/github.com/cockroachdb/errors/",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/gogo/protobuf/gogoproto:gogo_proto",
+        "@com_google_protobuf//:any_proto",
     ],
 )

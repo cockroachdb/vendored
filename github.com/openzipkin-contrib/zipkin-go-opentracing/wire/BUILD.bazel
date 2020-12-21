@@ -1,3 +1,5 @@
+load("@rules_proto//proto:defs.bzl", "proto_library")
+load("@io_bazel_rules_go//proto:def.bzl", "go_proto_library")
 load("@io_bazel_rules_go//go:def.bzl", "go_library")
 
 go_library(
@@ -5,14 +7,28 @@ go_library(
     srcs = [
         "carrier.go",
         "gen.go",
-        "wire.pb.go",
     ],
+    embed = [":wire_go_proto"],
     importmap = "github.com/cockroachdb/cockroach/vendor/github.com/openzipkin-contrib/zipkin-go-opentracing/wire",
     importpath = "github.com/openzipkin-contrib/zipkin-go-opentracing/wire",
     visibility = ["//visibility:public"],
     deps = [
-        "//vendor/github.com/gogo/protobuf/proto",
         "//vendor/github.com/openzipkin-contrib/zipkin-go-opentracing/flag",
         "//vendor/github.com/openzipkin-contrib/zipkin-go-opentracing/types",
     ],
+)
+
+proto_library(
+    name = "wire_proto",
+    srcs = ["wire.proto"],
+    visibility = ["//visibility:public"],
+)
+
+go_proto_library(
+    name = "wire_go_proto",
+    compilers = ["//pkg/cmd/protoc-gen-gogoroach:protoc-gen-gogoroach_compiler"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/openzipkin-contrib/zipkin-go-opentracing/wire",
+    importpath = "github.com/openzipkin-contrib/zipkin-go-opentracing/wire",
+    proto = ":wire_proto",
+    visibility = ["//visibility:public"],
 )

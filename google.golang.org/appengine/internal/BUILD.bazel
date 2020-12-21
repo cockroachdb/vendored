@@ -21,9 +21,9 @@ go_library(
     deps = [
         "//vendor/github.com/golang/protobuf/proto",
         "//vendor/golang.org/x/net/context",
-        "//vendor/google.golang.org/appengine/internal/base",
-        "//vendor/google.golang.org/appengine/internal/datastore",
-        "//vendor/google.golang.org/appengine/internal/log",
-        "//vendor/google.golang.org/appengine/internal/remote_api",
+        "//vendor/google.golang.org/appengine/internal/base:base_go_proto",
+        "//vendor/google.golang.org/appengine/internal/datastore:datastore_go_proto",
+        "//vendor/google.golang.org/appengine/internal/log:log_go_proto",
+        "//vendor/google.golang.org/appengine/internal/remote_api:remote_api_go_proto",
     ],
 )

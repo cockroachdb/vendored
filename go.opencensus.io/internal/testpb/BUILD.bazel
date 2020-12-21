@@ -1,0 +1,17 @@
+load("@rules_proto//proto:defs.bzl", "proto_library")
+load("@io_bazel_rules_go//proto:def.bzl", "go_proto_library")
+
+proto_library(
+    name = "testpb_proto",
+    srcs = ["test.proto"],
+    visibility = ["//vendor/go.opencensus.io:__subpackages__"],
+)
+
+go_proto_library(
+    name = "testpb_go_proto",
+    compilers = ["//pkg/cmd/protoc-gen-gogoroach:protoc-gen-gogoroach_grpc_compiler"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/go.opencensus.io/internal/testpb",
+    importpath = "go.opencensus.io/internal/testpb",
+    proto = ":testpb_proto",
+    visibility = ["//vendor/go.opencensus.io:__subpackages__"],
+)

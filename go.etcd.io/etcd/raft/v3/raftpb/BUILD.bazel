@@ -1,3 +1,4 @@
+load("@rules_proto//proto:defs.bzl", "proto_library")
 load("@io_bazel_rules_go//go:def.bzl", "go_library")
 
 go_library(
@@ -15,4 +16,13 @@ go_library(
         "//vendor/github.com/gogo/protobuf/proto",
         "//vendor/github.com/golang/protobuf/proto",
     ],
+)
+
+# keep
+proto_library(
+    name = "raft_proto",
+    srcs = ["raft.proto"],
+    strip_import_prefix = "/vendor/go.etcd.io",
+    visibility = ["//visibility:public"],
+    deps = ["//vendor/github.com/gogo/protobuf/gogoproto:gogo_proto"],
 )

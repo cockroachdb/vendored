@@ -1,0 +1,32 @@
+load("@rules_proto//proto:defs.bzl", "proto_library")
+load("@io_bazel_rules_go//proto:def.bzl", "go_proto_library")
+
+proto_library(
+    name = "example_proto",
+    srcs = [
+        "Booking.proto",
+        "Customer.proto",
+        "IgnoreMe.proto",
+        "Vehicle.proto",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//github.com/envoyproxy/protoc-gen-validate/validate:validate_proto",
+        "//github.com/mwitkow/go-proto-validators:validators_proto",
+        "@go_googleapis//google/api:annotations_proto",
+    ],
+)
+
+go_proto_library(
+    name = "example_go_proto",
+    compilers = ["//pkg/cmd/protoc-gen-gogoroach:protoc-gen-gogoroach_grpc_compiler"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/pseudomuto/protoc-gen-doc/examples/proto",
+    importpath = "github.com/pseudomuto/protoc-gen-doc/examples/proto",
+    proto = ":example_proto",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/envoyproxy/protoc-gen-validate/validate:validate_proto",
+        "//vendor/github.com/mwitkow/go-proto-validators:validator_proto",
+        "@go_googleapis//google/api:annotations_go_proto",
+    ],
+)

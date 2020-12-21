@@ -1,0 +1,17 @@
+load("@rules_proto//proto:defs.bzl", "proto_library")
+load("@io_bazel_rules_go//proto:def.bzl", "go_proto_library")
+
+proto_library(
+    name = "capability_proto",
+    srcs = ["capability_service.proto"],
+    visibility = ["//vendor/google.golang.org/appengine:__subpackages__"],
+)
+
+go_proto_library(
+    name = "capability_go_proto",
+    compilers = ["//pkg/cmd/protoc-gen-gogoroach:protoc-gen-gogoroach_grpc_compiler"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/google.golang.org/appengine/internal/capability",
+    importpath = "google.golang.org/appengine/internal/capability",
+    proto = ":capability_proto",
+    visibility = ["//vendor/google.golang.org/appengine:__subpackages__"],
+)

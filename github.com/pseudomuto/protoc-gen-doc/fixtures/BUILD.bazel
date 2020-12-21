@@ -1,0 +1,22 @@
+load("@rules_proto//proto:defs.bzl", "proto_library")
+load("@io_bazel_rules_go//proto:def.bzl", "go_proto_library")
+
+proto_library(
+    name = "example_proto",
+    srcs = [
+        "Booking.proto",
+        "Vehicle.proto",
+    ],
+    visibility = ["//visibility:public"],
+    deps = ["//github.com/pseudomuto/protokit/fixtures:fixtures_proto"],
+)
+
+go_proto_library(
+    name = "example_go_proto",
+    compilers = ["//pkg/cmd/protoc-gen-gogoroach:protoc-gen-gogoroach_grpc_compiler"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/pseudomuto/protoc-gen-doc/fixtures",
+    importpath = "github.com/pseudomuto/protoc-gen-doc/fixtures",
+    proto = ":example_proto",
+    visibility = ["//visibility:public"],
+    deps = ["//vendor/github.com/pseudomuto/protokit/fixtures:extend_proto"],
+)

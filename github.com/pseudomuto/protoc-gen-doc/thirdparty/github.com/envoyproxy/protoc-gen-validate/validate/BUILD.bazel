@@ -15,7 +15,7 @@ proto_library(
 go_proto_library(
     name = "validate_go_proto",
     compilers = ["//pkg/cmd/protoc-gen-gogoroach:protoc-gen-gogoroach_compiler"],
-    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/envoyproxy/protoc-gen-validate/validate",
+    importmap = "github.com/cockroachdb/cockroach/vendor/github.com/pseudomuto/protoc-gen-doc/thirdparty/github.com/envoyproxy/protoc-gen-validate/validate",
     importpath = "github.com/envoyproxy/protoc-gen-validate/validate",
     proto = ":validate_proto",
     visibility = ["//visibility:public"],

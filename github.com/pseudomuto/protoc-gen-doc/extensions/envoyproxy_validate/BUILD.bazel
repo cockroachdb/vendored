@@ -7,7 +7,7 @@ go_library(
     importpath = "github.com/pseudomuto/protoc-gen-doc/extensions/envoyproxy_validate",
     visibility = ["//visibility:public"],
     deps = [
-        "//vendor/github.com/envoyproxy/protoc-gen-validate/validate",
+        "//vendor/github.com/envoyproxy/protoc-gen-validate/validate:validate_go_proto",
         "//vendor/github.com/pseudomuto/protoc-gen-doc/extensions",
     ],
 )

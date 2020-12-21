@@ -1,0 +1,17 @@
+load("@rules_proto//proto:defs.bzl", "proto_library")
+load("@io_bazel_rules_go//proto:def.bzl", "go_proto_library")
+
+proto_library(
+    name = "echo_proto",
+    srcs = ["echo.proto"],
+    visibility = ["//visibility:public"],
+)
+
+go_proto_library(
+    name = "echo_go_proto",
+    compilers = ["//pkg/cmd/protoc-gen-gogoroach:protoc-gen-gogoroach_grpc_compiler"],
+    importmap = "github.com/cockroachdb/cockroach/vendor/google.golang.org/grpc/examples/features/proto/echo",
+    importpath = "google.golang.org/grpc/examples/features/proto/echo",
+    proto = ":echo_proto",
+    visibility = ["//visibility:public"],
+)
