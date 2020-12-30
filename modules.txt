@@ -503,8 +503,9 @@ github.com/googleapis/gax-go
 # github.com/gorhill/cronexpr v0.0.0-20140423231348-a557574d6c02
 ## explicit
 github.com/gorhill/cronexpr
-# github.com/gorilla/mux v1.7.4
+# github.com/gorilla/mux v1.8.0
 ## explicit
+github.com/gorilla/mux
 # github.com/gorilla/websocket v1.4.0
 github.com/gorilla/websocket
 # github.com/goware/modvendor v0.3.0
