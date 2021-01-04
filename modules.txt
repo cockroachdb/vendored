@@ -635,7 +635,7 @@ github.com/kisielk/errcheck/internal/errcheck
 ## explicit
 github.com/kisielk/gotool
 github.com/kisielk/gotool/internal/load
-# github.com/knz/go-libedit v0.0.0-00010101000000-000000000000 => github.com/otan-cockroach/go-libedit v1.10.2-0.20201030151939-7cced08450e7
+# github.com/knz/go-libedit v1.10.1 => github.com/otan-cockroach/go-libedit v1.10.2-0.20201030151939-7cced08450e7
 ## explicit
 github.com/knz/go-libedit
 github.com/knz/go-libedit/common
@@ -987,7 +987,7 @@ golang.org/x/text/width
 # golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
 ## explicit
 golang.org/x/time/rate
-# golang.org/x/tools v0.0.0-20200702044944-0cc1aa72b347 => github.com/cockroachdb/tools v0.0.0-20201202174556-f18ddc082e74
+# golang.org/x/tools v0.0.0-20210104081019-d8d6ddbec6ee
 ## explicit
 golang.org/x/tools/cmd/goyacc
 golang.org/x/tools/cmd/stringer
@@ -1272,4 +1272,3 @@ vitess.io/vitess/go/vt/vterrors
 # gopkg.in/yaml.v2 => github.com/cockroachdb/yaml v0.0.0-20180705215940-0e2822948641
 # github.com/knz/go-libedit => github.com/otan-cockroach/go-libedit v1.10.2-0.20201030151939-7cced08450e7
 # go.etcd.io/etcd/pkg/v3 => go.etcd.io/etcd/pkg/v3 v3.0.0-20201109164711-01844fd28560
-# golang.org/x/tools => github.com/cockroachdb/tools v0.0.0-20201202174556-f18ddc082e74
