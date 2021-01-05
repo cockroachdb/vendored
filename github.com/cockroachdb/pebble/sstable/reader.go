@@ -15,6 +15,7 @@ import (
 	"sync"
 	"unsafe"
 
+	"github.com/cespare/xxhash/v2"
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/pebble/internal/base"
 	"github.com/cockroachdb/pebble/internal/cache"
@@ -1613,7 +1614,7 @@ func init() {
 
 // Reader is a table reader.
 type Reader struct {
-	file              vfs.File
+	file              ReadableFile
 	fs                vfs.FS
 	filename          string
 	cacheID           uint64
@@ -1632,6 +1633,7 @@ type Reader struct {
 	FormatKey         base.FormatKey
 	Split             Split
 	mergerOK          bool
+	checksumType      ChecksumType
 	tableFilter       *tableFilterReader
 	Properties        Properties
 }
@@ -1828,7 +1830,12 @@ func (r *Reader) readBlock(
 				}
 			}
 			if raState.sequentialFile != nil {
-				_ = vfs.Prefetch(r.file, bh.Offset, uint64(readaheadSize))
+				type fd interface {
+					Fd() uintptr
+				}
+				if f, ok := r.file.(fd); ok {
+					_ = vfs.Prefetch(f.Fd(), bh.Offset, uint64(readaheadSize))
+				}
 			}
 		}
 	}
@@ -1840,9 +1847,18 @@ func (r *Reader) readBlock(
 		return cache.Handle{}, err
 	}
 
-	checksum0 := binary.LittleEndian.Uint32(b[bh.Length+1:])
-	checksum1 := crc.New(b[:bh.Length+1]).Value()
-	if checksum0 != checksum1 {
+	expectedChecksum := binary.LittleEndian.Uint32(b[bh.Length+1:])
+	var computedChecksum uint32
+	switch r.checksumType {
+	case ChecksumTypeCRC32c:
+		computedChecksum = crc.New(b[:bh.Length+1]).Value()
+	case ChecksumTypeXXHash64:
+		computedChecksum = uint32(xxhash.Sum64(b[:bh.Length+1]))
+	default:
+		return cache.Handle{}, errors.Errorf("unsupported checksum type: %d", r.checksumType)
+	}
+
+	if expectedChecksum != computedChecksum {
 		r.opts.Cache.Free(v)
 		return cache.Handle{}, base.CorruptionErrorf(
 			"pebble/table: invalid table %s (checksum mismatch at %d/%d)",
@@ -2196,9 +2212,16 @@ func (r *Reader) EstimateDiskUsage(start, end []byte) (uint64, error) {
 	return endBH.Offset + endBH.Length + blockTrailerLen - startBH.Offset, nil
 }
 
+// ReadableFile describes subset of vfs.File required for reading SSTs.
+type ReadableFile interface {
+	io.ReaderAt
+	io.Closer
+	Stat() (os.FileInfo, error)
+}
+
 // NewReader returns a new table reader for the file. Closing the reader will
 // close the file.
-func NewReader(f vfs.File, o ReaderOptions, extraOpts ...ReaderOption) (*Reader, error) {
+func NewReader(f ReadableFile, o ReaderOptions, extraOpts ...ReaderOption) (*Reader, error) {
 	o = o.ensureDefaults()
 	r := &Reader{
 		file: f,
@@ -2233,6 +2256,7 @@ func NewReader(f vfs.File, o ReaderOptions, extraOpts ...ReaderOption) (*Reader,
 		r.err = err
 		return nil, r.Close()
 	}
+	r.checksumType = footer.checksum
 	// Read the metaindex.
 	if err := r.readMetaindex(footer.metaindexBH); err != nil {
 		r.err = err

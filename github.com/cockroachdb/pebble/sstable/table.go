@@ -73,7 +73,6 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/pebble/internal/base"
-	"github.com/cockroachdb/pebble/vfs"
 )
 
 /*
@@ -150,9 +149,10 @@ const (
 	levelDBFormatVersion  = 0
 	rocksDBFormatVersion2 = 2
 
-	noChecksum     = 0
-	checksumCRC32c = 1
-	checksumXXHash = 2
+	noChecksum       = 0
+	checksumCRC32c   = 1
+	checksumXXHash   = 2
+	checksumXXHash64 = 3
 
 	// The block type gives the per-block compression format.
 	// These constants are part of the file format and should not be changed.
@@ -196,13 +196,13 @@ const (
 //    table_magic_number (8 bytes)
 type footer struct {
 	format      TableFormat
-	checksum    uint8
+	checksum    ChecksumType
 	metaindexBH BlockHandle
 	indexBH     BlockHandle
 	footerBH    BlockHandle
 }
 
-func readFooter(f vfs.File) (footer, error) {
+func readFooter(f ReadableFile) (footer, error) {
 	var footer footer
 	stat, err := f.Stat()
 	if err != nil {
@@ -233,7 +233,7 @@ func readFooter(f vfs.File) (footer, error) {
 		buf = buf[len(buf)-levelDBFooterLen:]
 		footer.footerBH.Length = uint64(len(buf))
 		footer.format = TableFormatLevelDB
-		footer.checksum = checksumCRC32c
+		footer.checksum = ChecksumTypeCRC32c
 
 	case rocksDBMagic:
 		if len(buf) < rocksDBFooterLen {
@@ -247,8 +247,12 @@ func readFooter(f vfs.File) (footer, error) {
 			return footer, base.CorruptionErrorf("pebble/table: unsupported format version %d", errors.Safe(version))
 		}
 		footer.format = TableFormatRocksDBv2
-		footer.checksum = uint8(buf[0])
-		if footer.checksum != checksumCRC32c {
+		switch uint8(buf[0]) {
+		case checksumCRC32c:
+			footer.checksum = ChecksumTypeCRC32c
+		case checksumXXHash64:
+			footer.checksum = ChecksumTypeXXHash64
+		default:
 			return footer, base.CorruptionErrorf("pebble/table: unsupported checksum type %d", errors.Safe(footer.checksum))
 		}
 		buf = buf[1:]
@@ -290,7 +294,18 @@ func (f footer) encode(buf []byte) []byte {
 		for i := range buf {
 			buf[i] = 0
 		}
-		buf[0] = f.checksum
+		switch f.checksum {
+		case ChecksumTypeNone:
+			buf[0] = noChecksum
+		case ChecksumTypeCRC32c:
+			buf[0] = checksumCRC32c
+		case ChecksumTypeXXHash:
+			buf[0] = checksumXXHash
+		case ChecksumTypeXXHash64:
+			buf[0] = checksumXXHash64
+		default:
+			panic("unknown checksum type")
+		}
 		n := 1
 		n += encodeBlockHandle(buf[n:], f.metaindexBH)
 		encodeBlockHandle(buf[n:], f.indexBH)

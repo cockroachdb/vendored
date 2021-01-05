@@ -187,7 +187,13 @@ type Batch struct {
 	formatKey      base.FormatKey
 	abbreviatedKey AbbreviatedKey
 
-	memTableSize uint32
+	// An upper bound on required space to add this batch to a memtable.
+	// Note that although batches are limited to 4 GiB in size, that limit
+	// applies to len(data), not the memtable size. The upper bound on the
+	// size of a memtable node is larger than the overhead of the batch's log
+	// encoding, so memTableSize is larger than len(data) and may overflow a
+	// uint32.
+	memTableSize uint64
 
 	// The db to which the batch will be committed. Do not change this field
 	// after the batch has been created as it might invalidate internal state.
@@ -666,8 +672,7 @@ func (b *Batch) NewIter(o *IterOptions) *Iterator {
 	if b.index == nil {
 		return &Iterator{err: ErrNotIndexed}
 	}
-	return b.db.newIterInternal(b.newInternalIter(o),
-		b.newRangeDelIter(o), nil /* snapshot */, o)
+	return b.db.newIterInternal(b, nil /* snapshot */, o)
 }
 
 // newInternalIter creates a new internalIterator that iterates over the
