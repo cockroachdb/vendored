@@ -323,7 +323,7 @@ github.com/go-ole/go-ole
 github.com/go-ole/go-ole/oleutil
 # github.com/go-sql-driver/mysql v1.5.0
 github.com/go-sql-driver/mysql
-# github.com/gogo/protobuf v1.3.1 => github.com/cockroachdb/gogoproto v1.2.1-0.20190102194534-ca10b809dba0
+# github.com/gogo/protobuf v1.3.1 => github.com/cockroachdb/gogoproto v1.2.1-0.20210111172841-8b6737fea948
 github.com/gogo/protobuf/gogoproto
 github.com/gogo/protobuf/jsonpb
 github.com/gogo/protobuf/plugin/compare

@@ -105,7 +105,7 @@ type Duration struct {
 func (m *Duration) Reset()      { *m = Duration{} }
 func (*Duration) ProtoMessage() {}
 func (*Duration) Descriptor() ([]byte, []int) {
-	return fileDescriptor_duration_187e4d5f80a83848, []int{0}
+	return fileDescriptor_duration_5d4ca75705424194, []int{0}
 }
 func (*Duration) XXX_WellKnownType() string { return "Duration" }
 func (m *Duration) XXX_Unmarshal(b []byte) error {
@@ -393,7 +393,7 @@ func (m *Duration) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthDuration
 			}
 			if (iNdEx + skippy) > l {
@@ -515,10 +515,10 @@ var (
 )
 
 func init() {
-	proto.RegisterFile("google/protobuf/duration.proto", fileDescriptor_duration_187e4d5f80a83848)
+	proto.RegisterFile("google/protobuf/duration.proto", fileDescriptor_duration_5d4ca75705424194)
 }
 
-var fileDescriptor_duration_187e4d5f80a83848 = []byte{
+var fileDescriptor_duration_5d4ca75705424194 = []byte{
 	// 209 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x92, 0x4b, 0xcf, 0xcf, 0x4f,
 	0xcf, 0x49, 0xd5, 0x2f, 0x28, 0xca, 0x2f, 0xc9, 0x4f, 0x2a, 0x4d, 0xd3, 0x4f, 0x29, 0x2d, 0x4a,
