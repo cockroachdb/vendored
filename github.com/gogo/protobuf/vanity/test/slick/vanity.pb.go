@@ -32,7 +32,7 @@ type A struct {
 func (m *A) Reset()      { *m = A{} }
 func (*A) ProtoMessage() {}
 func (*A) Descriptor() ([]byte, []int) {
-	return fileDescriptor_vanity_0b672c3d48e40257, []int{0}
+	return fileDescriptor_vanity_32d2fd890f3d8e2e, []int{0}
 }
 func (m *A) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -287,7 +287,7 @@ func (m *A) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthVanity
 			}
 			if (iNdEx + skippy) > l {
@@ -410,9 +410,9 @@ var (
 	ErrIntOverflowVanity   = fmt.Errorf("proto: integer overflow")
 )
 
-func init() { proto.RegisterFile("vanity.proto", fileDescriptor_vanity_0b672c3d48e40257) }
+func init() { proto.RegisterFile("vanity.proto", fileDescriptor_vanity_32d2fd890f3d8e2e) }
 
-var fileDescriptor_vanity_0b672c3d48e40257 = []byte{
+var fileDescriptor_vanity_32d2fd890f3d8e2e = []byte{
 	// 147 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0x29, 0x4b, 0xcc, 0xcb,
 	0x2c, 0xa9, 0xd4, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0x83, 0xf0, 0x94, 0xac, 0xb9, 0x18,

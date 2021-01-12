@@ -35,7 +35,7 @@ func (m *UnorderedFields) Reset()         { *m = UnorderedFields{} }
 func (m *UnorderedFields) String() string { return proto.CompactTextString(m) }
 func (*UnorderedFields) ProtoMessage()    {}
 func (*UnorderedFields) Descriptor() ([]byte, []int) {
-	return fileDescriptor_issue42_6157ac17a2848d4f, []int{0}
+	return fileDescriptor_issue42_9d1530e6b9f6985d, []int{0}
 }
 func (m *UnorderedFields) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -90,7 +90,7 @@ func (m *OrderedFields) Reset()         { *m = OrderedFields{} }
 func (m *OrderedFields) String() string { return proto.CompactTextString(m) }
 func (*OrderedFields) ProtoMessage()    {}
 func (*OrderedFields) Descriptor() ([]byte, []int) {
-	return fileDescriptor_issue42_6157ac17a2848d4f, []int{1}
+	return fileDescriptor_issue42_9d1530e6b9f6985d, []int{1}
 }
 func (m *OrderedFields) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -435,7 +435,7 @@ func (m *UnorderedFields) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthIssue42
 			}
 			if (iNdEx + skippy) > l {
@@ -517,7 +517,7 @@ func (m *OrderedFields) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthIssue42
 			}
 			if (iNdEx + skippy) > l {
@@ -638,9 +638,9 @@ var (
 	ErrIntOverflowIssue42   = fmt.Errorf("proto: integer overflow")
 )
 
-func init() { proto.RegisterFile("issue42.proto", fileDescriptor_issue42_6157ac17a2848d4f) }
+func init() { proto.RegisterFile("issue42.proto", fileDescriptor_issue42_9d1530e6b9f6985d) }
 
-var fileDescriptor_issue42_6157ac17a2848d4f = []byte{
+var fileDescriptor_issue42_9d1530e6b9f6985d = []byte{
 	// 144 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0xcd, 0x2c, 0x2e, 0x2e,
 	0x4d, 0x35, 0x31, 0xd2, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0x87, 0x72, 0xa5, 0x74, 0xd3,

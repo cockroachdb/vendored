@@ -35,7 +35,7 @@ func (m *Foo) Reset()         { *m = Foo{} }
 func (m *Foo) String() string { return proto.CompactTextString(m) }
 func (*Foo) ProtoMessage()    {}
 func (*Foo) Descriptor() ([]byte, []int) {
-	return fileDescriptor_proto_77f3bd346fa75d17, []int{0}
+	return fileDescriptor_proto_2cb5a8017c0e2528, []int{0}
 }
 func (m *Foo) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -237,7 +237,7 @@ func (m *Foo) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthProto
 			}
 			if (iNdEx + skippy) > l {
@@ -361,9 +361,9 @@ var (
 	ErrIntOverflowProto   = fmt.Errorf("proto: integer overflow")
 )
 
-func init() { proto.RegisterFile("proto.proto", fileDescriptor_proto_77f3bd346fa75d17) }
+func init() { proto.RegisterFile("proto.proto", fileDescriptor_proto_2cb5a8017c0e2528) }
 
-var fileDescriptor_proto_77f3bd346fa75d17 = []byte{
+var fileDescriptor_proto_2cb5a8017c0e2528 = []byte{
 	// 109 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0x2e, 0x28, 0xca, 0x2f,
 	0xc9, 0xd7, 0x03, 0x93, 0x42, 0xac, 0x60, 0x4a, 0x4a, 0x37, 0x3d, 0xb3, 0x24, 0xa3, 0x34, 0x49,

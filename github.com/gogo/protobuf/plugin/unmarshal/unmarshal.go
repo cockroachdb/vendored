@@ -253,7 +253,9 @@ func (p *unmarshal) decodeFixed64(varName string, typeName string) {
 	p.P(`iNdEx += 8`)
 }
 
-func (p *unmarshal) declareMapField(varName string, nullable bool, customType bool, field *descriptor.FieldDescriptorProto) {
+func (p *unmarshal) declareMapField(
+	varName string, nullable bool, customType bool, field *descriptor.FieldDescriptorProto,
+) {
 	switch field.GetType() {
 	case descriptor.FieldDescriptorProto_TYPE_DOUBLE:
 		p.P(`var `, varName, ` float64`)
@@ -334,7 +336,9 @@ func (p *unmarshal) declareMapField(varName string, nullable bool, customType bo
 	}
 }
 
-func (p *unmarshal) mapField(varName string, customType bool, field *descriptor.FieldDescriptorProto) {
+func (p *unmarshal) mapField(
+	varName string, customType bool, field *descriptor.FieldDescriptorProto,
+) {
 	switch field.GetType() {
 	case descriptor.FieldDescriptorProto_TYPE_DOUBLE:
 		p.P(`var `, varName, `temp uint64`)
@@ -478,7 +482,9 @@ func (p *unmarshal) mapField(varName string, customType bool, field *descriptor.
 	}
 }
 
-func (p *unmarshal) noStarOrSliceType(msg *generator.Descriptor, field *descriptor.FieldDescriptorProto) string {
+func (p *unmarshal) noStarOrSliceType(
+	msg *generator.Descriptor, field *descriptor.FieldDescriptorProto,
+) string {
 	typ, _ := p.GoType(msg, field)
 	if typ[0] == '*' {
 		return typ[1:]
@@ -489,7 +495,13 @@ func (p *unmarshal) noStarOrSliceType(msg *generator.Descriptor, field *descript
 	return typ
 }
 
-func (p *unmarshal) field(file *generator.FileDescriptor, msg *generator.Descriptor, field *descriptor.FieldDescriptorProto, fieldname string, proto3 bool) {
+func (p *unmarshal) field(
+	file *generator.FileDescriptor,
+	msg *generator.Descriptor,
+	field *descriptor.FieldDescriptorProto,
+	fieldname string,
+	proto3 bool,
+) {
 	repeated := field.IsRepeated()
 	nullable := gogoproto.IsNullable(field)
 	typ := p.noStarOrSliceType(msg, field)
@@ -824,7 +836,7 @@ func (p *unmarshal) field(file *generator.FileDescriptor, msg *generator.Descrip
 			p.P(`return err`)
 			p.Out()
 			p.P(`}`)
-			p.P(`if skippy < 0 {`)
+			p.P(`if (skippy < 0) || (iNdEx + skippy) < 0 {`)
 			p.In()
 			p.P(`return ErrInvalidLength`, p.localName)
 			p.Out()
@@ -1454,7 +1466,7 @@ func (p *unmarshal) Generate(file *generator.FileDescriptor) {
 			p.P(`return err`)
 			p.Out()
 			p.P(`}`)
-			p.P(`if skippy < 0 {`)
+			p.P(`if (skippy < 0) || (iNdEx + skippy) < 0 {`)
 			p.In()
 			p.P(`return ErrInvalidLength`, p.localName)
 			p.Out()
@@ -1477,7 +1489,7 @@ func (p *unmarshal) Generate(file *generator.FileDescriptor) {
 		p.P(`return err`)
 		p.Out()
 		p.P(`}`)
-		p.P(`if skippy < 0 {`)
+		p.P(`if (skippy < 0) || (iNdEx + skippy) < 0 {`)
 		p.In()
 		p.P(`return ErrInvalidLength`, p.localName)
 		p.Out()

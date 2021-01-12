@@ -44,7 +44,7 @@ type Subby struct {
 func (m *Subby) Reset()      { *m = Subby{} }
 func (*Subby) ProtoMessage() {}
 func (*Subby) Descriptor() ([]byte, []int) {
-	return fileDescriptor_one_539b073fce05cef9, []int{0}
+	return fileDescriptor_one_cb895ac1aa5cd533, []int{0}
 }
 func (m *Subby) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -91,7 +91,7 @@ type AllTypesOneOf struct {
 func (m *AllTypesOneOf) Reset()      { *m = AllTypesOneOf{} }
 func (*AllTypesOneOf) ProtoMessage() {}
 func (*AllTypesOneOf) Descriptor() ([]byte, []int) {
-	return fileDescriptor_one_539b073fce05cef9, []int{1}
+	return fileDescriptor_one_cb895ac1aa5cd533, []int{1}
 }
 func (m *AllTypesOneOf) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -593,7 +593,7 @@ type TwoOneofs struct {
 func (m *TwoOneofs) Reset()      { *m = TwoOneofs{} }
 func (*TwoOneofs) ProtoMessage() {}
 func (*TwoOneofs) Descriptor() ([]byte, []int) {
-	return fileDescriptor_one_539b073fce05cef9, []int{2}
+	return fileDescriptor_one_cb895ac1aa5cd533, []int{2}
 }
 func (m *TwoOneofs) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -861,7 +861,7 @@ type CustomOneof struct {
 func (m *CustomOneof) Reset()      { *m = CustomOneof{} }
 func (*CustomOneof) ProtoMessage() {}
 func (*CustomOneof) Descriptor() ([]byte, []int) {
-	return fileDescriptor_one_539b073fce05cef9, []int{3}
+	return fileDescriptor_one_cb895ac1aa5cd533, []int{3}
 }
 func (m *CustomOneof) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -4385,7 +4385,7 @@ func (m *Subby) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthOne
 			}
 			if (iNdEx + skippy) > l {
@@ -4736,7 +4736,7 @@ func (m *AllTypesOneOf) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthOne
 			}
 			if (iNdEx + skippy) > l {
@@ -4920,7 +4920,7 @@ func (m *TwoOneofs) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthOne
 			}
 			if (iNdEx + skippy) > l {
@@ -5073,7 +5073,7 @@ func (m *CustomOneof) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthOne
 			}
 			if (iNdEx + skippy) > l {
@@ -5194,9 +5194,9 @@ var (
 	ErrIntOverflowOne   = fmt.Errorf("proto: integer overflow")
 )
 
-func init() { proto.RegisterFile("combos/unmarshaler/one.proto", fileDescriptor_one_539b073fce05cef9) }
+func init() { proto.RegisterFile("combos/unmarshaler/one.proto", fileDescriptor_one_cb895ac1aa5cd533) }
 
-var fileDescriptor_one_539b073fce05cef9 = []byte{
+var fileDescriptor_one_cb895ac1aa5cd533 = []byte{
 	// 602 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xac, 0xd3, 0x3f, 0x4f, 0x1b, 0x31,
 	0x14, 0x00, 0x70, 0x3f, 0x42, 0x42, 0x70, 0x42, 0x49, 0x6f, 0x72, 0x51, 0x65, 0xac, 0xb4, 0x95,

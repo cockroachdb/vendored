@@ -42,7 +42,7 @@ func (x MyMessageNonNull_Color) String() string {
 	return proto.EnumName(MyMessageNonNull_Color_name, int32(x))
 }
 func (MyMessageNonNull_Color) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_merge_48cae3f909a8a625, []int{3, 0}
+	return fileDescriptor_merge_9721c1510159f9a5, []int{3, 0}
 }
 
 type InnerMessage struct {
@@ -58,7 +58,7 @@ func (m *InnerMessage) Reset()         { *m = InnerMessage{} }
 func (m *InnerMessage) String() string { return proto.CompactTextString(m) }
 func (*InnerMessage) ProtoMessage()    {}
 func (*InnerMessage) Descriptor() ([]byte, []int) {
-	return fileDescriptor_merge_48cae3f909a8a625, []int{0}
+	return fileDescriptor_merge_9721c1510159f9a5, []int{0}
 }
 func (m *InnerMessage) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_InnerMessage.Unmarshal(m, b)
@@ -113,7 +113,7 @@ func (m *OtherMessage) Reset()         { *m = OtherMessage{} }
 func (m *OtherMessage) String() string { return proto.CompactTextString(m) }
 func (*OtherMessage) ProtoMessage()    {}
 func (*OtherMessage) Descriptor() ([]byte, []int) {
-	return fileDescriptor_merge_48cae3f909a8a625, []int{1}
+	return fileDescriptor_merge_9721c1510159f9a5, []int{1}
 }
 func (m *OtherMessage) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_OtherMessage.Unmarshal(m, b)
@@ -172,7 +172,7 @@ func (m *RequiredInnerMessageNonNull) Reset()         { *m = RequiredInnerMessag
 func (m *RequiredInnerMessageNonNull) String() string { return proto.CompactTextString(m) }
 func (*RequiredInnerMessageNonNull) ProtoMessage()    {}
 func (*RequiredInnerMessageNonNull) Descriptor() ([]byte, []int) {
-	return fileDescriptor_merge_48cae3f909a8a625, []int{2}
+	return fileDescriptor_merge_9721c1510159f9a5, []int{2}
 }
 func (m *RequiredInnerMessageNonNull) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RequiredInnerMessageNonNull.Unmarshal(m, b)
@@ -220,7 +220,7 @@ func (m *MyMessageNonNull) Reset()         { *m = MyMessageNonNull{} }
 func (m *MyMessageNonNull) String() string { return proto.CompactTextString(m) }
 func (*MyMessageNonNull) ProtoMessage()    {}
 func (*MyMessageNonNull) Descriptor() ([]byte, []int) {
-	return fileDescriptor_merge_48cae3f909a8a625, []int{3}
+	return fileDescriptor_merge_9721c1510159f9a5, []int{3}
 }
 func (m *MyMessageNonNull) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_MyMessageNonNull.Unmarshal(m, b)
@@ -318,9 +318,9 @@ func init() {
 	proto.RegisterEnum("merge.MyMessageNonNull_Color", MyMessageNonNull_Color_name, MyMessageNonNull_Color_value)
 }
 
-func init() { proto.RegisterFile("merge.proto", fileDescriptor_merge_48cae3f909a8a625) }
+func init() { proto.RegisterFile("merge.proto", fileDescriptor_merge_9721c1510159f9a5) }
 
-var fileDescriptor_merge_48cae3f909a8a625 = []byte{
+var fileDescriptor_merge_9721c1510159f9a5 = []byte{
 	// 496 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x84, 0x53, 0x51, 0x8b, 0xd3, 0x4c,
 	0x14, 0xdd, 0x34, 0x4d, 0xb7, 0xb9, 0xdb, 0x6f, 0xe9, 0x37, 0x16, 0x09, 0xae, 0x62, 0x08, 0x08,

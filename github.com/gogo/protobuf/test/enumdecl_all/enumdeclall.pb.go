@@ -36,7 +36,7 @@ func (x MyEnum) String() string {
 	return proto.EnumName(MyEnum_name, int32(x))
 }
 func (MyEnum) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_enumdeclall_97762bd47095d695, []int{0}
+	return fileDescriptor_enumdeclall_ad6922af2d4dd74b, []int{0}
 }
 
 type MyOtherEnum int32
@@ -59,7 +59,7 @@ func (x MyOtherEnum) String() string {
 	return proto.EnumName(MyOtherEnum_name, int32(x))
 }
 func (MyOtherEnum) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_enumdeclall_97762bd47095d695, []int{1}
+	return fileDescriptor_enumdeclall_ad6922af2d4dd74b, []int{1}
 }
 
 type Message struct {
@@ -74,7 +74,7 @@ func (m *Message) Reset()         { *m = Message{} }
 func (m *Message) String() string { return proto.CompactTextString(m) }
 func (*Message) ProtoMessage()    {}
 func (*Message) Descriptor() ([]byte, []int) {
-	return fileDescriptor_enumdeclall_97762bd47095d695, []int{0}
+	return fileDescriptor_enumdeclall_ad6922af2d4dd74b, []int{0}
 }
 func (m *Message) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -414,7 +414,7 @@ func (m *Message) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthEnumdeclall
 			}
 			if (iNdEx + skippy) > l {
@@ -535,9 +535,9 @@ var (
 	ErrIntOverflowEnumdeclall   = fmt.Errorf("proto: integer overflow")
 )
 
-func init() { proto.RegisterFile("enumdeclall.proto", fileDescriptor_enumdeclall_97762bd47095d695) }
+func init() { proto.RegisterFile("enumdeclall.proto", fileDescriptor_enumdeclall_ad6922af2d4dd74b) }
 
-var fileDescriptor_enumdeclall_97762bd47095d695 = []byte{
+var fileDescriptor_enumdeclall_ad6922af2d4dd74b = []byte{
 	// 260 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x12, 0x4c, 0xcd, 0x2b, 0xcd,
 	0x4d, 0x49, 0x4d, 0xce, 0x49, 0xcc, 0xc9, 0xd1, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0xe2, 0x46,

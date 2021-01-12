@@ -42,7 +42,7 @@ type Subby struct {
 func (m *Subby) Reset()      { *m = Subby{} }
 func (*Subby) ProtoMessage() {}
 func (*Subby) Descriptor() ([]byte, []int) {
-	return fileDescriptor_one_475397b14a80232f, []int{0}
+	return fileDescriptor_one_186307ea226df868, []int{0}
 }
 func (m *Subby) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -98,7 +98,7 @@ type SampleOneOf struct {
 func (m *SampleOneOf) Reset()      { *m = SampleOneOf{} }
 func (*SampleOneOf) ProtoMessage() {}
 func (*SampleOneOf) Descriptor() ([]byte, []int) {
-	return fileDescriptor_one_475397b14a80232f, []int{1}
+	return fileDescriptor_one_186307ea226df868, []int{1}
 }
 func (m *SampleOneOf) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2919,7 +2919,7 @@ func (m *Subby) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthOne
 			}
 			if (iNdEx + skippy) > l {
@@ -3270,7 +3270,7 @@ func (m *SampleOneOf) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthOne
 			}
 			if (iNdEx + skippy) > l {
@@ -3391,9 +3391,9 @@ var (
 	ErrIntOverflowOne   = fmt.Errorf("proto: integer overflow")
 )
 
-func init() { proto.RegisterFile("combos/both/one.proto", fileDescriptor_one_475397b14a80232f) }
+func init() { proto.RegisterFile("combos/both/one.proto", fileDescriptor_one_186307ea226df868) }
 
-var fileDescriptor_one_475397b14a80232f = []byte{
+var fileDescriptor_one_186307ea226df868 = []byte{
 	// 404 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x44, 0xd2, 0xbf, 0x4f, 0x1b, 0x31,
 	0x14, 0x07, 0x70, 0x3f, 0x8e, 0x24, 0xe0, 0x84, 0x92, 0x9e, 0x54, 0xe9, 0x95, 0xe1, 0xc9, 0x62,
