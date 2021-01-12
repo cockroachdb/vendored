@@ -42,7 +42,7 @@ type Castaway struct {
 func (m *Castaway) Reset()      { *m = Castaway{} }
 func (*Castaway) ProtoMessage() {}
 func (*Castaway) Descriptor() ([]byte, []int) {
-	return fileDescriptor_castvalue_92129bf361b9c2b5, []int{0}
+	return fileDescriptor_castvalue_fc116ee75d132d96, []int{0}
 }
 func (m *Castaway) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -72,7 +72,7 @@ type Wilson struct {
 func (m *Wilson) Reset()      { *m = Wilson{} }
 func (*Wilson) ProtoMessage() {}
 func (*Wilson) Descriptor() ([]byte, []int) {
-	return fileDescriptor_castvalue_92129bf361b9c2b5, []int{1}
+	return fileDescriptor_castvalue_fc116ee75d132d96, []int{1}
 }
 func (m *Wilson) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1006,7 +1006,7 @@ func (m *Castaway) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthCastvalue
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -1118,7 +1118,7 @@ func (m *Castaway) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthCastvalue
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -1135,7 +1135,7 @@ func (m *Castaway) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthCastvalue
 			}
 			if (iNdEx + skippy) > l {
@@ -1206,7 +1206,7 @@ func (m *Wilson) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthCastvalue
 			}
 			if (iNdEx + skippy) > l {
@@ -1328,10 +1328,10 @@ var (
 )
 
 func init() {
-	proto.RegisterFile("combos/unmarshaler/castvalue.proto", fileDescriptor_castvalue_92129bf361b9c2b5)
+	proto.RegisterFile("combos/unmarshaler/castvalue.proto", fileDescriptor_castvalue_fc116ee75d132d96)
 }
 
-var fileDescriptor_castvalue_92129bf361b9c2b5 = []byte{
+var fileDescriptor_castvalue_fc116ee75d132d96 = []byte{
 	// 359 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xa4, 0x8f, 0xbd, 0x4f, 0xf2, 0x50,
 	0x14, 0xc6, 0xef, 0xa1, 0xe1, 0x0d, 0xef, 0xc5, 0x01, 0xab, 0x43, 0x83, 0xc9, 0xa1, 0x61, 0x91,

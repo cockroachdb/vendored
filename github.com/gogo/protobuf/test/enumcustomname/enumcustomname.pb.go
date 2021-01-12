@@ -62,7 +62,7 @@ func (x *MyCustomEnum) UnmarshalJSON(data []byte) error {
 	return nil
 }
 func (MyCustomEnum) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_enumcustomname_d428393be9e73607, []int{0}
+	return fileDescriptor_enumcustomname_2ab5740aff2f1f0b, []int{0}
 }
 
 type MyCustomUnprefixedEnum int32
@@ -98,7 +98,7 @@ func (x *MyCustomUnprefixedEnum) UnmarshalJSON(data []byte) error {
 	return nil
 }
 func (MyCustomUnprefixedEnum) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_enumcustomname_d428393be9e73607, []int{1}
+	return fileDescriptor_enumcustomname_2ab5740aff2f1f0b, []int{1}
 }
 
 type MyEnumWithEnumStringer int32
@@ -134,7 +134,7 @@ func (x *MyEnumWithEnumStringer) UnmarshalJSON(data []byte) error {
 	return nil
 }
 func (MyEnumWithEnumStringer) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_enumcustomname_d428393be9e73607, []int{2}
+	return fileDescriptor_enumcustomname_2ab5740aff2f1f0b, []int{2}
 }
 
 type OnlyEnums struct {
@@ -159,7 +159,7 @@ func (m *OnlyEnums) Reset()         { *m = OnlyEnums{} }
 func (m *OnlyEnums) String() string { return proto.CompactTextString(m) }
 func (*OnlyEnums) ProtoMessage()    {}
 func (*OnlyEnums) Descriptor() ([]byte, []int) {
-	return fileDescriptor_enumcustomname_d428393be9e73607, []int{0}
+	return fileDescriptor_enumcustomname_2ab5740aff2f1f0b, []int{0}
 }
 func (m *OnlyEnums) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_OnlyEnums.Unmarshal(m, b)
@@ -287,10 +287,10 @@ func (x MyEnumWithEnumStringer) String() string {
 }
 
 func init() {
-	proto.RegisterFile("enumcustomname.proto", fileDescriptor_enumcustomname_d428393be9e73607)
+	proto.RegisterFile("enumcustomname.proto", fileDescriptor_enumcustomname_2ab5740aff2f1f0b)
 }
 
-var fileDescriptor_enumcustomname_d428393be9e73607 = []byte{
+var fileDescriptor_enumcustomname_2ab5740aff2f1f0b = []byte{
 	// 551 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x9c, 0x93, 0x4f, 0x8f, 0xd2, 0x40,
 	0x18, 0xc6, 0x29, 0xba, 0x2c, 0x3b, 0x22, 0xe9, 0x4e, 0x14, 0x47, 0x30, 0x4d, 0xb3, 0x31, 0xc6,

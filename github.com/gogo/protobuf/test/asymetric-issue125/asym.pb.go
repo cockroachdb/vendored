@@ -34,7 +34,7 @@ func (m *M) Reset()         { *m = M{} }
 func (m *M) String() string { return proto.CompactTextString(m) }
 func (*M) ProtoMessage()    {}
 func (*M) Descriptor() ([]byte, []int) {
-	return fileDescriptor_asym_34ee0efbcd9b19e2, []int{0}
+	return fileDescriptor_asym_40972533953b5b0c, []int{0}
 }
 func (m *M) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -73,7 +73,7 @@ func (m *MyType) Reset()         { *m = MyType{} }
 func (m *MyType) String() string { return proto.CompactTextString(m) }
 func (*MyType) ProtoMessage()    {}
 func (*MyType) Descriptor() ([]byte, []int) {
-	return fileDescriptor_asym_34ee0efbcd9b19e2, []int{1}
+	return fileDescriptor_asym_40972533953b5b0c, []int{1}
 }
 func (m *MyType) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -449,7 +449,7 @@ func (m *M) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthAsym
 			}
 			if (iNdEx + skippy) > l {
@@ -500,7 +500,7 @@ func (m *MyType) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthAsym
 			}
 			if (iNdEx + skippy) > l {
@@ -621,9 +621,9 @@ var (
 	ErrIntOverflowAsym   = fmt.Errorf("proto: integer overflow")
 )
 
-func init() { proto.RegisterFile("asym.proto", fileDescriptor_asym_34ee0efbcd9b19e2) }
+func init() { proto.RegisterFile("asym.proto", fileDescriptor_asym_40972533953b5b0c) }
 
-var fileDescriptor_asym_34ee0efbcd9b19e2 = []byte{
+var fileDescriptor_asym_40972533953b5b0c = []byte{
 	// 158 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0x4a, 0x2c, 0xae, 0xcc,
 	0xd5, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0x01, 0xb1, 0xa5, 0x74, 0xd3, 0x33, 0x4b, 0x32,

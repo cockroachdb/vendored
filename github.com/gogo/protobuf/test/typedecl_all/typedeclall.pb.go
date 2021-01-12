@@ -25,7 +25,7 @@ func (m *Dropped) Reset()         { *m = Dropped{} }
 func (m *Dropped) String() string { return proto.CompactTextString(m) }
 func (*Dropped) ProtoMessage()    {}
 func (*Dropped) Descriptor() ([]byte, []int) {
-	return fileDescriptor_typedeclall_37fb6c37f980aef5, []int{0}
+	return fileDescriptor_typedeclall_c8869618f917270e, []int{0}
 }
 func (m *Dropped) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -72,7 +72,7 @@ func (m *DroppedWithoutGetters) Reset()         { *m = DroppedWithoutGetters{} }
 func (m *DroppedWithoutGetters) String() string { return proto.CompactTextString(m) }
 func (*DroppedWithoutGetters) ProtoMessage()    {}
 func (*DroppedWithoutGetters) Descriptor() ([]byte, []int) {
-	return fileDescriptor_typedeclall_37fb6c37f980aef5, []int{1}
+	return fileDescriptor_typedeclall_c8869618f917270e, []int{1}
 }
 func (m *DroppedWithoutGetters) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -112,7 +112,7 @@ func (m *Kept) Reset()         { *m = Kept{} }
 func (m *Kept) String() string { return proto.CompactTextString(m) }
 func (*Kept) ProtoMessage()    {}
 func (*Kept) Descriptor() ([]byte, []int) {
-	return fileDescriptor_typedeclall_37fb6c37f980aef5, []int{2}
+	return fileDescriptor_typedeclall_c8869618f917270e, []int{2}
 }
 func (m *Kept) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -689,7 +689,7 @@ func (m *Dropped) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthTypedeclall
 			}
 			if (iNdEx + skippy) > l {
@@ -777,7 +777,7 @@ func (m *DroppedWithoutGetters) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthTypedeclall
 			}
 			if (iNdEx + skippy) > l {
@@ -875,7 +875,7 @@ func (m *Kept) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthTypedeclall
 			}
 			if (iNdEx + skippy) > l {
@@ -995,9 +995,9 @@ var (
 	ErrIntOverflowTypedeclall   = fmt.Errorf("proto: integer overflow")
 )
 
-func init() { proto.RegisterFile("typedeclall.proto", fileDescriptor_typedeclall_37fb6c37f980aef5) }
+func init() { proto.RegisterFile("typedeclall.proto", fileDescriptor_typedeclall_c8869618f917270e) }
 
-var fileDescriptor_typedeclall_37fb6c37f980aef5 = []byte{
+var fileDescriptor_typedeclall_c8869618f917270e = []byte{
 	// 253 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x12, 0x2c, 0xa9, 0x2c, 0x48,
 	0x4d, 0x49, 0x4d, 0xce, 0x49, 0xcc, 0xc9, 0xd1, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0xe2, 0x46,

@@ -37,7 +37,7 @@ func (m *RequiredExample) Reset()         { *m = RequiredExample{} }
 func (m *RequiredExample) String() string { return proto.CompactTextString(m) }
 func (*RequiredExample) ProtoMessage()    {}
 func (*RequiredExample) Descriptor() ([]byte, []int) {
-	return fileDescriptor_requiredexample_2673f47f43fdf851, []int{0}
+	return fileDescriptor_requiredexample_17d9b4ca1fb14f54, []int{0}
 }
 func (m *RequiredExample) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -112,7 +112,7 @@ func (m *NidOptNative) Reset()         { *m = NidOptNative{} }
 func (m *NidOptNative) String() string { return proto.CompactTextString(m) }
 func (*NidOptNative) ProtoMessage()    {}
 func (*NidOptNative) Descriptor() ([]byte, []int) {
-	return fileDescriptor_requiredexample_2673f47f43fdf851, []int{1}
+	return fileDescriptor_requiredexample_17d9b4ca1fb14f54, []int{1}
 }
 func (m *NidOptNative) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -271,7 +271,7 @@ func (m *NinOptNative) Reset()         { *m = NinOptNative{} }
 func (m *NinOptNative) String() string { return proto.CompactTextString(m) }
 func (*NinOptNative) ProtoMessage()    {}
 func (*NinOptNative) Descriptor() ([]byte, []int) {
-	return fileDescriptor_requiredexample_2673f47f43fdf851, []int{2}
+	return fileDescriptor_requiredexample_17d9b4ca1fb14f54, []int{2}
 }
 func (m *NinOptNative) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -416,7 +416,7 @@ func (m *NestedNinOptNative) Reset()         { *m = NestedNinOptNative{} }
 func (m *NestedNinOptNative) String() string { return proto.CompactTextString(m) }
 func (*NestedNinOptNative) ProtoMessage()    {}
 func (*NestedNinOptNative) Descriptor() ([]byte, []int) {
-	return fileDescriptor_requiredexample_2673f47f43fdf851, []int{3}
+	return fileDescriptor_requiredexample_17d9b4ca1fb14f54, []int{3}
 }
 func (m *NestedNinOptNative) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1267,7 +1267,7 @@ func (m *RequiredExample) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthRequiredexample
 			}
 			if (iNdEx + skippy) > l {
@@ -1597,7 +1597,7 @@ func (m *NidOptNative) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthRequiredexample
 			}
 			if (iNdEx + skippy) > l {
@@ -1982,7 +1982,7 @@ func (m *NinOptNative) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthRequiredexample
 			}
 			if (iNdEx + skippy) > l {
@@ -2109,7 +2109,7 @@ func (m *NestedNinOptNative) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthRequiredexample
 			}
 			if (iNdEx + skippy) > l {
@@ -2231,10 +2231,10 @@ var (
 )
 
 func init() {
-	proto.RegisterFile("requiredexample.proto", fileDescriptor_requiredexample_2673f47f43fdf851)
+	proto.RegisterFile("requiredexample.proto", fileDescriptor_requiredexample_17d9b4ca1fb14f54)
 }
 
-var fileDescriptor_requiredexample_2673f47f43fdf851 = []byte{
+var fileDescriptor_requiredexample_17d9b4ca1fb14f54 = []byte{
 	// 469 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x6c, 0xd4, 0xdd, 0x8e, 0xd2, 0x40,
 	0x14, 0xc0, 0x71, 0x3b, 0x65, 0xf9, 0x98, 0x05, 0xd9, 0x6d, 0xe2, 0xe4, 0xc4, 0x98, 0x7a, 0xc2,

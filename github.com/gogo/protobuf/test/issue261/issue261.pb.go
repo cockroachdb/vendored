@@ -38,7 +38,7 @@ type MapStdTypes struct {
 func (m *MapStdTypes) Reset()      { *m = MapStdTypes{} }
 func (*MapStdTypes) ProtoMessage() {}
 func (*MapStdTypes) Descriptor() ([]byte, []int) {
-	return fileDescriptor_issue261_73ccdf10d7017cb8, []int{0}
+	return fileDescriptor_issue261_c7c4e62ef6515027, []int{0}
 }
 func (m *MapStdTypes) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -383,7 +383,7 @@ func (m *MapStdTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthIssue261
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -400,7 +400,7 @@ func (m *MapStdTypes) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthIssue261
 			}
 			if (iNdEx + skippy) > l {
@@ -520,9 +520,9 @@ var (
 	ErrIntOverflowIssue261   = fmt.Errorf("proto: integer overflow")
 )
 
-func init() { proto.RegisterFile("issue261.proto", fileDescriptor_issue261_73ccdf10d7017cb8) }
+func init() { proto.RegisterFile("issue261.proto", fileDescriptor_issue261_c7c4e62ef6515027) }
 
-var fileDescriptor_issue261_73ccdf10d7017cb8 = []byte{
+var fileDescriptor_issue261_c7c4e62ef6515027 = []byte{
 	// 275 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0xcb, 0x2c, 0x2e, 0x2e,
 	0x4d, 0x35, 0x32, 0x33, 0xd4, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0xe2, 0x80, 0xf1, 0xa5, 0x74,

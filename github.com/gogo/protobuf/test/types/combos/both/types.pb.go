@@ -49,7 +49,7 @@ func (m *KnownTypes) Reset()         { *m = KnownTypes{} }
 func (m *KnownTypes) String() string { return proto.CompactTextString(m) }
 func (*KnownTypes) ProtoMessage()    {}
 func (*KnownTypes) Descriptor() ([]byte, []int) {
-	return fileDescriptor_types_6d7bfc155f665581, []int{0}
+	return fileDescriptor_types_81e8f9a56d51c0c9, []int{0}
 }
 func (m *KnownTypes) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -187,7 +187,7 @@ func (m *ProtoTypes) Reset()         { *m = ProtoTypes{} }
 func (m *ProtoTypes) String() string { return proto.CompactTextString(m) }
 func (*ProtoTypes) ProtoMessage()    {}
 func (*ProtoTypes) Descriptor() ([]byte, []int) {
-	return fileDescriptor_types_6d7bfc155f665581, []int{1}
+	return fileDescriptor_types_81e8f9a56d51c0c9, []int{1}
 }
 func (m *ProtoTypes) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -402,7 +402,7 @@ func (m *StdTypes) Reset()         { *m = StdTypes{} }
 func (m *StdTypes) String() string { return proto.CompactTextString(m) }
 func (*StdTypes) ProtoMessage()    {}
 func (*StdTypes) Descriptor() ([]byte, []int) {
-	return fileDescriptor_types_6d7bfc155f665581, []int{2}
+	return fileDescriptor_types_81e8f9a56d51c0c9, []int{2}
 }
 func (m *StdTypes) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -617,7 +617,7 @@ func (m *RepProtoTypes) Reset()         { *m = RepProtoTypes{} }
 func (m *RepProtoTypes) String() string { return proto.CompactTextString(m) }
 func (*RepProtoTypes) ProtoMessage()    {}
 func (*RepProtoTypes) Descriptor() ([]byte, []int) {
-	return fileDescriptor_types_6d7bfc155f665581, []int{3}
+	return fileDescriptor_types_81e8f9a56d51c0c9, []int{3}
 }
 func (m *RepProtoTypes) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -832,7 +832,7 @@ func (m *RepStdTypes) Reset()         { *m = RepStdTypes{} }
 func (m *RepStdTypes) String() string { return proto.CompactTextString(m) }
 func (*RepStdTypes) ProtoMessage()    {}
 func (*RepStdTypes) Descriptor() ([]byte, []int) {
-	return fileDescriptor_types_6d7bfc155f665581, []int{4}
+	return fileDescriptor_types_81e8f9a56d51c0c9, []int{4}
 }
 func (m *RepStdTypes) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1047,7 +1047,7 @@ func (m *MapProtoTypes) Reset()         { *m = MapProtoTypes{} }
 func (m *MapProtoTypes) String() string { return proto.CompactTextString(m) }
 func (*MapProtoTypes) ProtoMessage()    {}
 func (*MapProtoTypes) Descriptor() ([]byte, []int) {
-	return fileDescriptor_types_6d7bfc155f665581, []int{5}
+	return fileDescriptor_types_81e8f9a56d51c0c9, []int{5}
 }
 func (m *MapProtoTypes) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1262,7 +1262,7 @@ func (m *MapStdTypes) Reset()         { *m = MapStdTypes{} }
 func (m *MapStdTypes) String() string { return proto.CompactTextString(m) }
 func (*MapStdTypes) ProtoMessage()    {}
 func (*MapStdTypes) Descriptor() ([]byte, []int) {
-	return fileDescriptor_types_6d7bfc155f665581, []int{6}
+	return fileDescriptor_types_81e8f9a56d51c0c9, []int{6}
 }
 func (m *MapStdTypes) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1468,7 +1468,7 @@ func (m *OneofProtoTypes) Reset()         { *m = OneofProtoTypes{} }
 func (m *OneofProtoTypes) String() string { return proto.CompactTextString(m) }
 func (*OneofProtoTypes) ProtoMessage()    {}
 func (*OneofProtoTypes) Descriptor() ([]byte, []int) {
-	return fileDescriptor_types_6d7bfc155f665581, []int{7}
+	return fileDescriptor_types_81e8f9a56d51c0c9, []int{7}
 }
 func (m *OneofProtoTypes) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1903,7 +1903,7 @@ func (m *OneofStdTypes) Reset()         { *m = OneofStdTypes{} }
 func (m *OneofStdTypes) String() string { return proto.CompactTextString(m) }
 func (*OneofStdTypes) ProtoMessage()    {}
 func (*OneofStdTypes) Descriptor() ([]byte, []int) {
-	return fileDescriptor_types_6d7bfc155f665581, []int{8}
+	return fileDescriptor_types_81e8f9a56d51c0c9, []int{8}
 }
 func (m *OneofStdTypes) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -12305,7 +12305,7 @@ func (m *KnownTypes) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthTypes
 			}
 			if (iNdEx + skippy) > l {
@@ -13049,7 +13049,7 @@ func (m *ProtoTypes) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthTypes
 			}
 			if (iNdEx + skippy) > l {
@@ -13793,7 +13793,7 @@ func (m *StdTypes) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthTypes
 			}
 			if (iNdEx + skippy) > l {
@@ -14526,7 +14526,7 @@ func (m *RepProtoTypes) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthTypes
 			}
 			if (iNdEx + skippy) > l {
@@ -15259,7 +15259,7 @@ func (m *RepStdTypes) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthTypes
 			}
 			if (iNdEx + skippy) > l {
@@ -15405,7 +15405,7 @@ func (m *MapProtoTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -15517,7 +15517,7 @@ func (m *MapProtoTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -15629,7 +15629,7 @@ func (m *MapProtoTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -15741,7 +15741,7 @@ func (m *MapProtoTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -15853,7 +15853,7 @@ func (m *MapProtoTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -15965,7 +15965,7 @@ func (m *MapProtoTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -16077,7 +16077,7 @@ func (m *MapProtoTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -16189,7 +16189,7 @@ func (m *MapProtoTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -16301,7 +16301,7 @@ func (m *MapProtoTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -16413,7 +16413,7 @@ func (m *MapProtoTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -16525,7 +16525,7 @@ func (m *MapProtoTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -16637,7 +16637,7 @@ func (m *MapProtoTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -16749,7 +16749,7 @@ func (m *MapProtoTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -16861,7 +16861,7 @@ func (m *MapProtoTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -16973,7 +16973,7 @@ func (m *MapProtoTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -17085,7 +17085,7 @@ func (m *MapProtoTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -17197,7 +17197,7 @@ func (m *MapProtoTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -17309,7 +17309,7 @@ func (m *MapProtoTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -17421,7 +17421,7 @@ func (m *MapProtoTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -17533,7 +17533,7 @@ func (m *MapProtoTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -17645,7 +17645,7 @@ func (m *MapProtoTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -17757,7 +17757,7 @@ func (m *MapProtoTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -17774,7 +17774,7 @@ func (m *MapProtoTypes) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthTypes
 			}
 			if (iNdEx + skippy) > l {
@@ -17919,7 +17919,7 @@ func (m *MapStdTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -18030,7 +18030,7 @@ func (m *MapStdTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -18141,7 +18141,7 @@ func (m *MapStdTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -18252,7 +18252,7 @@ func (m *MapStdTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -18363,7 +18363,7 @@ func (m *MapStdTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -18474,7 +18474,7 @@ func (m *MapStdTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -18585,7 +18585,7 @@ func (m *MapStdTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -18696,7 +18696,7 @@ func (m *MapStdTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -18807,7 +18807,7 @@ func (m *MapStdTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -18918,7 +18918,7 @@ func (m *MapStdTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -19029,7 +19029,7 @@ func (m *MapStdTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -19140,7 +19140,7 @@ func (m *MapStdTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -19251,7 +19251,7 @@ func (m *MapStdTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -19362,7 +19362,7 @@ func (m *MapStdTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -19473,7 +19473,7 @@ func (m *MapStdTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -19584,7 +19584,7 @@ func (m *MapStdTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -19695,7 +19695,7 @@ func (m *MapStdTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -19806,7 +19806,7 @@ func (m *MapStdTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -19917,7 +19917,7 @@ func (m *MapStdTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -20028,7 +20028,7 @@ func (m *MapStdTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -20139,7 +20139,7 @@ func (m *MapStdTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -20250,7 +20250,7 @@ func (m *MapStdTypes) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthTypes
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -20267,7 +20267,7 @@ func (m *MapStdTypes) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthTypes
 			}
 			if (iNdEx + skippy) > l {
@@ -20670,7 +20670,7 @@ func (m *OneofProtoTypes) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthTypes
 			}
 			if (iNdEx + skippy) > l {
@@ -21073,7 +21073,7 @@ func (m *OneofStdTypes) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthTypes
 			}
 			if (iNdEx + skippy) > l {
@@ -21194,9 +21194,9 @@ var (
 	ErrIntOverflowTypes   = fmt.Errorf("proto: integer overflow")
 )
 
-func init() { proto.RegisterFile("combos/both/types.proto", fileDescriptor_types_6d7bfc155f665581) }
+func init() { proto.RegisterFile("combos/both/types.proto", fileDescriptor_types_81e8f9a56d51c0c9) }
 
-var fileDescriptor_types_6d7bfc155f665581 = []byte{
+var fileDescriptor_types_81e8f9a56d51c0c9 = []byte{
 	// 2294 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xec, 0x5b, 0xcf, 0x73, 0x1b, 0x49,
 	0x19, 0x8d, 0x22, 0x39, 0xb1, 0xdb, 0x76, 0x62, 0x4f, 0x36, 0xcb, 0x60, 0x28, 0x25, 0x78, 0x37,

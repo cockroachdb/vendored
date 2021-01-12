@@ -36,7 +36,7 @@ func (m *Nil) Reset()         { *m = Nil{} }
 func (m *Nil) String() string { return proto.CompactTextString(m) }
 func (*Nil) ProtoMessage()    {}
 func (*Nil) Descriptor() ([]byte, []int) {
-	return fileDescriptor_fuzz_a9783a48f1b0a0f4, []int{0}
+	return fileDescriptor_fuzz_c99f90d24d17c0b9, []int{0}
 }
 func (m *Nil) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -88,7 +88,7 @@ func (m *NinRepPackedNative) Reset()         { *m = NinRepPackedNative{} }
 func (m *NinRepPackedNative) String() string { return proto.CompactTextString(m) }
 func (*NinRepPackedNative) ProtoMessage()    {}
 func (*NinRepPackedNative) Descriptor() ([]byte, []int) {
-	return fileDescriptor_fuzz_a9783a48f1b0a0f4, []int{1}
+	return fileDescriptor_fuzz_c99f90d24d17c0b9, []int{1}
 }
 func (m *NinRepPackedNative) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -233,7 +233,7 @@ func (m *NinOptNative) Reset()         { *m = NinOptNative{} }
 func (m *NinOptNative) String() string { return proto.CompactTextString(m) }
 func (*NinOptNative) ProtoMessage()    {}
 func (*NinOptNative) Descriptor() ([]byte, []int) {
-	return fileDescriptor_fuzz_a9783a48f1b0a0f4, []int{2}
+	return fileDescriptor_fuzz_c99f90d24d17c0b9, []int{2}
 }
 func (m *NinOptNative) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -387,7 +387,7 @@ func (m *NinOptStruct) Reset()         { *m = NinOptStruct{} }
 func (m *NinOptStruct) String() string { return proto.CompactTextString(m) }
 func (*NinOptStruct) ProtoMessage()    {}
 func (*NinOptStruct) Descriptor() ([]byte, []int) {
-	return fileDescriptor_fuzz_a9783a48f1b0a0f4, []int{3}
+	return fileDescriptor_fuzz_c99f90d24d17c0b9, []int{3}
 }
 func (m *NinOptStruct) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1333,7 +1333,7 @@ func (m *Nil) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthFuzz
 			}
 			if (iNdEx + skippy) > l {
@@ -2191,7 +2191,7 @@ func (m *NinRepPackedNative) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthFuzz
 			}
 			if (iNdEx + skippy) > l {
@@ -2515,7 +2515,7 @@ func (m *NinOptNative) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthFuzz
 			}
 			if (iNdEx + skippy) > l {
@@ -2812,7 +2812,7 @@ func (m *NinOptStruct) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthFuzz
 			}
 			if (iNdEx + skippy) > l {
@@ -2933,9 +2933,9 @@ var (
 	ErrIntOverflowFuzz   = fmt.Errorf("proto: integer overflow")
 )
 
-func init() { proto.RegisterFile("fuzz.proto", fileDescriptor_fuzz_a9783a48f1b0a0f4) }
+func init() { proto.RegisterFile("fuzz.proto", fileDescriptor_fuzz_c99f90d24d17c0b9) }
 
-var fileDescriptor_fuzz_a9783a48f1b0a0f4 = []byte{
+var fileDescriptor_fuzz_c99f90d24d17c0b9 = []byte{
 	// 445 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xac, 0xd3, 0xbf, 0x6e, 0x1a, 0x41,
 	0x10, 0xc7, 0x71, 0xcd, 0x0d, 0x7f, 0xd7, 0x10, 0xf0, 0x15, 0x9b, 0x91, 0x15, 0xa1, 0x15, 0xd5,

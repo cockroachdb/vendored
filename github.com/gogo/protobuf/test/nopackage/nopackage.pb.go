@@ -33,7 +33,7 @@ func (m *M) Reset()         { *m = M{} }
 func (m *M) String() string { return proto.CompactTextString(m) }
 func (*M) ProtoMessage()    {}
 func (*M) Descriptor() ([]byte, []int) {
-	return fileDescriptor_nopackage_085d7f4350f51d1d, []int{0}
+	return fileDescriptor_nopackage_518e4eee871948a8, []int{0}
 }
 func (m *M) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -271,7 +271,7 @@ func (m *M) Unmarshal(dAtA []byte) error {
 					if err != nil {
 						return err
 					}
-					if skippy < 0 {
+					if (skippy < 0) || (iNdEx+skippy) < 0 {
 						return ErrInvalidLengthNopackage
 					}
 					if (iNdEx + skippy) > postIndex {
@@ -288,7 +288,7 @@ func (m *M) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthNopackage
 			}
 			if (iNdEx + skippy) > l {
@@ -409,9 +409,9 @@ var (
 	ErrIntOverflowNopackage   = fmt.Errorf("proto: integer overflow")
 )
 
-func init() { proto.RegisterFile("nopackage.proto", fileDescriptor_nopackage_085d7f4350f51d1d) }
+func init() { proto.RegisterFile("nopackage.proto", fileDescriptor_nopackage_518e4eee871948a8) }
 
-var fileDescriptor_nopackage_085d7f4350f51d1d = []byte{
+var fileDescriptor_nopackage_518e4eee871948a8 = []byte{
 	// 134 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0xcf, 0xcb, 0x2f, 0x48,
 	0x4c, 0xce, 0x4e, 0x4c, 0x4f, 0xd5, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x57, 0x0a, 0xe2, 0x62, 0xf4,
