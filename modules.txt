@@ -367,12 +367,15 @@ github.com/elastic/gosigar/sys/windows
 # github.com/elazarl/go-bindata-assetfs v1.0.0
 ## explicit
 github.com/elazarl/go-bindata-assetfs
+# github.com/emicklei/dot v0.15.0
+## explicit
+github.com/emicklei/dot
 # github.com/envoyproxy/protoc-gen-validate v0.1.0
 github.com/envoyproxy/protoc-gen-validate/validate
 # github.com/facebookgo/clock v0.0.0-20150410010913-600d898af40a
 ## explicit
 github.com/facebookgo/clock
-# github.com/frankban/quicktest v1.7.3
+# github.com/frankban/quicktest v1.11.2
 ## explicit
 # github.com/ghemawat/stream v0.0.0-20171120220530-696b145b53b9
 ## explicit
@@ -465,7 +468,7 @@ github.com/google/btree
 # github.com/google/flatbuffers v1.11.0
 ## explicit
 github.com/google/flatbuffers/go
-# github.com/google/go-cmp v0.4.0
+# github.com/google/go-cmp v0.5.2
 ## explicit
 github.com/google/go-cmp/cmp
 github.com/google/go-cmp/cmp/cmpopts
@@ -777,6 +780,7 @@ github.com/pierrre/geohash
 ## explicit
 github.com/pkg/browser
 # github.com/pkg/errors v0.9.1
+## explicit
 github.com/pkg/errors
 # github.com/pmezard/go-difflib v1.0.0
 ## explicit
