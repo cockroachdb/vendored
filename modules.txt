@@ -245,7 +245,7 @@ github.com/cockroachdb/gostdlib/x/tools/internal/span
 # github.com/cockroachdb/logtags v0.0.0-20190617123548-eb05cc24525f
 ## explicit
 github.com/cockroachdb/logtags
-# github.com/cockroachdb/pebble v0.0.0-20210105203824-97dabc1c2dca
+# github.com/cockroachdb/pebble v0.0.0-20210108212919-48f55301c5c4
 ## explicit
 github.com/cockroachdb/pebble
 github.com/cockroachdb/pebble/bloom
@@ -390,7 +390,7 @@ github.com/go-ole/go-ole/oleutil
 github.com/go-sql-driver/mysql
 # github.com/gofrs/uuid v3.3.0+incompatible
 ## explicit
-# github.com/gogo/protobuf v1.3.1 => github.com/cockroachdb/gogoproto v1.2.1-0.20190102194534-ca10b809dba0
+# github.com/gogo/protobuf v1.3.1 => github.com/cockroachdb/gogoproto v1.2.1-0.20210111172841-8b6737fea948
 ## explicit
 github.com/gogo/protobuf/gogoproto
 github.com/gogo/protobuf/jsonpb
@@ -544,7 +544,7 @@ github.com/inconshreveable/mousetrap
 github.com/jackc/chunkreader/v2
 # github.com/jackc/fake v0.0.0-20150926172116-812a484cc733
 ## explicit
-# github.com/jackc/pgconn v1.6.1
+# github.com/jackc/pgconn v1.8.0
 ## explicit
 github.com/jackc/pgconn
 github.com/jackc/pgconn/internal/ctxwatch
@@ -553,10 +553,10 @@ github.com/jackc/pgconn/stmtcache
 github.com/jackc/pgio
 # github.com/jackc/pgpassfile v1.0.0
 github.com/jackc/pgpassfile
-# github.com/jackc/pgproto3/v2 v2.0.4
+# github.com/jackc/pgproto3/v2 v2.0.7
 ## explicit
 github.com/jackc/pgproto3/v2
-# github.com/jackc/pgservicefile v0.0.0-20200307190119-3430c5407db8
+# github.com/jackc/pgservicefile v0.0.0-20200714003250-2b9c44734f2b
 github.com/jackc/pgservicefile
 # github.com/jackc/pgtype v1.3.0
 github.com/jackc/pgtype
@@ -902,7 +902,7 @@ go.opencensus.io/trace
 go.opencensus.io/trace/internal
 go.opencensus.io/trace/propagation
 go.opencensus.io/trace/tracestate
-# golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
+# golang.org/x/crypto v0.0.0-20201221181555-eec23a3978ad
 ## explicit
 golang.org/x/crypto/bcrypt
 golang.org/x/crypto/blowfish
@@ -963,13 +963,16 @@ golang.org/x/perf/storage/benchfmt
 ## explicit
 golang.org/x/sync/errgroup
 golang.org/x/sync/syncmap
-# golang.org/x/sys v0.0.0-20210105210732-16f7687f5001
+# golang.org/x/sys v0.0.0-20210108172913-0df2131ae363
 ## explicit
 golang.org/x/sys/cpu
 golang.org/x/sys/internal/unsafeheader
+golang.org/x/sys/plan9
 golang.org/x/sys/unix
 golang.org/x/sys/windows
-# golang.org/x/text v0.3.3
+# golang.org/x/term v0.0.0-20201117132131-f5c789dd3221
+golang.org/x/term
+# golang.org/x/text v0.3.5
 ## explicit
 golang.org/x/text/cases
 golang.org/x/text/collate
@@ -1266,7 +1269,7 @@ vitess.io/vitess/go/vt/proto/vtgate
 vitess.io/vitess/go/vt/proto/vtrpc
 vitess.io/vitess/go/vt/sqlparser
 vitess.io/vitess/go/vt/vterrors
-# github.com/gogo/protobuf => github.com/cockroachdb/gogoproto v1.2.1-0.20190102194534-ca10b809dba0
+# github.com/gogo/protobuf => github.com/cockroachdb/gogoproto v1.2.1-0.20210111172841-8b6737fea948
 # github.com/grpc-ecosystem/grpc-gateway => github.com/cockroachdb/grpc-gateway v1.14.6-0.20200519165156-52697fc4a249
 # github.com/olekukonko/tablewriter => github.com/cockroachdb/tablewriter v0.0.5-0.20200105123400-bd15540e8847
 # github.com/abourget/teamcity => github.com/cockroachdb/teamcity v0.0.0-20180905144921-8ca25c33eb11

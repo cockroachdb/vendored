@@ -243,7 +243,7 @@ type FieldMask struct {
 func (m *FieldMask) Reset()      { *m = FieldMask{} }
 func (*FieldMask) ProtoMessage() {}
 func (*FieldMask) Descriptor() ([]byte, []int) {
-	return fileDescriptor_field_mask_f1676d06eb3d88ba, []int{0}
+	return fileDescriptor_field_mask_50eece8ef83c2edb, []int{0}
 }
 func (m *FieldMask) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -626,7 +626,7 @@ func (m *FieldMask) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthFieldMask
 			}
 			if (iNdEx + skippy) > l {
@@ -748,10 +748,10 @@ var (
 )
 
 func init() {
-	proto.RegisterFile("google/protobuf/field_mask.proto", fileDescriptor_field_mask_f1676d06eb3d88ba)
+	proto.RegisterFile("google/protobuf/field_mask.proto", fileDescriptor_field_mask_50eece8ef83c2edb)
 }
 
-var fileDescriptor_field_mask_f1676d06eb3d88ba = []byte{
+var fileDescriptor_field_mask_50eece8ef83c2edb = []byte{
 	// 200 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x52, 0x48, 0xcf, 0xcf, 0x4f,
 	0xcf, 0x49, 0xd5, 0x2f, 0x28, 0xca, 0x2f, 0xc9, 0x4f, 0x2a, 0x4d, 0xd3, 0x4f, 0xcb, 0x4c, 0xcd,

@@ -123,7 +123,7 @@ type Timestamp struct {
 func (m *Timestamp) Reset()      { *m = Timestamp{} }
 func (*Timestamp) ProtoMessage() {}
 func (*Timestamp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_timestamp_820f61227bd8f1e8, []int{0}
+	return fileDescriptor_timestamp_1c61d2d9bf9ad07c, []int{0}
 }
 func (*Timestamp) XXX_WellKnownType() string { return "Timestamp" }
 func (m *Timestamp) XXX_Unmarshal(b []byte) error {
@@ -411,7 +411,7 @@ func (m *Timestamp) Unmarshal(dAtA []byte) error {
 			if err != nil {
 				return err
 			}
-			if skippy < 0 {
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
 				return ErrInvalidLengthTimestamp
 			}
 			if (iNdEx + skippy) > l {
@@ -533,10 +533,10 @@ var (
 )
 
 func init() {
-	proto.RegisterFile("google/protobuf/timestamp.proto", fileDescriptor_timestamp_820f61227bd8f1e8)
+	proto.RegisterFile("google/protobuf/timestamp.proto", fileDescriptor_timestamp_1c61d2d9bf9ad07c)
 }
 
-var fileDescriptor_timestamp_820f61227bd8f1e8 = []byte{
+var fileDescriptor_timestamp_1c61d2d9bf9ad07c = []byte{
 	// 212 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x92, 0x4f, 0xcf, 0xcf, 0x4f,
 	0xcf, 0x49, 0xd5, 0x2f, 0x28, 0xca, 0x2f, 0xc9, 0x4f, 0x2a, 0x4d, 0xd3, 0x2f, 0xc9, 0xcc, 0x4d,

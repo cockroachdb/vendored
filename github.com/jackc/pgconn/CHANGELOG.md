@@ -1,3 +1,35 @@
+# 1.8.0 (December 3, 2020)
+
+* Add StatementErrored method to stmtcache.Cache. This allows the cache to purge invalidated prepared statements. (Ethan Pailes)
+
+# 1.7.2 (November 3, 2020)
+
+* Fix data value slices into work buffer with capacities larger than length.
+
+# 1.7.1 (October 31, 2020)
+
+* Do not asyncClose after receiving FATAL error from PostgreSQL server
+
+# 1.7.0 (September 26, 2020)
+
+* Exec(Params|Prepared) return ResultReader with FieldDescriptions loaded
+* Add ReceiveResults (Sebastiaan Mannem)
+* Fix parsing DSN connection with bad backslash
+* Add PgConn.CleanupDone so connection pools can determine when async close is complete
+
+# 1.6.4 (July 29, 2020)
+
+* Fix deadlock on error after CommandComplete but before ReadyForQuery
+* Fix panic on parsing DSN with trailing '='
+
+# 1.6.3 (July 22, 2020)
+
+* Fix error message after AppendCertsFromPEM failure (vahid-sohrabloo)
+
+# 1.6.2 (July 14, 2020)
+
+* Update pgservicefile library
+
 # 1.6.1 (June 27, 2020)
 
 * Update golang.org/x/crypto to latest
