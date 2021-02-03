@@ -8,13 +8,11 @@ import (
 	"bytes"
 	"io"
 	"sync/atomic"
-	"time"
 
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/pebble/internal/base"
+	"github.com/cockroachdb/pebble/internal/fastrand"
 	"github.com/cockroachdb/pebble/internal/manifest"
-	"github.com/cockroachdb/pebble/internal/randvar"
-	"golang.org/x/exp/rand"
 )
 
 // iterPos describes the state of the internal iterator, in terms of whether it is
@@ -97,10 +95,7 @@ type Iterator struct {
 // compaction
 type readSampling struct {
 	bytesUntilReadSampling uint64
-	rand                   *rand.Rand
-	randvar                *randvar.Uniform
 	pendingCompactions     []readCompaction
-	topFile                *manifest.FileMetadata
 	// forceReadSampling is used for testing purposes to force a read sample on every
 	// call to Iterator.maybeSampleRead()
 	forceReadSampling bool
@@ -182,6 +177,9 @@ func (i *Iterator) nextUserKey() {
 }
 
 func (i *Iterator) maybeSampleRead() {
+	if !i.valid {
+		return
+	}
 	if i.readState == nil {
 		return
 	}
@@ -189,34 +187,25 @@ func (i *Iterator) maybeSampleRead() {
 		i.sampleRead()
 		return
 	}
-	samplingPeriod := readBytesPeriod * i.readState.db.opts.Experimental.ReadSamplingMultiplier
+	samplingPeriod := uint32(readBytesPeriod * i.readState.db.opts.Experimental.ReadSamplingMultiplier)
 	if samplingPeriod <= 0 {
 		return
 	}
-	if i.readSampling.rand == nil || i.readSampling.randvar == nil {
-		i.readSampling.rand = rand.New(rand.NewSource(uint64(time.Now().UnixNano())))
-		i.readSampling.randvar = randvar.NewUniform(0, 2*samplingPeriod)
-	}
 	bytesRead := uint64(len(i.key) + len(i.value))
 	for i.readSampling.bytesUntilReadSampling < bytesRead {
-		i.readSampling.bytesUntilReadSampling += i.readSampling.randvar.Uint64(i.readSampling.rand)
+		i.readSampling.bytesUntilReadSampling += uint64(fastrand.Uint32n(2 * samplingPeriod))
 		i.sampleRead()
 	}
 	i.readSampling.bytesUntilReadSampling -= bytesRead
 }
 
 func (i *Iterator) sampleRead() {
-	topFile := i.readSampling.topFile
+	var topFile *manifest.FileMetadata
 	topLevel, numOverlappingLevels := numLevels, 0
 	if mi, ok := i.iter.(*mergingIter); ok {
 		if len(mi.levels) > 1 {
 			mi.ForEachLevelIter(func(li *levelIter) bool {
 				l := manifest.LevelToInt(li.level)
-				// TODO(aaditya): Fix edge case: For Iterator.Last(), Iterator.SeekLT() and Iterator.Prev(),
-				// if the key is the first key of the file or the only key, sampling skips it because
-				// the iterator has already moved past it. The solution would be to check for this, and then
-				// seek to the correct file to sample it. This could have a performance impact which needs to
-				// be tested in benchmarks.
 				if file := li.files.Current(); file != nil {
 					var containsKey bool
 					if i.pos == iterPosNext || i.pos == iterPosCurForward {
@@ -224,6 +213,13 @@ func (i *Iterator) sampleRead() {
 					} else if i.pos == iterPosPrev || i.pos == iterPosCurReverse {
 						containsKey = i.cmp(file.Largest.UserKey, i.key) >= 0
 					}
+					// Do nothing if the current key is not contained in file's
+					// bounds. We could seek the LevelIterator at this level
+					// to find the right file, but the performance impacts of
+					// doing that are significant enough to negate the benefits
+					// of read sampling in the first place. See the discussion
+					// at:
+					// https://github.com/cockroachdb/pebble/pull/1041#issuecomment-763226492
 					if containsKey {
 						numOverlappingLevels++
 						if numOverlappingLevels >= 2 {
