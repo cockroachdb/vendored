@@ -19,6 +19,8 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	goparser "go/parser"
+	"go/printer"
 	"go/token"
 	"io/ioutil"
 	"os"
@@ -35,12 +37,13 @@ import (
 
 var (
 	wrap         = flag.Int("wrap", 100, "column to wrap at")
-	tab          = flag.Int("tab", 8, "tab width for column calculations")
+	tab          = flag.Int("tab", 2, "tab width for column calculations")
 	overwrite    = flag.Bool("w", false, "overwrite modified files")
-	fast         = flag.Bool("fast", false, "skip running goimports")
+	fast         = flag.Bool("fast", false, "skip running goimports and simplify")
 	groupImports = flag.Bool("groupimports", true, "group imports by type")
 	printDiff    = flag.Bool("diff", true, "print diffs")
 	ignore       = flag.String("ignore", "", "regex matching files to skip")
+	srcDir       = flag.String("srcdir", "", "resolve imports as if the source file is from the given directory (if a file is given, the parent directory is used)")
 )
 
 var (
@@ -155,11 +158,40 @@ func checkBuf(path string, src []byte) ([]byte, error) {
 			TabWidth:   *tab,
 			FormatOnly: false,
 		}
-		newSrc, err := imports.Process(path, src, &importOpts)
+
+		pathForImports := path
+		if *srcDir != "" {
+			filename := filepath.Base(path)
+			if isDirectory(*srcDir) {
+				pathForImports = filepath.Join(*srcDir, filename)
+			} else {
+				pathForImports = filepath.Join(filepath.Dir(*srcDir), filename)
+			}
+		}
+
+		newSrc, err := imports.Process(pathForImports, src, &importOpts)
 		if err != nil {
 			return nil, err
 		}
 		src = newSrc
+
+		// Simplify
+		{
+			fileSet := token.NewFileSet()
+			f, err := goparser.ParseFile(fileSet, path, src, goparser.ParseComments)
+			if err != nil {
+				return nil, err
+			}
+			render.Simplify(f)
+
+			prCfg := &printer.Config{
+				Tabwidth: *tab,
+				Mode:     printer.UseSpaces | printer.TabIndent,
+			}
+			var buf bytes.Buffer
+			prCfg.Fprint(&buf, fileSet, f)
+			src = buf.Bytes()
+		}
 	}
 
 	file, err := parser.ParseFile(path, src)
@@ -283,4 +315,14 @@ func remapImports(file *parser.File) map[*parser.ImportDecl][]render.ImportBlock
 		mapping[imp] = blocks
 	}
 	return mapping
+}
+
+// isDirectory returns true if the path is a directory. False is
+// returned on any error.
+func isDirectory(path string) bool {
+	fileInfo, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return fileInfo.IsDir()
 }
