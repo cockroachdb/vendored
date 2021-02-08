@@ -8,6 +8,7 @@ import (
 
 const (
 	snapshot           = "snapshot"
+	versionId          = "versionid"
 	SnapshotTimeFormat = "2006-01-02T15:04:05.0000000Z07:00"
 )
 
@@ -23,6 +24,7 @@ type BlobURLParts struct {
 	Snapshot            string // "" if not a snapshot
 	SAS                 SASQueryParameters
 	UnparsedParams      string
+	VersionID           string // "" if not versioning enabled
 }
 
 // IPEndpointStyleInfo is used for IP endpoint style URL when working with Azure storage emulator.
@@ -85,11 +87,19 @@ func NewBlobURLParts(u url.URL) BlobURLParts {
 	// Convert the query parameters to a case-sensitive map & trim whitespace
 	paramsMap := u.Query()
 
-	up.Snapshot = "" // Assume no snapshot
+	up.Snapshot = ""  // Assume no snapshot
+	up.VersionID = "" // Assume no versionID
 	if snapshotStr, ok := caseInsensitiveValues(paramsMap).Get(snapshot); ok {
 		up.Snapshot = snapshotStr[0]
 		// If we recognized the query parameter, remove it from the map
 		delete(paramsMap, snapshot)
+	}
+
+	if versionIDs, ok := caseInsensitiveValues(paramsMap).Get(versionId); ok {
+		up.VersionID = versionIDs[0]
+		// If we recognized the query parameter, remove it from the map
+		delete(paramsMap, versionId)   // delete "versionid" from paramsMap
+		delete(paramsMap, "versionId") // delete "versionId" from paramsMap
 	}
 	up.SAS = newSASQueryParameters(paramsMap, true)
 	up.UnparsedParams = paramsMap.Encode()
@@ -124,6 +134,11 @@ func (up BlobURLParts) URL() url.URL {
 
 	rawQuery := up.UnparsedParams
 
+	//If no snapshot is initially provided, fill it in from the SAS query properties to help the user
+	if up.Snapshot == "" && !up.SAS.snapshotTime.IsZero() {
+		up.Snapshot = up.SAS.snapshotTime.Format(SnapshotTimeFormat)
+	}
+
 	// Concatenate blob snapshot query parameter (if it exists)
 	if up.Snapshot != "" {
 		if len(rawQuery) > 0 {
@@ -131,6 +146,15 @@ func (up BlobURLParts) URL() url.URL {
 		}
 		rawQuery += snapshot + "=" + up.Snapshot
 	}
+
+	// Concatenate blob version id query parameter (if it exists)
+	if up.VersionID != "" {
+		if len(rawQuery) > 0 {
+			rawQuery += "&"
+		}
+		rawQuery += versionId + "=" + up.VersionID
+	}
+
 	sas := up.SAS.Encode()
 	if sas != "" {
 		if len(rawQuery) > 0 {

@@ -62,15 +62,21 @@ func NewRequestLogPolicyFactory(o RequestLogOptions) pipeline.Factory {
 				logLevel, forceLog = pipeline.LogWarning, true
 			}
 
-			if err == nil { // We got a response from the service
-				sc := response.Response().StatusCode
-				if ((sc >= 400 && sc <= 499) && sc != http.StatusNotFound && sc != http.StatusConflict && sc != http.StatusPreconditionFailed && sc != http.StatusRequestedRangeNotSatisfiable) || (sc >= 500 && sc <= 599) {
-					logLevel, forceLog = pipeline.LogError, true // Promote to Error any 4xx (except those listed is an error) or any 5xx
-				} else {
-					// For other status codes, we leave the level as is.
+			var sc int
+			if err == nil { // We got a valid response from the service
+				sc = response.Response().StatusCode
+			} else { // We got an error, so we should inspect if we got a response
+				if se, ok := err.(StorageError); ok {
+					if r := se.Response(); r != nil {
+						sc = r.StatusCode
+					}
 				}
-			} else { // This error did not get an HTTP response from the service; upgrade the severity to Error
-				logLevel, forceLog = pipeline.LogError, true
+			}
+
+			if sc == 0 || ((sc >= 400 && sc <= 499) && sc != http.StatusNotFound && sc != http.StatusConflict && sc != http.StatusPreconditionFailed && sc != http.StatusRequestedRangeNotSatisfiable) || (sc >= 500 && sc <= 599) {
+				logLevel, forceLog = pipeline.LogError, true // Promote to Error any 4xx (except those listed is an error) or any 5xx
+			} else {
+				// For other status codes, we leave the level as is.
 			}
 
 			if shouldLog := po.ShouldLog(logLevel); forceLog || shouldLog {
@@ -109,8 +115,8 @@ func NewRequestLogPolicyFactory(o RequestLogOptions) pipeline.Factory {
 	})
 }
 
-// redactSigQueryParam redacts the 'sig' query parameter in URL's raw query to protect secret.
-func redactSigQueryParam(rawQuery string) (bool, string) {
+// RedactSigQueryParam redacts the 'sig' query parameter in URL's raw query to protect secret.
+func RedactSigQueryParam(rawQuery string) (bool, string) {
 	rawQuery = strings.ToLower(rawQuery) // lowercase the string so we can look for ?sig= and &sig=
 	sigFound := strings.Contains(rawQuery, "?sig=")
 	if !sigFound {
@@ -131,7 +137,7 @@ func redactSigQueryParam(rawQuery string) (bool, string) {
 
 func prepareRequestForLogging(request pipeline.Request) *http.Request {
 	req := request
-	if sigFound, rawQuery := redactSigQueryParam(req.URL.RawQuery); sigFound {
+	if sigFound, rawQuery := RedactSigQueryParam(req.URL.RawQuery); sigFound {
 		// Make copy so we don't destroy the query parameters we actually need to send in the request
 		req = request.Copy()
 		req.Request.URL.RawQuery = rawQuery
@@ -161,7 +167,7 @@ func prepareRequestForServiceLogging(request pipeline.Request) *http.Request {
 		req = request.Copy()
 		url, err := url.Parse(req.Header.Get(key))
 		if err == nil {
-			if sigFound, rawQuery := redactSigQueryParam(url.RawQuery); sigFound {
+			if sigFound, rawQuery := RedactSigQueryParam(url.RawQuery); sigFound {
 				url.RawQuery = rawQuery
 				req.Header.Set(xMsCopySourceHeader, url.String())
 			}

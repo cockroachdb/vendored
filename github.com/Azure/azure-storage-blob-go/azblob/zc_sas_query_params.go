@@ -1,6 +1,7 @@
 package azblob
 
 import (
+	"errors"
 	"net"
 	"net/url"
 	"strings"
@@ -22,20 +23,55 @@ const (
 
 // FormatTimesForSASSigning converts a time.Time to a snapshotTimeFormat string suitable for a
 // SASField's StartTime or ExpiryTime fields. Returns "" if value.IsZero().
-func FormatTimesForSASSigning(startTime, expiryTime time.Time) (string, string) {
+func FormatTimesForSASSigning(startTime, expiryTime, snapshotTime time.Time) (string, string, string) {
 	ss := ""
 	if !startTime.IsZero() {
-		ss = startTime.Format(SASTimeFormat) // "yyyy-MM-ddTHH:mm:ssZ"
+		ss = formatSASTimeWithDefaultFormat(&startTime)
 	}
 	se := ""
 	if !expiryTime.IsZero() {
-		se = expiryTime.Format(SASTimeFormat) // "yyyy-MM-ddTHH:mm:ssZ"
+		se = formatSASTimeWithDefaultFormat(&expiryTime)
 	}
-	return ss, se
+	sh := ""
+	if !snapshotTime.IsZero() {
+		sh = snapshotTime.Format(SnapshotTimeFormat)
+	}
+	return ss, se, sh
 }
 
 // SASTimeFormat represents the format of a SAS start or expiry time. Use it when formatting/parsing a time.Time.
 const SASTimeFormat = "2006-01-02T15:04:05Z" //"2017-07-27T00:00:00Z" // ISO 8601
+var SASTimeFormats = []string{"2006-01-02T15:04:05.0000000Z", SASTimeFormat, "2006-01-02T15:04Z", "2006-01-02"} // ISO 8601 formats, please refer to https://docs.microsoft.com/en-us/rest/api/storageservices/constructing-a-service-sas for more details.
+
+// formatSASTimeWithDefaultFormat format time with ISO 8601 in "yyyy-MM-ddTHH:mm:ssZ".
+func formatSASTimeWithDefaultFormat(t *time.Time) string {
+	return formatSASTime(t, SASTimeFormat) // By default, "yyyy-MM-ddTHH:mm:ssZ" is used
+}
+
+// formatSASTime format time with given format, use ISO 8601 in "yyyy-MM-ddTHH:mm:ssZ" by default.
+func formatSASTime(t *time.Time, format string) string {
+	if format != "" {
+		return t.Format(format)
+	}
+	return t.Format(SASTimeFormat) // By default, "yyyy-MM-ddTHH:mm:ssZ" is used
+}
+
+// parseSASTimeString try to parse sas time string.
+func parseSASTimeString(val string) (t time.Time, timeFormat string, err error) {
+	for _, sasTimeFormat := range SASTimeFormats {
+		t, err = time.Parse(sasTimeFormat, val)
+		if err == nil {
+			timeFormat = sasTimeFormat
+			break
+		}
+	}
+
+	if err != nil {
+		err = errors.New("fail to parse time with IOS 8601 formats, please refer to https://docs.microsoft.com/en-us/rest/api/storageservices/constructing-a-service-sas for more details")
+	}
+
+	return
+}
 
 // https://docs.microsoft.com/en-us/rest/api/storageservices/constructing-a-service-sas
 
@@ -53,6 +89,7 @@ type SASQueryParameters struct {
 	protocol           SASProtocol `param:"spr"`
 	startTime          time.Time   `param:"st"`
 	expiryTime         time.Time   `param:"se"`
+	snapshotTime       time.Time   `param:"snapshot"`
 	ipRange            IPRange     `param:"sip"`
 	identifier         string      `param:"si"`
 	resource           string      `param:"sr"`
@@ -63,6 +100,44 @@ type SASQueryParameters struct {
 	contentEncoding    string      `param:"rsce"`
 	contentLanguage    string      `param:"rscl"`
 	contentType        string      `param:"rsct"`
+	signedOid          string      `param:"skoid"`
+	signedTid          string      `param:"sktid"`
+	signedStart        time.Time   `param:"skt"`
+	signedExpiry       time.Time   `param:"ske"`
+	signedService      string      `param:"sks"`
+	signedVersion      string      `param:"skv"`
+
+	// private member used for startTime and expiryTime formatting.
+	stTimeFormat       string
+	seTimeFormat       string
+}
+
+func (p *SASQueryParameters) SignedOid() string {
+	return p.signedOid
+}
+
+func (p *SASQueryParameters) SignedTid() string {
+	return p.signedTid
+}
+
+func (p *SASQueryParameters) SignedStart() time.Time {
+	return p.signedStart
+}
+
+func (p *SASQueryParameters) SignedExpiry() time.Time {
+	return p.signedExpiry
+}
+
+func (p *SASQueryParameters) SignedService() string {
+	return p.signedService
+}
+
+func (p *SASQueryParameters) SignedVersion() string {
+	return p.signedVersion
+}
+
+func (p *SASQueryParameters) SnapshotTime() time.Time {
+	return p.snapshotTime
 }
 
 func (p *SASQueryParameters) Version() string {
@@ -160,10 +235,12 @@ func newSASQueryParameters(values url.Values, deleteSASParametersFromValues bool
 			p.resourceTypes = val
 		case "spr":
 			p.protocol = SASProtocol(val)
+		case "snapshot":
+			p.snapshotTime, _ = time.Parse(SnapshotTimeFormat, val)
 		case "st":
-			p.startTime, _ = time.Parse(SASTimeFormat, val)
+			p.startTime, p.stTimeFormat, _ = parseSASTimeString(val)
 		case "se":
-			p.expiryTime, _ = time.Parse(SASTimeFormat, val)
+			p.expiryTime, p.seTimeFormat, _ = parseSASTimeString(val)
 		case "sip":
 			dashIndex := strings.Index(val, "-")
 			if dashIndex == -1 {
@@ -190,6 +267,18 @@ func newSASQueryParameters(values url.Values, deleteSASParametersFromValues bool
 			p.contentLanguage = val
 		case "rsct":
 			p.contentType = val
+		case "skoid":
+			p.signedOid = val
+		case "sktid":
+			p.signedTid = val
+		case "skt":
+			p.signedStart, _ = time.Parse(SASTimeFormat, val)
+		case "ske":
+			p.signedExpiry, _ = time.Parse(SASTimeFormat, val)
+		case "sks":
+			p.signedService = val
+		case "skv":
+			p.signedVersion = val
 		default:
 			isSASKey = false // We didn't recognize the query parameter
 		}
@@ -215,10 +304,10 @@ func (p *SASQueryParameters) addToValues(v url.Values) url.Values {
 		v.Add("spr", string(p.protocol))
 	}
 	if !p.startTime.IsZero() {
-		v.Add("st", p.startTime.Format(SASTimeFormat))
+		v.Add("st", formatSASTime(&(p.startTime), p.stTimeFormat))
 	}
 	if !p.expiryTime.IsZero() {
-		v.Add("se", p.expiryTime.Format(SASTimeFormat))
+		v.Add("se", formatSASTime(&(p.expiryTime), p.seTimeFormat))
 	}
 	if len(p.ipRange.Start) > 0 {
 		v.Add("sip", p.ipRange.String())
@@ -231,6 +320,14 @@ func (p *SASQueryParameters) addToValues(v url.Values) url.Values {
 	}
 	if p.permissions != "" {
 		v.Add("sp", p.permissions)
+	}
+	if p.signedOid != "" {
+		v.Add("skoid", p.signedOid)
+		v.Add("sktid", p.signedTid)
+		v.Add("skt", p.signedStart.Format(SASTimeFormat))
+		v.Add("ske", p.signedExpiry.Format(SASTimeFormat))
+		v.Add("sks", p.signedService)
+		v.Add("skv", p.signedVersion)
 	}
 	if p.signature != "" {
 		v.Add("sig", p.signature)
