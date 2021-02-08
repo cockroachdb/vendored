@@ -683,7 +683,7 @@ github.com/lightstep/lightstep-tracer-go/lightstep/rand
 github.com/lightstep/lightstep-tracer-go/lightstep_thrift
 github.com/lightstep/lightstep-tracer-go/lightsteppb
 github.com/lightstep/lightstep-tracer-go/thrift_0_9_2/lib/go/thrift
-# github.com/linkedin/goavro/v2 v2.8.1
+# github.com/linkedin/goavro/v2 v2.9.8
 ## explicit
 github.com/linkedin/goavro/v2
 # github.com/lufia/iostat v1.0.0
