@@ -113,7 +113,7 @@ github.com/apache/thrift/lib/go/thrift
 # github.com/armon/circbuf v0.0.0-20150827004946-bbbad097214e
 ## explicit
 github.com/armon/circbuf
-# github.com/aws/aws-sdk-go v1.33.8
+# github.com/aws/aws-sdk-go v1.36.33
 ## explicit
 github.com/aws/aws-sdk-go/aws
 github.com/aws/aws-sdk-go/aws/arn
@@ -136,7 +136,9 @@ github.com/aws/aws-sdk-go/aws/session
 github.com/aws/aws-sdk-go/aws/signer/v4
 github.com/aws/aws-sdk-go/internal/context
 github.com/aws/aws-sdk-go/internal/ini
-github.com/aws/aws-sdk-go/internal/s3err
+github.com/aws/aws-sdk-go/internal/s3shared
+github.com/aws/aws-sdk-go/internal/s3shared/arn
+github.com/aws/aws-sdk-go/internal/s3shared/s3err
 github.com/aws/aws-sdk-go/internal/sdkio
 github.com/aws/aws-sdk-go/internal/sdkmath
 github.com/aws/aws-sdk-go/internal/sdkrand
@@ -157,7 +159,6 @@ github.com/aws/aws-sdk-go/private/protocol/restxml
 github.com/aws/aws-sdk-go/private/protocol/xml/xmlutil
 github.com/aws/aws-sdk-go/service/kms
 github.com/aws/aws-sdk-go/service/s3
-github.com/aws/aws-sdk-go/service/s3/internal/arn
 github.com/aws/aws-sdk-go/service/s3/s3iface
 github.com/aws/aws-sdk-go/service/s3/s3manager
 github.com/aws/aws-sdk-go/service/sts
@@ -623,7 +624,7 @@ github.com/jcmturner/gokrb5/v8/types
 # github.com/jcmturner/rpc/v2 v2.0.2
 github.com/jcmturner/rpc/v2/mstypes
 github.com/jcmturner/rpc/v2/ndr
-# github.com/jmespath/go-jmespath v0.3.0
+# github.com/jmespath/go-jmespath v0.4.0
 github.com/jmespath/go-jmespath
 # github.com/jordanlewis/gcassert v0.0.0-20200706043056-bf61eb72ee48
 ## explicit
@@ -934,7 +935,7 @@ golang.org/x/lint
 golang.org/x/lint/golint
 # golang.org/x/mod v0.3.1-0.20200828183125-ce943fd02449
 golang.org/x/mod/semver
-# golang.org/x/net v0.0.0-20201021035429-f5854403a974
+# golang.org/x/net v0.0.0-20201110031124-69a78807bb2b
 ## explicit
 golang.org/x/net/context
 golang.org/x/net/context/ctxhttp
