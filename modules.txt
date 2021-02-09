@@ -887,6 +887,11 @@ github.com/twpayne/go-kml
 # github.com/wadey/gocovmerge v0.0.0-20160331181800-b5bfa59ec0ad
 ## explicit
 github.com/wadey/gocovmerge
+# github.com/xdg/scram v0.0.0-20180814205039-7eeb5667e42c
+## explicit
+github.com/xdg/scram
+# github.com/xdg/stringprep v1.0.0
+github.com/xdg/stringprep
 # github.com/zabawaba99/go-gitignore v0.0.0-20200117185801-39e6bddfb292
 ## explicit
 github.com/zabawaba99/go-gitignore
