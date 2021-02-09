@@ -3,6 +3,7 @@ package sarama
 import (
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -32,6 +33,10 @@ type ConsumerError struct {
 
 func (ce ConsumerError) Error() string {
 	return fmt.Sprintf("kafka: error while consuming %s/%d: %s", ce.Topic, ce.Partition, ce.Err)
+}
+
+func (ce ConsumerError) Unwrap() error {
+	return ce.Err
 }
 
 // ConsumerErrors is a type that wraps a batch of errors and implements the Error interface.
@@ -421,13 +426,13 @@ func (child *partitionConsumer) AsyncClose() {
 func (child *partitionConsumer) Close() error {
 	child.AsyncClose()
 
-	var errors ConsumerErrors
+	var consumerErrors ConsumerErrors
 	for err := range child.errors {
-		errors = append(errors, err)
+		consumerErrors = append(consumerErrors, err)
 	}
 
-	if len(errors) > 0 {
-		return errors
+	if len(consumerErrors) > 0 {
+		return consumerErrors
 	}
 	return nil
 }
@@ -450,6 +455,9 @@ feederLoop:
 		}
 
 		for i, msg := range msgs {
+			for _, interceptor := range child.conf.Consumer.Interceptors {
+				msg.safelyApplyInterceptor(interceptor)
+			}
 		messageSelect:
 			select {
 			case <-child.dying:
@@ -599,6 +607,10 @@ func (child *partitionConsumer) parseResponse(response *FetchResponse) ([]*Consu
 				child.offset++ // skip this one so we can keep processing future messages
 			} else {
 				child.fetchSize *= 2
+				// check int32 overflow
+				if child.fetchSize < 0 {
+					child.fetchSize = math.MaxInt32
+				}
 				if child.conf.Consumer.Fetch.Max > 0 && child.fetchSize > child.conf.Consumer.Fetch.Max {
 					child.fetchSize = child.conf.Consumer.Fetch.Max
 				}
@@ -618,7 +630,7 @@ func (child *partitionConsumer) parseResponse(response *FetchResponse) ([]*Consu
 	abortedProducerIDs := make(map[int64]struct{}, len(block.AbortedTransactions))
 	abortedTransactions := block.getAbortedTransactions()
 
-	messages := []*ConsumerMessage{}
+	var messages []*ConsumerMessage
 	for _, records := range block.RecordsSet {
 		switch records.recordsType {
 		case legacyRecords:
@@ -881,6 +893,21 @@ func (bc *brokerConsumer) fetchNewMessages() (*FetchResponse, error) {
 	if bc.consumer.conf.Version.IsAtLeast(V0_11_0_0) {
 		request.Version = 4
 		request.Isolation = bc.consumer.conf.Consumer.IsolationLevel
+	}
+	if bc.consumer.conf.Version.IsAtLeast(V1_1_0_0) {
+		request.Version = 7
+		// We do not currently implement KIP-227 FetchSessions. Setting the id to 0
+		// and the epoch to -1 tells the broker not to generate as session ID we're going
+		// to just ignore anyway.
+		request.SessionID = 0
+		request.SessionEpoch = -1
+	}
+	if bc.consumer.conf.Version.IsAtLeast(V2_1_0_0) {
+		request.Version = 10
+	}
+	if bc.consumer.conf.Version.IsAtLeast(V2_3_0_0) {
+		request.Version = 11
+		request.RackID = bc.consumer.conf.RackID
 	}
 
 	for child := range bc.subscriptions {
