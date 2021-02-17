@@ -833,7 +833,7 @@ github.com/russross/blackfriday
 # github.com/sasha-s/go-deadlock v0.2.0
 ## explicit
 github.com/sasha-s/go-deadlock
-# github.com/shirou/gopsutil v2.20.6+incompatible
+# github.com/shirou/gopsutil v2.20.9+incompatible
 ## explicit
 github.com/shirou/gopsutil/cpu
 github.com/shirou/gopsutil/disk
