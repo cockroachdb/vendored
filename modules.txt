@@ -54,6 +54,9 @@ github.com/Azure/go-autorest/tracing
 # github.com/BurntSushi/toml v0.3.1
 ## explicit
 github.com/BurntSushi/toml
+# github.com/DataDog/zstd v1.4.8
+## explicit
+github.com/DataDog/zstd
 # github.com/Masterminds/goutils v1.1.0
 github.com/Masterminds/goutils
 # github.com/Masterminds/semver v1.5.0
@@ -245,7 +248,7 @@ github.com/cockroachdb/gostdlib/x/tools/internal/span
 # github.com/cockroachdb/logtags v0.0.0-20190617123548-eb05cc24525f
 ## explicit
 github.com/cockroachdb/logtags
-# github.com/cockroachdb/pebble v0.0.0-20210201233136-12ffb4e9273f
+# github.com/cockroachdb/pebble v0.0.0-20210217155127-444296cfa2bb
 ## explicit
 github.com/cockroachdb/pebble
 github.com/cockroachdb/pebble/bloom
@@ -639,7 +642,6 @@ github.com/kisielk/errcheck/internal/errcheck
 github.com/kisielk/gotool
 github.com/kisielk/gotool/internal/load
 # github.com/klauspost/compress v1.11.7
-## explicit
 github.com/klauspost/compress/fse
 github.com/klauspost/compress/huff0
 github.com/klauspost/compress/snappy
@@ -937,7 +939,7 @@ golang.org/x/crypto/ssh
 golang.org/x/crypto/ssh/agent
 golang.org/x/crypto/ssh/internal/bcrypt_pbkdf
 golang.org/x/crypto/ssh/knownhosts
-# golang.org/x/exp v0.0.0-20210201131500-d352d2db2ceb
+# golang.org/x/exp v0.0.0-20210212053707-62dc52270d37
 ## explicit
 golang.org/x/exp/rand
 # golang.org/x/lint v0.0.0-20200130185559-910be7a94367
@@ -978,7 +980,7 @@ golang.org/x/perf/storage/benchfmt
 ## explicit
 golang.org/x/sync/errgroup
 golang.org/x/sync/syncmap
-# golang.org/x/sys v0.0.0-20210124154548-22da62e12c0c
+# golang.org/x/sys v0.0.0-20210217105451-b926d437f341
 ## explicit
 golang.org/x/sys/cpu
 golang.org/x/sys/execabs
