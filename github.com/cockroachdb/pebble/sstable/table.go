@@ -159,8 +159,15 @@ const (
 	// They are different from the Compression constants because the latter
 	// are designed so that the zero value of the Compression type means to
 	// use the default compression (which is snappy).
+	// Not all compression types listed here are supported.
 	noCompressionBlockType     byte = 0
 	snappyCompressionBlockType byte = 1
+	zlibCompressionBlockType   byte = 2
+	bzip2CompressionBlockType  byte = 3
+	lz4CompressionBlockType    byte = 4
+	lz4hcCompressionBlockType  byte = 5
+	xpressCompressionBlockType byte = 6
+	zstdCompressionBlockType   byte = 7
 
 	metaPropertiesName = "rocksdb.properties"
 	metaRangeDelName   = "rocksdb.range_del"
