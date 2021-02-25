@@ -1,4 +1,4 @@
-# cloud.google.com/go v0.34.0
+# cloud.google.com/go v0.45.1
 ## explicit
 cloud.google.com/go/compute/metadata
 cloud.google.com/go/iam
@@ -71,7 +71,7 @@ github.com/Microsoft/go-winio
 github.com/Microsoft/go-winio/pkg/guid
 # github.com/Nvveen/Gotty v0.0.0-20120604004816-cd527374f1e5
 github.com/Nvveen/Gotty
-# github.com/PuerkitoBio/goquery v1.5.0
+# github.com/PuerkitoBio/goquery v1.5.1
 ## explicit
 github.com/PuerkitoBio/goquery
 # github.com/Shopify/sarama v1.27.2
@@ -480,9 +480,7 @@ github.com/google/go-cmp/cmp/internal/value
 github.com/google/go-github/github
 # github.com/google/go-querystring v1.0.0
 github.com/google/go-querystring/query
-# github.com/google/martian v2.1.0+incompatible
-## explicit
-# github.com/google/pprof v0.0.0-20190109223431-e84dfd68c163
+# github.com/google/pprof v0.0.0-20190515194954-54271f7e092f
 ## explicit
 github.com/google/pprof/driver
 github.com/google/pprof/internal/binutils
@@ -502,9 +500,8 @@ github.com/google/pprof/third_party/svgpan
 # github.com/google/uuid v1.2.0
 ## explicit
 github.com/google/uuid
-# github.com/googleapis/gax-go v2.0.2+incompatible
-## explicit
-github.com/googleapis/gax-go
+# github.com/googleapis/gax-go/v2 v2.0.5
+github.com/googleapis/gax-go/v2
 # github.com/gorhill/cronexpr v0.0.0-20140423231348-a557574d6c02
 ## explicit
 github.com/gorhill/cronexpr
@@ -533,6 +530,8 @@ github.com/grpc-ecosystem/grpc-gateway/utilities
 github.com/grpc-ecosystem/grpc-opentracing/go/otgrpc
 # github.com/hashicorp/go-uuid v1.0.2
 github.com/hashicorp/go-uuid
+# github.com/hashicorp/golang-lru v0.5.3
+github.com/hashicorp/golang-lru/simplelru
 # github.com/huandu/xstrings v1.3.0
 github.com/huandu/xstrings
 # github.com/ianlancetaylor/cgosymbolizer v0.0.0-20201002210021-dda951febc36
@@ -736,7 +735,7 @@ github.com/mitchellh/reflectwalk
 ## explicit
 github.com/mmatczuk/go_generics/cmd/go_generics
 github.com/mmatczuk/go_generics/globals
-# github.com/montanaflynn/stats v0.4.1-0.20190115100425-713f2944833c
+# github.com/montanaflynn/stats v0.6.3
 ## explicit
 github.com/montanaflynn/stats
 # github.com/mwitkow/go-proto-validators v0.0.0-20180403085117-0950a7990007
@@ -745,7 +744,7 @@ github.com/mwitkow/go-proto-validators
 ## explicit
 github.com/nlopes/slack
 github.com/nlopes/slack/slackutilsx
-# github.com/olekukonko/tablewriter v0.0.0-20170122224234-a0225b3f23b5 => github.com/cockroachdb/tablewriter v0.0.5-0.20200105123400-bd15540e8847
+# github.com/olekukonko/tablewriter v0.0.5-0.20200416053754-163badb3bac6 => github.com/cockroachdb/tablewriter v0.0.5-0.20200105123400-bd15540e8847
 ## explicit
 github.com/olekukonko/tablewriter
 # github.com/opencontainers/go-digest v1.0.0-rc1
@@ -771,8 +770,6 @@ github.com/openzipkin-contrib/zipkin-go-opentracing/thrift/gen-go/scribe
 github.com/openzipkin-contrib/zipkin-go-opentracing/thrift/gen-go/zipkincore
 github.com/openzipkin-contrib/zipkin-go-opentracing/types
 github.com/openzipkin-contrib/zipkin-go-opentracing/wire
-# github.com/pborman/uuid v1.2.0
-## explicit
 # github.com/peterbourgon/g2s v0.0.0-20170223122336-d4e7ad98afea
 ## explicit
 # github.com/petermattis/goid v0.0.0-20180202154549-b0b1615b78e5
@@ -797,7 +794,7 @@ github.com/pmezard/go-difflib/difflib
 ## explicit
 github.com/pquerna/cachecontrol
 github.com/pquerna/cachecontrol/cacheobject
-# github.com/prometheus/client_golang v1.1.0
+# github.com/prometheus/client_golang v1.4.1
 ## explicit
 github.com/prometheus/client_golang/prometheus
 github.com/prometheus/client_golang/prometheus/graphite
@@ -904,13 +901,15 @@ go.etcd.io/etcd/raft/v3/confchange
 go.etcd.io/etcd/raft/v3/quorum
 go.etcd.io/etcd/raft/v3/raftpb
 go.etcd.io/etcd/raft/v3/tracker
-# go.opencensus.io v0.18.0
+# go.opencensus.io v0.22.0
 go.opencensus.io
-go.opencensus.io/exemplar
 go.opencensus.io/internal
 go.opencensus.io/internal/tagencoding
+go.opencensus.io/metric/metricdata
+go.opencensus.io/metric/metricproducer
 go.opencensus.io/plugin/ochttp
 go.opencensus.io/plugin/ochttp/propagation/b3
+go.opencensus.io/resource
 go.opencensus.io/stats
 go.opencensus.io/stats/internal
 go.opencensus.io/stats/view
@@ -963,7 +962,7 @@ golang.org/x/net/internal/socks
 golang.org/x/net/internal/timeseries
 golang.org/x/net/proxy
 golang.org/x/net/trace
-# golang.org/x/oauth2 v0.0.0-20190115181402-5dab4167f31c
+# golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45
 ## explicit
 golang.org/x/oauth2
 golang.org/x/oauth2/google
@@ -1081,7 +1080,7 @@ golang.org/x/tools/txtar
 # golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1
 golang.org/x/xerrors
 golang.org/x/xerrors/internal
-# google.golang.org/api v0.1.0
+# google.golang.org/api v0.9.0
 ## explicit
 google.golang.org/api/gensupport
 google.golang.org/api/googleapi
@@ -1093,7 +1092,7 @@ google.golang.org/api/option
 google.golang.org/api/storage/v1
 google.golang.org/api/transport/http
 google.golang.org/api/transport/http/internal/propagation
-# google.golang.org/appengine v1.4.0
+# google.golang.org/appengine v1.6.1
 google.golang.org/appengine
 google.golang.org/appengine/internal
 google.golang.org/appengine/internal/app_identity
@@ -1242,8 +1241,6 @@ gopkg.in/square/go-jose.v2/json
 gopkg.in/yaml.v2
 # gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776
 gopkg.in/yaml.v3
-# gotest.tools v2.2.0+incompatible
-## explicit
 # honnef.co/go/tools v0.0.1-2020.1.6
 ## explicit
 honnef.co/go/tools/arg
@@ -1275,22 +1272,24 @@ honnef.co/go/tools/staticcheck
 honnef.co/go/tools/stylecheck
 honnef.co/go/tools/unused
 honnef.co/go/tools/version
-# vitess.io/vitess v0.0.0-00010101000000-000000000000 => github.com/cockroachdb/vitess v2.2.0-rc.1.0.20180830030426-1740ce8b3188+incompatible
+# vitess.io/vitess v0.0.0-00010101000000-000000000000 => github.com/cockroachdb/vitess v0.0.0-20210218160543-54524729cc82
 ## explicit
 vitess.io/vitess/go/bytes2
 vitess.io/vitess/go/hack
 vitess.io/vitess/go/sqltypes
 vitess.io/vitess/go/vt/proto/query
 vitess.io/vitess/go/vt/proto/topodata
-vitess.io/vitess/go/vt/proto/vtgate
 vitess.io/vitess/go/vt/proto/vtrpc
+vitess.io/vitess/go/vt/proto/vttime
 vitess.io/vitess/go/vt/sqlparser
+vitess.io/vitess/go/vt/sysvars
 vitess.io/vitess/go/vt/vterrors
+vitess.io/vitess/go/vt/vtgate/evalengine
 # github.com/gogo/protobuf => github.com/cockroachdb/gogoproto v1.2.1-0.20210111172841-8b6737fea948
 # github.com/grpc-ecosystem/grpc-gateway => github.com/cockroachdb/grpc-gateway v1.14.6-0.20200519165156-52697fc4a249
 # github.com/olekukonko/tablewriter => github.com/cockroachdb/tablewriter v0.0.5-0.20200105123400-bd15540e8847
 # github.com/abourget/teamcity => github.com/cockroachdb/teamcity v0.0.0-20180905144921-8ca25c33eb11
-# vitess.io/vitess => github.com/cockroachdb/vitess v2.2.0-rc.1.0.20180830030426-1740ce8b3188+incompatible
+# vitess.io/vitess => github.com/cockroachdb/vitess v0.0.0-20210218160543-54524729cc82
 # gopkg.in/yaml.v2 => github.com/cockroachdb/yaml v0.0.0-20180705215940-0e2822948641
 # github.com/knz/go-libedit => github.com/otan-cockroach/go-libedit v1.10.2-0.20201030151939-7cced08450e7
 # go.etcd.io/etcd/pkg/v3 => go.etcd.io/etcd/pkg/v3 v3.0.0-20201109164711-01844fd28560

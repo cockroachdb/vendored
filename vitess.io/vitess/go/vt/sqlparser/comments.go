@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -30,6 +30,12 @@ const (
 	DirectiveSkipQueryPlanCache = "SKIP_QUERY_PLAN_CACHE"
 	// DirectiveQueryTimeout sets a query timeout in vtgate. Only supported for SELECTS.
 	DirectiveQueryTimeout = "QUERY_TIMEOUT_MS"
+	// DirectiveScatterErrorsAsWarnings enables partial success scatter select queries
+	DirectiveScatterErrorsAsWarnings = "SCATTER_ERRORS_AS_WARNINGS"
+	// DirectiveIgnoreMaxPayloadSize skips payload size validation when set.
+	DirectiveIgnoreMaxPayloadSize = "IGNORE_MAX_PAYLOAD_SIZE"
+	// DirectiveIgnoreMaxMemoryRows skips memory row validation when set.
+	DirectiveIgnoreMaxMemoryRows = "IGNORE_MAX_MEMORY_ROWS"
 )
 
 func isNonSpace(r rune) bool {
@@ -53,7 +59,7 @@ func leadingCommentEnd(text string) (end int) {
 
 		// Found visible characters. Look for '/*' at the beginning
 		// and '*/' somewhere after that.
-		if len(remainingText) < 4 || remainingText[:2] != "/*" {
+		if len(remainingText) < 4 || remainingText[:2] != "/*" || remainingText[2] == '!' {
 			break
 		}
 		commentLength := 4 + strings.Index(remainingText[2:], "*/")
@@ -91,8 +97,8 @@ func trailingCommentStart(text string) (start int) {
 
 		// Find the beginning of the comment
 		startCommentPos := strings.LastIndex(text[:reducedLen-2], "/*")
-		if startCommentPos < 0 {
-			// Badly formatted sql :/
+		if startCommentPos < 0 || text[startCommentPos+2] == '!' {
+			// Badly formatted sql, or a special /*! comment
 			break
 		}
 
@@ -121,7 +127,9 @@ func SplitMarginComments(sql string) (query string, comments MarginComments) {
 		Leading:  strings.TrimLeftFunc(sql[:leadingEnd], unicode.IsSpace),
 		Trailing: strings.TrimRightFunc(sql[trailingStart:], unicode.IsSpace),
 	}
-	return strings.TrimFunc(sql[leadingEnd:trailingStart], unicode.IsSpace), comments
+	return strings.TrimFunc(sql[leadingEnd:trailingStart], func(c rune) bool {
+		return unicode.IsSpace(c) || c == ';'
+	}), comments
 }
 
 // StripLeadingComments trims the SQL string and removes any leading comments
@@ -160,31 +168,9 @@ func hasCommentPrefix(sql string) bool {
 	return len(sql) > 1 && ((sql[0] == '/' && sql[1] == '*') || (sql[0] == '-' && sql[1] == '-'))
 }
 
-// StripComments removes all comments from the string regardless
-// of where they occur
-func StripComments(sql string) string {
-	sql = StripLeadingComments(sql) // handle -- or /* ... */ at the beginning
-
-	for {
-		start := strings.Index(sql, "/*")
-		if start == -1 {
-			break
-		}
-		end := strings.Index(sql, "*/")
-		if end <= 1 {
-			break
-		}
-		sql = sql[:start] + sql[end+2:]
-	}
-
-	sql = strings.TrimFunc(sql, unicode.IsSpace)
-
-	return sql
-}
-
 // ExtractMysqlComment extracts the version and SQL from a comment-only query
 // such as /*!50708 sql here */
-func ExtractMysqlComment(sql string) (version string, innerSQL string) {
+func ExtractMysqlComment(sql string) (string, string) {
 	sql = sql[3 : len(sql)-2]
 
 	digitCount := 0
@@ -192,8 +178,11 @@ func ExtractMysqlComment(sql string) (version string, innerSQL string) {
 		digitCount++
 		return !unicode.IsDigit(c) || digitCount == 6
 	})
-	version = sql[0:endOfVersionIndex]
-	innerSQL = strings.TrimFunc(sql[endOfVersionIndex:], unicode.IsSpace)
+	if endOfVersionIndex < 0 {
+		return "", ""
+	}
+	version := sql[0:endOfVersionIndex]
+	innerSQL := strings.TrimFunc(sql[endOfVersionIndex:], unicode.IsSpace)
 
 	return version, innerSQL
 }
@@ -312,4 +301,46 @@ func SkipQueryPlanCacheDirective(stmt Statement) bool {
 		return false
 	}
 	return false
+}
+
+// IgnoreMaxPayloadSizeDirective returns true if the max payload size override
+// directive is set to true.
+func IgnoreMaxPayloadSizeDirective(stmt Statement) bool {
+	switch stmt := stmt.(type) {
+	case *Select:
+		directives := ExtractCommentDirectives(stmt.Comments)
+		return directives.IsSet(DirectiveIgnoreMaxPayloadSize)
+	case *Insert:
+		directives := ExtractCommentDirectives(stmt.Comments)
+		return directives.IsSet(DirectiveIgnoreMaxPayloadSize)
+	case *Update:
+		directives := ExtractCommentDirectives(stmt.Comments)
+		return directives.IsSet(DirectiveIgnoreMaxPayloadSize)
+	case *Delete:
+		directives := ExtractCommentDirectives(stmt.Comments)
+		return directives.IsSet(DirectiveIgnoreMaxPayloadSize)
+	default:
+		return false
+	}
+}
+
+// IgnoreMaxMaxMemoryRowsDirective returns true if the max memory rows override
+// directive is set to true.
+func IgnoreMaxMaxMemoryRowsDirective(stmt Statement) bool {
+	switch stmt := stmt.(type) {
+	case *Select:
+		directives := ExtractCommentDirectives(stmt.Comments)
+		return directives.IsSet(DirectiveIgnoreMaxMemoryRows)
+	case *Insert:
+		directives := ExtractCommentDirectives(stmt.Comments)
+		return directives.IsSet(DirectiveIgnoreMaxMemoryRows)
+	case *Update:
+		directives := ExtractCommentDirectives(stmt.Comments)
+		return directives.IsSet(DirectiveIgnoreMaxMemoryRows)
+	case *Delete:
+		directives := ExtractCommentDirectives(stmt.Comments)
+		return directives.IsSet(DirectiveIgnoreMaxMemoryRows)
+	default:
+		return false
+	}
 }

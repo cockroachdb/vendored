@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -79,6 +79,9 @@ var errorPriorities = map[vtrpcpb.Code]int{
 func Aggregate(errors []error) error {
 	if len(errors) == 0 {
 		return nil
+	}
+	if len(errors) == 1 {
+		return errors[0]
 	}
 	return New(aggregateCodes(errors), aggregateErrors(errors))
 }
