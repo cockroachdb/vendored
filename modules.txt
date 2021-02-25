@@ -860,7 +860,7 @@ github.com/spf13/pflag
 ## explicit
 github.com/stretchr/testify/assert
 github.com/stretchr/testify/require
-# github.com/twpayne/go-geom v1.3.6
+# github.com/twpayne/go-geom v1.3.7-0.20210224233516-acd1d64d533a
 ## explicit
 github.com/twpayne/go-geom
 github.com/twpayne/go-geom/bigxy
