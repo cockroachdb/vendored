@@ -28,9 +28,21 @@ import (
 )
 
 var (
+	// Removes package name and method arguments for Java method names.
+	// See tests for examples.
 	javaRegExp = regexp.MustCompile(`^(?:[a-z]\w*\.)*([A-Z][\w\$]*\.(?:<init>|[a-z][\w\$]*(?:\$\d+)?))(?:(?:\()|$)`)
-	goRegExp   = regexp.MustCompile(`^(?:[\w\-\.]+\/)+(.+)`)
-	cppRegExp  = regexp.MustCompile(`^(?:(?:\(anonymous namespace\)::)(\w+$))|(?:(?:\(anonymous namespace\)::)?(?:[_a-zA-Z]\w*\::|)*(_*[A-Z]\w*::~?[_a-zA-Z]\w*)$)`)
+	// Removes package name and method arguments for Go function names.
+	// See tests for examples.
+	goRegExp = regexp.MustCompile(`^(?:[\w\-\.]+\/)+(.+)`)
+	// Removes potential module versions in a package path.
+	goVerRegExp = regexp.MustCompile(`^(.*?)/v(?:[2-9]|[1-9][0-9]+)([./].*)$`)
+	// Strips C++ namespace prefix from a C++ function / method name.
+	// NOTE: Make sure to keep the template parameters in the name. Normally,
+	// template parameters are stripped from the C++ names but when
+	// -symbolize=demangle=templates flag is used, they will not be.
+	// See tests for examples.
+	cppRegExp                = regexp.MustCompile(`^(?:[_a-zA-Z]\w*::)+(_*[A-Z]\w*::~?[_a-zA-Z]\w*(?:<.*>)?)`)
+	cppAnonymousPrefixRegExp = regexp.MustCompile(`^\(anonymous namespace\)::`)
 )
 
 // Graph summarizes a performance profile into a format that is
@@ -191,7 +203,7 @@ type NodeSet map[NodeInfo]bool
 // works as a unique identifier; however, in a tree multiple nodes may share
 // identical NodeInfos. A *Node does uniquely identify a node so we can use that
 // instead. Though a *Node also uniquely identifies a node in a graph,
-// currently, during trimming, graphs are rebult from scratch using only the
+// currently, during trimming, graphs are rebuilt from scratch using only the
 // NodeSet, so there would not be the required context of the initial graph to
 // allow for the use of *Node.
 type NodePtrSet map[*Node]bool
@@ -307,6 +319,8 @@ func New(prof *profile.Profile, o *Options) *Graph {
 // nodes.
 func newGraph(prof *profile.Profile, o *Options) (*Graph, map[uint64]Nodes) {
 	nodes, locationMap := CreateNodes(prof, o)
+	seenNode := make(map[*Node]bool)
+	seenEdge := make(map[nodePair]bool)
 	for _, sample := range prof.Sample {
 		var w, dw int64
 		w = o.SampleValue(sample.Value)
@@ -316,8 +330,12 @@ func newGraph(prof *profile.Profile, o *Options) (*Graph, map[uint64]Nodes) {
 		if dw == 0 && w == 0 {
 			continue
 		}
-		seenNode := make(map[*Node]bool, len(sample.Location))
-		seenEdge := make(map[nodePair]bool, len(sample.Location))
+		for k := range seenNode {
+			delete(seenNode, k)
+		}
+		for k := range seenEdge {
+			delete(seenEdge, k)
+		}
 		var parent *Node
 		// A residual edge goes over one or more nodes that were not kept.
 		residual := false
@@ -429,6 +447,8 @@ func newTree(prof *profile.Profile, o *Options) (g *Graph) {
 
 // ShortenFunctionName returns a shortened version of a function's name.
 func ShortenFunctionName(f string) string {
+	f = cppAnonymousPrefixRegExp.ReplaceAllString(f, "")
+	f = goVerRegExp.ReplaceAllString(f, `${1}${2}`)
 	for _, re := range []*regexp.Regexp{goRegExp, javaRegExp, cppRegExp} {
 		if matches := re.FindStringSubmatch(f); len(matches) >= 2 {
 			return strings.Join(matches[1:], "")
