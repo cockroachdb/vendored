@@ -248,7 +248,7 @@ github.com/cockroachdb/gostdlib/x/tools/internal/span
 # github.com/cockroachdb/logtags v0.0.0-20190617123548-eb05cc24525f
 ## explicit
 github.com/cockroachdb/logtags
-# github.com/cockroachdb/pebble v0.0.0-20210217155127-444296cfa2bb
+# github.com/cockroachdb/pebble v0.0.0-20210302170351-6eee4f6b45b1
 ## explicit
 github.com/cockroachdb/pebble
 github.com/cockroachdb/pebble/bloom
@@ -640,7 +640,8 @@ github.com/kisielk/errcheck/internal/errcheck
 ## explicit
 github.com/kisielk/gotool
 github.com/kisielk/gotool/internal/load
-# github.com/klauspost/compress v1.11.7
+# github.com/klauspost/compress v1.11.9
+## explicit
 github.com/klauspost/compress/fse
 github.com/klauspost/compress/huff0
 github.com/klauspost/compress/snappy
