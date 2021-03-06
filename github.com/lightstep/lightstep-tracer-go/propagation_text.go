@@ -4,24 +4,33 @@ import (
 	"strconv"
 	"strings"
 
-	opentracing "github.com/opentracing/opentracing-go"
+	"github.com/opentracing/opentracing-go"
 )
 
 const (
-	prefixTracerState = "ot-tracer-"
-	prefixBaggage     = "ot-baggage-"
+	prefixBaggage = "ot-baggage-"
 
 	tracerStateFieldCount = 3
-	fieldNameTraceID      = prefixTracerState + "traceid"
-	fieldNameSpanID       = prefixTracerState + "spanid"
-	fieldNameSampled      = prefixTracerState + "sampled"
 )
 
 var theTextMapPropagator textMapPropagator
 
-type textMapPropagator struct{}
+type traceIDParser func(string) (uint64, uint64, error)
 
-func (textMapPropagator) Inject(
+type textMapPropagator struct {
+	traceIDKey string
+	traceID    string
+
+	spanIDKey string
+	spanID    string
+
+	sampledKey string
+	sampled    string
+
+	parseTraceID traceIDParser
+}
+
+func (p textMapPropagator) Inject(
 	spanContext opentracing.SpanContext,
 	opaqueCarrier interface{},
 ) error {
@@ -33,9 +42,13 @@ func (textMapPropagator) Inject(
 	if !ok {
 		return opentracing.ErrInvalidCarrier
 	}
-	carrier.Set(fieldNameTraceID, strconv.FormatUint(sc.TraceID, 16))
-	carrier.Set(fieldNameSpanID, strconv.FormatUint(sc.SpanID, 16))
-	carrier.Set(fieldNameSampled, "true")
+	carrier.Set(p.traceIDKey, p.traceID)
+	carrier.Set(p.spanIDKey, p.spanID)
+	if len(p.sampled) > 0 {
+		carrier.Set(p.sampledKey, p.sampled)
+	} else {
+		carrier.Set(p.sampledKey, "true")
+	}
 
 	for k, v := range sc.Baggage {
 		carrier.Set(prefixBaggage+k, v)
@@ -43,7 +56,7 @@ func (textMapPropagator) Inject(
 	return nil
 }
 
-func (textMapPropagator) Extract(
+func (p textMapPropagator) Extract(
 	opaqueCarrier interface{},
 ) (opentracing.SpanContext, error) {
 	carrier, ok := opaqueCarrier.(opentracing.TextMapReader)
@@ -52,24 +65,26 @@ func (textMapPropagator) Extract(
 	}
 
 	requiredFieldCount := 0
-	var traceID, spanID uint64
+	var traceIDUpper, traceIDLower, spanID uint64
+	var sampled string
 	var err error
 	decodedBaggage := map[string]string{}
 	err = carrier.ForeachKey(func(k, v string) error {
 		switch strings.ToLower(k) {
-		case fieldNameTraceID:
-			traceID, err = strconv.ParseUint(v, 16, 64)
+		case p.traceIDKey:
+			traceIDLower, traceIDUpper, err = p.parseTraceID(v)
 			if err != nil {
 				return opentracing.ErrSpanContextCorrupted
 			}
 			requiredFieldCount++
-		case fieldNameSpanID:
+		case p.spanIDKey:
 			spanID, err = strconv.ParseUint(v, 16, 64)
 			if err != nil {
 				return opentracing.ErrSpanContextCorrupted
 			}
 			requiredFieldCount++
-		case fieldNameSampled:
+		case p.sampledKey:
+			sampled = v
 			requiredFieldCount++
 		default:
 			lowercaseK := strings.ToLower(k)
@@ -90,8 +105,10 @@ func (textMapPropagator) Extract(
 	}
 
 	return SpanContext{
-		TraceID: traceID,
-		SpanID:  spanID,
-		Baggage: decodedBaggage,
+		TraceIDUpper: traceIDUpper,
+		TraceID:      traceIDLower,
+		SpanID:       spanID,
+		Sampled:      sampled,
+		Baggage:      decodedBaggage,
 	}, nil
 }

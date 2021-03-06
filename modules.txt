@@ -80,8 +80,7 @@ github.com/Shopify/sarama
 # github.com/Shopify/toxiproxy v2.1.4+incompatible
 ## explicit
 github.com/Shopify/toxiproxy/client
-# github.com/StackExchange/wmi v0.0.0-20180116203802-5d049714c4a6
-## explicit
+# github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d
 github.com/StackExchange/wmi
 # github.com/VividCortex/ewma v1.1.1
 ## explicit
@@ -386,8 +385,7 @@ github.com/ghemawat/stream
 github.com/ghodss/yaml
 # github.com/go-logfmt/logfmt v0.4.0
 github.com/go-logfmt/logfmt
-# github.com/go-ole/go-ole v1.2.2
-## explicit
+# github.com/go-ole/go-ole v1.2.4
 github.com/go-ole/go-ole
 github.com/go-ole/go-ole/oleutil
 # github.com/go-sql-driver/mysql v1.5.0
@@ -449,6 +447,8 @@ github.com/golang/geo/s1
 github.com/golang/geo/s2
 # github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 github.com/golang/glog
+# github.com/golang/groupcache v0.0.0-20190702054246-869f871628b6
+github.com/golang/groupcache/lru
 # github.com/golang/protobuf v1.4.2
 ## explicit
 github.com/golang/protobuf/descriptor
@@ -533,8 +533,6 @@ github.com/grpc-ecosystem/grpc-gateway/utilities
 github.com/grpc-ecosystem/grpc-opentracing/go/otgrpc
 # github.com/hashicorp/go-uuid v1.0.2
 github.com/hashicorp/go-uuid
-# github.com/hashicorp/golang-lru v0.5.3
-github.com/hashicorp/golang-lru/simplelru
 # github.com/huandu/xstrings v1.3.0
 github.com/huandu/xstrings
 # github.com/ianlancetaylor/cgosymbolizer v0.0.0-20201002210021-dda951febc36
@@ -681,14 +679,16 @@ github.com/lib/pq/scram
 # github.com/lib/pq/auth/kerberos v0.0.0-20200720160335-984a6aa1ca46
 ## explicit
 github.com/lib/pq/auth/kerberos
-# github.com/lightstep/lightstep-tracer-go v0.15.6
+# github.com/lightstep/lightstep-tracer-common/golang/gogo v0.0.0-20200305213919-a88bf8de3718
+github.com/lightstep/lightstep-tracer-common/golang/gogo/collectorpb
+github.com/lightstep/lightstep-tracer-common/golang/gogo/lightsteppb
+github.com/lightstep/lightstep-tracer-common/golang/gogo/metricspb
+# github.com/lightstep/lightstep-tracer-go v0.24.0
 ## explicit
 github.com/lightstep/lightstep-tracer-go
-github.com/lightstep/lightstep-tracer-go/collectorpb
+github.com/lightstep/lightstep-tracer-go/constants
+github.com/lightstep/lightstep-tracer-go/internal/metrics
 github.com/lightstep/lightstep-tracer-go/lightstep/rand
-github.com/lightstep/lightstep-tracer-go/lightstep_thrift
-github.com/lightstep/lightstep-tracer-go/lightsteppb
-github.com/lightstep/lightstep-tracer-go/thrift_0_9_2/lib/go/thrift
 # github.com/linkedin/goavro/v2 v2.9.8
 ## explicit
 github.com/linkedin/goavro/v2
@@ -905,7 +905,7 @@ go.etcd.io/etcd/raft/v3/confchange
 go.etcd.io/etcd/raft/v3/quorum
 go.etcd.io/etcd/raft/v3/raftpb
 go.etcd.io/etcd/raft/v3/tracker
-# go.opencensus.io v0.22.0
+# go.opencensus.io v0.22.3
 go.opencensus.io
 go.opencensus.io/internal
 go.opencensus.io/internal/tagencoding

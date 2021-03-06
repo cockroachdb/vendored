@@ -5,15 +5,16 @@ import (
 	"io"
 	"io/ioutil"
 
-	"github.com/golang/protobuf/proto"
-	lightstep "github.com/lightstep/lightstep-tracer-go/lightsteppb"
-	opentracing "github.com/opentracing/opentracing-go"
+	"github.com/gogo/protobuf/proto"
+	lightstep "github.com/lightstep/lightstep-tracer-common/golang/gogo/lightsteppb"
+	"github.com/opentracing/opentracing-go"
 )
 
 // BinaryCarrier is used as the format parameter in inject/extract for lighstep binary propagation.
 const BinaryCarrier = opentracing.Binary
 
-var theBinaryPropagator binaryPropagator
+// BinaryPropagator propagates context in binary format
+var BinaryPropagator binaryPropagator
 
 type binaryPropagator struct{}
 
@@ -29,7 +30,7 @@ func (binaryPropagator) Inject(
 		BasicCtx: &lightstep.BasicTracerCarrier{
 			TraceId:      sc.TraceID,
 			SpanId:       sc.SpanID,
-			Sampled:      true,
+			Sampled:      sc.Sampled == "true" || sc.Sampled == "1",
 			BaggageItems: sc.Baggage,
 		},
 	})

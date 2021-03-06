@@ -23,10 +23,9 @@ func max(x, y int) int {
 }
 
 func genSeededGUID() uint64 {
-	return uint64(randompool.Pick().Int63())
+	return randompool.Pick().Uint64()
 }
 
 func genSeededGUID2() (uint64, uint64) {
-	n1, n2 := randompool.Pick().TwoInt63()
-	return uint64(n1), uint64(n2)
+	return randompool.Pick().TwoUint64()
 }

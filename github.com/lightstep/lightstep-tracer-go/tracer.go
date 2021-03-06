@@ -1,16 +1,18 @@
-// package lightstep implements the LightStep OpenTracing client for Go.
+// Package lightstep implements the LightStep OpenTracing client for Go.
 package lightstep
 
 import (
+	"context"
 	"fmt"
+	"os"
+	"runtime"
+	"strings"
+	"sync"
 	"time"
 
-	"golang.org/x/net/context"
-
-	"runtime"
-	"sync"
-
-	ot "github.com/opentracing/opentracing-go"
+	"github.com/lightstep/lightstep-tracer-go/constants"
+	"github.com/lightstep/lightstep-tracer-go/internal/metrics"
+	"github.com/opentracing/opentracing-go"
 )
 
 // Tracer extends the `opentracing.Tracer` interface with methods for manual
@@ -18,7 +20,7 @@ import (
 // tracer and typecast it to a `lightstep.Tracer`. As a convenience, the
 // lightstep package provides static functions which perform the typecasting.
 type Tracer interface {
-	ot.Tracer
+	opentracing.Tracer
 
 	// Close flushes and then terminates the LightStep collector
 	Close(context.Context)
@@ -30,7 +32,7 @@ type Tracer interface {
 	Disable()
 }
 
-// Implements the `Tracer` interface. Buffers spans and forwards the to a Lightstep collector.
+// Implements the `Tracer` interface. Buffers spans and forwards to a Lightstep collector.
 type tracerImpl struct {
 	//////////////////////////////////////////////////////////////
 	// IMMUTABLE IMMUTABLE IMMUTABLE IMMUTABLE IMMUTABLE IMMUTABLE
@@ -44,9 +46,17 @@ type tracerImpl struct {
 	opts       Options
 
 	// report loop management
-	closeOnce               sync.Once
-	closeReportLoopChannel  chan struct{}
-	reportLoopClosedChannel chan struct{}
+	closeOnce                     sync.Once
+	closeReportLoopChannel        chan struct{}
+	closeSystemMetricsLoopChannel chan struct{}
+	reportLoopClosedChannel       chan struct{}
+
+	converter   *protoConverter
+	accessToken string
+	attributes  map[string]string
+
+	metricsReporter             *metrics.Reporter
+	metricsMeasurementFrequency time.Duration
 
 	//////////////////////////////////////////////////////////
 	// MUTABLE MUTABLE MUTABLE MUTABLE MUTABLE MUTABLE MUTABLE
@@ -68,6 +78,11 @@ type tracerImpl struct {
 	reportInFlight    bool
 	lastReportAttempt time.Time
 
+	// Meta Event Reporting can be enabled at tracer creation or on-demand by satellite
+	metaEventReportingEnabled bool
+	// Set to true on first report
+	firstReportHasRun bool
+
 	// We allow our remote peer to disable this instrumentation at any
 	// time, turning all potentially costly runtime operations into
 	// no-ops.
@@ -75,14 +90,29 @@ type tracerImpl struct {
 	// TODO this should use atomic load/store to test disabled
 	// prior to taking the lock, do please.
 	disabled bool
+
+	// Map of propagators used to determine the correct propagator to use
+	// based on the format passed into Inject/Extract. Supports one
+	// propagator for each of the formats: TextMap, HTTPHeaders, Binary
+	propagators map[opentracing.BuiltinFormat]Propagator
 }
 
 // NewTracer creates and starts a new Lightstep Tracer.
+// In case of error, we emit event and return nil.
 func NewTracer(opts Options) Tracer {
-	err := opts.Initialize()
+	tr, err := CreateTracer(opts)
 	if err != nil {
 		emitEvent(newEventStartError(err))
 		return nil
+	}
+	return tr
+}
+
+// CreateTracer creates and starts a new Lightstep Tracer.
+// It is meant to replace NewTracer which does not propagate the error.
+func CreateTracer(opts Options) (Tracer, error) {
+	if err := opts.Initialize(); err != nil {
+		return nil, fmt.Errorf("init; err: %v", err)
 	}
 
 	attributes := map[string]string{}
@@ -94,34 +124,72 @@ func NewTracer(opts Options) Tracer {
 	attributes[TracerPlatformVersionKey] = runtime.Version()
 	attributes[TracerVersionKey] = TracerVersionValue
 
+	tracerID := genSeededGUID()
 	now := time.Now()
 	impl := &tracerImpl{
 		opts:                    opts,
-		reporterID:              genSeededGUID(),
+		reporterID:              tracerID,
 		buffer:                  newSpansBuffer(opts.MaxBufferedSpans),
 		flushing:                newSpansBuffer(opts.MaxBufferedSpans),
 		closeReportLoopChannel:  make(chan struct{}),
 		reportLoopClosedChannel: make(chan struct{}),
+		converter:               newProtoConverter(opts),
+		accessToken:             opts.AccessToken,
+		attributes:              attributes,
+		metricsReporter: metrics.NewReporter(
+			metrics.WithReporterTracerID(tracerID),
+			metrics.WithReporterAccessToken(opts.AccessToken),
+			metrics.WithReporterTimeout(opts.SystemMetrics.Timeout),
+			metrics.WithReporterAddress(opts.SystemMetrics.Endpoint.urlWithoutPath()),
+			metrics.WithReporterAttributes(map[string]string{
+				metrics.ReporterPlatformKey:        TracerPlatformValue,
+				metrics.ReporterPlatformVersionKey: runtime.Version(),
+				metrics.ReporterVersionKey:         TracerVersionValue,
+				constants.HostnameKey:              attributes[constants.HostnameKey],
+				constants.ServiceVersionKey:        attributes[constants.ServiceVersionKey],
+				constants.ComponentNameKey:         attributes[constants.ComponentNameKey],
+			}),
+			metrics.WithReporterMeasurementDuration(opts.SystemMetrics.MeasurementFrequency),
+		),
+		metricsMeasurementFrequency: opts.SystemMetrics.MeasurementFrequency,
 	}
 
 	impl.buffer.setCurrent(now)
 
-	impl.client, err = newCollectorClient(opts, impl.reporterID, attributes)
+	var err error
+	impl.client, err = newCollectorClient(opts)
 	if err != nil {
-		fmt.Println("Failed to create to Collector client!", err)
-		return nil
+		return nil, fmt.Errorf("create collector client; err: %v", err)
 	}
 
 	conn, err := impl.client.ConnectClient()
 	if err != nil {
-		emitEvent(newEventStartError(err))
-		return nil
+		return nil, err
 	}
 	impl.connection = conn
 
+	// set meta reporting to defined option
+	impl.metaEventReportingEnabled = opts.MetaEventReportingEnabled
+	impl.firstReportHasRun = false
+
 	go impl.reportLoop()
 
-	return impl
+	impl.propagators = map[opentracing.BuiltinFormat]Propagator{
+		opentracing.TextMap:     LightStepPropagator,
+		opentracing.HTTPHeaders: LightStepPropagator,
+		opentracing.Binary:      BinaryPropagator,
+	}
+	for builtin, propagator := range opts.Propagators {
+		impl.propagators[builtin] = propagator
+	}
+
+	// allow disabling of system metrics via environment variable:
+	// LS_METRICS_ENABLED=false
+	if !opts.SystemMetrics.Disabled && strings.ToLower(os.Getenv("LS_METRICS_ENABLED")) != "false" {
+		go impl.systemMetricsLoop()
+	}
+
+	return impl, nil
 }
 
 func (tracer *tracerImpl) Options() Options {
@@ -130,29 +198,40 @@ func (tracer *tracerImpl) Options() Options {
 
 func (tracer *tracerImpl) StartSpan(
 	operationName string,
-	sso ...ot.StartSpanOption,
-) ot.Span {
+	sso ...opentracing.StartSpanOption,
+) opentracing.Span {
 	return newSpan(operationName, tracer, sso)
 }
 
-func (tracer *tracerImpl) Inject(sc ot.SpanContext, format interface{}, carrier interface{}) error {
-	switch format {
-	case ot.TextMap, ot.HTTPHeaders:
-		return theTextMapPropagator.Inject(sc, carrier)
-	case ot.Binary:
-		return theBinaryPropagator.Inject(sc, carrier)
+func (tracer *tracerImpl) Inject(sc opentracing.SpanContext, format interface{}, carrier interface{}) error {
+	if tracer.opts.MetaEventReportingEnabled {
+		opentracing.StartSpan(LSMetaEvent_InjectOperation,
+			opentracing.Tag{Key: LSMetaEvent_MetaEventKey, Value: true},
+			opentracing.Tag{Key: LSMetaEvent_TraceIdKey, Value: sc.(SpanContext).TraceID},
+			opentracing.Tag{Key: LSMetaEvent_SpanIdKey, Value: sc.(SpanContext).SpanID},
+			opentracing.Tag{Key: LSMetaEvent_PropagationFormatKey, Value: format}).
+			Finish()
 	}
-	return ot.ErrUnsupportedFormat
+
+	builtin, ok := format.(opentracing.BuiltinFormat)
+	if !ok {
+		return opentracing.ErrUnsupportedFormat
+	}
+	return tracer.propagators[builtin].Inject(sc, carrier)
 }
 
-func (tracer *tracerImpl) Extract(format interface{}, carrier interface{}) (ot.SpanContext, error) {
-	switch format {
-	case ot.TextMap, ot.HTTPHeaders:
-		return theTextMapPropagator.Extract(carrier)
-	case ot.Binary:
-		return theBinaryPropagator.Extract(carrier)
+func (tracer *tracerImpl) Extract(format interface{}, carrier interface{}) (opentracing.SpanContext, error) {
+	if tracer.opts.MetaEventReportingEnabled {
+		opentracing.StartSpan(LSMetaEvent_ExtractOperation,
+			opentracing.Tag{Key: LSMetaEvent_MetaEventKey, Value: true},
+			opentracing.Tag{Key: LSMetaEvent_PropagationFormatKey, Value: format}).
+			Finish()
 	}
-	return nil, ot.ErrUnsupportedFormat
+	builtin, ok := format.(opentracing.BuiltinFormat)
+	if !ok {
+		return nil, opentracing.ErrUnsupportedFormat
+	}
+	return tracer.propagators[builtin].Extract(carrier)
 }
 
 func (tracer *tracerImpl) reconnectClient(now time.Time) {
@@ -174,7 +253,12 @@ func (tracer *tracerImpl) reconnectClient(now time.Time) {
 func (tracer *tracerImpl) Close(ctx context.Context) {
 	tracer.closeOnce.Do(func() {
 		// notify report loop that we are closing
-		close(tracer.closeReportLoopChannel)
+		if tracer.closeReportLoopChannel != nil {
+			close(tracer.closeReportLoopChannel)
+		}
+		if tracer.closeSystemMetricsLoopChannel != nil {
+			close(tracer.closeSystemMetricsLoopChannel)
+		}
 		select {
 		case <-tracer.reportLoopClosedChannel:
 			tracer.Flush(ctx)
@@ -202,7 +286,7 @@ func (tracer *tracerImpl) RecordSpan(raw RawSpan) {
 	tracer.lock.Lock()
 
 	// Early-out for disabled runtimes
-	if tracer.disabled {
+	if tracer.disabled || raw.Context.Sampled == "false" {
 		tracer.lock.Unlock()
 		return
 	}
@@ -220,20 +304,36 @@ func (tracer *tracerImpl) Flush(ctx context.Context) {
 	tracer.flushingLock.Lock()
 	defer tracer.flushingLock.Unlock()
 
+	flushStart := time.Now()
+
 	if errorEvent := tracer.preFlush(); errorEvent != nil {
 		emitEvent(errorEvent)
 		return
 	}
 
+	if tracer.opts.MetaEventReportingEnabled && !tracer.firstReportHasRun {
+		opentracing.StartSpan(LSMetaEvent_TracerCreateOperation,
+			opentracing.Tag{Key: LSMetaEvent_MetaEventKey, Value: true},
+			opentracing.Tag{Key: LSMetaEvent_TracerGuidKey, Value: tracer.reporterID}).
+			Finish()
+		tracer.firstReportHasRun = true
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, tracer.opts.ReportTimeout)
 	defer cancel()
 
-	req, err := tracer.client.Translate(ctx, &tracer.flushing)
+	protoReq := tracer.converter.toReportRequest(
+		tracer.reporterID,
+		tracer.attributes,
+		tracer.accessToken,
+		&tracer.flushing,
+	)
+	req, err := tracer.client.Translate(protoReq)
 	if err != nil {
 		errorEvent := newEventFlushError(err, FlushErrorTranslate)
 		emitEvent(errorEvent)
 		// call postflush to prevent the tracer from going into an invalid state.
-		emitEvent(tracer.postFlush(errorEvent))
+		emitEvent(tracer.postFlush(flushStart, errorEvent))
 		return
 	}
 
@@ -248,7 +348,15 @@ func (tracer *tracerImpl) Flush(ctx context.Context) {
 	if reportErrorEvent != nil {
 		emitEvent(reportErrorEvent)
 	}
-	emitEvent(tracer.postFlush(reportErrorEvent))
+	emitEvent(tracer.postFlush(flushStart, reportErrorEvent))
+
+	if err == nil && resp.DevMode() {
+		tracer.metaEventReportingEnabled = true
+	}
+
+	if err == nil && !resp.DevMode() {
+		tracer.metaEventReportingEnabled = false
+	}
 
 	if err == nil && resp.Disable() {
 		tracer.Disable()
@@ -261,11 +369,11 @@ func (tracer *tracerImpl) preFlush() *eventFlushError {
 	defer tracer.lock.Unlock()
 
 	if tracer.disabled {
-		return newEventFlushError(flushErrorTracerClosed, FlushErrorTracerDisabled)
+		return newEventFlushError(errFlushFailedTracerClosed, FlushErrorTracerDisabled)
 	}
 
 	if tracer.connection == nil {
-		return newEventFlushError(flushErrorTracerClosed, FlushErrorTracerClosed)
+		return newEventFlushError(errFlushFailedTracerClosed, FlushErrorTracerClosed)
 	}
 
 	now := time.Now()
@@ -278,24 +386,29 @@ func (tracer *tracerImpl) preFlush() *eventFlushError {
 }
 
 // postFlush handles lock-protected data manipulation after flushing
-func (tracer *tracerImpl) postFlush(flushEventError *eventFlushError) *eventStatusReport {
+func (tracer *tracerImpl) postFlush(flushStart time.Time, flushEventError *eventFlushError) *eventStatusReport {
+
 	tracer.lock.Lock()
 	defer tracer.lock.Unlock()
 
+	flushEnd := time.Now()
+
 	tracer.reportInFlight = false
 
-	statusReportEvent := newEventStatusReport(
-		tracer.flushing.reportStart,
-		tracer.flushing.reportEnd,
-		len(tracer.flushing.rawSpans),
-		int(tracer.flushing.droppedSpanCount+tracer.buffer.droppedSpanCount),
-		int(tracer.flushing.logEncoderErrorCount+tracer.buffer.logEncoderErrorCount),
-	)
-
 	if flushEventError == nil {
+		statusReportEvent := newEventStatusReport(
+			tracer.flushing.reportStart,
+			tracer.flushing.reportEnd,
+			len(tracer.flushing.rawSpans),
+			int(tracer.flushing.reportDroppedSpanCount()),
+			int(tracer.flushing.reportLogEncoderErrorCount()),
+			flushEnd.Sub(flushStart),
+		)
 		tracer.flushing.clear()
 		return statusReportEvent
 	}
+
+	reportStart, reportEnd := tracer.flushing.reportStart, tracer.flushing.reportEnd
 
 	switch flushEventError.State() {
 	case FlushErrorTranslate:
@@ -306,7 +419,14 @@ func (tracer *tracerImpl) postFlush(flushEventError *eventFlushError) *eventStat
 		tracer.buffer.mergeFrom(&tracer.flushing)
 	}
 
-	statusReportEvent.SetSentSpans(0)
+	statusReportEvent := newEventStatusReport(
+		reportStart,
+		reportEnd,
+		0,
+		int(tracer.buffer.reportDroppedSpanCount()),
+		int(tracer.buffer.reportLogEncoderErrorCount()),
+		flushEnd.Sub(flushStart),
+	)
 
 	return statusReportEvent
 }
@@ -371,6 +491,44 @@ func (tracer *tracerImpl) reportLoop() {
 			}
 		case <-tracer.closeReportLoopChannel:
 			close(tracer.reportLoopClosedChannel)
+			return
+		}
+	}
+}
+
+func (tracer *tracerImpl) systemMetricsLoop() {
+	ticker := time.NewTicker(tracer.metricsMeasurementFrequency)
+	intervals := int64(1)
+
+	measure := func(intervals int64) int64 {
+		ctx, cancel := context.WithTimeout(context.Background(), tracer.metricsMeasurementFrequency)
+		defer cancel()
+
+		if err := tracer.metricsReporter.Measure(ctx, intervals); err != nil {
+			emitEvent(newEventSystemMetricsMeasurementFailed(err))
+			intervals++
+		} else {
+			intervals = 1
+		}
+		emitEvent(newEventSystemMetricsStatusReport(
+			tracer.metricsReporter.Start,
+			tracer.metricsReporter.End,
+			tracer.metricsReporter.MetricsCount),
+		)
+		return intervals
+	}
+
+	intervals = measure(intervals)
+
+	for {
+		select {
+		case <-ticker.C:
+			if tracer.disabled {
+				return
+			}
+
+			intervals = measure(intervals)
+		case <-tracer.closeSystemMetricsLoopChannel:
 			return
 		}
 	}

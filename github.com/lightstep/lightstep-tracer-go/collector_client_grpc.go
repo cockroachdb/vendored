@@ -1,17 +1,17 @@
 package lightstep
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"time"
 
-	"golang.org/x/net/context"
-
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/metadata"
 
 	// N.B.(jmacd): Do not use google.golang.org/glog in this package.
-	cpb "github.com/lightstep/lightstep-tracer-go/collectorpb"
+	"github.com/lightstep/lightstep-tracer-common/golang/gogo/collectorpb"
 )
 
 const (
@@ -26,10 +26,6 @@ var (
 // grpcCollectorClient specifies how to send reports back to a LightStep
 // collector via grpc.
 type grpcCollectorClient struct {
-	// auth and runtime information
-	attributes map[string]string
-	reporterID uint64
-
 	// accessToken is the access token used for explicit trace collection requests.
 	accessToken        string
 	maxReportingPeriod time.Duration // set by GrpcOptions.MaxReportingPeriod
@@ -38,27 +34,21 @@ type grpcCollectorClient struct {
 
 	// Remote service that will receive reports.
 	address       string
-	grpcClient    cpb.CollectorServiceClient
+	grpcClient    collectorpb.CollectorServiceClient
 	connTimestamp time.Time
 	dialOptions   []grpc.DialOption
-
-	// converters
-	converter *protoConverter
 
 	// For testing purposes only
 	grpcConnectorFactory ConnectorFactory
 }
 
-func newGrpcCollectorClient(opts Options, reporterID uint64, attributes map[string]string) *grpcCollectorClient {
+func newGrpcCollectorClient(opts Options) (*grpcCollectorClient, error) {
 	rec := &grpcCollectorClient{
-		attributes:           attributes,
-		reporterID:           reporterID,
 		accessToken:          opts.AccessToken,
 		maxReportingPeriod:   opts.ReportingPeriod,
 		reconnectPeriod:      opts.ReconnectPeriod,
 		reportingTimeout:     opts.ReportTimeout,
 		dialOptions:          opts.DialOptions,
-		converter:            newProtoConverter(opts),
 		grpcConnectorFactory: opts.ConnFactory,
 	}
 
@@ -71,11 +61,20 @@ func newGrpcCollectorClient(opts Options, reporterID uint64, attributes map[stri
 	rec.dialOptions = append(rec.dialOptions, grpc.WithDefaultCallOptions(grpc.MaxCallSendMsgSize(opts.GRPCMaxCallSendMsgSizeBytes)))
 	if opts.Collector.Plaintext {
 		rec.dialOptions = append(rec.dialOptions, grpc.WithInsecure())
+		return rec, nil
+	}
+
+	if len(opts.Collector.CustomCACertFile) > 0 {
+		creds, err := credentials.NewClientTLSFromFile(opts.Collector.CustomCACertFile, "")
+		if err != nil {
+			return nil, err
+		}
+		rec.dialOptions = append(rec.dialOptions, grpc.WithTransportCredentials(creds))
 	} else {
 		rec.dialOptions = append(rec.dialOptions, grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(nil, "")))
 	}
 
-	return rec
+	return rec, nil
 }
 
 func (client *grpcCollectorClient) ConnectClient() (Connection, error) {
@@ -87,9 +86,9 @@ func (client *grpcCollectorClient) ConnectClient() (Connection, error) {
 			return nil, err
 		}
 
-		grpcClient, ok := uncheckedClient.(cpb.CollectorServiceClient)
+		grpcClient, ok := uncheckedClient.(collectorpb.CollectorServiceClient)
 		if !ok {
-			return nil, fmt.Errorf("Grpc connector factory did not provide valid client!")
+			return nil, fmt.Errorf("gRPC connector factory did not provide valid client")
 		}
 
 		conn = transport
@@ -101,35 +100,58 @@ func (client *grpcCollectorClient) ConnectClient() (Connection, error) {
 		}
 
 		conn = transport
-		client.grpcClient = cpb.NewCollectorServiceClient(transport)
+		client.grpcClient = collectorpb.NewCollectorServiceClient(transport)
 	}
 	client.connTimestamp = now
 	return conn, nil
 }
 
 func (client *grpcCollectorClient) ShouldReconnect() bool {
-	return time.Now().Sub(client.connTimestamp) > client.reconnectPeriod
+	return time.Since(client.connTimestamp) > client.reconnectPeriod
 }
 
 func (client *grpcCollectorClient) Report(ctx context.Context, req reportRequest) (collectorResponse, error) {
 	if req.protoRequest == nil {
 		return nil, fmt.Errorf("protoRequest cannot be null")
 	}
+
+	ctx = metadata.NewOutgoingContext(
+		ctx,
+		metadata.Pairs(
+			accessTokenHeader,
+			client.accessToken,
+		),
+	)
+
 	resp, err := client.grpcClient.Report(ctx, req.protoRequest)
 	if err != nil {
 		return nil, err
 	}
-	return resp, nil
+	return protoResponse{ReportResponse: resp}, nil
 }
 
-func (client *grpcCollectorClient) Translate(ctx context.Context, buffer *reportBuffer) (reportRequest, error) {
-	req := client.converter.toReportRequest(
-		client.reporterID,
-		client.attributes,
-		client.accessToken,
-		buffer,
-	)
-	return reportRequest{
-		protoRequest: req,
-	}, nil
+func (client *grpcCollectorClient) Translate(protoRequest *collectorpb.ReportRequest) (reportRequest, error) {
+	return reportRequest{protoRequest: protoRequest}, nil
+}
+
+type protoResponse struct {
+	*collectorpb.ReportResponse
+}
+
+func (res protoResponse) Disable() bool {
+	for _, command := range res.GetCommands() {
+		if command.Disable {
+			return true
+		}
+	}
+	return false
+}
+
+func (res protoResponse) DevMode() bool {
+	for _, command := range res.GetCommands() {
+		if command.DevMode {
+			return true
+		}
+	}
+	return false
 }
