@@ -168,6 +168,9 @@ github.com/aws/aws-sdk-go/service/sts/stsiface
 # github.com/axiomhq/hyperloglog v0.0.0-20181223111420-4b99d0c2c99e
 ## explicit
 github.com/axiomhq/hyperloglog
+# github.com/bazelbuild/rules_go v0.26.0
+## explicit
+github.com/bazelbuild/rules_go/go/tools/bazel
 # github.com/benesch/cgosymbolizer v0.0.0-20180702220239-70e1ee2b39d3
 ## explicit
 github.com/benesch/cgosymbolizer
