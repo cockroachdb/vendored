@@ -1,15 +1,16 @@
 package unused
 
-//go:generate stringer -type edge
-type edge uint64
+//go:generate stringer -type edgeKind
+type edgeKind uint64
 
-func (e edge) is(o edge) bool {
+func (e edgeKind) is(o edgeKind) bool {
 	return e&o != 0
 }
 
 const (
-	edgeAlias edge = 1 << iota
+	edgeAlias edgeKind = 1 << iota
 	edgeBlankField
+	edgeAnonymousStruct
 	edgeCgoExported
 	edgeConstGroup
 	edgeElementType
@@ -39,7 +40,6 @@ const (
 	edgeProvidesMethod
 	edgeReceiver
 	edgeRuntimeFunction
-	edgeSameObject
 	edgeSignature
 	edgeStructConversion
 	edgeTestSink
