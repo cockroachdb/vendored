@@ -313,6 +313,7 @@ github.com/dave/dst/dstutil
 # github.com/davecgh/go-spew v1.1.1
 github.com/davecgh/go-spew/spew
 # github.com/dgrijalva/jwt-go v3.2.0+incompatible
+## explicit
 github.com/dgrijalva/jwt-go
 # github.com/dgryski/go-metro v0.0.0-20180109044635-280f6062b5bc
 ## explicit
@@ -484,6 +485,9 @@ github.com/google/go-cmp/cmp/internal/value
 # github.com/google/go-github v17.0.0+incompatible
 ## explicit
 github.com/google/go-github/github
+# github.com/google/go-github/v32 v32.1.0
+## explicit
+github.com/google/go-github/v32/github
 # github.com/google/go-querystring v1.0.0
 github.com/google/go-querystring/query
 # github.com/google/pprof v0.0.0-20190515194954-54271f7e092f
@@ -534,6 +538,10 @@ github.com/grpc-ecosystem/grpc-gateway/utilities
 # github.com/grpc-ecosystem/grpc-opentracing v0.0.0-20180507213350-8e809c8a8645
 ## explicit
 github.com/grpc-ecosystem/grpc-opentracing/go/otgrpc
+# github.com/hashicorp/go-cleanhttp v0.5.1
+github.com/hashicorp/go-cleanhttp
+# github.com/hashicorp/go-retryablehttp v0.5.3
+github.com/hashicorp/go-retryablehttp
 # github.com/hashicorp/go-uuid v1.0.2
 github.com/hashicorp/go-uuid
 # github.com/huandu/xstrings v1.3.0
@@ -777,6 +785,12 @@ github.com/openzipkin-contrib/zipkin-go-opentracing/thrift/gen-go/scribe
 github.com/openzipkin-contrib/zipkin-go-opentracing/thrift/gen-go/zipkincore
 github.com/openzipkin-contrib/zipkin-go-opentracing/types
 github.com/openzipkin-contrib/zipkin-go-opentracing/wire
+# github.com/opsgenie/opsgenie-go-sdk-v2 v1.2.6
+## explicit
+github.com/opsgenie/opsgenie-go-sdk-v2/alert
+github.com/opsgenie/opsgenie-go-sdk-v2/client
+github.com/opsgenie/opsgenie-go-sdk-v2/og
+github.com/opsgenie/opsgenie-go-sdk-v2/schedule
 # github.com/peterbourgon/g2s v0.0.0-20170223122336-d4e7ad98afea
 ## explicit
 # github.com/petermattis/goid v0.0.0-20180202154549-b0b1615b78e5
@@ -933,6 +947,7 @@ go.opencensus.io/trace/tracestate
 ## explicit
 golang.org/x/crypto/bcrypt
 golang.org/x/crypto/blowfish
+golang.org/x/crypto/cast5
 golang.org/x/crypto/chacha20
 golang.org/x/crypto/curve25519
 golang.org/x/crypto/ed25519
@@ -940,6 +955,12 @@ golang.org/x/crypto/ed25519/internal/edwards25519
 golang.org/x/crypto/internal/subtle
 golang.org/x/crypto/md4
 golang.org/x/crypto/ocsp
+golang.org/x/crypto/openpgp
+golang.org/x/crypto/openpgp/armor
+golang.org/x/crypto/openpgp/elgamal
+golang.org/x/crypto/openpgp/errors
+golang.org/x/crypto/openpgp/packet
+golang.org/x/crypto/openpgp/s2k
 golang.org/x/crypto/pbkdf2
 golang.org/x/crypto/pkcs12
 golang.org/x/crypto/pkcs12/internal/rc2
