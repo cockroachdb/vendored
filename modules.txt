@@ -253,7 +253,7 @@ github.com/cockroachdb/gostdlib/x/tools/internal/span
 # github.com/cockroachdb/logtags v0.0.0-20190617123548-eb05cc24525f
 ## explicit
 github.com/cockroachdb/logtags
-# github.com/cockroachdb/pebble v0.0.0-20210310192349-958290ba5bd6
+# github.com/cockroachdb/pebble v0.0.0-20210313162627-639dfcee1d23
 ## explicit
 github.com/cockroachdb/pebble
 github.com/cockroachdb/pebble/bloom
@@ -990,7 +990,7 @@ golang.org/x/perf/storage/benchfmt
 ## explicit
 golang.org/x/sync/errgroup
 golang.org/x/sync/syncmap
-# golang.org/x/sys v0.0.0-20210309074719-68d13333faf2
+# golang.org/x/sys v0.0.0-20210316092937-0b90fd5c4c48
 ## explicit
 golang.org/x/sys/cpu
 golang.org/x/sys/execabs
