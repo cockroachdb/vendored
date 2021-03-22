@@ -6,6 +6,8 @@
 
 The LightStep distributed tracing library for Go.
 
+**Looking for the LightStep OpenCensus exporter? Check out the [`lightstepoc` package](./lightstepoc).**
+
 ## Installation
 
 ```
@@ -17,7 +19,7 @@ $ go get 'github.com/lightstep/lightstep-tracer-go'
 Godoc: https://godoc.org/github.com/lightstep/lightstep-tracer-go
 
 ## Initialization: Starting a new tracer
-To initialize a tracer, configure it with a valid Access Token and optional tuning parameters. Register the tracer as the OpenTracing global tracer so that it will become available to your installed intstrumentations libraries.
+To initialize a tracer, configure it with a valid Access Token and optional tuning parameters. Register the tracer as the OpenTracing global tracer so that it will become available to your installed instrumentation libraries.
 
 ```go
 import (
@@ -43,7 +45,7 @@ All instrumentation should be done through the OpenTracing API, rather than usin
 
 ## Flushing and Closing: Managing the tracer lifecycle
 
-As part of managaing your application lifecycle, the lightstep tracer extends the `opentracing.Tracer` interface with methods for manual flushing and closing. To access these methods, you can take the global tracer and typecast it to a `lightstep.Tracer`. As a convenience, the lightstep package provides static methods which perform the typecasting.
+As part of managing your application lifecycle, the lightstep tracer extends the `opentracing.Tracer` interface with methods for manual flushing and closing. To access these methods, you can take the global tracer and typecast it to a `lightstep.Tracer`. As a convenience, the lightstep package provides static methods which perform the typecasting.
 
 ```go
 import (
@@ -69,7 +71,7 @@ func shutdown(ctx context.Context) {
 ```
 
 ## Event Handling: Observing the LightStep tracer
-In order to connect diagnostic information from the lightstep tracer into an application's logging and metrics systems, inject an event handler using the `OnEvent` static method. Events may be typecast to check for errors or specific events such as status reports.
+In order to connect diagnostic information from the lightstep tracer into an application's logging and metrics systems, inject an event handler using the `SetGlobalEventHandler` static method. Events may be typecast to check for errors or specific events such as status reports.
 
 ```go
 import (
@@ -82,6 +84,8 @@ logAndMetricsHandler := func(event lightstep.Event){
   switch event := event.(type) {
   case EventStatusReport:
     metrics.Count("tracer.dropped_spans", event.DroppedSpans())
+  case MetricEventStatusReport:
+    metrics.Count("tracer.sent_metrics", event.SentMetrics())
   case ErrorEvent:
     logger.Error("LS Tracer error: %s", event)
   default:
@@ -91,7 +95,7 @@ logAndMetricsHandler := func(event lightstep.Event){
 
 func main() {
   // setup event handler first to catch startup errors
-  lightstep.OnEvent(logAndMetricsHandler)
+  lightstep.SetGlobalEventHandler(logAndMetricsHandler)
   
   lightstepTracer := lightstep.NewTracer(lightstep.Options{
     AccessToken: "YourAccessToken",
@@ -105,12 +109,19 @@ Event handlers will receive events from any active tracers, as well as errors in
 
 ## Advanced Configuration: Transport and Serialization Protocols
 
-By default, the tracer will send information to LightStep using GRPC and Protocol Buffers which is the recommended configuration. If there are no specific transport protocol needs you have, there is no need to change this default.
+By following the above configuration, the tracer will send information to LightStep using HTTP and Protocol Buffers which is the recommended configuration. If there are no specific transport protocol needs you have, there is no need to change this default.
 
-There are three total options for transport protocols:
+There are two options for transport protocols:
 
-- [Protocol Buffers](https://developers.google.com/protocol-buffers/) over [GRPC](https://grpc.io/) - The recommended, default, and most performant solution.
-- [Thrift](https://thrift.apache.org/) over HTTP - A legacy implementation not recommended for new deployments.
-- \[ EXPERIMENTAL \] [Protocol Buffers](https://developers.google.com/protocol-buffers/) over HTTP - New transport protocol supported for use cases where GRPC isn't an option. In order to enable HTTP you will need to configure the LightStep collectors receiving the data to accept HTTP traffic. Reach out to LightStep for support in this.
+- [Protocol Buffers](https://developers.google.com/protocol-buffers/) over HTTP - The recommended and default solution.
+- [Protocol Buffers](https://developers.google.com/protocol-buffers/) over [GRPC](https://grpc.io/) - This is a more advanced solution that might be desirable if you already have gRPC networking configured.
 
-You can configure which transport protocol the tracer uses using the `UseGRPC`, `UseThrift`, and `UseHttp` flags in the options.
+You can configure which transport protocol the tracer uses using the `UseGRPC` and `UseHttp` flags in the options.
+
+## Release
+
+To make a release, do these steps
+1. Run `make ver=X.Y.Z version`
+1. Update CHANGELOG.md
+1. Merge changes
+1. Run `make release_tag`

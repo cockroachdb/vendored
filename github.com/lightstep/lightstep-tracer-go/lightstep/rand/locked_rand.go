@@ -60,6 +60,15 @@ func (lr *LockedRand) Uint64() (n uint64) {
 	return
 }
 
+// TwoUint64 generates 2 random uint64 without locking twice.
+func (lr *LockedRand) TwoUint64()  (n1, n2 uint64) {
+	lr.lk.Lock()
+	n1 = lr.r.Uint64()
+	n2 = lr.r.Uint64()
+	lr.lk.Unlock()
+	return
+}
+
 // Int31 returns a non-negative pseudo-random 31-bit integer as an int32.
 func (lr *LockedRand) Int31() (n int32) {
 	lr.lk.Lock()

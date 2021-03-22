@@ -1,14 +1,14 @@
 package lightstep
 
 import (
+	"context"
 	"io"
 	"net/http"
 
-	"golang.org/x/net/context"
-
-	cpb "github.com/lightstep/lightstep-tracer-go/collectorpb"
-	"github.com/lightstep/lightstep-tracer-go/lightstep_thrift"
+	"github.com/lightstep/lightstep-tracer-common/golang/gogo/collectorpb"
 )
+
+var accessTokenHeader = http.CanonicalHeaderKey("Lightstep-Access-Token")
 
 // Connection describes a closable connection. Exposed for testing.
 type Connection interface {
@@ -18,39 +18,42 @@ type Connection interface {
 // ConnectorFactory is for testing purposes.
 type ConnectorFactory func() (interface{}, Connection, error)
 
-// collectorResponse encapsulates internal thrift/grpc responses.
+// collectorResponse encapsulates internal grpc/http responses.
 type collectorResponse interface {
 	GetErrors() []string
 	Disable() bool
+	DevMode() bool
+}
+
+// Collector encapsulates custom transport of protobuf messages
+type Collector interface {
+	Report(context.Context, *collectorpb.ReportRequest) (*collectorpb.ReportResponse, error)
 }
 
 type reportRequest struct {
-	thriftRequest *lightstep_thrift.ReportRequest
-	protoRequest  *cpb.ReportRequest
-	httpRequest   *http.Request
+	protoRequest *collectorpb.ReportRequest
+	httpRequest  *http.Request
 }
 
-// collectorClient encapsulates internal thrift/grpc transports.
+// collectorClient encapsulates internal grpc/http transports.
 type collectorClient interface {
 	Report(context.Context, reportRequest) (collectorResponse, error)
-	Translate(context.Context, *reportBuffer) (reportRequest, error)
+	Translate(*collectorpb.ReportRequest) (reportRequest, error)
 	ConnectClient() (Connection, error)
 	ShouldReconnect() bool
 }
 
-func newCollectorClient(opts Options, reporterId uint64, attributes map[string]string) (collectorClient, error) {
-	if opts.UseThrift {
-		return newThriftCollectorClient(opts, reporterId, attributes), nil
+func newCollectorClient(opts Options) (collectorClient, error) {
+	if opts.CustomCollector != nil {
+		return newCustomCollector(opts), nil
 	}
-
 	if opts.UseHttp {
-		return newHttpCollectorClient(opts, reporterId, attributes)
+		return newHTTPCollectorClient(opts)
 	}
-
 	if opts.UseGRPC {
-		return newGrpcCollectorClient(opts, reporterId, attributes), nil
+		return newGrpcCollectorClient(opts)
 	}
 
-	// No transport specified, defaulting to GRPC
-	return newGrpcCollectorClient(opts, reporterId, attributes), nil
+	// No transport specified, defaulting to HTTP
+	return newHTTPCollectorClient(opts)
 }

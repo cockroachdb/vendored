@@ -7,21 +7,24 @@ import (
 	"os"
 	"path"
 	"strings"
-	"time"
+	"time" // N.B.(jmacd): Do not use google.golang.org/glog in this package.
 
-	// N.B.(jmacd): Do not use google.golang.org/glog in this package.
-
-	ot "github.com/opentracing/opentracing-go"
+	"github.com/lightstep/lightstep-tracer-go/constants"
+	"github.com/opentracing/opentracing-go"
 	"google.golang.org/grpc"
 )
 
 // Default Option values.
 const (
-	DefaultCollectorPath       = "/_rpc/v1/reports/binary"
-	DefaultPlainPort           = 80
-	DefaultSecurePort          = 443
-	DefaultThriftCollectorHost = "collector.lightstep.com"
-	DefaultGRPCCollectorHost   = "collector-grpc.lightstep.com"
+	DefaultCollectorPath     = "/_rpc/v1/reports/binary"
+	DefaultPlainPort         = 80
+	DefaultSecurePort        = 443
+	DefaultGRPCCollectorHost = "collector-grpc.lightstep.com"
+
+	DefaultSystemMetricsHost = "ingest.lightstep.com"
+
+	DefaultSystemMetricsMeasurementFrequency = 30 * time.Second
+	DefaultSystemMetricsTimeout              = 5 * time.Second
 
 	DefaultMaxReportingPeriod = 2500 * time.Millisecond
 	DefaultMinReportingPeriod = 500 * time.Millisecond
@@ -38,11 +41,12 @@ const (
 
 // Tag and Tracer Attribute keys.
 const (
-	ParentSpanGUIDKey = "parent_span_guid" // ParentSpanGUIDKey is the tag key used to record the relationship between child and parent spans.
-	ComponentNameKey  = "lightstep.component_name"
-	GUIDKey           = "lightstep.guid" // <- runtime guid, not span guid
-	HostnameKey       = "lightstep.hostname"
+	ParentSpanGUIDKey = "parent_span_guid"         // ParentSpanGUIDKey is the tag key used to record the relationship between child and parent spans.
+	ComponentNameKey  = constants.ComponentNameKey // NOTE: these will be deprecated in favour of the constants package
+	GUIDKey           = "lightstep.guid"           // <- runtime guid, not span guid
+	HostnameKey       = constants.HostnameKey      // NOTE: these will be deprecated in favour of the constants package
 	CommandLineKey    = "lightstep.command_line"
+	ServiceVersionKey = constants.ServiceVersionKey // NOTE: these will be deprecated in favour of the constants package
 
 	TracerPlatformKey        = "lightstep.tracer_platform"
 	TracerPlatformValue      = "go"
@@ -57,8 +61,7 @@ const (
 
 // Validation Errors
 var (
-	validationErrorNoAccessToken = fmt.Errorf("Options invalid: AccessToken must not be empty")
-	validationErrorGUIDKey       = fmt.Errorf("Options invalid: setting the %v tag is no longer supported", GUIDKey)
+	errInvalidGUIDKey = fmt.Errorf("Options invalid: setting the %v tag is no longer supported", GUIDKey)
 )
 
 // A SpanRecorder handles all of the `RawSpan` data generated via an
@@ -70,13 +73,15 @@ type SpanRecorder interface {
 // Endpoint describes a collector or web API host/port and whether or
 // not to use plaintext communication.
 type Endpoint struct {
-	Scheme    string `yaml:"scheme" json:"scheme" usage:"scheme to use for the endpoint, defaults to appropriate one if no custom one is required"`
-	Host      string `yaml:"host" json:"host" usage:"host on which the endpoint is running"`
-	Port      int    `yaml:"port" json:"port" usage:"port on which the endpoint is listening"`
-	Plaintext bool   `yaml:"plaintext" json:"plaintext" usage:"whether or not to encrypt data send to the endpoint"`
+	Scheme           string `yaml:"scheme" json:"scheme" usage:"scheme to use for the endpoint, defaults to appropriate one if no custom one is required"`
+	Host             string `yaml:"host" json:"host" usage:"host on which the endpoint is running"`
+	Port             int    `yaml:"port" json:"port" usage:"port on which the endpoint is listening"`
+	Plaintext        bool   `yaml:"plaintext" json:"plaintext" usage:"whether or not to encrypt data send to the endpoint"`
+	CustomCACertFile string `yaml:"custom_ca_cert_file" json:"custom_ca_cert_file" usage:"path to a custom CA cert file, defaults to system defined certs if omitted"`
 }
 
-// Deprecated: HostPort use SocketAddress instead.
+// HostPort use SocketAddress instead.
+// DEPRECATED
 func (e Endpoint) HostPort() string {
 	return e.SocketAddress()
 }
@@ -86,7 +91,7 @@ func (e Endpoint) SocketAddress() string {
 	return fmt.Sprintf("%s:%d", e.Host, e.Port)
 }
 
-// URL returns an address suitable for dialing thrift connections
+// URL returns an address suitable for dialing http connections
 func (e Endpoint) URL() string {
 	return fmt.Sprintf("%s%s", e.urlWithoutPath(), DefaultCollectorPath)
 }
@@ -108,6 +113,13 @@ func (e Endpoint) scheme() string {
 	return secureScheme
 }
 
+type SystemMetricsOptions struct {
+	Disabled             bool          `yaml:"disabled"`
+	Endpoint             Endpoint      `yaml:"endpoint"`
+	MeasurementFrequency time.Duration `yaml:"measurement_frequency"`
+	Timeout              time.Duration `yaml:"timeout"`
+}
+
 // Options control how the LightStep Tracer behaves.
 type Options struct {
 	// AccessToken is the unique API key for your LightStep project.  It is
@@ -120,7 +132,7 @@ type Options struct {
 
 	// Tags are arbitrary key-value pairs that apply to all spans generated by
 	// this Tracer.
-	Tags ot.Tags
+	Tags opentracing.Tags
 
 	// LightStep is the host, port, and plaintext option to use
 	// for the LightStep web API.
@@ -162,16 +174,27 @@ type Options struct {
 
 	// DEPRECATED: The LightStep library prints the first error to stdout by default.
 	// See the documentation on the SetGlobalEventHandler function for guidance on
-	// how to integrate tracer diagnostics with your applicaiton's logging and
+	// how to integrate tracer diagnostics with your application's logging and
 	// metrics systems.
 	Verbose bool `yaml:"verbose"`
 
 	// Force the use of a specific transport protocol. If multiple are set to true,
-	// the following order is used to select for the first option: thrift, http, grpc.
-	// If none are set to true, GRPC is defaulted to.
-	UseThrift bool `yaml:"use_thrift"`
-	UseHttp   bool `yaml:"use_http"`
-	UseGRPC   bool `yaml:"usegrpc"`
+	// the following order is used to select for the first option: http, grpc.
+	// If none are set to true, HTTP is defaulted to.
+	UseHttp bool `yaml:"use_http"`
+	UseGRPC bool `yaml:"usegrpc"`
+
+	// Propagators allow inject/extract to use custom propagators for different formats. This
+	// package includes a `B3Propagator` that supports B3 headers on text maps and http headers.
+	// Defaults:
+	//   opentracing.HTTPHeaders: LightStepPropagator
+	//   opentracing.TextMap: LightStepPropagator,
+	//   opentracing.Binary: LightStepPropagator
+	Propagators map[opentracing.BuiltinFormat]Propagator `yaml:"-"`
+
+	// CustomCollector allows customizing the Protobuf transport.
+	// This is an advanced feature that avoids reconnect logic.
+	CustomCollector Collector `yaml:"-" json:"-"`
 
 	ReconnectPeriod time.Duration `yaml:"reconnect_period"`
 
@@ -186,6 +209,11 @@ type Options struct {
 
 	// For testing purposes only
 	ConnFactory ConnectorFactory `yaml:"-" json:"-"`
+
+	// Enable LightStep Meta Event Logging
+	MetaEventReportingEnabled bool `yaml:"meta_event_reporting_enabled" json:"meta_event_reporting_enabled"`
+
+	SystemMetrics SystemMetricsOptions `yaml:"system_metrics"`
 }
 
 // Initialize validates options, and sets default values for unset options.
@@ -229,12 +257,16 @@ func (opts *Options) Initialize() error {
 	}
 
 	// Set some default attributes if not found in options
-	if _, found := opts.Tags[ComponentNameKey]; !found {
-		opts.Tags[ComponentNameKey] = path.Base(os.Args[0])
+	if _, found := opts.Tags[constants.ComponentNameKey]; !found {
+		// If not found, use the first command line argument as the default service name
+		defaultService := path.Base(os.Args[0])
+
+		emitEvent(newEventMissingService(defaultService))
+		opts.Tags[constants.ComponentNameKey] = defaultService
 	}
-	if _, found := opts.Tags[HostnameKey]; !found {
+	if _, found := opts.Tags[constants.HostnameKey]; !found {
 		hostname, _ := os.Hostname()
-		opts.Tags[HostnameKey] = hostname
+		opts.Tags[constants.HostnameKey] = hostname
 	}
 	if _, found := opts.Tags[CommandLineKey]; !found {
 		opts.Tags[CommandLineKey] = strings.Join(os.Args, " ")
@@ -243,11 +275,7 @@ func (opts *Options) Initialize() error {
 	opts.ReconnectPeriod = time.Duration(float64(opts.ReconnectPeriod) * (1 + 0.2*rand.Float64()))
 
 	if opts.Collector.Host == "" {
-		if opts.UseThrift {
-			opts.Collector.Host = DefaultThriftCollectorHost
-		} else {
-			opts.Collector.Host = DefaultGRPCCollectorHost
-		}
+		opts.Collector.Host = DefaultGRPCCollectorHost
 	}
 
 	if opts.Collector.Port <= 0 {
@@ -258,18 +286,46 @@ func (opts *Options) Initialize() error {
 		}
 	}
 
+	if opts.SystemMetrics.Endpoint.Host == "" {
+		opts.SystemMetrics.Endpoint.Host = DefaultSystemMetricsHost
+	}
+
+	if opts.SystemMetrics.Endpoint.Port <= 0 {
+		opts.SystemMetrics.Endpoint.Port = DefaultSecurePort
+
+		if opts.SystemMetrics.Endpoint.Plaintext {
+			opts.SystemMetrics.Endpoint.Port = DefaultPlainPort
+		}
+	}
+
+	if opts.SystemMetrics.MeasurementFrequency <= 0 {
+		opts.SystemMetrics.MeasurementFrequency = DefaultSystemMetricsMeasurementFrequency
+	}
+
+	if opts.SystemMetrics.Timeout <= 0 {
+		opts.SystemMetrics.Timeout = DefaultSystemMetricsTimeout
+	}
+
 	return nil
 }
 
 // Validate checks that all required fields are set, and no options are incorrectly
 // configured.
 func (opts *Options) Validate() error {
-	if len(opts.AccessToken) == 0 {
-		return validationErrorNoAccessToken
+	if _, found := opts.Tags[GUIDKey]; found {
+		return errInvalidGUIDKey
 	}
 
-	if _, found := opts.Tags[GUIDKey]; found {
-		return validationErrorGUIDKey
+	if len(opts.Collector.CustomCACertFile) != 0 {
+		if _, err := os.Stat(opts.Collector.CustomCACertFile); os.IsNotExist(err) {
+			return err
+		}
+	}
+
+	if !opts.SystemMetrics.Disabled && len(opts.SystemMetrics.Endpoint.CustomCACertFile) != 0 {
+		if _, err := os.Stat(opts.SystemMetrics.Endpoint.CustomCACertFile); os.IsNotExist(err) {
+			return err
+		}
 	}
 
 	return nil
@@ -281,7 +337,7 @@ func (opts *Options) Validate() error {
 type SetSpanID uint64
 
 // Apply satisfies the StartSpanOption interface.
-func (sid SetSpanID) Apply(sso *ot.StartSpanOptions) {}
+func (sid SetSpanID) Apply(sso *opentracing.StartSpanOptions) {}
 func (sid SetSpanID) applyLS(sso *startSpanOptions) {
 	sso.SetSpanID = uint64(sid)
 }
@@ -294,7 +350,7 @@ func (sid SetSpanID) applyLS(sso *startSpanOptions) {
 type SetTraceID uint64
 
 // Apply satisfies the StartSpanOption interface.
-func (sid SetTraceID) Apply(sso *ot.StartSpanOptions) {}
+func (sid SetTraceID) Apply(sso *opentracing.StartSpanOptions) {}
 func (sid SetTraceID) applyLS(sso *startSpanOptions) {
 	sso.SetTraceID = uint64(sid)
 }
@@ -308,7 +364,7 @@ func (sid SetTraceID) applyLS(sso *startSpanOptions) {
 type SetParentSpanID uint64
 
 // Apply satisfies the StartSpanOption interface.
-func (sid SetParentSpanID) Apply(sso *ot.StartSpanOptions) {}
+func (sid SetParentSpanID) Apply(sso *opentracing.StartSpanOptions) {}
 func (sid SetParentSpanID) applyLS(sso *startSpanOptions) {
 	sso.SetParentSpanID = uint64(sid)
 }
@@ -318,8 +374,15 @@ type lightStepStartSpanOption interface {
 	applyLS(*startSpanOptions)
 }
 
+type SetSampled string
+func (s SetSampled) Apply(sso *opentracing.StartSpanOptions) {}
+
+func (s SetSampled) applyLS(sso *startSpanOptions) {
+	sso.SetSampled = string(s)
+}
+
 type startSpanOptions struct {
-	Options ot.StartSpanOptions
+	Options opentracing.StartSpanOptions
 
 	// Options to explicitly set span_id, trace_id,
 	// parent_span_id, expected to be used when exporting spans
@@ -327,9 +390,10 @@ type startSpanOptions struct {
 	SetSpanID       uint64
 	SetParentSpanID uint64
 	SetTraceID      uint64
+	SetSampled	string
 }
 
-func newStartSpanOptions(sso []ot.StartSpanOption) startSpanOptions {
+func newStartSpanOptions(sso []opentracing.StartSpanOption) startSpanOptions {
 	opts := startSpanOptions{}
 	for _, o := range sso {
 		switch o := o.(type) {
