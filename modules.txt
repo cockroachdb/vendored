@@ -717,12 +717,12 @@ github.com/twpayne/go-kml
 github.com/wadey/gocovmerge
 # github.com/zabawaba99/go-gitignore v0.0.0-20200117185801-39e6bddfb292
 github.com/zabawaba99/go-gitignore
-# go.etcd.io/etcd v0.0.0-00010101000000-000000000000 => github.com/cockroachdb/etcd v0.4.7-0.20200615211340-a17df30d5955
-go.etcd.io/etcd/raft
-go.etcd.io/etcd/raft/confchange
-go.etcd.io/etcd/raft/quorum
-go.etcd.io/etcd/raft/raftpb
-go.etcd.io/etcd/raft/tracker
+# go.etcd.io/etcd/raft/v3 v3.5.0-alpha.0
+go.etcd.io/etcd/raft/v3
+go.etcd.io/etcd/raft/v3/confchange
+go.etcd.io/etcd/raft/v3/quorum
+go.etcd.io/etcd/raft/v3/raftpb
+go.etcd.io/etcd/raft/v3/tracker
 # go.opencensus.io v0.18.0
 go.opencensus.io
 go.opencensus.io/exemplar
@@ -792,7 +792,7 @@ golang.org/x/perf/storage/benchfmt
 # golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 golang.org/x/sync/errgroup
 golang.org/x/sync/syncmap
-# golang.org/x/sys v0.0.0-20200824131525-c12d262b63d8
+# golang.org/x/sys v0.0.0-20201009025420-dfb3f7c4e634
 golang.org/x/sys/cpu
 golang.org/x/sys/internal/unsafeheader
 golang.org/x/sys/unix
@@ -856,6 +856,7 @@ golang.org/x/tools/go/analysis/singlechecker
 golang.org/x/tools/go/analysis/unitchecker
 golang.org/x/tools/go/ast/astutil
 golang.org/x/tools/go/ast/inspector
+golang.org/x/tools/go/buildutil
 golang.org/x/tools/go/cfg
 golang.org/x/tools/go/gcexportdata
 golang.org/x/tools/go/internal/gcimporter
@@ -1034,7 +1035,7 @@ gopkg.in/square/go-jose.v2/json
 gopkg.in/yaml.v2
 # gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c
 gopkg.in/yaml.v3
-# honnef.co/go/tools v0.0.0-20190530104931-1f0868a609b7
+# honnef.co/go/tools v0.0.1-2019.2.3
 honnef.co/go/tools/arg
 honnef.co/go/tools/cmd/staticcheck
 honnef.co/go/tools/config

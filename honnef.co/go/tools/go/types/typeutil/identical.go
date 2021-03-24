@@ -6,13 +6,21 @@ import (
 
 // Identical reports whether x and y are identical types.
 // Unlike types.Identical, receivers of Signature types are not ignored.
-// Unlike types.Identical, interfaces are compared via pointer equality.
+// Unlike types.Identical, interfaces are compared via pointer equality (except for the empty interface, which gets deduplicated).
+// Unlike types.Identical, structs are compared via pointer equality.
 func Identical(x, y types.Type) (ret bool) {
 	if !types.Identical(x, y) {
 		return false
 	}
 
 	switch x := x.(type) {
+	case *types.Struct:
+		y, ok := y.(*types.Struct)
+		if !ok {
+			// should be impossible
+			return true
+		}
+		return x == y
 	case *types.Interface:
 		// The issue with interfaces, typeutil.Map and types.Identical
 		//
@@ -38,6 +46,13 @@ func Identical(x, y types.Type) (ret bool) {
 		y, ok := y.(*types.Interface)
 		if !ok {
 			// should be impossible
+			return true
+		}
+		if x.NumEmbeddeds() == 0 &&
+			y.NumEmbeddeds() == 0 &&
+			x.NumMethods() == 0 &&
+			y.NumMethods() == 0 {
+			// all truly empty interfaces are the same
 			return true
 		}
 		return x == y
