@@ -261,7 +261,7 @@ github.com/cockroachdb/gostdlib/x/tools/internal/span
 # github.com/cockroachdb/logtags v0.0.0-20190617123548-eb05cc24525f
 ## explicit
 github.com/cockroachdb/logtags
-# github.com/cockroachdb/pebble v0.0.0-20210319172629-92fbeeabfd1c
+# github.com/cockroachdb/pebble v0.0.0-20210326172335-294d5706b57a
 ## explicit
 github.com/cockroachdb/pebble
 github.com/cockroachdb/pebble/bloom
@@ -721,7 +721,7 @@ github.com/kisielk/errcheck/internal/errcheck
 ## explicit
 github.com/kisielk/gotool
 github.com/kisielk/gotool/internal/load
-# github.com/klauspost/compress v1.11.12
+# github.com/klauspost/compress v1.11.13
 ## explicit
 github.com/klauspost/compress/fse
 github.com/klauspost/compress/huff0
@@ -1098,7 +1098,7 @@ golang.org/x/perf/storage/benchfmt
 ## explicit
 golang.org/x/sync/errgroup
 golang.org/x/sync/syncmap
-# golang.org/x/sys v0.0.0-20210319071255-635bc2c9138d
+# golang.org/x/sys v0.0.0-20210324051608-47abb6519492
 ## explicit
 golang.org/x/sys/cpu
 golang.org/x/sys/execabs
