@@ -1004,7 +1004,7 @@ github.com/xdg/stringprep
 # github.com/zabawaba99/go-gitignore v0.0.0-20200117185801-39e6bddfb292
 ## explicit
 github.com/zabawaba99/go-gitignore
-# go.etcd.io/etcd/raft/v3 v3.0.0-20210215124703-719f6ce06fbc
+# go.etcd.io/etcd/raft/v3 v3.0.0-20210320072418-e51c697ec6e8
 ## explicit
 go.etcd.io/etcd/raft/v3
 go.etcd.io/etcd/raft/v3/confchange
