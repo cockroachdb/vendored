@@ -212,6 +212,7 @@ github.com/cockroachdb/errors/domains
 github.com/cockroachdb/errors/errbase
 github.com/cockroachdb/errors/errorspb
 github.com/cockroachdb/errors/errutil
+github.com/cockroachdb/errors/extgrpc
 github.com/cockroachdb/errors/hintdetail
 github.com/cockroachdb/errors/issuelink
 github.com/cockroachdb/errors/markers
@@ -389,6 +390,8 @@ github.com/go-ole/go-ole/oleutil
 github.com/go-sql-driver/mysql
 # github.com/gofrs/uuid v3.3.0+incompatible
 ## explicit
+# github.com/gogo/googleapis v1.2.0
+github.com/gogo/googleapis/google/rpc
 # github.com/gogo/protobuf v1.3.2 => github.com/cockroachdb/gogoproto v1.2.1-0.20210111172841-8b6737fea948
 ## explicit
 github.com/gogo/protobuf/gogoproto
@@ -419,6 +422,8 @@ github.com/gogo/protobuf/sortkeys
 github.com/gogo/protobuf/types
 github.com/gogo/protobuf/vanity
 github.com/gogo/protobuf/vanity/command
+# github.com/gogo/status v1.1.0
+github.com/gogo/status
 # github.com/golang-commonmark/html v0.0.0-20180910111043-7d7c804e1d46
 ## explicit
 github.com/golang-commonmark/html
