@@ -218,7 +218,7 @@ github.com/cockroachdb/crlfmt/internal/render
 # github.com/cockroachdb/datadriven v1.0.1-0.20201212195501-e89bf9ee1861
 ## explicit
 github.com/cockroachdb/datadriven
-# github.com/cockroachdb/errors v1.8.3
+# github.com/cockroachdb/errors v1.8.3 => github.com/knz/errors v0.0.0-20210413124634-218247db0d74
 ## explicit
 github.com/cockroachdb/errors
 github.com/cockroachdb/errors/assert
@@ -1434,6 +1434,7 @@ vitess.io/vitess/go/vt/sqlparser
 vitess.io/vitess/go/vt/sysvars
 vitess.io/vitess/go/vt/vterrors
 vitess.io/vitess/go/vt/vtgate/evalengine
+# github.com/cockroachdb/errors => github.com/knz/errors v0.0.0-20210413124634-218247db0d74
 # github.com/grpc-ecosystem/grpc-gateway => github.com/cockroachdb/grpc-gateway v1.14.6-0.20200519165156-52697fc4a249
 # github.com/olekukonko/tablewriter => github.com/cockroachdb/tablewriter v0.0.5-0.20200105123400-bd15540e8847
 # github.com/abourget/teamcity => github.com/cockroachdb/teamcity v0.0.0-20180905144921-8ca25c33eb11
