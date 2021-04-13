@@ -453,7 +453,7 @@ github.com/go-swagger/go-swagger/scan
 ## explicit
 # github.com/gogo/googleapis v1.2.0
 github.com/gogo/googleapis/google/rpc
-# github.com/gogo/protobuf v1.3.2 => github.com/cockroachdb/gogoproto v1.2.1-0.20210111172841-8b6737fea948
+# github.com/gogo/protobuf v1.3.2
 ## explicit
 github.com/gogo/protobuf/gogoproto
 github.com/gogo/protobuf/jsonpb
@@ -511,7 +511,7 @@ github.com/golang/geo/s2
 github.com/golang/glog
 # github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e
 github.com/golang/groupcache/lru
-# github.com/golang/protobuf v1.4.3
+# github.com/golang/protobuf v1.5.2
 ## explicit
 github.com/golang/protobuf/descriptor
 github.com/golang/protobuf/internal/gengogrpc
@@ -534,7 +534,7 @@ github.com/google/btree
 # github.com/google/flatbuffers v1.11.0
 ## explicit
 github.com/google/flatbuffers/go
-# github.com/google/go-cmp v0.5.2
+# github.com/google/go-cmp v0.5.5
 ## explicit
 github.com/google/go-cmp/cmp
 github.com/google/go-cmp/cmp/cmpopts
@@ -582,7 +582,7 @@ github.com/gorilla/websocket
 # github.com/goware/modvendor v0.3.0
 ## explicit
 github.com/goware/modvendor
-# github.com/grpc-ecosystem/grpc-gateway v1.13.0 => github.com/cockroachdb/grpc-gateway v1.14.6-0.20200519165156-52697fc4a249
+# github.com/grpc-ecosystem/grpc-gateway v1.16.0 => github.com/cockroachdb/grpc-gateway v1.14.6-0.20200519165156-52697fc4a249
 ## explicit
 github.com/grpc-ecosystem/grpc-gateway/codegenerator
 github.com/grpc-ecosystem/grpc-gateway/internal
@@ -718,10 +718,10 @@ github.com/jstemmer/go-junit-report/parser
 ## explicit
 github.com/kevinburke/go-bindata
 github.com/kevinburke/go-bindata/go-bindata
-# github.com/kisielk/errcheck v1.2.0
+# github.com/kisielk/errcheck v1.5.0
 ## explicit
 github.com/kisielk/errcheck
-github.com/kisielk/errcheck/internal/errcheck
+github.com/kisielk/errcheck/errcheck
 # github.com/kisielk/gotool v1.0.0
 ## explicit
 github.com/kisielk/gotool
@@ -1290,7 +1290,7 @@ google.golang.org/grpc/status
 google.golang.org/grpc/tap
 # google.golang.org/grpc/examples v0.0.0-20210324172016-702608ffae4d
 ## explicit
-# google.golang.org/protobuf v1.25.0
+# google.golang.org/protobuf v1.26.0
 ## explicit
 google.golang.org/protobuf/cmd/protoc-gen-go/internal_gengo
 google.golang.org/protobuf/compiler/protogen
@@ -1306,13 +1306,12 @@ google.golang.org/protobuf/internal/encoding/messageset
 google.golang.org/protobuf/internal/encoding/tag
 google.golang.org/protobuf/internal/encoding/text
 google.golang.org/protobuf/internal/errors
-google.golang.org/protobuf/internal/fieldsort
 google.golang.org/protobuf/internal/filedesc
 google.golang.org/protobuf/internal/filetype
 google.golang.org/protobuf/internal/flags
 google.golang.org/protobuf/internal/genid
 google.golang.org/protobuf/internal/impl
-google.golang.org/protobuf/internal/mapsort
+google.golang.org/protobuf/internal/order
 google.golang.org/protobuf/internal/pragma
 google.golang.org/protobuf/internal/set
 google.golang.org/protobuf/internal/strs
@@ -1434,7 +1433,6 @@ vitess.io/vitess/go/vt/sqlparser
 vitess.io/vitess/go/vt/sysvars
 vitess.io/vitess/go/vt/vterrors
 vitess.io/vitess/go/vt/vtgate/evalengine
-# github.com/gogo/protobuf => github.com/cockroachdb/gogoproto v1.2.1-0.20210111172841-8b6737fea948
 # github.com/grpc-ecosystem/grpc-gateway => github.com/cockroachdb/grpc-gateway v1.14.6-0.20200519165156-52697fc4a249
 # github.com/olekukonko/tablewriter => github.com/cockroachdb/tablewriter v0.0.5-0.20200105123400-bd15540e8847
 # github.com/abourget/teamcity => github.com/cockroachdb/teamcity v0.0.0-20180905144921-8ca25c33eb11
