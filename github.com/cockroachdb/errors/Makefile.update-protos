@@ -6,8 +6,25 @@
 #   go get github.com/gogo/protobuf/types
 #   go get github.com/gogo/protobuf/protoc-gen-gogo
 #
-# Run `make -f Makefile.update-protos` after the
-# dependencies have been installed.
+# Note: as of 2021-04-13, we like to use a custom protoc-gen-gogo
+# with additional options, to stabilize the marshalled
+# encoding of objects (so that they are deterministic
+# across marshal/unmarshal cycles) and reduce the memory footprint
+# of objects:
+#
+#	vanity.TurnOnStable_MarshalerAll,
+#	vanity.TurnOffGoUnrecognizedAll,
+#	vanity.TurnOffGoUnkeyedAll,
+#	vanity.TurnOffGoSizecacheAll,
+#
+# Until this is resolved, the "go get" commands above are not
+# adequate; instead:
+#
+# 1. set the PATH env var to point to CockroachDB's `bin`
+#    sub-directory (after a successful CockroachDB build), where a
+#    suitable version of protoc-gen-gogoroach is provided.
+#
+# 2. run `make -f Makefile.update-protos` with this PATH active.
 
 export SHELL := env PWD=$(CURDIR) bash
 
