@@ -181,9 +181,6 @@ github.com/axiomhq/hyperloglog
 # github.com/bazelbuild/rules_go v0.26.0
 ## explicit
 github.com/bazelbuild/rules_go/go/tools/bazel
-# github.com/benesch/cgosymbolizer v0.0.0-20180702220239-70e1ee2b39d3
-## explicit
-github.com/benesch/cgosymbolizer
 # github.com/beorn7/perks v1.0.1
 github.com/beorn7/perks/quantile
 # github.com/biogo/store v0.0.0-20160505134755-913427a1d5e8
@@ -617,9 +614,6 @@ github.com/hashicorp/hcl/json/scanner
 github.com/hashicorp/hcl/json/token
 # github.com/huandu/xstrings v1.3.0
 github.com/huandu/xstrings
-# github.com/ianlancetaylor/cgosymbolizer v0.0.0-20201002210021-dda951febc36
-## explicit
-github.com/ianlancetaylor/cgosymbolizer
 # github.com/ianlancetaylor/demangle v0.0.0-20181102032728-5e5cf60278f6
 github.com/ianlancetaylor/demangle
 # github.com/imdario/mergo v0.3.9
