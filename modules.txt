@@ -168,9 +168,6 @@ github.com/aws/aws-sdk-go/service/sts/stsiface
 # github.com/axiomhq/hyperloglog v0.0.0-20181223111420-4b99d0c2c99e
 ## explicit
 github.com/axiomhq/hyperloglog
-# github.com/benesch/cgosymbolizer v0.0.0-20180702220239-70e1ee2b39d3
-## explicit
-github.com/benesch/cgosymbolizer
 # github.com/beorn7/perks v1.0.1
 github.com/beorn7/perks/quantile
 # github.com/biogo/store v0.0.0-20160505134755-913427a1d5e8
@@ -534,9 +531,6 @@ github.com/hashicorp/go-uuid
 github.com/hashicorp/golang-lru/simplelru
 # github.com/huandu/xstrings v1.3.0
 github.com/huandu/xstrings
-# github.com/ianlancetaylor/cgosymbolizer v0.0.0-20201002210021-dda951febc36
-## explicit
-github.com/ianlancetaylor/cgosymbolizer
 # github.com/ianlancetaylor/demangle v0.0.0-20181102032728-5e5cf60278f6
 github.com/ianlancetaylor/demangle
 # github.com/imdario/mergo v0.3.9
