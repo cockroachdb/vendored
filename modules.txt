@@ -306,8 +306,8 @@ github.com/codahale/hdrhistogram
 # github.com/coreos/go-oidc v2.2.1+incompatible
 ## explicit
 github.com/coreos/go-oidc
-# github.com/cpuguy83/go-md2man v1.0.10
-github.com/cpuguy83/go-md2man/md2man
+# github.com/cpuguy83/go-md2man/v2 v2.0.0
+github.com/cpuguy83/go-md2man/v2/md2man
 # github.com/dave/dst v0.24.0
 ## explicit
 github.com/dave/dst
@@ -926,8 +926,8 @@ github.com/pseudomuto/protokit
 ## explicit
 github.com/rcrowley/go-metrics
 github.com/rcrowley/go-metrics/exp
-# github.com/russross/blackfriday v1.5.2
-github.com/russross/blackfriday
+# github.com/russross/blackfriday/v2 v2.0.1
+github.com/russross/blackfriday/v2
 # github.com/sasha-s/go-deadlock v0.2.0
 ## explicit
 github.com/sasha-s/go-deadlock
@@ -943,6 +943,8 @@ github.com/shirou/gopsutil/net
 github.com/shirou/gopsutil/process
 # github.com/shopspring/decimal v1.2.0
 ## explicit
+# github.com/shurcooL/sanitized_anchor_name v1.0.0
+github.com/shurcooL/sanitized_anchor_name
 # github.com/sirupsen/logrus v1.4.2
 github.com/sirupsen/logrus
 # github.com/spf13/afero v1.4.1
@@ -950,7 +952,7 @@ github.com/spf13/afero
 github.com/spf13/afero/mem
 # github.com/spf13/cast v1.3.1
 github.com/spf13/cast
-# github.com/spf13/cobra v0.0.5
+# github.com/spf13/cobra v1.1.3
 ## explicit
 github.com/spf13/cobra
 github.com/spf13/cobra/doc
