@@ -44,8 +44,6 @@ github.com/Azure/go-autorest/logger
 github.com/Azure/go-autorest/tracing
 # github.com/BurntSushi/toml v0.3.1
 github.com/BurntSushi/toml
-# github.com/DataDog/zstd v1.4.4
-github.com/DataDog/zstd
 # github.com/Masterminds/goutils v1.1.0
 github.com/Masterminds/goutils
 # github.com/Masterminds/semver v1.5.0
@@ -61,7 +59,7 @@ github.com/Microsoft/go-winio/pkg/guid
 github.com/Nvveen/Gotty
 # github.com/PuerkitoBio/goquery v1.5.0
 github.com/PuerkitoBio/goquery
-# github.com/Shopify/sarama v1.22.2-0.20190604114437-cd910a683f9f
+# github.com/Shopify/sarama v1.27.2
 github.com/Shopify/sarama
 # github.com/Shopify/toxiproxy v2.1.4+incompatible
 github.com/Shopify/toxiproxy/client
@@ -387,7 +385,7 @@ github.com/golang/snappy
 github.com/google/btree
 # github.com/google/flatbuffers v1.11.0
 github.com/google/flatbuffers/go
-# github.com/google/go-cmp v0.4.0
+# github.com/google/go-cmp v0.5.2
 github.com/google/go-cmp/cmp
 github.com/google/go-cmp/cmp/cmpopts
 github.com/google/go-cmp/cmp/internal/diff
@@ -535,6 +533,12 @@ github.com/kisielk/errcheck/internal/errcheck
 # github.com/kisielk/gotool v1.0.0
 github.com/kisielk/gotool
 github.com/kisielk/gotool/internal/load
+# github.com/klauspost/compress v1.11.0
+github.com/klauspost/compress/fse
+github.com/klauspost/compress/huff0
+github.com/klauspost/compress/snappy
+github.com/klauspost/compress/zstd
+github.com/klauspost/compress/zstd/internal/xxhash
 # github.com/knz/go-libedit v1.10.1
 github.com/knz/go-libedit
 github.com/knz/go-libedit/common
@@ -630,7 +634,7 @@ github.com/openzipkin-contrib/zipkin-go-opentracing/types
 github.com/openzipkin-contrib/zipkin-go-opentracing/wire
 # github.com/petermattis/goid v0.0.0-20180202154549-b0b1615b78e5
 github.com/petermattis/goid
-# github.com/pierrec/lz4 v2.4.1+incompatible
+# github.com/pierrec/lz4 v2.5.2+incompatible
 github.com/pierrec/lz4
 github.com/pierrec/lz4/internal/xxh32
 # github.com/pierrre/geohash v1.0.0
@@ -668,7 +672,7 @@ github.com/pseudomuto/protoc-gen-doc/extensions/lyft_validate
 github.com/pseudomuto/protoc-gen-doc/extensions/validator_field
 # github.com/pseudomuto/protokit v0.2.0
 github.com/pseudomuto/protokit
-# github.com/rcrowley/go-metrics v0.0.0-20190826022208-cac0b30c2563
+# github.com/rcrowley/go-metrics v0.0.0-20200313005456-10cdbea86bc0
 github.com/rcrowley/go-metrics
 github.com/rcrowley/go-metrics/exp
 # github.com/russross/blackfriday v1.5.2
@@ -738,7 +742,7 @@ go.opencensus.io/trace
 go.opencensus.io/trace/internal
 go.opencensus.io/trace/propagation
 go.opencensus.io/trace/tracestate
-# golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
+# golang.org/x/crypto v0.0.0-20200820211705-5c72a883971a
 golang.org/x/crypto/bcrypt
 golang.org/x/crypto/blowfish
 golang.org/x/crypto/chacha20
@@ -765,7 +769,7 @@ golang.org/x/lint
 golang.org/x/lint/golint
 # golang.org/x/mod v0.3.0
 golang.org/x/mod/semver
-# golang.org/x/net v0.0.0-20200602114024-627f9648deb9
+# golang.org/x/net v0.0.0-20200904194848-62affa334b73
 golang.org/x/net/context
 golang.org/x/net/context/ctxhttp
 golang.org/x/net/html
@@ -877,7 +881,7 @@ golang.org/x/tools/internal/span
 golang.org/x/tools/internal/testenv
 golang.org/x/tools/internal/typesinternal
 golang.org/x/tools/txtar
-# golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543
+# golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1
 golang.org/x/xerrors
 golang.org/x/xerrors/internal
 # google.golang.org/api v0.1.0
@@ -1033,7 +1037,7 @@ gopkg.in/square/go-jose.v2/cipher
 gopkg.in/square/go-jose.v2/json
 # gopkg.in/yaml.v2 v2.3.0 => github.com/cockroachdb/yaml v0.0.0-20180705215940-0e2822948641
 gopkg.in/yaml.v2
-# gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c
+# gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776
 gopkg.in/yaml.v3
 # honnef.co/go/tools v0.0.1-2019.2.3
 honnef.co/go/tools/arg
