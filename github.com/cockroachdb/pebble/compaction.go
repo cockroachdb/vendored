@@ -421,6 +421,7 @@ const (
 	compactionKindMove        compactionKind = "move"
 	compactionKindDeleteOnly  compactionKind = "delete-only"
 	compactionKindElisionOnly compactionKind = "elision-only"
+	compactionKindRead        compactionKind = "read"
 )
 
 // compaction is a table compaction from one level to the next, starting from a
@@ -509,8 +510,9 @@ type compaction struct {
 
 func (c *compaction) makeInfo(jobID int) CompactionInfo {
 	info := CompactionInfo{
-		JobID: jobID,
-		Input: make([]LevelInfo, 0, len(c.inputs)),
+		JobID:  jobID,
+		Reason: string(c.kind),
+		Input:  make([]LevelInfo, 0, len(c.inputs)),
 	}
 	for _, cl := range c.inputs {
 		inputInfo := LevelInfo{Level: cl.level, Tables: nil}
@@ -563,12 +565,15 @@ func newCompaction(pc *pickedCompaction, opts *Options, bytesCompacted *uint64) 
 	}
 	c.setupInuseKeyRanges()
 
-	if c.startLevel.level == numLevels-1 {
+	switch {
+	case pc.readTriggered:
+		c.kind = compactionKindRead
+	case c.startLevel.level == numLevels-1:
 		// This compaction is an L6->L6 elision-only compaction to rewrite
 		// a sstable without unnecessary tombstones.
 		c.kind = compactionKindElisionOnly
-	} else if c.outputLevel.files.Empty() && c.startLevel.files.Len() == 1 &&
-		c.grandparents.SizeSum() <= c.maxOverlapBytes {
+	case c.outputLevel.files.Empty() && c.startLevel.files.Len() == 1 &&
+		c.grandparents.SizeSum() <= c.maxOverlapBytes:
 		// This compaction can be converted into a trivial move from one level
 		// to the next. We avoid such a move if there is lots of overlapping
 		// grandparent data. Otherwise, the move could create a parent file
@@ -1481,7 +1486,7 @@ func (d *DB) flush1() error {
 		d.updateReadStateLocked(d.opts.DebugCheck)
 		d.updateTableStatsLocked(ve.NewFiles)
 	}
-	d.deleteObsoleteFiles(jobID)
+	d.deleteObsoleteFiles(jobID, false /* waitForOngoing */)
 
 	// Mark all the memtables we flushed as flushed. Note that we do this last so
 	// that a synchronous call to DB.Flush() will not return until the deletion
@@ -1888,7 +1893,7 @@ func (d *DB) compact1(c *compaction, errChannel chan error) (err error) {
 		d.updateReadStateLocked(d.opts.DebugCheck)
 		d.updateTableStatsLocked(ve.NewFiles)
 	}
-	d.deleteObsoleteFiles(jobID)
+	d.deleteObsoleteFiles(jobID, true /* waitForOngoing */)
 
 	return err
 }
@@ -2559,7 +2564,7 @@ func (d *DB) enableFileDeletions() {
 	}
 	jobID := d.mu.nextJobID
 	d.mu.nextJobID++
-	d.deleteObsoleteFiles(jobID)
+	d.deleteObsoleteFiles(jobID, true /* waitForOngoing */)
 }
 
 // d.mu must be held when calling this.
@@ -2586,12 +2591,14 @@ func (d *DB) releaseCleaningTurn() {
 	d.mu.cleaner.cond.Broadcast()
 }
 
-// deleteObsoleteFiles deletes those files that are no longer needed.
+// deleteObsoleteFiles deletes those files that are no longer needed. If
+// waitForOngoing is true, it waits for any ongoing cleaning turns to complete,
+// and if false, it returns rightaway if a cleaning turn is ongoing.
 //
 // d.mu must be held when calling this, but the mutex may be dropped and
 // re-acquired during the course of this method.
-func (d *DB) deleteObsoleteFiles(jobID int) {
-	if !d.acquireCleaningTurn(true) {
+func (d *DB) deleteObsoleteFiles(jobID int, waitForOngoing bool) {
+	if !d.acquireCleaningTurn(waitForOngoing) {
 		return
 	}
 	d.doDeleteObsoleteFiles(jobID)
