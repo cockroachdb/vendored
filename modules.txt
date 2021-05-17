@@ -245,7 +245,7 @@ github.com/cockroachdb/gostdlib/x/tools/internal/span
 # github.com/cockroachdb/logtags v0.0.0-20190617123548-eb05cc24525f
 ## explicit
 github.com/cockroachdb/logtags
-# github.com/cockroachdb/pebble v0.0.0-20210516195411-0be98f9ab6a3
+# github.com/cockroachdb/pebble v0.0.0-20210517171146-85e0b39a8d1b
 ## explicit
 github.com/cockroachdb/pebble
 github.com/cockroachdb/pebble/bloom
