@@ -752,7 +752,7 @@ github.com/kr/text
 ## explicit
 github.com/leanovate/gopter
 github.com/leanovate/gopter/prop
-# github.com/lib/pq v1.8.0
+# github.com/lib/pq v1.8.0 => github.com/cockroachdb/pq v0.0.0-20210517091544-990dd3347596
 ## explicit
 github.com/lib/pq
 github.com/lib/pq/oid
@@ -1431,4 +1431,5 @@ vitess.io/vitess/go/vt/vtgate/evalengine
 # vitess.io/vitess => github.com/cockroachdb/vitess v0.0.0-20210218160543-54524729cc82
 # gopkg.in/yaml.v2 => github.com/cockroachdb/yaml v0.0.0-20180705215940-0e2822948641
 # github.com/knz/go-libedit => github.com/otan-cockroach/go-libedit v1.10.2-0.20201030151939-7cced08450e7
+# github.com/lib/pq => github.com/cockroachdb/pq v0.0.0-20210517091544-990dd3347596
 # go.etcd.io/etcd/pkg/v3 => go.etcd.io/etcd/pkg/v3 v3.0.0-20201109164711-01844fd28560
