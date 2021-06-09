@@ -916,6 +916,8 @@ github.com/pquerna/cachecontrol/cacheobject
 github.com/prometheus/client_golang/prometheus
 github.com/prometheus/client_golang/prometheus/graphite
 github.com/prometheus/client_golang/prometheus/internal
+github.com/prometheus/client_golang/prometheus/promauto
+github.com/prometheus/client_golang/prometheus/promhttp
 # github.com/prometheus/client_model v0.2.0
 ## explicit
 github.com/prometheus/client_model/go
