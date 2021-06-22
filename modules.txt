@@ -782,8 +782,6 @@ github.com/linkedin/goavro/v2
 # github.com/lufia/iostat v1.0.0
 ## explicit
 github.com/lufia/iostat
-# github.com/lusis/go-slackbot v0.0.0-20180109053408-401027ccfef5
-## explicit
 # github.com/lusis/slack-test v0.0.0-20190426140909-c40012f20018
 ## explicit
 # github.com/magiconair/properties v1.8.4
