@@ -1,4 +1,4 @@
-# cloud.google.com/go v0.45.1
+# cloud.google.com/go v0.45.1 => github.com/cockroachdb/google-cloud-go v0.45.2-0.20210623224357-4fefe580b8d5
 ## explicit
 cloud.google.com/go/compute/metadata
 cloud.google.com/go/iam
@@ -1285,6 +1285,7 @@ vitess.io/vitess/go/vt/sqlparser
 vitess.io/vitess/go/vt/sysvars
 vitess.io/vitess/go/vt/vterrors
 vitess.io/vitess/go/vt/vtgate/evalengine
+# cloud.google.com/go => github.com/cockroachdb/google-cloud-go v0.45.2-0.20210623224357-4fefe580b8d5
 # github.com/gogo/protobuf => github.com/cockroachdb/gogoproto v1.2.1-0.20210111172841-8b6737fea948
 # github.com/grpc-ecosystem/grpc-gateway => github.com/cockroachdb/grpc-gateway v1.14.6-0.20200519165156-52697fc4a249
 # github.com/olekukonko/tablewriter => github.com/cockroachdb/tablewriter v0.0.5-0.20200105123400-bd15540e8847
