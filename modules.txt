@@ -215,7 +215,7 @@ github.com/cockroachdb/crlfmt/internal/render
 # github.com/cockroachdb/datadriven v1.0.1-0.20201212195501-e89bf9ee1861
 ## explicit
 github.com/cockroachdb/datadriven
-# github.com/cockroachdb/errors v1.8.4
+# github.com/cockroachdb/errors v1.8.5
 ## explicit
 github.com/cockroachdb/errors
 github.com/cockroachdb/errors/assert
@@ -283,11 +283,18 @@ github.com/cockroachdb/pebble/internal/record
 github.com/cockroachdb/pebble/sstable
 github.com/cockroachdb/pebble/tool
 github.com/cockroachdb/pebble/vfs
-# github.com/cockroachdb/redact v1.0.9
+# github.com/cockroachdb/redact v1.1.0
 ## explicit
 github.com/cockroachdb/redact
-github.com/cockroachdb/redact/internal
-github.com/cockroachdb/redact/internal/fmtsort
+github.com/cockroachdb/redact/builder
+github.com/cockroachdb/redact/interfaces
+github.com/cockroachdb/redact/internal/buffer
+github.com/cockroachdb/redact/internal/escape
+github.com/cockroachdb/redact/internal/fmtforward
+github.com/cockroachdb/redact/internal/markers
+github.com/cockroachdb/redact/internal/redact
+github.com/cockroachdb/redact/internal/rfmt
+github.com/cockroachdb/redact/internal/rfmt/fmtsort
 # github.com/cockroachdb/returncheck v0.0.0-20200612231554-92cdbca611dd
 ## explicit
 github.com/cockroachdb/returncheck
@@ -452,8 +459,7 @@ github.com/go-swagger/go-swagger/generator
 github.com/go-swagger/go-swagger/scan
 # github.com/gofrs/uuid v3.3.0+incompatible
 ## explicit
-# github.com/gogo/googleapis v1.4.0
-## explicit
+# github.com/gogo/googleapis v1.4.1
 github.com/gogo/googleapis/google/rpc
 # github.com/gogo/protobuf v1.3.2
 ## explicit
@@ -1082,7 +1088,7 @@ golang.org/x/mod/internal/lazyregexp
 golang.org/x/mod/modfile
 golang.org/x/mod/module
 golang.org/x/mod/semver
-# golang.org/x/net v0.0.0-20210525063256-abc453219eb5
+# golang.org/x/net v0.0.0-20210614182718-04defd469f4e
 ## explicit
 golang.org/x/net/context
 golang.org/x/net/context/ctxhttp
@@ -1114,7 +1120,7 @@ golang.org/x/perf/storage/benchfmt
 ## explicit
 golang.org/x/sync/errgroup
 golang.org/x/sync/syncmap
-# golang.org/x/sys v0.0.0-20210603125802-9665404d3644
+# golang.org/x/sys v0.0.0-20210616094352-59db8d763f22
 ## explicit
 golang.org/x/sys/execabs
 golang.org/x/sys/internal/unsafeheader
@@ -1145,7 +1151,7 @@ golang.org/x/text/width
 # golang.org/x/time v0.0.0-20210220033141-f8bda1e9f3ba
 ## explicit
 golang.org/x/time/rate
-# golang.org/x/tools v0.1.2
+# golang.org/x/tools v0.1.3
 ## explicit
 golang.org/x/tools/cmd/goimports
 golang.org/x/tools/cmd/goyacc
@@ -1216,6 +1222,7 @@ golang.org/x/tools/internal/lsp/fuzzy
 golang.org/x/tools/internal/packagesinternal
 golang.org/x/tools/internal/span
 golang.org/x/tools/internal/testenv
+golang.org/x/tools/internal/typeparams
 golang.org/x/tools/internal/typesinternal
 golang.org/x/tools/txtar
 # golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1
@@ -1246,7 +1253,7 @@ google.golang.org/appengine/internal/modules
 google.golang.org/appengine/internal/remote_api
 google.golang.org/appengine/internal/urlfetch
 google.golang.org/appengine/urlfetch
-# google.golang.org/genproto v0.0.0-20210603172842-58e84a565dcf
+# google.golang.org/genproto v0.0.0-20210624195500-8bfb893ecb84
 ## explicit
 google.golang.org/genproto/googleapis/api/annotations
 google.golang.org/genproto/googleapis/api/httpbody
