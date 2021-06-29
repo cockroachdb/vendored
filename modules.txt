@@ -448,6 +448,11 @@ github.com/golang/geo/s1
 github.com/golang/geo/s2
 # github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 github.com/golang/glog
+# github.com/golang/mock v1.5.0
+## explicit
+github.com/golang/mock/gomock
+github.com/golang/mock/mockgen
+github.com/golang/mock/mockgen/model
 # github.com/golang/protobuf v1.4.2
 ## explicit
 github.com/golang/protobuf/descriptor
@@ -946,6 +951,9 @@ golang.org/x/exp/rand
 golang.org/x/lint
 golang.org/x/lint/golint
 # golang.org/x/mod v0.3.1-0.20200828183125-ce943fd02449
+golang.org/x/mod/internal/lazyregexp
+golang.org/x/mod/modfile
+golang.org/x/mod/module
 golang.org/x/mod/semver
 # golang.org/x/net v0.0.0-20210119194325-5f4716e94777
 ## explicit
@@ -1063,12 +1071,16 @@ golang.org/x/tools/go/loader
 golang.org/x/tools/go/packages
 golang.org/x/tools/go/types/objectpath
 golang.org/x/tools/go/types/typeutil
+golang.org/x/tools/imports
 golang.org/x/tools/internal/analysisinternal
 golang.org/x/tools/internal/event
 golang.org/x/tools/internal/event/core
 golang.org/x/tools/internal/event/keys
 golang.org/x/tools/internal/event/label
+golang.org/x/tools/internal/fastwalk
 golang.org/x/tools/internal/gocommand
+golang.org/x/tools/internal/gopathwalk
+golang.org/x/tools/internal/imports
 golang.org/x/tools/internal/lsp/diff
 golang.org/x/tools/internal/lsp/diff/myers
 golang.org/x/tools/internal/lsp/fuzzy
