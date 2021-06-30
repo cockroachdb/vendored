@@ -667,11 +667,14 @@ github.com/jcmturner/aescts/v2
 # github.com/jcmturner/dnsutils/v2 v2.0.0
 github.com/jcmturner/dnsutils/v2
 # github.com/jcmturner/gofork v1.0.0
+## explicit
 github.com/jcmturner/gofork/encoding/asn1
 github.com/jcmturner/gofork/x/crypto/pbkdf2
 # github.com/jcmturner/goidentity/v6 v6.0.1
+## explicit
 github.com/jcmturner/goidentity/v6
 # github.com/jcmturner/gokrb5/v8 v8.4.2
+## explicit
 github.com/jcmturner/gokrb5/v8/asn1tools
 github.com/jcmturner/gokrb5/v8/client
 github.com/jcmturner/gokrb5/v8/config
