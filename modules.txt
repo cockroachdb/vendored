@@ -283,11 +283,18 @@ github.com/cockroachdb/pebble/internal/record
 github.com/cockroachdb/pebble/sstable
 github.com/cockroachdb/pebble/tool
 github.com/cockroachdb/pebble/vfs
-# github.com/cockroachdb/redact v1.0.9
+# github.com/cockroachdb/redact v1.1.2
 ## explicit
 github.com/cockroachdb/redact
-github.com/cockroachdb/redact/internal
-github.com/cockroachdb/redact/internal/fmtsort
+github.com/cockroachdb/redact/builder
+github.com/cockroachdb/redact/interfaces
+github.com/cockroachdb/redact/internal/buffer
+github.com/cockroachdb/redact/internal/escape
+github.com/cockroachdb/redact/internal/fmtforward
+github.com/cockroachdb/redact/internal/markers
+github.com/cockroachdb/redact/internal/redact
+github.com/cockroachdb/redact/internal/rfmt
+github.com/cockroachdb/redact/internal/rfmt/fmtsort
 # github.com/cockroachdb/returncheck v0.0.0-20200612231554-92cdbca611dd
 ## explicit
 github.com/cockroachdb/returncheck
