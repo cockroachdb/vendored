@@ -1060,7 +1060,7 @@ github.com/prometheus/client_golang/prometheus/graphite
 github.com/prometheus/client_golang/prometheus/internal
 github.com/prometheus/client_golang/prometheus/promauto
 github.com/prometheus/client_golang/prometheus/promhttp
-# github.com/prometheus/client_model v0.2.0
+# github.com/prometheus/client_model v0.2.1-0.20210607210712-147c58e9608a
 ## explicit
 github.com/prometheus/client_model/go
 # github.com/prometheus/common v0.10.0
