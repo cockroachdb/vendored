@@ -1,22 +1,27 @@
-RETOOL=$(CURDIR)/_tools/bin/retool
-PATH := ${PWD}/bin:${PWD}/ENV/bin:${PATH}
-DOCKER_RELEASE_IMAGE := golang:1.12.0-stretch
-.DEFAULT_GOAL := all
+PATH := ${PWD}/_tools/bin:${PWD}/bin:${PWD}/ENV/bin:${PATH}
+export GO111MODULE=off
 
 all: setup test_all
 
-.PHONY: test test_all test_core test_clients test_go_client test_python_client generate release_gen
+.PHONY: setup generate test_all test test_clients test_go_client test_python_client
 
-# Phony commands:
+setup:
+	./check_protoc_version.sh
+	GOPATH=$(CURDIR)/_tools GOBIN=$(CURDIR)/_tools/bin go get github.com/twitchtv/retool
+	./_tools/bin/retool build
+
 generate:
-	PATH=$(CURDIR)/_tools/bin:$(PATH) GOBIN="${PWD}/bin" go install -v ./protoc-gen-...
-	$(RETOOL) do go generate ./...
+	# Recompile and install generator
+	GOBIN="$$PWD/bin" go install -v ./protoc-gen-twirp
+	GOBIN="$$PWD/bin" go install -v ./protoc-gen-twirp_python
+	# Generate code from go:generate comments
+	go generate ./...
 
-test_all: setup test_core test_clients
+test_all: setup test test_clients
 
-test_core: generate
-	$(RETOOL) do errcheck -blank ./internal/twirptest
-	go test -race $(shell go list ./... | grep -v /vendor/ | grep -v /_tools/)
+test: generate
+	./_tools/bin/errcheck ./internal/twirptest
+	go test -race $(shell GO111MODULE=off go list ./... | grep -v /vendor/ | grep -v /_tools/)
 
 test_clients: test_go_client test_python_client
 
@@ -26,20 +31,8 @@ test_go_client: generate build/clientcompat build/gocompat
 test_python_client: generate build/clientcompat build/pycompat
 	./build/clientcompat -client ./build/pycompat
 
-setup:
-	./install_proto.bash
-	GO111MODULE=off GOPATH=$(CURDIR)/_tools GOBIN=$(CURDIR)/_tools/bin go get github.com/twitchtv/retool
-	$(RETOOL) build
 
-release_gen:
-	git clean -xdf
-	docker run \
-		--volume "$(CURDIR):/go/src/github.com/twitchtv/twirp" \
-		--workdir "/go/src/github.com/twitchtv/twirp" \
-		$(DOCKER_RELEASE_IMAGE) \
-		internal/release_gen.sh
-
-# Actual files for testing clients:
+# For clientcompat and testing Python
 ./build:
 	mkdir build
 

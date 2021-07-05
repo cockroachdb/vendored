@@ -128,6 +128,9 @@ func genGeneratedHeader(gen *protogen.Plugin, g *protogen.GeneratedFile, f *file
 		protocVersion := "(unknown)"
 		if v := gen.Request.GetCompilerVersion(); v != nil {
 			protocVersion = fmt.Sprintf("v%v.%v.%v", v.GetMajor(), v.GetMinor(), v.GetPatch())
+			if s := v.GetSuffix(); s != "" {
+				protocVersion += "-" + s
+			}
 		}
 		g.P("// \tprotoc-gen-go ", protocGenGoVersion)
 		g.P("// \tprotoc        ", protocVersion)
@@ -526,25 +529,6 @@ func genMessageBaseMethods(g *protogen.GeneratedFile, f *fileInfo, m *messageInf
 		g.P("}")
 		g.P()
 		f.needRawDesc = true
-	}
-
-	// ExtensionRangeArray method.
-	extRanges := m.Desc.ExtensionRanges()
-	if m.genExtRangeMethod && extRanges.Len() > 0 {
-		protoExtRange := protoifacePackage.Ident("ExtensionRangeV1")
-		extRangeVar := "extRange_" + m.GoIdent.GoName
-		g.P("var ", extRangeVar, " = []", protoExtRange, " {")
-		for i := 0; i < extRanges.Len(); i++ {
-			r := extRanges.Get(i)
-			g.P("{Start:", r[0], ", End:", r[1]-1 /* inclusive */, "},")
-		}
-		g.P("}")
-		g.P()
-		g.P("// Deprecated: Use ", m.GoIdent, ".ProtoReflect.Descriptor.ExtensionRanges instead.")
-		g.P("func (*", m.GoIdent, ") ExtensionRangeArray() []", protoExtRange, " {")
-		g.P("return ", extRangeVar)
-		g.P("}")
-		g.P()
 	}
 }
 
