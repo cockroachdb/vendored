@@ -30,6 +30,15 @@ import (
 	"github.com/bufbuild/buf/internal/pkg/stringutil"
 )
 
+const (
+	// CommentIgnorePrefix is the comment ignore prefix.
+	//
+	// Comments with this prefix do not count towards valid comments in the comment checkers.
+	// This is also used in buflint when constructing a new Runner, and is passed to the
+	// RunnerWithIgnorePrefix option.
+	CommentIgnorePrefix = "buf:lint:ignore"
+)
+
 var (
 	// CheckCommentEnum is a check function.
 	CheckCommentEnum = newEnumCheckFunc(checkCommentEnum)
@@ -85,7 +94,7 @@ func checkCommentNamedDescriptor(
 		// this will magically skip map entry fields as well as a side-effect, although originally unintended
 		return nil
 	}
-	if strings.TrimSpace(location.LeadingComments()) == "" {
+	if !validLeadingComment(location.LeadingComments()) {
 		add(namedDescriptor, location, nil, "%s %q should have a non-empty comment for documentation.", typeName, namedDescriptor.Name())
 	}
 	return nil

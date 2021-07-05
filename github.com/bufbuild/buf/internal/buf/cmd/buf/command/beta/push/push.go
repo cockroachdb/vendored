@@ -54,7 +54,7 @@ func NewCommand(
 			func(ctx context.Context, container appflag.Container) error {
 				return run(ctx, container, flags, moduleResolverReaderProvider)
 			},
-			bufcli.NewErrorInterceptor(name),
+			bufcli.NewErrorInterceptor(),
 		),
 		BindFlags: flags.Bind,
 	}
@@ -64,7 +64,6 @@ type flags struct {
 	Branch      string
 	Tags        []string
 	ErrorFormat string
-	Force       bool
 	// special
 	InputHashtag string
 }
@@ -144,7 +143,7 @@ func run(
 		flags.Tags,
 	)
 	if err != nil {
-		if rpc.GetErrorCode(err) == rpc.ErrorCodeAlreadyExists && !flags.Force {
+		if rpc.GetErrorCode(err) == rpc.ErrorCodeAlreadyExists {
 			if _, err := container.Stderr().Write(
 				[]byte(fmt.Sprintf(
 					"The latest commit on branch %q has the same content, not creating a new commit.\n",

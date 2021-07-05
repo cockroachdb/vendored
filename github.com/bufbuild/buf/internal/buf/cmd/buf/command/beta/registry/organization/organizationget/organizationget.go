@@ -44,7 +44,7 @@ func NewCommand(
 			func(ctx context.Context, container appflag.Container) error {
 				return run(ctx, container, flags)
 			},
-			bufcli.NewErrorInterceptor(name),
+			bufcli.NewErrorInterceptor(),
 		),
 		BindFlags: flags.Bind,
 	}
@@ -76,6 +76,11 @@ func run(
 	if err != nil {
 		return appcmd.NewInvalidArgumentError(err.Error())
 	}
+	format, err := bufprint.ParseFormat(flags.Format)
+	if err != nil {
+		return appcmd.NewInvalidArgumentError(err.Error())
+	}
+
 	apiProvider, err := bufcli.NewRegistryProvider(ctx, container)
 	if err != nil {
 		return err
@@ -94,5 +99,8 @@ func run(
 		}
 		return err
 	}
-	return bufcli.PrintOrganizations(ctx, moduleOwner.Remote(), container.Stdout(), flags.Format, organization)
+	return bufprint.NewOrganizationPrinter(
+		moduleOwner.Remote(),
+		container.Stdout(),
+	).PrintOrganization(ctx, format, organization)
 }

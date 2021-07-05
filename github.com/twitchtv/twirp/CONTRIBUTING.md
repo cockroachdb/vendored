@@ -44,8 +44,8 @@ Generally you want to make changes and run `make`, which will install all
 dependencies we know about, build the core, and run all of the tests that we
 have against Go and Python code. A few notes:
 
- * Make sure to clone the repo on `$GOPATH/src/github.com/twitchtv/twirp`
- * Run Go unit tests with `make test_core`, or just the tests with `go test -race ./...` (make sure to re-generate code with `make generate` before running unit tests).
+ * Clone the repo on `$GOPATH/src/github.com/twitchtv/twirp` (go modules not supported yet).
+ * Run Go unit tests with `make test`.
  * Most tests of the Go server are in `internal/twirptest/service_test.go`.
  * Integration tests running the full stack in both Go and Python auto-generated clients are in the [clientcompat](./clientcompat) directory.
 
@@ -78,8 +78,7 @@ Twirp uses Github releases. To make a new release:
  4. Add a new commit to master with a message like "Version vX.X.X release" and push.
  5. Tag the commit you just made: `git tag vX.X.X` and `git push origin --tags`.
  6. Go to Github https://github.com/twitchtv/twirp/releases and "Draft a new release".
- 7. Make sure to document changes, upgrade instructions are very important.
- 8. Run `make release_gen` to generate release assets in the `release` directory. This requires Docker to be installed. Then Upload all files in the `release` directory as part of the release.
+ 7. Make sure that all new functionality is properly documented, on code comments, PR description, and include links and/or upgrade instructions on the release. For example the [v7 release](https://github.com/twitchtv/twirp/releases/tag/v7.0.0). Minor releases can just include a link to the PR/PRs that were merged included into the release.
 
 
 ## Code of Conduct
