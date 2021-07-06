@@ -31,9 +31,9 @@ const (
 	// DefaultMajorVersion is the default major version.
 	DefaultMajorVersion = 3
 	// DefaultMinorVersion is the default minor version.
-	DefaultMinorVersion = 17
+	DefaultMinorVersion = 15
 	// DefaultPatchVersion is the default patch version.
-	DefaultPatchVersion = 1
+	DefaultPatchVersion = 2
 	// DefaultSuffixVersion is the default suffix version.
 	DefaultSuffixVersion = ""
 )
@@ -50,7 +50,6 @@ var (
 		"php":    {},
 		"python": {},
 		"ruby":   {},
-		"kotlin": {},
 	}
 )
 
@@ -84,7 +83,6 @@ func NewHandler(
 	if err == nil {
 		return newBinaryHandler(logger, pluginPath), nil
 	}
-	// we always look for protoc-gen-X first, but if not, check the builtins
 	if _, ok := ProtocProxyPluginNames[pluginName]; ok {
 		if handlerOptions.protocPath == "" {
 			handlerOptions.protocPath = "protoc"

@@ -18,13 +18,14 @@ import (
 	"context"
 
 	"github.com/bufbuild/buf/internal/buf/bufanalysis"
-	"github.com/bufbuild/buf/internal/buf/bufcheck/buflint/internal/buflintcheck"
 	"github.com/bufbuild/buf/internal/buf/bufcheck/internal"
 	"github.com/bufbuild/buf/internal/buf/bufcore/bufimage"
 	"github.com/bufbuild/buf/internal/buf/bufcore/bufimage/bufimageutil"
 	"github.com/bufbuild/buf/internal/pkg/protosource"
 	"go.uber.org/zap"
 )
+
+const globalIgnorePrefix = "buf:lint:ignore"
 
 type handler struct {
 	logger *zap.Logger
@@ -38,10 +39,7 @@ func newHandler(logger *zap.Logger) *handler {
 		// note that comment ignores still need to be enabled within the config
 		// for a given check, this just says that comment ignores are allowed
 		// in the first place
-		runner: internal.NewRunner(
-			logger,
-			internal.RunnerWithIgnorePrefix(buflintcheck.CommentIgnorePrefix),
-		),
+		runner: internal.NewRunner(logger, internal.RunnerWithIgnorePrefix(globalIgnorePrefix)),
 	}
 }
 

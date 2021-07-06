@@ -123,10 +123,12 @@ func newBlockDec(lowMem bool) *blockDec {
 // Input must be a start of a block and will be at the end of the block when returned.
 func (b *blockDec) reset(br byteBuffer, windowSize uint64) error {
 	b.WindowSize = windowSize
-	tmp, err := br.readSmall(3)
-	if err != nil {
-		println("Reading block header:", err)
-		return err
+	tmp := br.readSmall(3)
+	if tmp == nil {
+		if debug {
+			println("Reading block header:", io.ErrUnexpectedEOF)
+		}
+		return io.ErrUnexpectedEOF
 	}
 	bh := uint32(tmp[0]) | (uint32(tmp[1]) << 8) | (uint32(tmp[2]) << 16)
 	b.Last = bh&1 != 0
@@ -177,6 +179,7 @@ func (b *blockDec) reset(br byteBuffer, windowSize uint64) error {
 	if cap(b.dst) <= maxSize {
 		b.dst = make([]byte, 0, maxSize+1)
 	}
+	var err error
 	b.data, err = br.readBig(cSize, b.dataStorage)
 	if err != nil {
 		if debug {
