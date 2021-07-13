@@ -13,7 +13,7 @@ import (
 	"github.com/cockroachdb/pebble"
 	"github.com/cockroachdb/pebble/internal/base"
 	"github.com/cockroachdb/pebble/internal/manifest"
-	"github.com/cockroachdb/pebble/internal/record"
+	"github.com/cockroachdb/pebble/record"
 	"github.com/cockroachdb/pebble/sstable"
 	"github.com/spf13/cobra"
 )
@@ -117,6 +117,7 @@ func (m *manifestT) runDump(cmd *cobra.Command, args []string) {
 			var bve manifest.BulkVersionEdit
 			bve.AddedByFileNum = make(map[base.FileNum]*manifest.FileMetadata)
 			var cmp *base.Comparer
+			var editIdx int
 			rr := record.NewReader(f, 0 /* logNum */)
 			for {
 				offset := rr.Offset()
@@ -138,7 +139,7 @@ func (m *manifestT) runDump(cmd *cobra.Command, args []string) {
 				}
 
 				empty := true
-				fmt.Fprintf(stdout, "%d\n", offset)
+				fmt.Fprintf(stdout, "%d/%d\n", offset, editIdx)
 				if ve.ComparerName != "" {
 					empty = false
 					fmt.Fprintf(stdout, "  comparer:     %s", ve.ComparerName)
@@ -197,6 +198,7 @@ func (m *manifestT) runDump(cmd *cobra.Command, args []string) {
 					// `LogNum == 0`.
 					fmt.Fprintf(stdout, "  <empty>\n")
 				}
+				editIdx++
 			}
 
 			if cmp != nil {
