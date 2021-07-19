@@ -103,6 +103,20 @@ var profile256 = Profile{
 	Reset:   []byte("\033[0m"),
 }
 
+// BackgroundColorSequence returns the corresponding color in the profile as
+// a background color escape sequence.
+func (cp Profile) BackgroundColorSequence(code Code) []byte {
+	es := cp[code]
+	const backgroundColorEscapeSequence = "\033[7m"
+	return append(es[:len(es):len(es)], []byte(backgroundColorEscapeSequence)...)
+}
+
+// PickArbitraryColor maps a uint32 to an arbitrary color code (excluding Reset)
+// in a deterministic fashion.
+func PickArbitraryColor(input uint32) Code {
+	return Code(input % uint32(Reset))
+}
+
 // Stdout sets the color for future output to os.Stdout.
 func Stdout(code Code) {
 	if StdoutProfile == nil {
