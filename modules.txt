@@ -119,6 +119,9 @@ github.com/apache/arrow/go/arrow/memory
 # github.com/apache/thrift v0.0.0-20181211084444-2b7365c54f82
 ## explicit
 github.com/apache/thrift/lib/go/thrift
+# github.com/arl/statsviz v0.4.0
+## explicit
+github.com/arl/statsviz
 # github.com/armon/circbuf v0.0.0-20150827004946-bbbad097214e
 ## explicit
 github.com/armon/circbuf
