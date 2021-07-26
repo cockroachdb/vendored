@@ -96,6 +96,9 @@ github.com/VividCortex/ewma
 # github.com/abourget/teamcity v0.0.0-00010101000000-000000000000 => github.com/cockroachdb/teamcity v0.0.0-20180905144921-8ca25c33eb11
 ## explicit
 github.com/abourget/teamcity
+# github.com/alessio/shellescape v1.4.1
+## explicit
+github.com/alessio/shellescape
 # github.com/alexbrainman/sspi v0.0.0-20180613141037-e580b900e9f5
 github.com/alexbrainman/sspi
 github.com/alexbrainman/sspi/negotiate
