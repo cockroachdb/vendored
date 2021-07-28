@@ -25,11 +25,12 @@ func AddSourceTemplates(t *template.Template) {
 }
 
 const weblistPageCSS = `<style type="text/css">
-body #content{
+body {
 font-family: sans-serif;
 }
 h1 {
   font-size: 1.5em;
+  margin-bottom: 4px;
 }
 .legend {
   font-size: 1.25em;
@@ -40,7 +41,14 @@ h1 {
 .inlinesrc {
   color: #000066;
 }
+.deadsrc {
+cursor: pointer;
+}
+.deadsrc:hover {
+background-color: #eeeeee;
+}
 .livesrc {
+color: #0000ff;
 cursor: pointer;
 }
 .livesrc:hover {

@@ -1773,8 +1773,6 @@ const (
 	NFPROTO_NUMPROTO = 0xd
 )
 
-const SO_ORIGINAL_DST = 0x50
-
 type Nfgenmsg struct {
 	Nfgen_family uint8
 	Version      uint8
