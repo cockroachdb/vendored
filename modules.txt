@@ -671,7 +671,7 @@ github.com/golang/protobuf/ptypes/empty
 github.com/golang/protobuf/ptypes/struct
 github.com/golang/protobuf/ptypes/timestamp
 github.com/golang/protobuf/ptypes/wrappers
-# github.com/golang/snappy v0.0.3
+# github.com/golang/snappy v0.0.4
 ## explicit
 github.com/golang/snappy
 # github.com/google/btree v1.0.0
@@ -928,7 +928,7 @@ github.com/lightstep/lightstep-tracer-go
 github.com/lightstep/lightstep-tracer-go/constants
 github.com/lightstep/lightstep-tracer-go/internal/metrics
 github.com/lightstep/lightstep-tracer-go/lightstep/rand
-# github.com/linkedin/goavro/v2 v2.9.8
+# github.com/linkedin/goavro/v2 v2.10.0
 ## explicit
 github.com/linkedin/goavro/v2
 # github.com/lufia/iostat v1.0.0
