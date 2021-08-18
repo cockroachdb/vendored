@@ -1936,6 +1936,16 @@ func (d *DB) compact1(c *compaction, errChannel chan error) (err error) {
 func (d *DB) runCompaction(
 	jobID int, c *compaction, pacer pacer,
 ) (ve *versionEdit, pendingOutputs []*fileMetadata, retErr error) {
+	// As a sanity check, confirm that the smallest / largest keys for new and
+	// deleted files in the new versionEdit pass a validation function before
+	// returning the edit.
+	defer func() {
+		err := validateVersionEdit(ve, d.opts.Experimental.KeyValidationFunc, d.opts.Comparer.FormatKey)
+		if err != nil {
+			d.opts.Logger.Fatalf("pebble: version edit validation failed: %s", err)
+		}
+	}()
+
 	// Check for a delete-only compaction. This can occur when wide range
 	// tombstones completely contain sstables.
 	if c.kind == compactionKindDeleteOnly {
@@ -2482,7 +2492,39 @@ func (d *DB) runCompaction(
 	if err := d.dataDir.Sync(); err != nil {
 		return nil, pendingOutputs, err
 	}
+
 	return ve, pendingOutputs, nil
+}
+
+// validateVersionEdit validates that start and end keys across new and deleted
+// files in a versionEdit pass the given validation function.
+func validateVersionEdit(ve *versionEdit, validateFn func([]byte) error, format base.FormatKey) error {
+	if validateFn == nil {
+		return nil
+	}
+
+	validateMetaFn := func(f *manifest.FileMetadata) error {
+		for _, key := range []InternalKey{f.Smallest, f.Largest} {
+			if err := validateFn(key.UserKey); err != nil {
+				return errors.Wrapf(err, "key=%q; file=%s", format(key.UserKey), f)
+			}
+		}
+		return nil
+	}
+
+	// Validate both new and deleted files.
+	for _, f := range ve.NewFiles {
+		if err := validateMetaFn(f.Meta); err != nil {
+			return err
+		}
+	}
+	for _, m := range ve.DeletedFiles {
+		if err := validateMetaFn(m); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // scanObsoleteFiles scans the filesystem for files that are no longer needed
@@ -2683,8 +2725,22 @@ func (d *DB) doDeleteObsoleteFiles(jobID int) {
 	}
 	d.mu.versions.obsoleteTables = nil
 
-	obsoleteManifests := d.mu.versions.obsoleteManifests
-	d.mu.versions.obsoleteManifests = nil
+	// Sort the manifests cause we want to delete some contiguous prefix
+	// of the older manifests.
+	sort.Slice(d.mu.versions.obsoleteManifests, func(i, j int) bool {
+		return d.mu.versions.obsoleteManifests[i].fileNum <
+			d.mu.versions.obsoleteManifests[j].fileNum
+	})
+
+	var obsoleteManifests []fileInfo
+	manifestsToDelete := len(d.mu.versions.obsoleteManifests) - d.opts.NumPrevManifest
+	if manifestsToDelete > 0 {
+		obsoleteManifests = d.mu.versions.obsoleteManifests[:manifestsToDelete]
+		d.mu.versions.obsoleteManifests = d.mu.versions.obsoleteManifests[manifestsToDelete:]
+		if len(d.mu.versions.obsoleteManifests) == 0 {
+			d.mu.versions.obsoleteManifests = nil
+		}
+	}
 
 	obsoleteOptions := d.mu.versions.obsoleteOptions
 	d.mu.versions.obsoleteOptions = nil

@@ -350,6 +350,19 @@ type Options struct {
 		// The default value is the number of logical CPUs, which can be
 		// limited by runtime.GOMAXPROCS.
 		TableCacheShards int
+
+		// KeyValidationFunc is a function to validate a user key in an SSTable.
+		//
+		// Currently, this function is used to validate the smallest and largest
+		// keys in an SSTable undergoing compaction. In this case, returning an
+		// error from the validation function will result in a panic at runtime,
+		// given that there is rarely any way of recovering from malformed keys
+		// present in compacted files. By default, validation is not performed.
+		//
+		// Additional use-cases may be added in the future.
+		//
+		// NOTE: callers should take care to not mutate the key being validated.
+		KeyValidationFunc func(userKey []byte) error
 	}
 
 	// Filters is a map from filter policy name to filter policy. It is used for
@@ -437,6 +450,11 @@ type Options struct {
 	// compactions. The default is 1. Concurrent compactions are only performed
 	// when L0 read-amplification passes the L0CompactionConcurrency threshold.
 	MaxConcurrentCompactions int
+
+	// NumPrevManifest is the number of non-current or older manifests which
+	// we want to keep around for debugging purposes. By default, we're going
+	// to keep one older manifest.
+	NumPrevManifest int
 
 	// ReadOnly indicates that the DB should be opened in read-only mode. Writes
 	// to the DB will return an error, background compactions are disabled, and
@@ -595,6 +613,10 @@ func (o *Options) EnsureDefaults() *Options {
 	if o.MaxConcurrentCompactions <= 0 {
 		o.MaxConcurrentCompactions = 1
 	}
+	if o.NumPrevManifest <= 0 {
+		o.NumPrevManifest = 1
+	}
+
 	if o.FS == nil {
 		o.FS = vfs.WithDiskHealthChecks(vfs.Default, 5*time.Second,
 			func(name string, duration time.Duration) {
