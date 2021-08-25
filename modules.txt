@@ -842,6 +842,7 @@ github.com/jcmturner/gokrb5/v8/types
 github.com/jcmturner/rpc/v2/mstypes
 github.com/jcmturner/rpc/v2/ndr
 # github.com/jessevdk/go-flags v1.4.0
+## explicit
 github.com/jessevdk/go-flags
 # github.com/jhump/protoreflect v1.8.3-0.20210302193947-8255811fc3c0
 github.com/jhump/protoreflect/codec
@@ -1049,6 +1050,7 @@ github.com/pierrre/geohash
 ## explicit
 github.com/pkg/browser
 # github.com/pkg/errors v0.9.1
+## explicit
 github.com/pkg/errors
 # github.com/pkg/profile v1.6.0
 github.com/pkg/profile
