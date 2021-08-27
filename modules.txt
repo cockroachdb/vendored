@@ -717,7 +717,7 @@ github.com/google/pprof/third_party/svgpan
 github.com/google/uuid
 # github.com/googleapis/gax-go/v2 v2.0.5
 github.com/googleapis/gax-go/v2
-# github.com/gorhill/cronexpr v0.0.0-20140423231348-a557574d6c02
+# github.com/gorhill/cronexpr v0.0.0-20180427100037-88b0669f7d75
 ## explicit
 github.com/gorhill/cronexpr
 # github.com/gorilla/handlers v1.5.1
