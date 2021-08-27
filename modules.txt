@@ -717,7 +717,7 @@ github.com/google/pprof/third_party/svgpan
 github.com/google/uuid
 # github.com/googleapis/gax-go/v2 v2.0.5
 github.com/googleapis/gax-go/v2
-# github.com/gorhill/cronexpr v0.0.0-20140423231348-a557574d6c02
+# github.com/gorhill/cronexpr v0.0.0-20180427100037-88b0669f7d75
 ## explicit
 github.com/gorhill/cronexpr
 # github.com/gorilla/handlers v1.5.1
@@ -1543,7 +1543,7 @@ gopkg.in/ini.v1
 gopkg.in/square/go-jose.v2
 gopkg.in/square/go-jose.v2/cipher
 gopkg.in/square/go-jose.v2/json
-# gopkg.in/yaml.v2 v2.4.0 => github.com/cockroachdb/yaml v0.0.0-20180705215940-0e2822948641
+# gopkg.in/yaml.v2 v2.4.0 => github.com/cockroachdb/yaml v0.0.0-20210825132133-2d6955c8edbc
 ## explicit
 gopkg.in/yaml.v2
 # gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
@@ -1599,7 +1599,7 @@ vitess.io/vitess/go/vt/vtgate/evalengine
 # github.com/bufbuild/buf => github.com/cockroachdb/buf v0.42.2-0.20210706083726-883d34031660
 # honnef.co/go/tools => honnef.co/go/tools v0.0.1-2020.1.6
 # vitess.io/vitess => github.com/cockroachdb/vitess v0.0.0-20210218160543-54524729cc82
-# gopkg.in/yaml.v2 => github.com/cockroachdb/yaml v0.0.0-20180705215940-0e2822948641
+# gopkg.in/yaml.v2 => github.com/cockroachdb/yaml v0.0.0-20210825132133-2d6955c8edbc
 # github.com/knz/go-libedit => github.com/otan-cockroach/go-libedit v1.10.2-0.20201030151939-7cced08450e7
 # go.etcd.io/etcd/pkg/v3 => go.etcd.io/etcd/pkg/v3 v3.0.0-20201109164711-01844fd28560
 # github.com/docker/docker => github.com/moby/moby v20.10.6+incompatible
