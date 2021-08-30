@@ -515,9 +515,6 @@ github.com/edsrzf/mmap-go
 ## explicit
 github.com/elastic/gosigar
 github.com/elastic/gosigar/sys/windows
-# github.com/elazarl/go-bindata-assetfs v1.0.0
-## explicit
-github.com/elazarl/go-bindata-assetfs
 # github.com/emicklei/dot v0.15.0
 ## explicit
 github.com/emicklei/dot
