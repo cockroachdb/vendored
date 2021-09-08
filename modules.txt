@@ -318,6 +318,8 @@ github.com/bufbuild/buf/internal/pkg/zaputil
 # github.com/cenkalti/backoff v2.1.1+incompatible
 ## explicit
 github.com/cenkalti/backoff
+# github.com/cespare/xxhash v1.1.0
+github.com/cespare/xxhash
 # github.com/cespare/xxhash/v2 v2.1.1
 github.com/cespare/xxhash/v2
 # github.com/client9/misspell v0.3.4
@@ -534,6 +536,9 @@ github.com/fsnotify/fsnotify
 github.com/ghemawat/stream
 # github.com/ghodss/yaml v1.0.0
 github.com/ghodss/yaml
+# github.com/go-kit/kit v0.9.0
+github.com/go-kit/kit/log
+github.com/go-kit/kit/log/level
 # github.com/go-logfmt/logfmt v0.5.0
 github.com/go-logfmt/logfmt
 # github.com/go-ole/go-ole v1.2.4
@@ -997,6 +1002,8 @@ github.com/mwitkow/go-proto-validators
 ## explicit
 github.com/nlopes/slack
 github.com/nlopes/slack/slackutilsx
+# github.com/oklog/ulid v1.3.1
+github.com/oklog/ulid
 # github.com/olekukonko/tablewriter v0.0.5-0.20200416053754-163badb3bac6 => github.com/cockroachdb/tablewriter v0.0.5-0.20200105123400-bd15540e8847
 ## explicit
 github.com/olekukonko/tablewriter
@@ -1077,6 +1084,30 @@ github.com/prometheus/common/model
 github.com/prometheus/procfs
 github.com/prometheus/procfs/internal/fs
 github.com/prometheus/procfs/internal/util
+# github.com/prometheus/prometheus v2.5.0+incompatible
+## explicit
+github.com/prometheus/prometheus/pkg/gate
+github.com/prometheus/prometheus/pkg/labels
+github.com/prometheus/prometheus/pkg/textparse
+github.com/prometheus/prometheus/pkg/timestamp
+github.com/prometheus/prometheus/pkg/value
+github.com/prometheus/prometheus/promql
+github.com/prometheus/prometheus/storage
+github.com/prometheus/prometheus/storage/tsdb
+github.com/prometheus/prometheus/util/stats
+github.com/prometheus/prometheus/util/strutil
+github.com/prometheus/prometheus/util/testutil
+# github.com/prometheus/tsdb v0.7.1
+github.com/prometheus/tsdb
+github.com/prometheus/tsdb/chunkenc
+github.com/prometheus/tsdb/chunks
+github.com/prometheus/tsdb/encoding
+github.com/prometheus/tsdb/errors
+github.com/prometheus/tsdb/fileutil
+github.com/prometheus/tsdb/goversion
+github.com/prometheus/tsdb/index
+github.com/prometheus/tsdb/labels
+github.com/prometheus/tsdb/wal
 # github.com/pseudomuto/protoc-gen-doc v1.3.2
 ## explicit
 github.com/pseudomuto/protoc-gen-doc
