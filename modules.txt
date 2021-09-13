@@ -725,6 +725,8 @@ github.com/gorilla/handlers
 github.com/gorilla/mux
 # github.com/gorilla/websocket v1.4.2
 github.com/gorilla/websocket
+# github.com/gostaticanalysis/analysisutil v0.0.0-20190318220348-4088753ea4d3
+github.com/gostaticanalysis/analysisutil
 # github.com/goware/modvendor v0.3.0
 ## explicit
 github.com/goware/modvendor
@@ -850,6 +852,9 @@ github.com/jhump/protoreflect/desc/protoparse/ast
 github.com/jhump/protoreflect/dynamic
 github.com/jhump/protoreflect/internal
 github.com/jhump/protoreflect/internal/codec
+# github.com/jingyugao/rowserrcheck v1.1.0
+## explicit
+github.com/jingyugao/rowserrcheck/passes/rowserr
 # github.com/jmespath/go-jmespath v0.4.0
 github.com/jmespath/go-jmespath
 # github.com/jordanlewis/gcassert v0.0.0-20210709222130-81f5df3faab8
