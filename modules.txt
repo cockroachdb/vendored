@@ -1143,7 +1143,7 @@ github.com/toqueteos/webbrowser
 github.com/twitchtv/twirp
 github.com/twitchtv/twirp/ctxsetters
 github.com/twitchtv/twirp/internal/contextkeys
-# github.com/twpayne/go-geom v1.3.7-0.20210228220813-9d9885b50d3e
+# github.com/twpayne/go-geom v1.4.1
 ## explicit
 github.com/twpayne/go-geom
 github.com/twpayne/go-geom/bigxy
@@ -1167,7 +1167,7 @@ github.com/twpayne/go-geom/xy/lineintersection
 github.com/twpayne/go-geom/xy/lineintersector
 github.com/twpayne/go-geom/xy/location
 github.com/twpayne/go-geom/xy/orientation
-# github.com/twpayne/go-kml v1.5.1
+# github.com/twpayne/go-kml v1.5.2
 github.com/twpayne/go-kml
 # github.com/wadey/gocovmerge v0.0.0-20160331181800-b5bfa59ec0ad
 ## explicit
