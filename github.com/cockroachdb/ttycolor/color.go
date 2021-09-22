@@ -73,8 +73,8 @@ const (
 // terminals support 8 colors, some 256, others none at all.
 type Profile map[Code][]byte
 
-// For terminals with 8-color support.
-var profile8 = Profile{
+// Profile8 is suitable for terminals with 8-color support.
+var Profile8 = Profile{
 	// Keep these in the same order as the color codes above.
 	Black:   []byte("\033[0;30;49m"),
 	Red:     []byte("\033[0;31;49m"),
@@ -88,8 +88,8 @@ var profile8 = Profile{
 	Reset:   []byte("\033[0m"),
 }
 
-// For terminals with 256-color support.
-var profile256 = Profile{
+// Profile256 is suitable for terminals with 256-color support.
+var Profile256 = Profile{
 	// Keep these in the same order as the color codes above.
 	Black:   []byte("\033[38;5;0m"),
 	Red:     []byte("\033[38;5;160m"),
@@ -101,6 +101,20 @@ var profile256 = Profile{
 	White:   []byte("\033[38;5;315"),
 	Gray:    []byte("\033[38;5;246m"),
 	Reset:   []byte("\033[0m"),
+}
+
+// BackgroundColorSequence returns the corresponding color in the profile as
+// a background color escape sequence.
+func (cp Profile) BackgroundColorSequence(code Code) []byte {
+	es := cp[code]
+	const backgroundColorEscapeSequence = "\033[7m"
+	return append(es[:len(es):len(es)], []byte(backgroundColorEscapeSequence)...)
+}
+
+// PickArbitraryColor maps a uint32 to an arbitrary color code (excluding Reset)
+// in a deterministic fashion.
+func PickArbitraryColor(input uint32) Code {
+	return Code(input % uint32(Reset))
 }
 
 // Stdout sets the color for future output to os.Stdout.
@@ -119,41 +133,50 @@ func Stderr(code Code) {
 	_, _ = os.Stderr.Write(StderrProfile[code])
 }
 
-func detectProfile(f *os.File) Profile {
+// DetectProfile configures a profile suitable for the given file output.
+func DetectProfile(f *os.File) (Profile, error) {
 	// Console does not support our color profiles but Powershell supports
-	// profile256. Sadly, detecting the shell is not well supported, so default to
+	// Profile256. Sadly, detecting the shell is not well supported, so default to
 	// no-color.
 	if runtime.GOOS == "windows" {
-		return nil
+		return nil, nil
 	}
 
 	// Determine whether f is a character device and if so, that the terminal
 	// supports color output.
 	fi, err := f.Stat()
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	if (fi.Mode() & os.ModeCharDevice) != 0 {
 		term := os.Getenv("TERM")
 		switch term {
 		case "ansi", "tmux":
-			return profile8
+			return Profile8, nil
 		case "st":
-			return profile256
+			return Profile256, nil
 		default:
 			if strings.HasSuffix(term, "256color") {
-				return profile256
+				return Profile256, nil
 			}
 			if strings.HasSuffix(term, "color") || strings.HasPrefix(term, "screen") {
-				return profile8
+				return Profile8, nil
 			}
 		}
 	}
-	return nil
+	return nil, nil
+}
+
+func detectProfileOrPanic(f *os.File) Profile {
+	cp, err := DetectProfile(f)
+	if err != nil {
+		panic(err)
+	}
+	return cp
 }
 
 // StdoutProfile is the Profile to use for stdout.
-var StdoutProfile = detectProfile(os.Stdout)
+var StdoutProfile = detectProfileOrPanic(os.Stdout)
 
 // StderrProfile is the Profile to use for stderr.
-var StderrProfile = detectProfile(os.Stderr)
+var StderrProfile = detectProfileOrPanic(os.Stderr)

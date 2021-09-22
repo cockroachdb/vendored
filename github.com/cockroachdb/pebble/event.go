@@ -411,6 +411,10 @@ type EventListener struct {
 	// installed.
 	FlushEnd func(FlushInfo)
 
+	// FormatUpgrade is invoked after the database's FormatMajorVersion
+	// is upgraded.
+	FormatUpgrade func(FormatMajorVersion)
+
 	// ManifestCreated is invoked after a manifest has been created.
 	ManifestCreated func(ManifestCreateInfo)
 
@@ -468,6 +472,9 @@ func (l *EventListener) EnsureDefaults(logger Logger) {
 	}
 	if l.FlushEnd == nil {
 		l.FlushEnd = func(info FlushInfo) {}
+	}
+	if l.FormatUpgrade == nil {
+		l.FormatUpgrade = func(v FormatMajorVersion) {}
 	}
 	if l.ManifestCreated == nil {
 		l.ManifestCreated = func(info ManifestCreateInfo) {}
@@ -527,6 +534,9 @@ func MakeLoggingEventListener(logger Logger) EventListener {
 		FlushEnd: func(info FlushInfo) {
 			logger.Infof("%s", info)
 		},
+		FormatUpgrade: func(v FormatMajorVersion) {
+			logger.Infof("upgraded to format version: %s", v)
+		},
 		ManifestCreated: func(info ManifestCreateInfo) {
 			logger.Infof("%s", info)
 		},
@@ -577,6 +587,10 @@ func TeeEventListener(a, b EventListener) EventListener {
 			a.CompactionEnd(info)
 			b.CompactionEnd(info)
 		},
+		DiskSlow: func(info DiskSlowInfo) {
+			a.DiskSlow(info)
+			b.DiskSlow(info)
+		},
 		FlushBegin: func(info FlushInfo) {
 			a.FlushBegin(info)
 			b.FlushBegin(info)
@@ -584,6 +598,10 @@ func TeeEventListener(a, b EventListener) EventListener {
 		FlushEnd: func(info FlushInfo) {
 			a.FlushEnd(info)
 			b.FlushEnd(info)
+		},
+		FormatUpgrade: func(v FormatMajorVersion) {
+			a.FormatUpgrade(v)
+			b.FormatUpgrade(v)
 		},
 		ManifestCreated: func(info ManifestCreateInfo) {
 			a.ManifestCreated(info)
@@ -604,6 +622,10 @@ func TeeEventListener(a, b EventListener) EventListener {
 		TableIngested: func(info TableIngestInfo) {
 			a.TableIngested(info)
 			b.TableIngested(info)
+		},
+		TableStatsLoaded: func(info TableStatsInfo) {
+			a.TableStatsLoaded(info)
+			b.TableStatsLoaded(info)
 		},
 		WALCreated: func(info WALCreateInfo) {
 			a.WALCreated(info)
