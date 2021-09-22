@@ -216,9 +216,7 @@ func ingestCleanup(fs vfs.FS, dirname string, meta []*fileMetadata) error {
 	for i := range meta {
 		target := base.MakeFilename(fs, dirname, fileTypeTable, meta[i].FileNum)
 		if err := fs.Remove(target); err != nil {
-			if firstErr != nil {
-				firstErr = err
-			}
+			firstErr = firstError(firstErr, err)
 		}
 	}
 	return firstErr
@@ -680,7 +678,7 @@ func (d *DB) ingestApply(jobID int, meta []*fileMetadata) (*versionEdit, error) 
 		levelMetrics.BytesIngested += m.Size
 		levelMetrics.TablesIngested++
 	}
-	if err := d.mu.versions.logAndApply(jobID, ve, metrics, d.dataDir, func() []compactionInfo {
+	if err := d.mu.versions.logAndApply(jobID, ve, metrics, func() []compactionInfo {
 		return d.getInProgressCompactionInfoLocked(nil)
 	}); err != nil {
 		return nil, err
