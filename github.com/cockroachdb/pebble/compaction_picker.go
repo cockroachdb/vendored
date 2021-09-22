@@ -110,10 +110,6 @@ type pickedCompaction struct {
 	// equal to startLevel+1 except when startLevel is 0 in which case it is
 	// equal to compactionPicker.baseLevel().
 	outputLevel *compactionLevel
-	// adjustedOutputLevel is the output level used for the purpose of
-	// determining the target output file size, overlap bytes, and expanded
-	// bytes, taking into account the base level.
-	adjustedOutputLevel int
 
 	inputs []compactionLevel
 
@@ -127,6 +123,10 @@ type pickedCompaction struct {
 	// maxOverlapBytes is the maximum number of bytes of overlap allowed for a
 	// single output table with the tables in the grandparent level.
 	maxOverlapBytes uint64
+	// maxExpandedBytes is the maximum size of an expanded compaction. If growing
+	// a compaction results in a larger size, the original compaction is used
+	// instead.
+	maxExpandedBytes uint64
 
 	// The boundaries of the input data.
 	smallest InternalKey
@@ -154,12 +154,12 @@ func newPickedCompaction(opts *Options, cur *version, startLevel, baseLevel int)
 	adjustedOutputLevel := 1 + outputLevel - baseLevel
 
 	pc := &pickedCompaction{
-		cmp:                 opts.Comparer.Compare,
-		version:             cur,
-		inputs:              []compactionLevel{{level: startLevel}, {level: outputLevel}},
-		adjustedOutputLevel: adjustedOutputLevel,
-		maxOutputFileSize:   uint64(opts.Level(adjustedOutputLevel).TargetFileSize),
-		maxOverlapBytes:     maxGrandparentOverlapBytes(opts, adjustedOutputLevel),
+		cmp:               opts.Comparer.Compare,
+		version:           cur,
+		inputs:            []compactionLevel{{level: startLevel}, {level: outputLevel}},
+		maxOutputFileSize: uint64(opts.Level(adjustedOutputLevel).TargetFileSize),
+		maxOverlapBytes:   maxGrandparentOverlapBytes(opts, adjustedOutputLevel),
+		maxExpandedBytes:  expandedCompactionByteSizeLimit(opts, adjustedOutputLevel),
 	}
 	pc.startLevel = &pc.inputs[0]
 	pc.outputLevel = &pc.inputs[1]
@@ -191,12 +191,7 @@ func newPickedCompactionFromL0(
 	return pc
 }
 
-func (pc *pickedCompaction) setupInputs(opts *Options, diskAvailBytes uint64) bool {
-	// maxExpandedBytes is the maximum size of an expanded compaction. If
-	// growing a compaction results in a larger size, the original compaction
-	// is used instead.
-	maxExpandedBytes := expandedCompactionByteSizeLimit(opts, pc.adjustedOutputLevel, diskAvailBytes)
-
+func (pc *pickedCompaction) setupInputs() bool {
 	// Expand the initial inputs to a clean cut.
 	var isCompacting bool
 	pc.startLevel.files, isCompacting = expandToAtomicUnit(pc.cmp, pc.startLevel.files, false /* disableIsCompacting */)
@@ -273,7 +268,7 @@ func (pc *pickedCompaction) setupInputs(opts *Options, diskAvailBytes uint64) bo
 					sizeSum += f.Size
 				}
 			}
-			if sizeSum+pc.outputLevel.files.SizeSum() < maxExpandedBytes {
+			if sizeSum+pc.outputLevel.files.SizeSum() < pc.maxExpandedBytes {
 				pc.startLevel.files = manifest.NewLevelSliceSeqSorted(newStartLevelFiles)
 				pc.smallest, pc.largest = manifest.KeyRange(pc.cmp,
 					pc.startLevel.files.Iter(), pc.outputLevel.files.Iter())
@@ -281,7 +276,7 @@ func (pc *pickedCompaction) setupInputs(opts *Options, diskAvailBytes uint64) bo
 				*pc.lcf = oldLcf
 			}
 		}
-	} else if pc.grow(pc.smallest, pc.largest, maxExpandedBytes) {
+	} else if pc.grow(pc.smallest, pc.largest) {
 		pc.smallest, pc.largest = manifest.KeyRange(pc.cmp,
 			pc.startLevel.files.Iter(), pc.outputLevel.files.Iter())
 	}
@@ -291,7 +286,7 @@ func (pc *pickedCompaction) setupInputs(opts *Options, diskAvailBytes uint64) bo
 // grow grows the number of inputs at c.level without changing the number of
 // c.level+1 files in the compaction, and returns whether the inputs grew. sm
 // and la are the smallest and largest InternalKeys in all of the inputs.
-func (pc *pickedCompaction) grow(sm, la InternalKey, maxExpandedBytes uint64) bool {
+func (pc *pickedCompaction) grow(sm, la InternalKey) bool {
 	if pc.outputLevel.files.Empty() {
 		return false
 	}
@@ -303,7 +298,7 @@ func (pc *pickedCompaction) grow(sm, la InternalKey, maxExpandedBytes uint64) bo
 	if grow0.Len() <= pc.startLevel.files.Len() {
 		return false
 	}
-	if grow0.SizeSum()+pc.outputLevel.files.SizeSum() >= maxExpandedBytes {
+	if grow0.SizeSum()+pc.outputLevel.files.SizeSum() >= pc.maxExpandedBytes {
 		return false
 	}
 	sm1, la1 := manifest.KeyRange(pc.cmp, grow0.Iter())
@@ -423,17 +418,12 @@ func expandToAtomicUnit(
 }
 
 func newCompactionPicker(
-	v *version,
-	opts *Options,
-	inProgressCompactions []compactionInfo,
-	levelSizes [numLevels]int64,
-	diskAvailBytes func() uint64,
+	v *version, opts *Options, inProgressCompactions []compactionInfo, levelSizes [numLevels]int64,
 ) compactionPicker {
 	p := &compactionPickerByScore{
-		opts:           opts,
-		vers:           v,
-		levelSizes:     levelSizes,
-		diskAvailBytes: diskAvailBytes,
+		opts:       opts,
+		vers:       v,
+		levelSizes: levelSizes,
 	}
 	p.initLevelMaxBytes(inProgressCompactions)
 	return p
@@ -531,19 +521,6 @@ type compactionPickerByScore struct {
 
 	// levelSizes holds the current size of each level.
 	levelSizes [numLevels]int64
-
-	// diskAvailBytes returns a cached statistic on the number of bytes
-	// available on disk, as reported by the filesystem. It's used to be more
-	// restrictive in expanding compactions if available disk space is
-	// limited.
-	//
-	// The cached value is updated whenever a file is deleted and
-	// whenever a compaction or flush completes. Since file removal is
-	// the primary means of reclaiming space, there is a rough bound on
-	// the statistic's staleness when available bytes is growing.
-	// Compactions and flushes are longer, slower operations and provide
-	// a much looser bound when available bytes is decreasing.
-	diskAvailBytes func() uint64
 }
 
 var _ compactionPicker = &compactionPickerByScore{}
@@ -982,7 +959,7 @@ func (p *compactionPickerByScore) pickAuto(env compactionEnv) (pc *pickedCompact
 		}
 
 		if info.level == 0 {
-			pc = pickL0(env, p.opts, p.vers, p.baseLevel, p.diskAvailBytes)
+			pc = pickL0(env, p.opts, p.vers, p.baseLevel)
 			// Fail-safe to protect against compacting the same sstable
 			// concurrently.
 			if pc != nil && !inputRangeAlreadyCompacting(env, pc) {
@@ -1002,7 +979,7 @@ func (p *compactionPickerByScore) pickAuto(env compactionEnv) (pc *pickedCompact
 			continue
 		}
 
-		pc := pickAutoHelper(env, p.opts, p.vers, *info, p.baseLevel, p.diskAvailBytes)
+		pc := pickAutoHelper(env, p.opts, p.vers, *info, p.baseLevel)
 		// Fail-safe to protect against compacting the same sstable concurrently.
 		if pc != nil && !inputRangeAlreadyCompacting(env, pc) {
 			pc.score = info.score
@@ -1123,12 +1100,7 @@ func (p *compactionPickerByScore) pickElisionOnlyCompaction(
 }
 
 func pickAutoHelper(
-	env compactionEnv,
-	opts *Options,
-	vers *version,
-	cInfo candidateLevelInfo,
-	baseLevel int,
-	diskAvailBytes func() uint64,
+	env compactionEnv, opts *Options, vers *version, cInfo candidateLevelInfo, baseLevel int,
 ) (pc *pickedCompaction) {
 	if cInfo.outputLevel == 0 {
 		return pickIntraL0(env, opts, vers)
@@ -1149,7 +1121,7 @@ func pickAutoHelper(
 		}
 	}
 
-	if !pc.setupInputs(opts, diskAvailBytes()) {
+	if !pc.setupInputs() {
 		return nil
 	}
 	return pc
@@ -1157,9 +1129,7 @@ func pickAutoHelper(
 
 // Helper method to pick compactions originating from L0. Uses information about
 // sublevels to generate a compaction.
-func pickL0(
-	env compactionEnv, opts *Options, vers *version, baseLevel int, diskAvailBytes func() uint64,
-) (pc *pickedCompaction) {
+func pickL0(env compactionEnv, opts *Options, vers *version, baseLevel int) (pc *pickedCompaction) {
 	// It is important to pass information about Lbase files to L0Sublevels
 	// so it can pick a compaction that does not conflict with an Lbase => Lbase+1
 	// compaction. Without this, we observed reduced concurrency of L0=>Lbase
@@ -1174,7 +1144,7 @@ func pickL0(
 	}
 	if lcf != nil {
 		pc = newPickedCompactionFromL0(lcf, opts, vers, baseLevel, true)
-		pc.setupInputs(opts, diskAvailBytes())
+		pc.setupInputs()
 		if pc.startLevel.files.Empty() {
 			opts.Logger.Fatalf("empty compaction chosen")
 		}
@@ -1192,7 +1162,7 @@ func pickL0(
 	}
 	if lcf != nil {
 		pc = newPickedCompactionFromL0(lcf, opts, vers, 0, false)
-		if !pc.setupInputs(opts, diskAvailBytes()) {
+		if !pc.setupInputs() {
 			return nil
 		}
 		if pc.startLevel.files.Empty() {
@@ -1306,6 +1276,7 @@ func pickIntraL0(env compactionEnv, opts *Options, vers *version) (pc *pickedCom
 	// thus read all of the L0 sstables anyways, even if they are partitioned.
 	pc.maxOutputFileSize = math.MaxUint64
 	pc.maxOverlapBytes = math.MaxUint64
+	pc.maxExpandedBytes = math.MaxUint64
 	return pc
 }
 
@@ -1333,7 +1304,7 @@ func (p *compactionPickerByScore) pickManual(
 	if conflictsWithInProgress(manual.level, outputLevel, env.inProgressCompactions) {
 		return nil, true
 	}
-	pc = pickManualHelper(p.opts, manual, p.vers, p.baseLevel, p.diskAvailBytes)
+	pc = pickManualHelper(p.opts, manual, p.vers, p.baseLevel)
 	if pc == nil {
 		return nil, false
 	}
@@ -1348,11 +1319,7 @@ func (p *compactionPickerByScore) pickManual(
 }
 
 func pickManualHelper(
-	opts *Options,
-	manual *manualCompaction,
-	vers *version,
-	baseLevel int,
-	diskAvailBytes func() uint64,
+	opts *Options, manual *manualCompaction, vers *version, baseLevel int,
 ) (pc *pickedCompaction) {
 	pc = newPickedCompaction(opts, vers, manual.level, baseLevel)
 	manual.outputLevel = pc.outputLevel.level
@@ -1362,7 +1329,7 @@ func pickManualHelper(
 		// Nothing to do
 		return nil
 	}
-	if !pc.setupInputs(opts, diskAvailBytes()) {
+	if !pc.setupInputs() {
 		return nil
 	}
 	return pc
@@ -1403,7 +1370,7 @@ func pickReadTriggeredCompactionHelper(
 	}
 	pc = newPickedCompaction(p.opts, p.vers, rc.level, p.baseLevel)
 	pc.startLevel.files = overlapSlice
-	if !pc.setupInputs(p.opts, p.diskAvailBytes()) {
+	if !pc.setupInputs() {
 		return nil
 	}
 	if inputRangeAlreadyCompacting(env, pc) {

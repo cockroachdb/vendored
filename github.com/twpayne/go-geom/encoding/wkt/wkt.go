@@ -1,8 +1,3 @@
-//go:generate goyacc -l -o wkt.gen.go -p wkt wkt.y
-// TODO remove the following line if https://github.com/golang/tools/pull/304 is accepted
-//go:generate sed -i -e "s/wktErrorVerbose = false/wktErrorVerbose = true/" wkt.gen.go
-//go:generate gofumports -w wkt.gen.go
-
 // Package wkt implements Well Known Text encoding and decoding.
 package wkt
 
@@ -45,10 +40,10 @@ func NewEncoder(applyOptFns ...EncodeOption) *Encoder {
 	return encoder
 }
 
-// An EncodeOption is an encoder option.
+// EncodeOptions specify options to apply to the encoder.
 type EncodeOption func(*Encoder)
 
-// EncodeOptionWithMaxDecimalDigits sets the maximum decimal digits to encode.
+// EncodeWithMaxDecimalDigits sets the maximum decimal digits to encode.
 func EncodeOptionWithMaxDecimalDigits(maxDecimalDigits int) EncodeOption {
 	return func(e *Encoder) {
 		e.maxDecimalDigits = maxDecimalDigits
@@ -62,10 +57,5 @@ func Marshal(g geom.T, applyOptFns ...EncodeOption) (string, error) {
 
 // Unmarshal translates a WKT to the corresponding geometry.
 func Unmarshal(wkt string) (geom.T, error) {
-	wktlex := newWKTLex(wkt)
-	wktParse(wktlex)
-	if wktlex.lastErr != nil {
-		return nil, wktlex.lastErr
-	}
-	return wktlex.ret, nil
+	return decode(wkt)
 }

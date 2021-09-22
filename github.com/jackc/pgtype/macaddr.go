@@ -2,8 +2,9 @@ package pgtype
 
 import (
 	"database/sql/driver"
-	"fmt"
 	"net"
+
+	errors "golang.org/x/xerrors"
 )
 
 type Macaddr struct {
@@ -35,23 +36,11 @@ func (dst *Macaddr) Set(src interface{}) error {
 			return err
 		}
 		*dst = Macaddr{Addr: addr, Status: Present}
-	case *net.HardwareAddr:
-		if value == nil {
-			*dst = Macaddr{Status: Null}
-		} else {
-			return dst.Set(*value)
-		}
-	case *string:
-		if value == nil {
-			*dst = Macaddr{Status: Null}
-		} else {
-			return dst.Set(*value)
-		}
 	default:
 		if originalSrc, ok := underlyingPtrType(src); ok {
 			return dst.Set(originalSrc)
 		}
-		return fmt.Errorf("cannot convert %v to Macaddr", value)
+		return errors.Errorf("cannot convert %v to Macaddr", value)
 	}
 
 	return nil
@@ -83,13 +72,13 @@ func (src *Macaddr) AssignTo(dst interface{}) error {
 			if nextDst, retry := GetAssignToDstType(dst); retry {
 				return src.AssignTo(nextDst)
 			}
-			return fmt.Errorf("unable to assign to %T", dst)
+			return errors.Errorf("unable to assign to %T", dst)
 		}
 	case Null:
 		return NullAssignTo(dst)
 	}
 
-	return fmt.Errorf("cannot decode %#v into %T", src, dst)
+	return errors.Errorf("cannot decode %#v into %T", src, dst)
 }
 
 func (dst *Macaddr) DecodeText(ci *ConnInfo, src []byte) error {
@@ -114,7 +103,7 @@ func (dst *Macaddr) DecodeBinary(ci *ConnInfo, src []byte) error {
 	}
 
 	if len(src) != 6 {
-		return fmt.Errorf("Received an invalid size for a macaddr: %d", len(src))
+		return errors.Errorf("Received an invalid size for a macaddr: %d", len(src))
 	}
 
 	addr := make(net.HardwareAddr, 6)
@@ -164,7 +153,7 @@ func (dst *Macaddr) Scan(src interface{}) error {
 		return dst.DecodeText(nil, srcCopy)
 	}
 
-	return fmt.Errorf("cannot scan %T", src)
+	return errors.Errorf("cannot scan %T", src)
 }
 
 // Value implements the database/sql/driver Valuer interface.

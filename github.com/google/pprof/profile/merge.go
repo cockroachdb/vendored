@@ -35,10 +35,7 @@ func (p *Profile) Compact() *Profile {
 // functions and mappings. Profiles must have identical profile sample
 // and period types or the merge will fail. profile.Period of the
 // resulting profile will be the maximum of all profiles, and
-// profile.TimeNanos will be the earliest nonzero one. Merges are
-// associative with the caveat of the first profile having some
-// specialization in how headers are combined. There may be other
-// subtleties now or in the future regarding associativity.
+// profile.TimeNanos will be the earliest nonzero one.
 func Merge(srcs []*Profile) (*Profile, error) {
 	if len(srcs) == 0 {
 		return nil, fmt.Errorf("no profiles to merge")
@@ -231,6 +228,7 @@ func (pm *profileMerger) mapLocation(src *Location) *Location {
 	}
 
 	if l, ok := pm.locationsByID[src.ID]; ok {
+		pm.locationsByID[src.ID] = l
 		return l
 	}
 

@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgio"
 	"github.com/jackc/pgtype"
+	errors "golang.org/x/xerrors"
 )
 
 // PostgreSQL format codes
@@ -26,11 +27,6 @@ func (e SerializationError) Error() string {
 
 func convertSimpleArgument(ci *pgtype.ConnInfo, arg interface{}) (interface{}, error) {
 	if arg == nil {
-		return nil, nil
-	}
-
-	refVal := reflect.ValueOf(arg)
-	if refVal.Kind() == reflect.Ptr && refVal.IsNil() {
 		return nil, nil
 	}
 
@@ -72,14 +68,12 @@ func convertSimpleArgument(ci *pgtype.ConnInfo, arg interface{}) (interface{}, e
 			return nil, nil
 		}
 		return string(buf), nil
-	case float32:
-		return float64(arg), nil
+	case int64:
+		return arg, nil
 	case float64:
 		return arg, nil
 	case bool:
 		return arg, nil
-	case time.Duration:
-		return fmt.Sprintf("%d microsecond", int64(arg)/1000), nil
 	case time.Time:
 		return arg, nil
 	case string:
@@ -92,8 +86,6 @@ func convertSimpleArgument(ci *pgtype.ConnInfo, arg interface{}) (interface{}, e
 		return int64(arg), nil
 	case int32:
 		return int64(arg), nil
-	case int64:
-		return arg, nil
 	case int:
 		return int64(arg), nil
 	case uint8:
@@ -104,33 +96,24 @@ func convertSimpleArgument(ci *pgtype.ConnInfo, arg interface{}) (interface{}, e
 		return int64(arg), nil
 	case uint64:
 		if arg > math.MaxInt64 {
-			return nil, fmt.Errorf("arg too big for int64: %v", arg)
+			return nil, errors.Errorf("arg too big for int64: %v", arg)
 		}
 		return int64(arg), nil
 	case uint:
 		if uint64(arg) > math.MaxInt64 {
-			return nil, fmt.Errorf("arg too big for int64: %v", arg)
+			return nil, errors.Errorf("arg too big for int64: %v", arg)
 		}
 		return int64(arg), nil
+	case float32:
+		return float64(arg), nil
 	}
 
-	if dt, found := ci.DataTypeForValue(arg); found {
-		v := dt.Value
-		err := v.Set(arg)
-		if err != nil {
-			return nil, err
-		}
-		buf, err := v.(pgtype.TextEncoder).EncodeText(ci, nil)
-		if err != nil {
-			return nil, err
-		}
-		if buf == nil {
-			return nil, nil
-		}
-		return string(buf), nil
-	}
+	refVal := reflect.ValueOf(arg)
 
 	if refVal.Kind() == reflect.Ptr {
+		if refVal.IsNil() {
+			return nil, nil
+		}
 		arg = refVal.Elem().Interface()
 		return convertSimpleArgument(ci, arg)
 	}
@@ -227,9 +210,7 @@ func encodePreparedStatementArgument(ci *pgtype.ConnInfo, buf []byte, oid uint32
 // argument to a prepared statement. It defaults to TextFormatCode if no
 // determination can be made.
 func chooseParameterFormatCode(ci *pgtype.ConnInfo, oid uint32, arg interface{}) int16 {
-	switch arg := arg.(type) {
-	case pgtype.ParamFormatPreferrer:
-		return arg.PreferredParamFormat()
+	switch arg.(type) {
 	case pgtype.BinaryEncoder:
 		return BinaryFormatCode
 	case string, *string, pgtype.TextEncoder:

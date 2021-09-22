@@ -127,17 +127,18 @@ type fileInterval struct {
 	// this bool is used as a heuristic (but not as a complete disqualifier).
 	intervalRangeIsBaseCompacting bool
 
-	// All files in this interval, in increasing sublevel order.
-	files []*FileMetadata
-
-	// len(files) - compactingFileCount is the stack depth that requires
+	// fileCount - compactingFileCount is the stack depth that requires
 	// starting new compactions. This metric is not precise since the
 	// compactingFileCount can include files that are part of N (where N > 1)
 	// intra-L0 compactions, so the stack depth after those complete will be
-	// len(files) - compactingFileCount + N. We ignore this imprecision since
+	// fileCount - compactingFileCount + N. We ignore this imprecision since
 	// we don't want to track which files are part of which intra-L0
 	// compaction.
+	fileCount           int
 	compactingFileCount int
+
+	// All files in this interval, in increasing sublevel order.
+	files []*FileMetadata
 
 	// Interpolated from files in this interval. For files spanning multiple
 	// intervals, we assume an equal distribution of bytes across all those
@@ -291,6 +292,7 @@ func NewL0Sublevels(
 				subLevel <= interval.files[len(interval.files)-1].subLevel {
 				subLevel = interval.files[len(interval.files)-1].subLevel + 1
 			}
+			s.orderedIntervals[i].fileCount++
 			interval.estimatedBytes += interpolatedBytes
 			if f.minIntervalIndex < interval.filesMinIntervalIndex {
 				interval.filesMinIntervalIndex = f.minIntervalIndex
@@ -298,6 +300,9 @@ func NewL0Sublevels(
 			if f.maxIntervalIndex > interval.filesMaxIntervalIndex {
 				interval.filesMaxIntervalIndex = f.maxIntervalIndex
 			}
+		}
+		for i := f.minIntervalIndex; i <= f.maxIntervalIndex; i++ {
+			interval := &s.orderedIntervals[i]
 			interval.files = append(interval.files, f)
 		}
 		f.subLevel = subLevel
@@ -471,7 +476,7 @@ func (s *L0Sublevels) describe(verbose bool) string {
 	foundBaseCompactingIntervals := false
 	for ; i < len(s.orderedIntervals); i++ {
 		interval := &s.orderedIntervals[i]
-		if len(interval.files) == 0 {
+		if interval.fileCount == 0 {
 			continue
 		}
 		if !interval.isBaseCompacting {
@@ -509,9 +514,8 @@ func (s *L0Sublevels) ReadAmplification() int {
 	amp := 0
 	for i := range s.orderedIntervals {
 		interval := &s.orderedIntervals[i]
-		fileCount := len(interval.files)
-		if amp < fileCount {
-			amp = fileCount
+		if amp < interval.fileCount {
+			amp = interval.fileCount
 		}
 	}
 	return amp
@@ -546,7 +550,7 @@ func (s *L0Sublevels) InUseKeyRanges(smallest, largest []byte) []UserKeyRange {
 	for i := start; i < end; {
 		// Intervals with no files are not in use and can be skipped, once we
 		// end the current UserKeyRange.
-		if len(s.orderedIntervals[i].files) == 0 {
+		if s.orderedIntervals[i].fileCount == 0 {
 			curr = nil
 			i++
 			continue
@@ -602,7 +606,7 @@ func (s *L0Sublevels) MaxDepthAfterOngoingCompactions() int {
 	depth := 0
 	for i := range s.orderedIntervals {
 		interval := &s.orderedIntervals[i]
-		intervalDepth := len(interval.files) - interval.compactingFileCount
+		intervalDepth := interval.fileCount - interval.compactingFileCount
 		if depth < intervalDepth {
 			depth = intervalDepth
 		}
@@ -903,29 +907,6 @@ func (is intervalSorterByDecreasingScore) Swap(i, j int) {
 //
 //    Lbase a--------i    m---------w
 //
-// Note that when ExtendL0ForBaseCompactionTo is called, the compaction expands
-// to the following, given that the [l,o] file can be added without including
-// additional files in Lbase:
-//
-//         _____________
-//    L0.3 |a--d    g-j|      _________
-//    L0.2 |       f--j|      |  r-t  |
-//    L0.1 | b-d  e---j|______|       |
-//    L0.0 |a--d   f--j||l--o  p-----x|
-//
-//    Lbase a--------i    m---------w
-//
-// If an additional file existed in LBase that overlapped with [l,o], it would
-// be excluded from the compaction. Concretely:
-//
-//         _____________
-//    L0.3 |a--d    g-j|      _________
-//    L0.2 |       f--j|      |  r-t  |
-//    L0.1 | b-d  e---j|      |       |
-//    L0.0 |a--d   f--j| l--o |p-----x|
-//
-//    Lbase a--------ij--lm---------w
-//
 // Intra-L0: If the L0 score is high, but PickBaseCompaction() is unable to
 // pick a compaction, PickIntraL0Compaction will be used to pick an intra-L0
 // compaction. Similar to L0 -> Lbase compactions, we want to allow for
@@ -994,7 +975,7 @@ func (s *L0Sublevels) PickBaseCompaction(
 	sublevelCount := len(s.levelFiles)
 	for i := range s.orderedIntervals {
 		interval := &s.orderedIntervals[i]
-		depth := len(interval.files) - interval.compactingFileCount
+		depth := interval.fileCount - interval.compactingFileCount
 		if interval.isBaseCompacting || minCompactionDepth > depth {
 			continue
 		}
@@ -1209,7 +1190,7 @@ func (s *L0Sublevels) PickIntraL0Compaction(
 	scoredIntervals := make([]intervalAndScore, len(s.orderedIntervals))
 	for i := range s.orderedIntervals {
 		interval := &s.orderedIntervals[i]
-		depth := len(interval.files) - interval.compactingFileCount
+		depth := interval.fileCount - interval.compactingFileCount
 		if minCompactionDepth > depth {
 			continue
 		}

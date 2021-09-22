@@ -50,7 +50,7 @@ func Read(r io.Reader) (geom.T, error) {
 	}
 	t := wkbcommon.Type(ewkbGeometryType)
 
-	var layout geom.Layout
+	layout := geom.NoLayout
 	switch t & (ewkbZ | ewkbM) {
 	case 0:
 		layout = geom.XY

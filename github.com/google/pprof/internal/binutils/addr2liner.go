@@ -70,11 +70,7 @@ func (a *addr2LinerJob) write(s string) error {
 }
 
 func (a *addr2LinerJob) readLine() (string, error) {
-	s, err := a.out.ReadString('\n')
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(s), nil
+	return a.out.ReadString('\n')
 }
 
 // close releases any resources used by the addr2liner object.
@@ -119,11 +115,19 @@ func newAddr2Liner(cmd, file string, base uint64) (*addr2Liner, error) {
 	return a, nil
 }
 
+func (d *addr2Liner) readString() (string, error) {
+	s, err := d.rw.readLine()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(s), nil
+}
+
 // readFrame parses the addr2line output for a single address. It
 // returns a populated plugin.Frame and whether it has reached the end of the
 // data.
 func (d *addr2Liner) readFrame() (plugin.Frame, bool) {
-	funcname, err := d.rw.readLine()
+	funcname, err := d.readString()
 	if err != nil {
 		return plugin.Frame{}, true
 	}
@@ -131,12 +135,12 @@ func (d *addr2Liner) readFrame() (plugin.Frame, bool) {
 		// If addr2line returns a hex address we can assume it is the
 		// sentinel. Read and ignore next two lines of output from
 		// addr2line
-		d.rw.readLine()
-		d.rw.readLine()
+		d.readString()
+		d.readString()
 		return plugin.Frame{}, true
 	}
 
-	fileline, err := d.rw.readLine()
+	fileline, err := d.readString()
 	if err != nil {
 		return plugin.Frame{}, true
 	}
@@ -182,7 +186,7 @@ func (d *addr2Liner) rawAddrInfo(addr uint64) ([]plugin.Frame, error) {
 		return nil, err
 	}
 
-	resp, err := d.rw.readLine()
+	resp, err := d.readString()
 	if err != nil {
 		return nil, err
 	}
