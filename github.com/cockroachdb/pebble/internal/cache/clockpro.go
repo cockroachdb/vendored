@@ -168,6 +168,7 @@ func (c *shard) Set(id uint64, fileNum base.FileNum, offset uint64, value *Value
 		c.metaDel(e)
 		c.metaCheck(e)
 
+		e.size = int64(len(value.buf))
 		c.coldTarget += e.size
 		if c.coldTarget > c.targetSize() {
 			c.coldTarget = c.targetSize()
@@ -251,6 +252,16 @@ func (c *shard) Free() {
 func (c *shard) Reserve(n int) {
 	c.mu.Lock()
 	c.reservedSize += int64(n)
+
+	// Changing c.reservedSize will either increase or decrease
+	// the targetSize. But we want coldTarget to be in the range
+	// [0, targetSize]. So, if c.targetSize decreases, make sure
+	// that the coldTarget fits within the limits.
+	targetSize := c.targetSize()
+	if c.coldTarget > targetSize {
+		c.coldTarget = targetSize
+	}
+
 	c.evict()
 	c.mu.Unlock()
 }
