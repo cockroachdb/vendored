@@ -3,8 +3,8 @@ package pgtype
 import (
 	"database/sql/driver"
 	"encoding/json"
-	"errors"
-	"fmt"
+
+	errors "golang.org/x/xerrors"
 )
 
 type JSON struct {
@@ -82,7 +82,7 @@ func (src *JSON) AssignTo(dst interface{}) error {
 		if src.Status == Present {
 			*v = string(src.Bytes)
 		} else {
-			return fmt.Errorf("cannot assign non-present status to %T", dst)
+			return errors.Errorf("cannot assign non-present status to %T", dst)
 		}
 	case **string:
 		if src.Status == Present {
@@ -113,10 +113,6 @@ func (src *JSON) AssignTo(dst interface{}) error {
 	return nil
 }
 
-func (JSON) PreferredResultFormat() int16 {
-	return TextFormatCode
-}
-
 func (dst *JSON) DecodeText(ci *ConnInfo, src []byte) error {
 	if src == nil {
 		*dst = JSON{Status: Null}
@@ -129,10 +125,6 @@ func (dst *JSON) DecodeText(ci *ConnInfo, src []byte) error {
 
 func (dst *JSON) DecodeBinary(ci *ConnInfo, src []byte) error {
 	return dst.DecodeText(ci, src)
-}
-
-func (JSON) PreferredParamFormat() int16 {
-	return TextFormatCode
 }
 
 func (src JSON) EncodeText(ci *ConnInfo, buf []byte) ([]byte, error) {
@@ -166,7 +158,7 @@ func (dst *JSON) Scan(src interface{}) error {
 		return dst.DecodeText(nil, srcCopy)
 	}
 
-	return fmt.Errorf("cannot scan %T", src)
+	return errors.Errorf("cannot scan %T", src)
 }
 
 // Value implements the database/sql/driver Valuer interface.

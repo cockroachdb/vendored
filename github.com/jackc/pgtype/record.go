@@ -1,8 +1,10 @@
 package pgtype
 
 import (
-	"fmt"
+	"encoding/binary"
 	"reflect"
+
+	errors "golang.org/x/xerrors"
 )
 
 // Record is the generic PostgreSQL record type such as is created with the
@@ -32,7 +34,7 @@ func (dst *Record) Set(src interface{}) error {
 	case []Value:
 		*dst = Record{Fields: value, Status: Present}
 	default:
-		return fmt.Errorf("cannot convert %v to Record", src)
+		return errors.Errorf("cannot convert %v to Record", src)
 	}
 
 	return nil
@@ -67,32 +69,13 @@ func (src *Record) AssignTo(dst interface{}) error {
 			if nextDst, retry := GetAssignToDstType(dst); retry {
 				return src.AssignTo(nextDst)
 			}
-			return fmt.Errorf("unable to assign to %T", dst)
+			return errors.Errorf("unable to assign to %T", dst)
 		}
 	case Null:
 		return NullAssignTo(dst)
 	}
 
-	return fmt.Errorf("cannot decode %#v into %T", src, dst)
-}
-
-func prepareNewBinaryDecoder(ci *ConnInfo, fieldOID uint32, v *Value) (BinaryDecoder, error) {
-	var binaryDecoder BinaryDecoder
-
-	if dt, ok := ci.DataTypeForOID(fieldOID); ok {
-		binaryDecoder, _ = dt.Value.(BinaryDecoder)
-	} else {
-		return nil, fmt.Errorf("unknown oid while decoding record: %v", fieldOID)
-	}
-
-	if binaryDecoder == nil {
-		return nil, fmt.Errorf("no binary decoder registered for: %v", fieldOID)
-	}
-
-	// Duplicate struct to scan into
-	binaryDecoder = reflect.New(reflect.ValueOf(binaryDecoder).Elem().Type()).Interface().(BinaryDecoder)
-	*v = binaryDecoder.(Value)
-	return binaryDecoder, nil
+	return errors.Errorf("cannot decode %#v into %T", src, dst)
 }
 
 func (dst *Record) DecodeBinary(ci *ConnInfo, src []byte) error {
@@ -101,23 +84,51 @@ func (dst *Record) DecodeBinary(ci *ConnInfo, src []byte) error {
 		return nil
 	}
 
-	scanner := NewCompositeBinaryScanner(ci, src)
+	rp := 0
 
-	fields := make([]Value, scanner.FieldCount())
-
-	for i := 0; scanner.Next(); i++ {
-		binaryDecoder, err := prepareNewBinaryDecoder(ci, scanner.OID(), &fields[i])
-		if err != nil {
-			return err
-		}
-
-		if err = binaryDecoder.DecodeBinary(ci, scanner.Bytes()); err != nil {
-			return err
-		}
+	if len(src[rp:]) < 4 {
+		return errors.Errorf("Record incomplete %v", src)
 	}
+	fieldCount := int(int32(binary.BigEndian.Uint32(src[rp:])))
+	rp += 4
 
-	if scanner.Err() != nil {
-		return scanner.Err()
+	fields := make([]Value, fieldCount)
+
+	for i := 0; i < fieldCount; i++ {
+		if len(src[rp:]) < 8 {
+			return errors.Errorf("Record incomplete %v", src)
+		}
+		fieldOID := binary.BigEndian.Uint32(src[rp:])
+		rp += 4
+
+		fieldLen := int(int32(binary.BigEndian.Uint32(src[rp:])))
+		rp += 4
+
+		var binaryDecoder BinaryDecoder
+		if dt, ok := ci.DataTypeForOID(fieldOID); ok {
+			binaryDecoder, _ = dt.Value.(BinaryDecoder)
+		}
+		if binaryDecoder == nil {
+			return errors.Errorf("unknown oid while decoding record: %v", fieldOID)
+		}
+
+		var fieldBytes []byte
+		if fieldLen >= 0 {
+			if len(src[rp:]) < fieldLen {
+				return errors.Errorf("Record incomplete %v", src)
+			}
+			fieldBytes = src[rp : rp+fieldLen]
+			rp += fieldLen
+		}
+
+		// Duplicate struct to scan into
+		binaryDecoder = reflect.New(reflect.ValueOf(binaryDecoder).Elem().Type()).Interface().(BinaryDecoder)
+
+		if err := binaryDecoder.DecodeBinary(ci, fieldBytes); err != nil {
+			return err
+		}
+
+		fields[i] = binaryDecoder.(Value)
 	}
 
 	*dst = Record{Fields: fields, Status: Present}

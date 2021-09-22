@@ -19,19 +19,18 @@ import (
 	"github.com/cockroachdb/pebble/internal/invariants"
 	"github.com/cockroachdb/pebble/internal/manifest"
 	"github.com/cockroachdb/pebble/internal/manual"
-	"github.com/cockroachdb/pebble/record"
+	"github.com/cockroachdb/pebble/internal/record"
 	"github.com/cockroachdb/pebble/sstable"
 	"github.com/cockroachdb/pebble/vfs"
-	"github.com/cockroachdb/pebble/vfs/atomicfs"
 )
 
 const (
-	// MinTableCacheSize is the minimum size of the table cache, for a given store.
-	MinTableCacheSize = 64
+	// minTableCacheSize is the minimum size of the table cache.
+	minTableCacheSize = 64
 
-	// NumNonTableCacheFiles is an approximation for the number of MaxOpenFiles
-	// that we don't use for table caches, for a given store.
-	NumNonTableCacheFiles = 10
+	// numNonTableCacheFiles is an approximation for the number of MaxOpenFiles
+	// that we don't use for table caches.
+	numNonTableCacheFiles = 10
 )
 
 var (
@@ -186,9 +185,6 @@ type DB struct {
 
 		// The size of the current log file (i.e. db.mu.log.queue[len(queue)-1].
 		logSize uint64
-
-		// The number of bytes available on disk.
-		diskAvailBytes uint64
 	}
 
 	cacheID        uint64
@@ -212,7 +208,7 @@ type DB struct {
 	dataDir  vfs.File
 	walDir   vfs.File
 
-	tableCache *tableCacheContainer
+	tableCache tableCache
 	newIters   tableNewIters
 
 	commit *commitPipeline
@@ -255,19 +251,6 @@ type DB struct {
 	// DB.mu will be held continuously across a set of calls.
 	mu struct {
 		sync.Mutex
-
-		formatVers struct {
-			// vers is the database's current format major version.
-			// Backwards-incompatible features are gated behind new
-			// format major versions and not enabled until a database's
-			// version is ratcheted upwards.
-			vers FormatMajorVersion
-			// marker is the atomic marker for the format major version.
-			// When a database's version is ratcheted upwards, the
-			// marker is moved in order to atomically record the new
-			// version.
-			marker *atomicfs.Marker
-		}
 
 		// The ID of the next job. Job IDs are passed to event listener
 		// notifications and act as a mechanism for tying together the events and
@@ -960,8 +943,7 @@ func (d *DB) Close() error {
 	if n := len(d.mu.compact.inProgress); n > 0 {
 		err = errors.Errorf("pebble: %d unexpected in-progress compactions", errors.Safe(n))
 	}
-	err = firstError(err, d.mu.formatVers.marker.Close())
-	err = firstError(err, d.tableCache.close())
+	err = firstError(err, d.tableCache.Close())
 	if !d.opts.ReadOnly {
 		err = firstError(err, d.mu.log.Close())
 	} else if d.mu.log.LogWriter != nil {

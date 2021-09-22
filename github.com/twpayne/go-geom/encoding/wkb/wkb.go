@@ -58,7 +58,7 @@ func Read(r io.Reader, opts ...wkbcommon.WKBOption) (geom.T, error) {
 	}
 	t := wkbcommon.Type(wkbGeometryType)
 
-	var layout geom.Layout
+	layout := geom.NoLayout
 	switch 1000 * (t / 1000) {
 	case wkbXYID:
 		layout = geom.XY

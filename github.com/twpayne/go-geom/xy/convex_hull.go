@@ -221,27 +221,35 @@ func (calc *convexHullCalculator) padArray3(pts []float64) []float64 {
 func (calc *convexHullCalculator) computeOctRing(inputPts []float64) []float64 {
 	stride := calc.stride
 	octPts := calc.computeOctPts(inputPts)
-
-	// Dedup adjacent points, only keep ones that are different from previous.
-	uniquePts := octPts[0:stride]
+	copyTo := 0
 	for i := stride; i < len(octPts); i += stride {
 		if !internal.Equal(octPts, i-stride, octPts, i) {
-			uniquePts = append(uniquePts, octPts[i:i+stride]...)
+			copyTo += stride
+		}
+		for j := 0; j < stride; j++ {
+			octPts[copyTo+j] = octPts[i+j]
 		}
 	}
 
-	// Need at least 3 unique points (a triangle) to exclude anything inside.
-	if len(uniquePts) < 3*stride {
+	// points must all lie in a line
+	if copyTo < 6 {
 		return nil
 	}
 
-	return uniquePts
+	copyTo += stride
+	octPts = octPts[0 : copyTo+stride]
+
+	// close ring
+	for j := 0; j < stride; j++ {
+		octPts[copyTo+j] = octPts[j]
+	}
+
+	return octPts
 }
 
 func (calc *convexHullCalculator) computeOctPts(inputPts []float64) []float64 {
 	stride := calc.stride
 	pts := make([]float64, 8*stride)
-
 	for j := 0; j < len(pts); j += stride {
 		for k := 0; k < stride; k++ {
 			pts[j+k] = inputPts[k]

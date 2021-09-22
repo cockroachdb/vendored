@@ -17,7 +17,7 @@ package redact
 import (
 	"io"
 
-	"github.com/cockroachdb/redact/internal/rfmt"
+	internalFmt "github.com/cockroachdb/redact/internal"
 )
 
 // Sprint prints out the arguments and encloses unsafe bits
@@ -27,7 +27,13 @@ import (
 // If a RedactableString or RedactableBytes argument is passed,
 // it is reproduced as-is without escaping.
 func Sprint(args ...interface{}) RedactableString {
-	return rfmt.Sprint(args...)
+	p := internalFmt.NewInternalPrinter()
+	internalFmt.SetHook(p, printArgFn)
+	internalFmt.DoPrint(p, args)
+	redactLastWrites(p)
+	s := RedactableString(internalFmt.Buf(p))
+	internalFmt.Free(p)
+	return s
 }
 
 // Sprintf formats the arguments and encloses unsafe bits
@@ -38,7 +44,13 @@ func Sprint(args ...interface{}) RedactableString {
 // is responsible to ensure that the markers are not present
 // in the format string.
 func Sprintf(format string, args ...interface{}) RedactableString {
-	return rfmt.Sprintf(format, args...)
+	p := internalFmt.NewInternalPrinter()
+	internalFmt.SetHook(p, printArgFn)
+	internalFmt.DoPrintf(p, format, args)
+	redactLastWrites(p)
+	s := RedactableString(internalFmt.Buf(p))
+	internalFmt.Free(p)
+	return s
 }
 
 // HelperForErrorf is a helper to implement a redaction-aware
@@ -51,13 +63,24 @@ func Sprintf(format string, args ...interface{}) RedactableString {
 // Note: This function only works if an error redaction function
 // has been injected with RegisterRedactErrorFn().
 func HelperForErrorf(format string, args ...interface{}) (RedactableString, error) {
-	return rfmt.HelperForErrorf(format, args...)
+	p := internalFmt.NewInternalPrinter()
+	internalFmt.SetCollectError(p)
+	internalFmt.SetHook(p, printArgFn)
+	internalFmt.DoPrintf(p, format, args)
+	redactLastWrites(p)
+	s := RedactableString(internalFmt.Buf(p))
+	e := internalFmt.WrappedError(p)
+	internalFmt.Free(p)
+	if m, ok := e.(*makeError); ok {
+		e = m.err
+	}
+	return s, e
 }
 
 // Sprintfn produces a RedactableString using the provided
 // SafeFormat-alike function.
 func Sprintfn(printer func(w SafePrinter)) RedactableString {
-	return rfmt.Sprintfn(printer)
+	return Sprint(printerfn{printer})
 }
 
 // StringWithoutMarkers formats the provided SafeFormatter and strips
@@ -77,11 +100,23 @@ func StringWithoutMarkers(f SafeFormatter) string {
 // Fprint is like Sprint but outputs the redactable
 // string to the provided Writer.
 func Fprint(w io.Writer, args ...interface{}) (n int, err error) {
-	return rfmt.Fprint(w, args...)
+	p := internalFmt.NewInternalPrinter()
+	internalFmt.SetHook(p, printArgFn)
+	internalFmt.DoPrint(p, args)
+	redactLastWrites(p)
+	n, err = w.Write(internalFmt.Buf(p))
+	internalFmt.Free(p)
+	return
 }
 
 // Fprintf is like Sprintf but outputs the redactable string to the
 // provided Writer.
 func Fprintf(w io.Writer, format string, args ...interface{}) (n int, err error) {
-	return rfmt.Fprintf(w, format, args...)
+	p := internalFmt.NewInternalPrinter()
+	internalFmt.SetHook(p, printArgFn)
+	internalFmt.DoPrintf(p, format, args)
+	redactLastWrites(p)
+	n, err = w.Write(internalFmt.Buf(p))
+	internalFmt.Free(p)
+	return
 }

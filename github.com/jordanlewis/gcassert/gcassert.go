@@ -1,3 +1,13 @@
+// Copyright 2020 The Cockroach Authors.
+//
+// Use of this software is governed by the Business Source License
+// included in the file licenses/BSL.txt.
+//
+// As of the Change Date specified in that file, in accordance with
+// the Business Source License, use of this software will be governed
+// by the Apache License, Version 2.0, included in the file
+// licenses/APL.txt.
+
 package gcassert
 
 import (
@@ -26,7 +36,6 @@ const (
 	noDirective assertDirective = iota
 	inline
 	bce
-	noescape
 )
 
 func stringToDirective(s string) (assertDirective, error) {
@@ -35,8 +44,6 @@ func stringToDirective(s string) (assertDirective, error) {
 		return inline, nil
 	case "bce":
 		return bce, nil
-	case "noescape":
-		return noescape, nil
 	}
 	return noDirective, errors.New(fmt.Sprintf("no such directive %s", s))
 }
@@ -189,11 +196,9 @@ func GCAssert(w io.Writer, paths ...string) error {
 			}
 			if lineToDirectives := directiveMap[absPath]; lineToDirectives != nil {
 				info := lineToDirectives[lineNo]
-				if len(info.directives) > 0 {
-					if info.passedDirective == nil {
-						info.passedDirective = make(map[int]bool)
-						lineToDirectives[lineNo] = info
-					}
+				if info.passedDirective == nil {
+					info.passedDirective = make(map[int]bool)
+					lineToDirectives[lineNo] = info
 				}
 				for i, d := range info.directives {
 					switch d {
@@ -211,12 +216,6 @@ func GCAssert(w io.Writer, paths ...string) error {
 					case inline:
 						if strings.HasPrefix(message, "inlining call to") {
 							info.passedDirective[i] = true
-						}
-					case noescape:
-						if strings.HasSuffix(message, "escapes to heap:") {
-							if err := printAssertionFailure(cwd, fileSet, info, w, message); err != nil {
-								return err
-							}
 						}
 					}
 				}

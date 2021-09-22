@@ -33,20 +33,12 @@ func (src *BPChar) AssignTo(dst interface{}) error {
 	return (*Text)(src).AssignTo(dst)
 }
 
-func (BPChar) PreferredResultFormat() int16 {
-	return TextFormatCode
-}
-
 func (dst *BPChar) DecodeText(ci *ConnInfo, src []byte) error {
 	return (*Text)(dst).DecodeText(ci, src)
 }
 
 func (dst *BPChar) DecodeBinary(ci *ConnInfo, src []byte) error {
 	return (*Text)(dst).DecodeBinary(ci, src)
-}
-
-func (BPChar) PreferredParamFormat() int16 {
-	return TextFormatCode
 }
 
 func (src BPChar) EncodeText(ci *ConnInfo, buf []byte) ([]byte, error) {
