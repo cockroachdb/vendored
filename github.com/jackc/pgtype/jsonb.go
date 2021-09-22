@@ -2,7 +2,8 @@ package pgtype
 
 import (
 	"database/sql/driver"
-	"fmt"
+
+	errors "golang.org/x/xerrors"
 )
 
 type JSONB JSON
@@ -19,10 +20,6 @@ func (src *JSONB) AssignTo(dst interface{}) error {
 	return (*JSON)(src).AssignTo(dst)
 }
 
-func (JSONB) PreferredResultFormat() int16 {
-	return TextFormatCode
-}
-
 func (dst *JSONB) DecodeText(ci *ConnInfo, src []byte) error {
 	return (*JSON)(dst).DecodeText(ci, src)
 }
@@ -34,20 +31,16 @@ func (dst *JSONB) DecodeBinary(ci *ConnInfo, src []byte) error {
 	}
 
 	if len(src) == 0 {
-		return fmt.Errorf("jsonb too short")
+		return errors.Errorf("jsonb too short")
 	}
 
 	if src[0] != 1 {
-		return fmt.Errorf("unknown jsonb version number %d", src[0])
+		return errors.Errorf("unknown jsonb version number %d", src[0])
 	}
 
 	*dst = JSONB{Bytes: src[1:], Status: Present}
 	return nil
 
-}
-
-func (JSONB) PreferredParamFormat() int16 {
-	return TextFormatCode
 }
 
 func (src JSONB) EncodeText(ci *ConnInfo, buf []byte) ([]byte, error) {

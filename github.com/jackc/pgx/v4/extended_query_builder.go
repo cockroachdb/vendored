@@ -21,7 +21,7 @@ func (eqb *extendedQueryBuilder) AppendParam(ci *pgtype.ConnInfo, oid uint32, ar
 	f := chooseParameterFormatCode(ci, oid, arg)
 	eqb.paramFormats = append(eqb.paramFormats, f)
 
-	v, err := eqb.encodeExtendedParamValue(ci, oid, f, arg)
+	v, err := eqb.encodeExtendedParamValue(ci, oid, arg)
 	if err != nil {
 		return err
 	}
@@ -40,7 +40,7 @@ func (eqb *extendedQueryBuilder) Reset() {
 	eqb.paramFormats = eqb.paramFormats[0:0]
 	eqb.resultFormats = eqb.resultFormats[0:0]
 
-	eqb.resetCount++
+	eqb.resetCount += 1
 
 	// Every so often shrink our reserved memory if it is abnormally high
 	if eqb.resetCount%128 == 0 {
@@ -62,7 +62,7 @@ func (eqb *extendedQueryBuilder) Reset() {
 
 }
 
-func (eqb *extendedQueryBuilder) encodeExtendedParamValue(ci *pgtype.ConnInfo, oid uint32, formatCode int16, arg interface{}) ([]byte, error) {
+func (eqb *extendedQueryBuilder) encodeExtendedParamValue(ci *pgtype.ConnInfo, oid uint32, arg interface{}) ([]byte, error) {
 	if arg == nil {
 		return nil, nil
 	}
@@ -82,41 +82,36 @@ func (eqb *extendedQueryBuilder) encodeExtendedParamValue(ci *pgtype.ConnInfo, o
 	var buf []byte
 	pos := len(eqb.paramValueBytes)
 
-	if arg, ok := arg.(string); ok {
+	switch arg := arg.(type) {
+	case pgtype.BinaryEncoder:
+		buf, err = arg.EncodeBinary(ci, eqb.paramValueBytes)
+		if err != nil {
+			return nil, err
+		}
+		if buf == nil {
+			return nil, nil
+		}
+		eqb.paramValueBytes = buf
+		return eqb.paramValueBytes[pos:], nil
+	case pgtype.TextEncoder:
+		buf, err = arg.EncodeText(ci, eqb.paramValueBytes)
+		if err != nil {
+			return nil, err
+		}
+		if buf == nil {
+			return nil, nil
+		}
+		eqb.paramValueBytes = buf
+		return eqb.paramValueBytes[pos:], nil
+	case string:
 		return []byte(arg), nil
-	}
-
-	if formatCode == TextFormatCode {
-		if arg, ok := arg.(pgtype.TextEncoder); ok {
-			buf, err = arg.EncodeText(ci, eqb.paramValueBytes)
-			if err != nil {
-				return nil, err
-			}
-			if buf == nil {
-				return nil, nil
-			}
-			eqb.paramValueBytes = buf
-			return eqb.paramValueBytes[pos:], nil
-		}
-	} else if formatCode == BinaryFormatCode {
-		if arg, ok := arg.(pgtype.BinaryEncoder); ok {
-			buf, err = arg.EncodeBinary(ci, eqb.paramValueBytes)
-			if err != nil {
-				return nil, err
-			}
-			if buf == nil {
-				return nil, nil
-			}
-			eqb.paramValueBytes = buf
-			return eqb.paramValueBytes[pos:], nil
-		}
 	}
 
 	if argIsPtr {
 		// We have already checked that arg is not pointing to nil,
 		// so it is safe to dereference here.
 		arg = refVal.Elem().Interface()
-		return eqb.encodeExtendedParamValue(ci, oid, formatCode, arg)
+		return eqb.encodeExtendedParamValue(ci, oid, arg)
 	}
 
 	if dt, ok := ci.DataTypeForOID(oid); ok {
@@ -129,40 +124,18 @@ func (eqb *extendedQueryBuilder) encodeExtendedParamValue(ci *pgtype.ConnInfo, o
 					if err != nil {
 						return nil, err
 					}
-					return eqb.encodeExtendedParamValue(ci, oid, formatCode, v)
+					return eqb.encodeExtendedParamValue(ci, oid, v)
 				}
 			}
 
 			return nil, err
 		}
 
-		return eqb.encodeExtendedParamValue(ci, oid, formatCode, value)
-	}
-
-	// There is no data type registered for the destination OID, but maybe there is data type registered for the arg
-	// type. If so use it's text encoder (if available).
-	if dt, ok := ci.DataTypeForValue(arg); ok {
-		value := dt.Value
-		if textEncoder, ok := value.(pgtype.TextEncoder); ok {
-			err := value.Set(arg)
-			if err != nil {
-				return nil, err
-			}
-
-			buf, err = textEncoder.EncodeText(ci, eqb.paramValueBytes)
-			if err != nil {
-				return nil, err
-			}
-			if buf == nil {
-				return nil, nil
-			}
-			eqb.paramValueBytes = buf
-			return eqb.paramValueBytes[pos:], nil
-		}
+		return eqb.encodeExtendedParamValue(ci, oid, value)
 	}
 
 	if strippedArg, ok := stripNamedType(&refVal); ok {
-		return eqb.encodeExtendedParamValue(ci, oid, formatCode, strippedArg)
+		return eqb.encodeExtendedParamValue(ci, oid, strippedArg)
 	}
 	return nil, SerializationError(fmt.Sprintf("Cannot encode %T into oid %v - %T must implement Encoder or be converted to a string", arg, oid, arg))
 }

@@ -62,7 +62,6 @@ a {
 .header .title h1 {
   font-size: 1.75em;
   margin-right: 1rem;
-  margin-bottom: 4px;
 }
 .header .title a {
   color: #212121;
@@ -131,10 +130,6 @@ a {
   display: flex;
   align-items: center;
   justify-content: center;
-}
-.menu-name a {
-  text-decoration: none;
-  color: #212121;
 }
 .submenu {
   display: none;
@@ -371,12 +366,6 @@ table tr td {
           {{if .UserConfig}}<span class="menu-delete-btn" data-config={{.Name}}>🗙</span>{{end}}
         </a>
       {{end}}
-    </div>
-  </div>
-
-  <div id="download" class="menu-item">
-    <div class="menu-name">
-      <a href="./download">Download</a>
     </div>
   </div>
 

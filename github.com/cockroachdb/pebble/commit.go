@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"unsafe"
 
-	"github.com/cockroachdb/pebble/record"
+	"github.com/cockroachdb/pebble/internal/record"
 )
 
 // commitQueue is a lock-free fixed-size single-producer, multi-consumer
