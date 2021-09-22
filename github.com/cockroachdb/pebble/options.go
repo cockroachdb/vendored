@@ -7,6 +7,7 @@ package pebble
 import (
 	"bytes"
 	"fmt"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -339,6 +340,29 @@ type Options struct {
 		// and disables read triggered compactions. The default is 1 << 4. which
 		// gets multiplied with a constant of 1 << 16 to yield 1 << 20 (1MB).
 		ReadSamplingMultiplier int64
+
+		// TableCacheShards is the number of shards per table cache.
+		// Reducing the value can reduce the number of idle goroutines per DB
+		// instance which can be useful in scenarios with a lot of DB instances
+		// and a large number of CPUs, but doing so can lead to higher contention
+		// in the table cache and reduced performance.
+		//
+		// The default value is the number of logical CPUs, which can be
+		// limited by runtime.GOMAXPROCS.
+		TableCacheShards int
+
+		// KeyValidationFunc is a function to validate a user key in an SSTable.
+		//
+		// Currently, this function is used to validate the smallest and largest
+		// keys in an SSTable undergoing compaction. In this case, returning an
+		// error from the validation function will result in a panic at runtime,
+		// given that there is rarely any way of recovering from malformed keys
+		// present in compacted files. By default, validation is not performed.
+		//
+		// Additional use-cases may be added in the future.
+		//
+		// NOTE: callers should take care to not mutate the key being validated.
+		KeyValidationFunc func(userKey []byte) error
 	}
 
 	// Filters is a map from filter policy name to filter policy. It is used for
@@ -358,6 +382,22 @@ type Options struct {
 	// allows increased compaction flexibility and concurrency when those
 	// tables are compacted to lower levels.
 	FlushSplitBytes int64
+
+	// FormatMajorVersion sets the format of on-disk files. It is
+	// recommended to set the format major version to an explicit
+	// version, as the default may change over time.
+	//
+	// At Open if the existing database is formatted using a later
+	// format major version that is known to this version of Pebble,
+	// Pebble will continue to use the later format major version. If
+	// the existing database's version is unknown, the caller may use
+	// FormatMostCompatible and will be able to open the database
+	// regardless of its actual version.
+	//
+	// If the existing database is formatted using a format major
+	// version earlier than the one specified, Open will automatically
+	// ratchet the database to the specified format major version.
+	FormatMajorVersion FormatMajorVersion
 
 	// FS provides the interface for persistent file storage.
 	//
@@ -427,11 +467,24 @@ type Options struct {
 	// when L0 read-amplification passes the L0CompactionConcurrency threshold.
 	MaxConcurrentCompactions int
 
+	// NumPrevManifest is the number of non-current or older manifests which
+	// we want to keep around for debugging purposes. By default, we're going
+	// to keep one older manifest.
+	NumPrevManifest int
+
 	// ReadOnly indicates that the DB should be opened in read-only mode. Writes
 	// to the DB will return an error, background compactions are disabled, and
 	// the flush that normally occurs after replaying the WAL at startup is
 	// disabled.
 	ReadOnly bool
+
+	// TableCache is an initialized TableCache which should be set as an
+	// option if the DB needs to be initialized with a pre-existing table cache.
+	// If TableCache is nil, then a table cache which is unique to the DB instance
+	// is created. TableCache can be shared between db instances by setting it here.
+	// The TableCache set here must use the same underlying cache as Options.Cache
+	// and pebble will panic otherwise.
+	TableCache *TableCache
 
 	// TablePropertyCollectors is a list of TablePropertyCollector creation
 	// functions. A new TablePropertyCollector is created for each sstable built
@@ -584,6 +637,14 @@ func (o *Options) EnsureDefaults() *Options {
 	if o.MaxConcurrentCompactions <= 0 {
 		o.MaxConcurrentCompactions = 1
 	}
+	if o.NumPrevManifest <= 0 {
+		o.NumPrevManifest = 1
+	}
+
+	if o.FormatMajorVersion == FormatDefault {
+		o.FormatMajorVersion = FormatMostCompatible
+	}
+
 	if o.FS == nil {
 		o.FS = vfs.WithDiskHealthChecks(vfs.Default, 5*time.Second,
 			func(name string, duration time.Duration) {
@@ -601,6 +662,9 @@ func (o *Options) EnsureDefaults() *Options {
 	}
 	if o.Experimental.ReadSamplingMultiplier == 0 {
 		o.Experimental.ReadSamplingMultiplier = 1 << 4
+	}
+	if o.Experimental.TableCacheShards <= 0 {
+		o.Experimental.TableCacheShards = runtime.GOMAXPROCS(0)
 	}
 
 	o.initMaps()
@@ -672,6 +736,7 @@ func (o *Options) String() string {
 	fmt.Fprintf(&buf, "  delete_range_flush_delay=%s\n", o.Experimental.DeleteRangeFlushDelay)
 	fmt.Fprintf(&buf, "  disable_wal=%t\n", o.DisableWAL)
 	fmt.Fprintf(&buf, "  flush_split_bytes=%d\n", o.FlushSplitBytes)
+	fmt.Fprintf(&buf, "  format_major_version=%d\n", o.FormatMajorVersion)
 	fmt.Fprintf(&buf, "  l0_compaction_concurrency=%d\n", o.Experimental.L0CompactionConcurrency)
 	fmt.Fprintf(&buf, "  l0_compaction_threshold=%d\n", o.L0CompactionThreshold)
 	fmt.Fprintf(&buf, "  l0_stop_writes_threshold=%d\n", o.L0StopWritesThreshold)
@@ -688,6 +753,7 @@ func (o *Options) String() string {
 	fmt.Fprintf(&buf, "  read_compaction_rate=%d\n", o.Experimental.ReadCompactionRate)
 	fmt.Fprintf(&buf, "  read_sampling_multiplier=%d\n", o.Experimental.ReadSamplingMultiplier)
 	fmt.Fprintf(&buf, "  strict_wal_tail=%t\n", o.private.strictWALTail)
+	fmt.Fprintf(&buf, "  table_cache_shards=%d\n", o.Experimental.TableCacheShards)
 	fmt.Fprintf(&buf, "  table_property_collectors=[")
 	for i := range o.TablePropertyCollectors {
 		if i > 0 {
@@ -843,6 +909,19 @@ func (o *Options) Parse(s string, hooks *ParseHooks) error {
 				o.DisableWAL, err = strconv.ParseBool(value)
 			case "flush_split_bytes":
 				o.FlushSplitBytes, err = strconv.ParseInt(value, 10, 64)
+			case "format_major_version":
+				// NB: The version written here may be stale. Open does
+				// not use the format major version encoded in the
+				// OPTIONS file other than to validate that the encoded
+				// version is valid right here.
+				var v uint64
+				v, err = strconv.ParseUint(value, 10, 64)
+				if vers := FormatMajorVersion(v); vers > FormatNewest || vers == FormatDefault {
+					err = errors.Newf("unknown format major version %d", o.FormatMajorVersion)
+				}
+				if err == nil {
+					o.FormatMajorVersion = FormatMajorVersion(v)
+				}
 			case "l0_compaction_concurrency":
 				o.Experimental.L0CompactionConcurrency, err = strconv.Atoi(value)
 			case "l0_compaction_threshold":
@@ -886,6 +965,8 @@ func (o *Options) Parse(s string, hooks *ParseHooks) error {
 				o.Experimental.ReadCompactionRate, err = strconv.ParseInt(value, 10, 64)
 			case "read_sampling_multiplier":
 				o.Experimental.ReadSamplingMultiplier, err = strconv.ParseInt(value, 10, 64)
+			case "table_cache_shards":
+				o.Experimental.TableCacheShards, err = strconv.Atoi(value)
 			case "table_format":
 				switch value {
 				case "leveldb":
@@ -1032,6 +1113,13 @@ func (o *Options) Validate() error {
 	if o.MemTableStopWritesThreshold < 2 {
 		fmt.Fprintf(&buf, "MemTableStopWritesThreshold (%d) must be >= 2\n",
 			o.MemTableStopWritesThreshold)
+	}
+	if o.FormatMajorVersion > FormatNewest {
+		fmt.Fprintf(&buf, "FormatMajorVersion (%d) must be <= %d\n",
+			o.FormatMajorVersion, FormatNewest)
+	}
+	if o.TableCache != nil && o.Cache != o.TableCache.cache {
+		fmt.Fprintf(&buf, "underlying cache in the TableCache and the Cache dont match\n")
 	}
 	if buf.Len() == 0 {
 		return nil
