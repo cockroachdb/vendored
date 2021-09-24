@@ -36,6 +36,21 @@ const (
 	// InternalKeyKindColumnFamilyBlobIndex                    = 16
 	// InternalKeyKindBlobIndex                                = 17
 
+	// InternalKeyKindSeparator is a key used for separator / successor keys
+	// written to sstable block indexes.
+	//
+	// NOTE: the RocksDB value has been repurposed. This was done to ensure that
+	// keys written to block indexes with value "17" (when 17 happened to be the
+	// max value, and InternalKeyKindMax was therefore set to 17), remain stable
+	// when new key kinds are supported in Pebble.
+	InternalKeyKindSeparator = 17
+
+	// InternalKeyKindSetWithDelete keys are SET keys that have met with a
+	// DELETE or SINGLEDEL key in a prior compaction. This key kind is
+	// specific to Pebble. See
+	// https://github.com/cockroachdb/pebble/issues/1255.
+	InternalKeyKindSetWithDelete InternalKeyKind = 18
+
 	// This maximum value isn't part of the file format. It's unlikely,
 	// but future extensions may increase this value.
 	//
@@ -45,7 +60,7 @@ const (
 	// which sorts 'less than or equal to' any other valid internalKeyKind, when
 	// searching for any kind of internal key formed by a certain user key and
 	// seqNum.
-	InternalKeyKindMax InternalKeyKind = 17
+	InternalKeyKindMax InternalKeyKind = 18
 
 	// A marker for an invalid key.
 	InternalKeyKindInvalid InternalKeyKind = 255
@@ -66,14 +81,15 @@ const (
 )
 
 var internalKeyKindNames = []string{
-	InternalKeyKindDelete:       "DEL",
-	InternalKeyKindSet:          "SET",
-	InternalKeyKindMerge:        "MERGE",
-	InternalKeyKindLogData:      "LOGDATA",
-	InternalKeyKindSingleDelete: "SINGLEDEL",
-	InternalKeyKindRangeDelete:  "RANGEDEL",
-	InternalKeyKindMax:          "MAX",
-	InternalKeyKindInvalid:      "INVALID",
+	InternalKeyKindDelete:        "DEL",
+	InternalKeyKindSet:           "SET",
+	InternalKeyKindMerge:         "MERGE",
+	InternalKeyKindLogData:       "LOGDATA",
+	InternalKeyKindSingleDelete:  "SINGLEDEL",
+	InternalKeyKindRangeDelete:   "RANGEDEL",
+	InternalKeyKindSeparator:     "SEPARATOR",
+	InternalKeyKindSetWithDelete: "SETWITHDEL",
+	InternalKeyKindInvalid:       "INVALID",
 }
 
 func (k InternalKeyKind) String() string {
@@ -130,13 +146,14 @@ func MakeRangeDeleteSentinelKey(userKey []byte) InternalKey {
 }
 
 var kindsMap = map[string]InternalKeyKind{
-	"DEL":       InternalKeyKindDelete,
-	"SINGLEDEL": InternalKeyKindSingleDelete,
-	"RANGEDEL":  InternalKeyKindRangeDelete,
-	"SET":       InternalKeyKindSet,
-	"MERGE":     InternalKeyKindMerge,
-	"INVALID":   InternalKeyKindInvalid,
-	"MAX":       InternalKeyKindMax,
+	"DEL":        InternalKeyKindDelete,
+	"SINGLEDEL":  InternalKeyKindSingleDelete,
+	"RANGEDEL":   InternalKeyKindRangeDelete,
+	"SET":        InternalKeyKindSet,
+	"MERGE":      InternalKeyKindMerge,
+	"INVALID":    InternalKeyKindInvalid,
+	"SEPARATOR":  InternalKeyKindSeparator,
+	"SETWITHDEL": InternalKeyKindSetWithDelete,
 }
 
 // ParseInternalKey parses the string representation of an internal key. The
@@ -224,7 +241,7 @@ func (k InternalKey) Separator(
 		// any sequence number and kind here to create a valid separator key. We
 		// use the max sequence number to match the behavior of LevelDB and
 		// RocksDB.
-		return MakeInternalKey(buf, InternalKeySeqNumMax, InternalKeyKindMax)
+		return MakeInternalKey(buf, InternalKeySeqNumMax, InternalKeyKindSeparator)
 	}
 	return k
 }
@@ -241,7 +258,7 @@ func (k InternalKey) Successor(cmp Compare, succ Successor, buf []byte) Internal
 		// any sequence number and kind here to create a valid separator key. We
 		// use the max sequence number to match the behavior of LevelDB and
 		// RocksDB.
-		return MakeInternalKey(buf, InternalKeySeqNumMax, InternalKeyKindMax)
+		return MakeInternalKey(buf, InternalKeySeqNumMax, InternalKeyKindSeparator)
 	}
 	return k
 }
