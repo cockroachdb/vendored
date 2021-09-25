@@ -91,8 +91,19 @@ func main() {
 			// Handle "replace" in module file if any
 			if len(s) > 3 && s[3] == "=>" {
 				mod.SourcePath = s[4]
-				mod.SourceVersion = s[5]
-				mod.Dir = pkgModPath(mod.SourcePath, mod.SourceVersion)
+
+				// Handle replaces with a relative target. For example:
+				// "replace github.com/status-im/status-go/protocol => ./protocol"
+				if strings.HasPrefix(s[4], ".") || strings.HasPrefix(s[4], "/") {
+					mod.Dir, err = filepath.Abs(s[4])
+					if err != nil {
+						fmt.Printf("invalid relative path: %v", err)
+						os.Exit(1)
+					}
+				} else {
+					mod.SourceVersion = s[5]
+					mod.Dir = pkgModPath(mod.SourcePath, mod.SourceVersion)
+				}
 			} else {
 				mod.Dir = pkgModPath(mod.ImportPath, mod.Version)
 			}
@@ -191,6 +202,17 @@ func importPathIntersect(basePath, pkgPath string) string {
 	return pkgPath[len(basePath):]
 }
 
+func normString(str string) (normStr string) {
+	for _, char := range str {
+		if unicode.IsUpper(char) {
+			normStr += "!" + string(unicode.ToLower(char))
+		} else {
+			normStr += string(char)
+		}
+	}
+	return
+}
+
 func pkgModPath(importPath, version string) string {
 	goPath := os.Getenv("GOPATH")
 	if goPath == "" {
@@ -198,17 +220,10 @@ func pkgModPath(importPath, version string) string {
 		goPath = filepath.Join(os.Getenv("HOME"), "go")
 	}
 
-	var normPath string
+	normPath := normString(importPath)
+	normVersion := normString(version)
 
-	for _, char := range importPath {
-		if unicode.IsUpper(char) {
-			normPath += "!" + string(unicode.ToLower(char))
-		} else {
-			normPath += string(char)
-		}
-	}
-
-	return filepath.Join(goPath, "pkg", "mod", fmt.Sprintf("%s@%s", normPath, version))
+	return filepath.Join(goPath, "pkg", "mod", fmt.Sprintf("%s@%s", normPath, normVersion))
 }
 
 func copyFile(src, dst string) (int64, error) {
