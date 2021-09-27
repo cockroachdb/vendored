@@ -19,31 +19,18 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/pkg/errors"
+
 	"github.com/prometheus/prometheus/pkg/labels"
+	"github.com/prometheus/prometheus/promql/parser"
+	"github.com/prometheus/prometheus/storage"
+	"github.com/prometheus/prometheus/tsdb/chunkenc"
 )
 
-// Value is a generic interface for values resulting from a query evaluation.
-type Value interface {
-	Type() ValueType
-	String() string
-}
-
-func (Matrix) Type() ValueType { return ValueTypeMatrix }
-func (Vector) Type() ValueType { return ValueTypeVector }
-func (Scalar) Type() ValueType { return ValueTypeScalar }
-func (String) Type() ValueType { return ValueTypeString }
-
-// ValueType describes a type of a value.
-type ValueType string
-
-// The valid value types.
-const (
-	ValueTypeNone   = "none"
-	ValueTypeVector = "vector"
-	ValueTypeScalar = "scalar"
-	ValueTypeMatrix = "matrix"
-	ValueTypeString = "string"
-)
+func (Matrix) Type() parser.ValueType { return parser.ValueTypeMatrix }
+func (Vector) Type() parser.ValueType { return parser.ValueTypeVector }
+func (Scalar) Type() parser.ValueType { return parser.ValueTypeScalar }
+func (String) Type() parser.ValueType { return parser.ValueTypeString }
 
 // String represents a string value.
 type String struct {
@@ -141,7 +128,7 @@ func (vec Vector) String() string {
 }
 
 // ContainsSameLabelset checks if a vector has samples with the same labelset
-// Such a behaviour is semantically undefined
+// Such a behavior is semantically undefined
 // https://github.com/prometheus/prometheus/issues/4562
 func (vec Vector) ContainsSameLabelset() bool {
 	l := make(map[uint64]struct{}, len(vec))
@@ -155,7 +142,7 @@ func (vec Vector) ContainsSameLabelset() bool {
 	return false
 }
 
-// Matrix is a slice of Seriess that implements sort.Interface and
+// Matrix is a slice of Series that implements sort.Interface and
 // has a String method.
 type Matrix []Series
 
@@ -183,8 +170,8 @@ func (m Matrix) Len() int           { return len(m) }
 func (m Matrix) Less(i, j int) bool { return labels.Compare(m[i].Metric, m[j].Metric) < 0 }
 func (m Matrix) Swap(i, j int)      { m[i], m[j] = m[j], m[i] }
 
-// ContainsSameLabelset checks if a matrix has samples with the same labelset
-// Such a behaviour is semantically undefined
+// ContainsSameLabelset checks if a matrix has samples with the same labelset.
+// Such a behavior is semantically undefined.
 // https://github.com/prometheus/prometheus/issues/4562
 func (m Matrix) ContainsSameLabelset() bool {
 	l := make(map[uint64]struct{}, len(m))
@@ -201,8 +188,9 @@ func (m Matrix) ContainsSameLabelset() bool {
 // Result holds the resulting value of an execution or an error
 // if any occurred.
 type Result struct {
-	Err   error
-	Value Value
+	Err      error
+	Value    parser.Value
+	Warnings storage.Warnings
 }
 
 // Vector returns a Vector if the result value is one. An error is returned if
@@ -213,7 +201,7 @@ func (r *Result) Vector() (Vector, error) {
 	}
 	v, ok := r.Value.(Vector)
 	if !ok {
-		return nil, fmt.Errorf("query result is not a Vector")
+		return nil, errors.New("query result is not a Vector")
 	}
 	return v, nil
 }
@@ -226,7 +214,7 @@ func (r *Result) Matrix() (Matrix, error) {
 	}
 	v, ok := r.Value.(Matrix)
 	if !ok {
-		return nil, fmt.Errorf("query result is not a range Vector")
+		return nil, errors.New("query result is not a range Vector")
 	}
 	return v, nil
 }
@@ -239,7 +227,7 @@ func (r *Result) Scalar() (Scalar, error) {
 	}
 	v, ok := r.Value.(Scalar)
 	if !ok {
-		return Scalar{}, fmt.Errorf("query result is not a Scalar")
+		return Scalar{}, errors.New("query result is not a Scalar")
 	}
 	return v, nil
 }
@@ -252,4 +240,66 @@ func (r *Result) String() string {
 		return ""
 	}
 	return r.Value.String()
+}
+
+// StorageSeries simulates promql.Series as storage.Series.
+type StorageSeries struct {
+	series Series
+}
+
+// NewStorageSeries returns a StorageSeries from a Series.
+func NewStorageSeries(series Series) *StorageSeries {
+	return &StorageSeries{
+		series: series,
+	}
+}
+
+func (ss *StorageSeries) Labels() labels.Labels {
+	return ss.series.Metric
+}
+
+// Iterator returns a new iterator of the data of the series.
+func (ss *StorageSeries) Iterator() chunkenc.Iterator {
+	return newStorageSeriesIterator(ss.series)
+}
+
+type storageSeriesIterator struct {
+	points []Point
+	curr   int
+}
+
+func newStorageSeriesIterator(series Series) *storageSeriesIterator {
+	return &storageSeriesIterator{
+		points: series.Points,
+		curr:   -1,
+	}
+}
+
+func (ssi *storageSeriesIterator) Seek(t int64) bool {
+	i := ssi.curr
+	if i < 0 {
+		i = 0
+	}
+	for ; i < len(ssi.points); i++ {
+		if ssi.points[i].T >= t {
+			ssi.curr = i
+			return true
+		}
+	}
+	ssi.curr = len(ssi.points) - 1
+	return false
+}
+
+func (ssi *storageSeriesIterator) At() (t int64, v float64) {
+	p := ssi.points[ssi.curr]
+	return p.T, p.V
+}
+
+func (ssi *storageSeriesIterator) Next() bool {
+	ssi.curr++
+	return ssi.curr < len(ssi.points)
+}
+
+func (ssi *storageSeriesIterator) Err() error {
+	return nil
 }

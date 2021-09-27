@@ -14,8 +14,6 @@
 package storage
 
 import (
-	"math"
-
 	"github.com/prometheus/prometheus/pkg/labels"
 )
 
@@ -26,15 +24,42 @@ func NoopQuerier() Querier {
 	return noopQuerier{}
 }
 
-func (noopQuerier) Select(*SelectParams, ...*labels.Matcher) (SeriesSet, error) {
-	return NoopSeriesSet(), nil
+func (noopQuerier) Select(bool, *SelectHints, ...*labels.Matcher) SeriesSet {
+	return NoopSeriesSet()
 }
 
-func (noopQuerier) LabelValues(name string) ([]string, error) {
-	return nil, nil
+func (noopQuerier) LabelValues(string, ...*labels.Matcher) ([]string, Warnings, error) {
+	return nil, nil, nil
+}
+
+func (noopQuerier) LabelNames(...*labels.Matcher) ([]string, Warnings, error) {
+	return nil, nil, nil
 }
 
 func (noopQuerier) Close() error {
+	return nil
+}
+
+type noopChunkQuerier struct{}
+
+// NoopChunkedQuerier is a ChunkQuerier that does nothing.
+func NoopChunkedQuerier() ChunkQuerier {
+	return noopChunkQuerier{}
+}
+
+func (noopChunkQuerier) Select(bool, *SelectHints, ...*labels.Matcher) ChunkSeriesSet {
+	return NoopChunkedSeriesSet()
+}
+
+func (noopChunkQuerier) LabelValues(string, ...*labels.Matcher) ([]string, Warnings, error) {
+	return nil, nil, nil
+}
+
+func (noopChunkQuerier) LabelNames(...*labels.Matcher) ([]string, Warnings, error) {
+	return nil, nil, nil
+}
+
+func (noopChunkQuerier) Close() error {
 	return nil
 }
 
@@ -45,35 +70,25 @@ func NoopSeriesSet() SeriesSet {
 	return noopSeriesSet{}
 }
 
-func (noopSeriesSet) Next() bool {
-	return false
+func (noopSeriesSet) Next() bool { return false }
+
+func (noopSeriesSet) At() Series { return nil }
+
+func (noopSeriesSet) Err() error { return nil }
+
+func (noopSeriesSet) Warnings() Warnings { return nil }
+
+type noopChunkedSeriesSet struct{}
+
+// NoopChunkedSeriesSet is a ChunkSeriesSet that does nothing.
+func NoopChunkedSeriesSet() ChunkSeriesSet {
+	return noopChunkedSeriesSet{}
 }
 
-func (noopSeriesSet) At() Series {
-	return nil
-}
+func (noopChunkedSeriesSet) Next() bool { return false }
 
-func (noopSeriesSet) Err() error {
-	return nil
-}
+func (noopChunkedSeriesSet) At() ChunkSeries { return nil }
 
-type noopSeriesIterator struct{}
+func (noopChunkedSeriesSet) Err() error { return nil }
 
-// NoopSeriesIt is a SeriesIterator that does nothing.
-var NoopSeriesIt = noopSeriesIterator{}
-
-func (noopSeriesIterator) At() (int64, float64) {
-	return math.MinInt64, 0
-}
-
-func (noopSeriesIterator) Seek(t int64) bool {
-	return false
-}
-
-func (noopSeriesIterator) Next() bool {
-	return false
-}
-
-func (noopSeriesIterator) Err() error {
-	return nil
-}
+func (noopChunkedSeriesSet) Warnings() Warnings { return nil }
