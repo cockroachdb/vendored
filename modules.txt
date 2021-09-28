@@ -1004,7 +1004,6 @@ github.com/opencontainers/image-spec/specs-go/v1
 # github.com/opennota/wd v0.0.0-20180911144301-b446539ab1e7
 ## explicit
 # github.com/opentracing/opentracing-go v1.2.0
-## explicit
 github.com/opentracing/opentracing-go
 github.com/opentracing/opentracing-go/log
 # github.com/openzipkin/zipkin-go v0.2.5
