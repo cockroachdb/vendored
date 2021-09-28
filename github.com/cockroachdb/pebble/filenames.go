@@ -24,7 +24,6 @@ const (
 	fileTypeCurrent  = base.FileTypeCurrent
 	fileTypeOptions  = base.FileTypeOptions
 	fileTypeTemp     = base.FileTypeTemp
-	fileTypeOldTemp  = base.FileTypeOldTemp
 )
 
 // setCurrentFile sets the CURRENT file to point to the manifest with
