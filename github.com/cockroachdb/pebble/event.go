@@ -454,12 +454,8 @@ type EventListener struct {
 // for nil-ness before invoking.
 func (l *EventListener) EnsureDefaults(logger Logger) {
 	if l.BackgroundError == nil {
-		if logger != nil {
-			l.BackgroundError = func(err error) {
-				logger.Infof("background error: %s", err)
-			}
-		} else {
-			l.BackgroundError = func(error) {}
+		l.BackgroundError = func(err error) {
+			logger.Infof("background error: %s", err)
 		}
 	}
 	if l.CompactionBegin == nil {

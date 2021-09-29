@@ -46,9 +46,8 @@ const (
 	InternalKeyKindSeparator = 17
 
 	// InternalKeyKindSetWithDelete keys are SET keys that have met with a
-	// DELETE or SINGLEDEL key in a prior compaction. This key kind is
-	// specific to Pebble. See
-	// https://github.com/cockroachdb/pebble/issues/1255.
+	// DELETE key in a prior compaction. This key kind is specific to Pebble.
+	// See https://github.com/cockroachdb/pebble/issues/1255.
 	InternalKeyKindSetWithDelete InternalKeyKind = 18
 
 	// This maximum value isn't part of the file format. It's unlikely,
