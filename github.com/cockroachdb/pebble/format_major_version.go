@@ -95,11 +95,7 @@ var formatMajorVersionMigrations = map[FormatMajorVersion]func(*DB) error{
 		// guaranteed to exist, because we unconditionally locate it
 		// during Open.
 		manifestFileNum := d.mu.versions.manifestFileNum
-		filename := d.mu.versions.fs.PathBase(base.MakeFilename(
-			d.mu.versions.fs,
-			d.mu.versions.dirname,
-			fileTypeManifest,
-			manifestFileNum))
+		filename := base.MakeFilename(fileTypeManifest, manifestFileNum)
 		if err := d.mu.versions.manifestMarker.Move(filename); err != nil {
 			return errors.Wrap(err, "moving manifest marker")
 		}
@@ -107,7 +103,7 @@ var formatMajorVersionMigrations = map[FormatMajorVersion]func(*DB) error{
 		// Now that we have a manifest marker file in place and pointing
 		// to the current MANIFEST, finalize the upgrade. If we fail for
 		// some reason, a retry of this migration is guaranteed to again
-		// move the manfiest marker file to the latest manifest. If
+		// move the manifest marker file to the latest manifest. If
 		// we're unable to finalize the upgrade, a subsequent call to
 		// Open will ignore the manifest marker.
 		if err := d.finalizeFormatVersUpgrade(formatVersionedManifestMarker); err != nil {

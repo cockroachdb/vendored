@@ -30,12 +30,17 @@ var tableCacheLabels = pprof.Labels("pebble", "table-cache")
 // tableCacheOpts contains the db specific fields
 // of a table cache. This is stored in the tableCacheContainer
 // along with the table cache.
+// NB: It is important to make sure that the fields in this
+// struct are read-only. Since the fields here are shared
+// by every single tableCacheShard, if non read-only fields
+// are updated, we could have unnecessary evictions of those
+// fields, and the surrounding fields from the CPU caches.
 type tableCacheOpts struct {
 	atomic struct {
 		// iterCount in the tableCacheOpts keeps track of iterators
 		// opened or closed by a DB. It's used to keep track of
 		// leaked iterators on a per-db level.
-		iterCount int32
+		iterCount *int32
 	}
 
 	logger        Logger
@@ -43,7 +48,7 @@ type tableCacheOpts struct {
 	dirname       string
 	fs            vfs.FS
 	opts          sstable.ReaderOptions
-	filterMetrics FilterMetrics
+	filterMetrics *FilterMetrics
 }
 
 // tableCacheContainer contains the table cache and
@@ -51,7 +56,7 @@ type tableCacheOpts struct {
 type tableCacheContainer struct {
 	tableCache *TableCache
 
-	// dbOpts contains fields relevent to the table cache
+	// dbOpts contains fields relevant to the table cache
 	// which are unique to each DB.
 	dbOpts tableCacheOpts
 }
@@ -59,8 +64,8 @@ type tableCacheContainer struct {
 // newTableCacheContainer will panic if the underlying cache in the table cache
 // doesn't match Options.Cache.
 func newTableCacheContainer(
-	tc *TableCache, cacheID uint64, dirname string,
-	fs vfs.FS, opts *Options, size int) *tableCacheContainer {
+	tc *TableCache, cacheID uint64, dirname string, fs vfs.FS, opts *Options, size int,
+) *tableCacheContainer {
 	// We will release a ref to table cache acquired here when tableCacheContainer.close is called.
 	if tc != nil {
 		if tc.cache != opts.Cache {
@@ -80,6 +85,8 @@ func newTableCacheContainer(
 	t.dbOpts.dirname = dirname
 	t.dbOpts.fs = fs
 	t.dbOpts.opts = opts.MakeReaderOptions()
+	t.dbOpts.filterMetrics = &FilterMetrics{}
+	t.dbOpts.atomic.iterCount = new(int32)
 	return t
 }
 
@@ -90,7 +97,7 @@ func (c *tableCacheContainer) close() error {
 	// by the DB using this container. Note that we'll still perform cleanup
 	// below in the case that there are leaked iterators.
 	var err error
-	if v := atomic.LoadInt32(&c.dbOpts.atomic.iterCount); v > 0 {
+	if v := atomic.LoadInt32(c.dbOpts.atomic.iterCount); v > 0 {
 		err = errors.Errorf("leaked iterators: %d", errors.Safe(v))
 	}
 
@@ -147,7 +154,7 @@ func (c *tableCacheContainer) withReader(meta *fileMetadata, fn func(*sstable.Re
 }
 
 func (c *tableCacheContainer) iterCount() int64 {
-	return int64(atomic.LoadInt32(&c.dbOpts.atomic.iterCount))
+	return int64(atomic.LoadInt32(c.dbOpts.atomic.iterCount))
 }
 
 // TableCache is a shareable cache for open sstables.
@@ -290,8 +297,7 @@ func (c *tableCacheShard) releaseLoop() {
 }
 
 func (c *tableCacheShard) newIters(
-	file *manifest.FileMetadata, opts *IterOptions, bytesIterated *uint64,
-	dbOpts *tableCacheOpts,
+	file *manifest.FileMetadata, opts *IterOptions, bytesIterated *uint64, dbOpts *tableCacheOpts,
 ) (internalIterator, internalIterator, error) {
 	// Calling findNode gives us the responsibility of decrementing v's
 	// refCount. If opening the underlying table resulted in error, then we
@@ -328,7 +334,7 @@ func (c *tableCacheShard) newIters(
 	iter.SetCloseHook(v.closeHook)
 
 	atomic.AddInt32(&c.atomic.iterCount, 1)
-	atomic.AddInt32(&dbOpts.atomic.iterCount, 1)
+	atomic.AddInt32(dbOpts.atomic.iterCount, 1)
 	if invariants.RaceEnabled {
 		c.mu.Lock()
 		c.mu.iters[iter] = debug.Stack()
@@ -350,7 +356,9 @@ func (c *tableCacheShard) newIters(
 }
 
 // getTableProperties return sst table properties for target file
-func (c *tableCacheShard) getTableProperties(file *fileMetadata, dbOpts *tableCacheOpts) (*sstable.Properties, error) {
+func (c *tableCacheShard) getTableProperties(
+	file *fileMetadata, dbOpts *tableCacheOpts,
+) (*sstable.Properties, error) {
 	// Calling findNode gives us the responsibility of decrementing v's refCount here
 	v := c.findNode(file, dbOpts)
 	defer c.unrefValue(v)
@@ -502,7 +510,7 @@ func (c *tableCacheShard) findNode(meta *fileMetadata, dbOpts *tableCacheOpts) *
 		}
 		c.unrefValue(v)
 		atomic.AddInt32(&c.atomic.iterCount, -1)
-		atomic.AddInt32(&dbOpts.atomic.iterCount, -1)
+		atomic.AddInt32(dbOpts.atomic.iterCount, -1)
 		return nil
 	}
 	n.value = v
@@ -737,12 +745,12 @@ type tableCacheValue struct {
 func (v *tableCacheValue) load(meta *fileMetadata, c *tableCacheShard, dbOpts *tableCacheOpts) {
 	// Try opening the fileTypeTable first.
 	var f vfs.File
-	v.filename = base.MakeFilename(dbOpts.fs, dbOpts.dirname, fileTypeTable, meta.FileNum)
+	v.filename = base.MakeFilepath(dbOpts.fs, dbOpts.dirname, fileTypeTable, meta.FileNum)
 	f, v.err = dbOpts.fs.Open(v.filename, vfs.RandomReadsOption)
 	if v.err == nil {
 		cacheOpts := private.SSTableCacheOpts(dbOpts.cacheID, meta.FileNum).(sstable.ReaderOption)
 		reopenOpt := sstable.FileReopenOpt{FS: dbOpts.fs, Filename: v.filename}
-		v.reader, v.err = sstable.NewReader(f, dbOpts.opts, cacheOpts, &dbOpts.filterMetrics, reopenOpt)
+		v.reader, v.err = sstable.NewReader(f, dbOpts.opts, cacheOpts, dbOpts.filterMetrics, reopenOpt)
 	}
 	if v.err == nil {
 		if meta.SmallestSeqNum == meta.LargestSeqNum {

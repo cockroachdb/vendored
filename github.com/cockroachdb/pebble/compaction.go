@@ -1693,7 +1693,7 @@ type deleteCompactionHint struct {
 	// by this hint. The hint cannot be resolved until this sequence number is
 	// in the same snapshot stripe as the largest tombstone sequence number.
 	// This is set when a hint is created, so the LSM may look different and
-	// notably no longer contian the sstable that contained the key at this
+	// notably no longer contain the sstable that contained the key at this
 	// sequence number.
 	fileSmallestSeqNum uint64
 }
@@ -2094,7 +2094,7 @@ func (d *DB) runCompaction(
 		pendingOutputs = append(pendingOutputs, fileMeta)
 		d.mu.Unlock()
 
-		filename := base.MakeFilename(d.opts.FS, d.dirname, fileTypeTable, fileNum)
+		filename := base.MakeFilepath(d.opts.FS, d.dirname, fileTypeTable, fileNum)
 		file, err := d.opts.FS.Create(filename)
 		if err != nil {
 			return err
@@ -2837,7 +2837,7 @@ func (d *DB) paceAndDeleteObsoleteFiles(jobID int, files []obsoleteFile) {
 	}
 
 	for _, of := range files {
-		path := base.MakeFilename(d.opts.FS, of.dir, of.fileType, of.fileNum)
+		path := base.MakeFilepath(d.opts.FS, of.dir, of.fileType, of.fileNum)
 		if of.fileType == fileTypeTable {
 			_ = pacer.maybeThrottle(of.fileSize)
 			d.mu.Lock()
