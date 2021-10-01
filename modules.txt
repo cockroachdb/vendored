@@ -179,6 +179,7 @@ github.com/cockroachdb/errors/errutil
 github.com/cockroachdb/errors/hintdetail
 github.com/cockroachdb/errors/issuelink
 github.com/cockroachdb/errors/markers
+github.com/cockroachdb/errors/oserror
 github.com/cockroachdb/errors/report
 github.com/cockroachdb/errors/safedetails
 github.com/cockroachdb/errors/secondary
@@ -205,7 +206,7 @@ github.com/cockroachdb/gostdlib/x/tools/internal/semver
 github.com/cockroachdb/gostdlib/x/tools/internal/span
 # github.com/cockroachdb/logtags v0.0.0-20190617123548-eb05cc24525f
 github.com/cockroachdb/logtags
-# github.com/cockroachdb/pebble v0.0.0-20210518010609-7506c674f9af
+# github.com/cockroachdb/pebble v0.0.0-20211001161057-8fb49009b540
 github.com/cockroachdb/pebble
 github.com/cockroachdb/pebble/bloom
 github.com/cockroachdb/pebble/internal/arenaskl
@@ -796,7 +797,7 @@ golang.org/x/perf/benchstat
 golang.org/x/perf/cmd/benchstat
 golang.org/x/perf/internal/stats
 golang.org/x/perf/storage/benchfmt
-# golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
+# golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
 golang.org/x/sync/errgroup
 golang.org/x/sync/syncmap
 # golang.org/x/sys v0.0.0-20201009025420-dfb3f7c4e634
