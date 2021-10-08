@@ -1171,7 +1171,7 @@ github.com/rcrowley/go-metrics/exp
 ## explicit
 # github.com/russross/blackfriday/v2 v2.0.1
 github.com/russross/blackfriday/v2
-# github.com/sasha-s/go-deadlock v0.2.0
+# github.com/sasha-s/go-deadlock v0.3.1
 ## explicit
 github.com/sasha-s/go-deadlock
 # github.com/shirou/gopsutil v2.20.9+incompatible
