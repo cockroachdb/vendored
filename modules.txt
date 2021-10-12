@@ -460,7 +460,7 @@ github.com/cockroachdb/gostdlib/x/tools/internal/span
 # github.com/cockroachdb/logtags v0.0.0-20190617123548-eb05cc24525f
 ## explicit
 github.com/cockroachdb/logtags
-# github.com/cockroachdb/pebble v0.0.0-20211011160653-59007c613a66
+# github.com/cockroachdb/pebble v0.0.0-20211012165517-0ee4290cea22
 ## explicit
 github.com/cockroachdb/pebble
 github.com/cockroachdb/pebble/bloom
