@@ -23,18 +23,30 @@ const (
 	AnyValue
 )
 
+// Aggregated is a list of Bucket sorted by repetition count.
+type Aggregated struct {
+	// Snapshot is a pointer to the structure that was used to generate these
+	// buckets.
+	*Snapshot
+
+	Buckets []*Bucket
+
+	// Disallow initialization with unnamed parameters.
+	_ struct{}
+}
+
 // Aggregate merges similar goroutines into buckets.
 //
 // The buckets are ordered in library provided order of relevancy. You can
-// reorder at your chosing.
-func Aggregate(goroutines []*Goroutine, similar Similarity) []*Bucket {
+// reorder at your choosing.
+func (s *Snapshot) Aggregate(similar Similarity) *Aggregated {
 	type count struct {
 		ids   []int
 		first bool
 	}
 	b := map[*Signature]*count{}
 	// O(n²). Fix eventually.
-	for _, routine := range goroutines {
+	for _, routine := range s.Goroutines {
 		found := false
 		for key, c := range b {
 			// When a match is found, this effectively drops the other goroutine ID.
@@ -59,47 +71,43 @@ func Aggregate(goroutines []*Goroutine, similar Similarity) []*Bucket {
 			b[key] = &count{ids: []int{routine.ID}, first: routine.First}
 		}
 	}
-	out := make(buckets, 0, len(b))
+	bs := make([]*Bucket, 0, len(b))
 	for signature, c := range b {
 		sort.Ints(c.ids)
-		out = append(out, &Bucket{Signature: *signature, IDs: c.ids, First: c.first})
+		bs = append(bs, &Bucket{Signature: *signature, IDs: c.ids, First: c.first})
 	}
-	sort.Sort(out)
-	return out
+	// Do reverse sort.
+	sort.SliceStable(bs, func(i, j int) bool {
+		l := bs[i]
+		r := bs[j]
+		if l.First || r.First {
+			return l.First
+		}
+		if l.Signature.less(&r.Signature) {
+			return true
+		}
+		if r.Signature.less(&l.Signature) {
+			return false
+		}
+		return len(r.IDs) > len(l.IDs)
+	})
+	return &Aggregated{
+		Snapshot: s,
+		Buckets:  bs,
+	}
 }
 
 // Bucket is a stack trace signature and the list of goroutines that fits this
 // signature.
 type Bucket struct {
+	// Signature is the generalized signature for this bucket.
 	Signature
 	// IDs is the ID of each Goroutine with this Signature.
 	IDs []int
 	// First is true if this Bucket contains the first goroutine, e.g. the one
 	// Signature that likely generated the panic() call, if any.
 	First bool
-}
 
-// less does reverse sort.
-func (b *Bucket) less(r *Bucket) bool {
-	if b.First || r.First {
-		return b.First
-	}
-	return b.Signature.less(&r.Signature)
-}
-
-//
-
-// buckets is a list of Bucket sorted by repeation count.
-type buckets []*Bucket
-
-func (b buckets) Len() int {
-	return len(b)
-}
-
-func (b buckets) Less(i, j int) bool {
-	return b[i].less(b[j])
-}
-
-func (b buckets) Swap(i, j int) {
-	b[j], b[i] = b[i], b[j]
+	// Disallow initialization with unnamed parameters.
+	_ struct{}
 }
