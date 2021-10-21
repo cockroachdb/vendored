@@ -52,6 +52,12 @@ type FilterPolicy = base.FilterPolicy
 // TablePropertyCollector exports the sstable.TablePropertyCollector type.
 type TablePropertyCollector = sstable.TablePropertyCollector
 
+// BlockPropertyCollector exports the sstable.BlockPropertyCollector type.
+type BlockPropertyCollector = sstable.BlockPropertyCollector
+
+// BlockPropertyFilter exports the sstable.BlockPropertyFilter type.
+type BlockPropertyFilter = sstable.BlockPropertyFilter
+
 // IterOptions hold the optional per-query parameters for NewIter.
 //
 // Like Options, a nil *IterOptions is valid and means to use the default
@@ -72,7 +78,12 @@ type IterOptions struct {
 	// false to skip scanning. This function must be thread-safe since the same
 	// function can be used by multiple iterators, if the iterator is cloned.
 	TableFilter func(userProps map[string]string) bool
-
+	// BlockPropertyFilters can be used to avoid scanning tables and blocks in
+	// tables. It is requires that this slice is sorted in increasing order of
+	// the BlockPropertyFilter.ShortID. This slice represents an intersection
+	// across all filters, i.e., all filters must indicate that the block is
+	// relevant.
+	BlockPropertyFilters []BlockPropertyFilter
 	// Internal options.
 	logger Logger
 }
@@ -363,6 +374,12 @@ type Options struct {
 		//
 		// NOTE: callers should take care to not mutate the key being validated.
 		KeyValidationFunc func(userKey []byte) error
+
+		// ValidateOnIngest schedules validation of sstables after they have
+		// been ingested.
+		//
+		// By default, this value is false.
+		ValidateOnIngest bool
 	}
 
 	// Filters is a map from filter policy name to filter policy. It is used for
@@ -490,6 +507,11 @@ type Options struct {
 	// functions. A new TablePropertyCollector is created for each sstable built
 	// and lives for the lifetime of the table.
 	TablePropertyCollectors []func() TablePropertyCollector
+
+	// BlockPropertyCollectors is a list of BlockPropertyCollector creation
+	// functions. A new BlockPropertyCollector is created for each sstable
+	// built and lives for the lifetime of writing that table.
+	BlockPropertyCollectors []func() BlockPropertyCollector
 
 	// WALBytesPerSync sets the number of bytes to write to a WAL before calling
 	// Sync on it in the background. Just like with BytesPerSync above, this
@@ -767,6 +789,7 @@ func (o *Options) String() string {
 		fmt.Fprintf(&buf, "%s", o.TablePropertyCollectors[i]().Name())
 	}
 	fmt.Fprintf(&buf, "]\n")
+	fmt.Fprintf(&buf, "  validate_on_ingest=%t\n", o.Experimental.ValidateOnIngest)
 	fmt.Fprintf(&buf, "  wal_dir=%s\n", o.WALDir)
 	fmt.Fprintf(&buf, "  wal_bytes_per_sync=%d\n", o.WALBytesPerSync)
 
@@ -979,6 +1002,8 @@ func (o *Options) Parse(s string, hooks *ParseHooks) error {
 				}
 			case "table_property_collectors":
 				// TODO(peter): set o.TablePropertyCollectors
+			case "validate_on_ingest":
+				o.Experimental.ValidateOnIngest, err = strconv.ParseBool(value)
 			case "wal_dir":
 				o.WALDir = value
 			case "wal_bytes_per_sync":
@@ -1157,6 +1182,7 @@ func (o *Options) MakeWriterOptions(level int) sstable.WriterOptions {
 		}
 		writerOpts.TableFormat = sstable.TableFormatRocksDBv2
 		writerOpts.TablePropertyCollectors = o.TablePropertyCollectors
+		writerOpts.BlockPropertyCollectors = o.BlockPropertyCollectors
 	}
 	levelOpts := o.Level(level)
 	writerOpts.BlockRestartInterval = levelOpts.BlockRestartInterval

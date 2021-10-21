@@ -26,12 +26,12 @@ import (
 )
 
 const (
-	// MinTableCacheSize is the minimum size of the table cache, for a given store.
-	MinTableCacheSize = 64
+	// minTableCacheSize is the minimum size of the table cache, for a single db.
+	minTableCacheSize = 64
 
-	// NumNonTableCacheFiles is an approximation for the number of MaxOpenFiles
-	// that we don't use for table caches, for a given store.
-	NumNonTableCacheFiles = 10
+	// numNonTableCacheFiles is an approximation for the number of files
+	// that we don't use for table caches, for a given db.
+	numNonTableCacheFiles = 10
 )
 
 var (
@@ -243,6 +243,11 @@ type DB struct {
 	// could grab db.mu, it must *not* be held while deleters.Wait() is called.
 	deleters sync.WaitGroup
 
+	// During an iterator close, we may asynchronously schedule read compactions.
+	// We want to wait for those goroutines to finish, before closing the DB.
+	// compactionShedulers.Wait() should not be called while the DB.mu is held.
+	compactionSchedulers sync.WaitGroup
+
 	// The main mutex protecting internal DB state. This mutex encompasses many
 	// fields because those fields need to be accessed and updated atomically. In
 	// particular, the current version, log.*, mem.*, and snapshot list need to
@@ -336,9 +341,14 @@ type DB struct {
 			manual []*manualCompaction
 			// inProgress is the set of in-progress flushes and compactions.
 			inProgress map[*compaction]struct{}
-			// readCompactions is a list of read triggered compactions. The next
-			// compaction to perform is as the start. New entries are added to the end.
-			readCompactions []readCompaction
+
+			// rescheduleReadCompaction indicates to an iterator that a read compaction
+			// should be scheduled.
+			rescheduleReadCompaction bool
+
+			// readCompactions is a readCompactionQueue which keeps track of the
+			// compactions which we might have to perform.
+			readCompactions readCompactionQueue
 		}
 
 		cleaner struct {
@@ -375,6 +385,17 @@ type DB struct {
 			// active stat collection goroutine clears the list and processes
 			// them.
 			pending []manifest.NewFileEntry
+		}
+
+		tableValidation struct {
+			// cond is a condition variable used to signal the completion of a
+			// job to validate one or more sstables.
+			cond sync.Cond
+			// pending is a slice of metadata for sstables waiting to be
+			// validated.
+			pending []newFileEntry
+			// validating is set to true when validation is running.
+			validating bool
 		}
 	}
 
@@ -955,6 +976,9 @@ func (d *DB) Close() error {
 	for d.mu.tableStats.loading {
 		d.mu.tableStats.cond.Wait()
 	}
+	for d.mu.tableValidation.validating {
+		d.mu.tableValidation.cond.Wait()
+	}
 
 	var err error
 	if n := len(d.mu.compact.inProgress); n > 0 {
@@ -1014,6 +1038,7 @@ func (d *DB) Close() error {
 	// Wait for all the deletion goroutines spawned by cleaning jobs to finish.
 	d.mu.Unlock()
 	d.deleters.Wait()
+	d.compactionSchedulers.Wait()
 	d.mu.Lock()
 	return err
 }
