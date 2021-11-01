@@ -116,6 +116,8 @@ github.com/apache/arrow/go/arrow/float16
 github.com/apache/arrow/go/arrow/internal/cpu
 github.com/apache/arrow/go/arrow/internal/debug
 github.com/apache/arrow/go/arrow/memory
+# github.com/apache/thrift v0.13.0
+github.com/apache/thrift/lib/go/thrift
 # github.com/armon/circbuf v0.0.0-20150827004946-bbbad097214e
 ## explicit
 github.com/armon/circbuf
@@ -593,6 +595,11 @@ github.com/envoyproxy/protoc-gen-validate/validate
 github.com/facebookgo/clock
 # github.com/felixge/httpsnoop v1.0.1
 github.com/felixge/httpsnoop
+# github.com/fraugster/parquet-go v0.4.0
+## explicit
+github.com/fraugster/parquet-go
+github.com/fraugster/parquet-go/parquet
+github.com/fraugster/parquet-go/parquetschema
 # github.com/fsnotify/fsnotify v1.4.9
 github.com/fsnotify/fsnotify
 # github.com/ghemawat/stream v0.0.0-20171120220530-696b145b53b9
