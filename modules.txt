@@ -786,6 +786,9 @@ github.com/google/pprof/profile
 github.com/google/pprof/third_party/d3
 github.com/google/pprof/third_party/d3flamegraph
 github.com/google/pprof/third_party/svgpan
+# github.com/google/skylark v0.0.0-20181101142754-a5f7082aabed
+## explicit
+github.com/google/skylark/syntax
 # github.com/google/uuid v1.2.0
 github.com/google/uuid
 # github.com/googleapis/gax-go/v2 v2.1.0
