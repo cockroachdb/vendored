@@ -89,6 +89,9 @@ github.com/VividCortex/ewma
 # github.com/abourget/teamcity v0.0.0-00010101000000-000000000000 => github.com/cockroachdb/teamcity v0.0.0-20180905144921-8ca25c33eb11
 ## explicit
 github.com/abourget/teamcity
+# github.com/alessio/shellescape v1.4.1
+## explicit
+github.com/alessio/shellescape
 # github.com/alexbrainman/sspi v0.0.0-20180613141037-e580b900e9f5
 github.com/alexbrainman/sspi
 github.com/alexbrainman/sspi/negotiate
@@ -927,22 +930,14 @@ go.opencensus.io/trace/tracestate
 ## explicit
 golang.org/x/crypto/bcrypt
 golang.org/x/crypto/blowfish
-golang.org/x/crypto/chacha20
-golang.org/x/crypto/curve25519
 golang.org/x/crypto/ed25519
 golang.org/x/crypto/ed25519/internal/edwards25519
-golang.org/x/crypto/internal/subtle
 golang.org/x/crypto/md4
 golang.org/x/crypto/ocsp
 golang.org/x/crypto/pbkdf2
 golang.org/x/crypto/pkcs12
 golang.org/x/crypto/pkcs12/internal/rc2
-golang.org/x/crypto/poly1305
 golang.org/x/crypto/scrypt
-golang.org/x/crypto/ssh
-golang.org/x/crypto/ssh/agent
-golang.org/x/crypto/ssh/internal/bcrypt_pbkdf
-golang.org/x/crypto/ssh/knownhosts
 # golang.org/x/exp v0.0.0-20210212053707-62dc52270d37
 ## explicit
 golang.org/x/exp/rand
@@ -989,7 +984,6 @@ golang.org/x/sync/errgroup
 golang.org/x/sync/syncmap
 # golang.org/x/sys v0.0.0-20210217105451-b926d437f341
 ## explicit
-golang.org/x/sys/cpu
 golang.org/x/sys/execabs
 golang.org/x/sys/internal/unsafeheader
 golang.org/x/sys/plan9
