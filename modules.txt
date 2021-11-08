@@ -12,16 +12,17 @@ cloud.google.com/go/internal/version
 cloud.google.com/go/storage
 # github.com/Azure/azure-pipeline-go v0.2.3
 github.com/Azure/azure-pipeline-go/pipeline
-# github.com/Azure/azure-sdk-for-go v33.4.0+incompatible
+# github.com/Azure/azure-sdk-for-go v57.1.0+incompatible
 ## explicit
 github.com/Azure/azure-sdk-for-go/profiles/latest/compute/mgmt/compute
 github.com/Azure/azure-sdk-for-go/profiles/latest/network/mgmt/network
 github.com/Azure/azure-sdk-for-go/profiles/latest/resources/mgmt/resources
 github.com/Azure/azure-sdk-for-go/profiles/latest/resources/mgmt/subscriptions
 github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-07-01/compute
-github.com/Azure/azure-sdk-for-go/services/network/mgmt/2019-07-01/network
-github.com/Azure/azure-sdk-for-go/services/resources/mgmt/2018-06-01/subscriptions
-github.com/Azure/azure-sdk-for-go/services/resources/mgmt/2019-05-01/resources
+github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-07-01/compute
+github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-03-01/network
+github.com/Azure/azure-sdk-for-go/services/resources/mgmt/2020-10-01/resources
+github.com/Azure/azure-sdk-for-go/services/resources/mgmt/2021-01-01/subscriptions
 github.com/Azure/azure-sdk-for-go/version
 # github.com/Azure/azure-storage-blob-go v0.14.0
 ## explicit
@@ -31,7 +32,7 @@ github.com/Azure/go-ansiterm
 github.com/Azure/go-ansiterm/winterm
 # github.com/Azure/go-autorest v14.2.0+incompatible
 github.com/Azure/go-autorest
-# github.com/Azure/go-autorest/autorest v0.11.1
+# github.com/Azure/go-autorest/autorest v0.11.20
 ## explicit
 github.com/Azure/go-autorest/autorest
 github.com/Azure/go-autorest/autorest/azure
@@ -44,7 +45,7 @@ github.com/Azure/go-autorest/autorest/azure/auth
 github.com/Azure/go-autorest/autorest/azure/cli
 # github.com/Azure/go-autorest/autorest/date v0.3.0
 github.com/Azure/go-autorest/autorest/date
-# github.com/Azure/go-autorest/autorest/to v0.3.0
+# github.com/Azure/go-autorest/autorest/to v0.4.0
 ## explicit
 github.com/Azure/go-autorest/autorest/to
 # github.com/Azure/go-autorest/autorest/validation v0.2.0
