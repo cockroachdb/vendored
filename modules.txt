@@ -986,8 +986,6 @@ github.com/linkedin/goavro/v2
 # github.com/lufia/iostat v1.0.0
 ## explicit
 github.com/lufia/iostat
-# github.com/lusis/slack-test v0.0.0-20190426140909-c40012f20018
-## explicit
 # github.com/magiconair/properties v1.8.4
 github.com/magiconair/properties
 # github.com/mailru/easyjson v0.7.6
@@ -1051,10 +1049,6 @@ github.com/montanaflynn/stats
 github.com/morikuni/aec
 # github.com/mwitkow/go-proto-validators v0.0.0-20180403085117-0950a7990007
 github.com/mwitkow/go-proto-validators
-# github.com/nlopes/slack v0.4.0
-## explicit
-github.com/nlopes/slack
-github.com/nlopes/slack/slackutilsx
 # github.com/oklog/ulid v1.3.1
 github.com/oklog/ulid
 # github.com/olekukonko/tablewriter v0.0.5-0.20200416053754-163badb3bac6 => github.com/cockroachdb/tablewriter v0.0.5-0.20200105123400-bd15540e8847
@@ -1167,6 +1161,14 @@ github.com/shirou/gopsutil/process
 github.com/shurcooL/sanitized_anchor_name
 # github.com/sirupsen/logrus v1.8.1
 github.com/sirupsen/logrus
+# github.com/slack-go/slack v0.9.5
+## explicit
+github.com/slack-go/slack
+github.com/slack-go/slack/internal/backoff
+github.com/slack-go/slack/internal/errorsx
+github.com/slack-go/slack/internal/misc
+github.com/slack-go/slack/internal/timex
+github.com/slack-go/slack/slackutilsx
 # github.com/spf13/afero v1.4.1
 github.com/spf13/afero
 github.com/spf13/afero/mem
