@@ -974,6 +974,9 @@ github.com/kr/pretty
 # github.com/kr/text v0.2.0
 ## explicit
 github.com/kr/text
+# github.com/kylelemons/godebug v1.1.0
+## explicit
+github.com/kylelemons/godebug/diff
 # github.com/leanovate/gopter v0.2.5-0.20190402064358-634a59d12406
 ## explicit
 github.com/leanovate/gopter
