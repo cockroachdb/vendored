@@ -670,7 +670,6 @@ github.com/gogo/googleapis/google/rpc
 # github.com/gogo/protobuf v1.3.2
 ## explicit
 github.com/gogo/protobuf/gogoproto
-github.com/gogo/protobuf/jsonpb
 github.com/gogo/protobuf/plugin/compare
 github.com/gogo/protobuf/plugin/defaultcheck
 github.com/gogo/protobuf/plugin/description
