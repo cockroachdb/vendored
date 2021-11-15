@@ -1153,7 +1153,7 @@ github.com/russross/blackfriday/v2
 # github.com/sasha-s/go-deadlock v0.3.1
 ## explicit
 github.com/sasha-s/go-deadlock
-# github.com/shirou/gopsutil v2.20.9+incompatible
+# github.com/shirou/gopsutil v3.21.10+incompatible
 ## explicit
 github.com/shirou/gopsutil/cpu
 github.com/shirou/gopsutil/disk
@@ -1197,6 +1197,11 @@ github.com/stretchr/testify/assert
 github.com/stretchr/testify/require
 # github.com/subosito/gotenv v1.2.0
 github.com/subosito/gotenv
+# github.com/tklauser/go-sysconf v0.3.9
+## explicit
+github.com/tklauser/go-sysconf
+# github.com/tklauser/numcpus v0.3.0
+github.com/tklauser/numcpus
 # github.com/toqueteos/webbrowser v1.2.0
 github.com/toqueteos/webbrowser
 # github.com/twitchtv/twirp v7.1.1+incompatible
