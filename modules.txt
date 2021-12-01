@@ -1031,7 +1031,7 @@ github.com/json-iterator/go
 ## explicit
 github.com/kevinburke/go-bindata
 github.com/kevinburke/go-bindata/go-bindata
-# github.com/kisielk/errcheck v1.5.0
+# github.com/kisielk/errcheck v1.6.1-0.20210625163953-8ddee489636a
 ## explicit; go 1.14
 github.com/kisielk/errcheck
 github.com/kisielk/errcheck/errcheck
