@@ -67,7 +67,7 @@ github.com/Azure/go-autorest/tracing
 ## explicit; go 1.16
 github.com/BurntSushi/toml
 github.com/BurntSushi/toml/internal
-# github.com/DataDog/zstd v1.4.8
+# github.com/DataDog/zstd v1.5.0
 ## explicit; go 1.14
 github.com/DataDog/zstd
 # github.com/Masterminds/goutils v1.1.0
@@ -445,7 +445,7 @@ github.com/cockroachdb/crlfmt/internal/render
 # github.com/cockroachdb/datadriven v1.0.1-0.20211007161720-b558070c3be0
 ## explicit; go 1.13
 github.com/cockroachdb/datadriven
-# github.com/cockroachdb/errors v1.8.5
+# github.com/cockroachdb/errors v1.8.6
 ## explicit; go 1.13
 github.com/cockroachdb/errors
 github.com/cockroachdb/errors/assert
@@ -489,7 +489,7 @@ github.com/cockroachdb/gostdlib/x/tools/internal/span
 # github.com/cockroachdb/logtags v0.0.0-20211118104740-dabe8e521a4f
 ## explicit; go 1.16
 github.com/cockroachdb/logtags
-# github.com/cockroachdb/pebble v0.0.0-20211019184201-7fec828fc1af
+# github.com/cockroachdb/pebble v0.0.0-20211216173920-e2a8aef27e1b => github.com/itsbilal/pebble v0.0.0-20211217164346-1d01451ab268
 ## explicit; go 1.13
 github.com/cockroachdb/pebble
 github.com/cockroachdb/pebble/bloom
@@ -503,10 +503,11 @@ github.com/cockroachdb/pebble/internal/fastrand
 github.com/cockroachdb/pebble/internal/humanize
 github.com/cockroachdb/pebble/internal/intern
 github.com/cockroachdb/pebble/internal/invariants
+github.com/cockroachdb/pebble/internal/keyspan
 github.com/cockroachdb/pebble/internal/manifest
 github.com/cockroachdb/pebble/internal/manual
 github.com/cockroachdb/pebble/internal/private
-github.com/cockroachdb/pebble/internal/rangedel
+github.com/cockroachdb/pebble/internal/rangekey
 github.com/cockroachdb/pebble/internal/rate
 github.com/cockroachdb/pebble/internal/rawalloc
 github.com/cockroachdb/pebble/record
@@ -1039,11 +1040,13 @@ github.com/kisielk/errcheck/errcheck
 ## explicit
 github.com/kisielk/gotool
 github.com/kisielk/gotool/internal/load
-# github.com/klauspost/compress v1.12.2
-## explicit; go 1.13
+# github.com/klauspost/compress v1.13.6
+## explicit; go 1.15
+github.com/klauspost/compress
 github.com/klauspost/compress/flate
 github.com/klauspost/compress/fse
 github.com/klauspost/compress/huff0
+github.com/klauspost/compress/internal/snapref
 github.com/klauspost/compress/zip
 github.com/klauspost/compress/zstd
 github.com/klauspost/compress/zstd/internal/xxhash
@@ -1059,7 +1062,7 @@ github.com/knz/go-libedit/unix
 # github.com/knz/strtime v0.0.0-20200318182718-be999391ffa9
 ## explicit
 github.com/knz/strtime
-# github.com/kr/pretty v0.2.1
+# github.com/kr/pretty v0.3.0
 ## explicit; go 1.12
 github.com/kr/pretty
 # github.com/kr/text v0.2.0
@@ -1263,6 +1266,9 @@ github.com/pseudomuto/protokit
 ## explicit
 github.com/rcrowley/go-metrics
 github.com/rcrowley/go-metrics/exp
+# github.com/rogpeppe/go-internal v1.8.1
+## explicit; go 1.16
+github.com/rogpeppe/go-internal/fmtsort
 # github.com/russross/blackfriday v1.6.0
 ## explicit; go 1.13
 # github.com/russross/blackfriday/v2 v2.0.1
@@ -1471,7 +1477,7 @@ go.uber.org/zap/internal/bufferpool
 go.uber.org/zap/internal/color
 go.uber.org/zap/internal/exit
 go.uber.org/zap/zapcore
-# golang.org/x/crypto v0.0.0-20210711020723-a769d52b0f97
+# golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
 ## explicit; go 1.17
 golang.org/x/crypto/bcrypt
 golang.org/x/crypto/blowfish
@@ -1483,20 +1489,20 @@ golang.org/x/crypto/pbkdf2
 golang.org/x/crypto/pkcs12
 golang.org/x/crypto/pkcs12/internal/rc2
 golang.org/x/crypto/scrypt
-# golang.org/x/exp v0.0.0-20210514180818-737f94c0881e
-## explicit; go 1.17
+# golang.org/x/exp v0.0.0-20211216164055-b2b84827b756
+## explicit; go 1.18
 golang.org/x/exp/rand
 # golang.org/x/lint v0.0.0-20210508222113-6edffad5e616
 ## explicit; go 1.11
 golang.org/x/lint
 golang.org/x/lint/golint
-# golang.org/x/mod v0.5.1
+# golang.org/x/mod v0.6.0-dev.0.20211013180041-c96bc1413d57
 ## explicit; go 1.17
 golang.org/x/mod/internal/lazyregexp
 golang.org/x/mod/modfile
 golang.org/x/mod/module
 golang.org/x/mod/semver
-# golang.org/x/net v0.0.0-20210913180222-943fd674d43e
+# golang.org/x/net v0.0.0-20211015210444-4f30a5c0130f
 ## explicit; go 1.17
 golang.org/x/net/context
 golang.org/x/net/context/ctxhttp
@@ -1530,7 +1536,7 @@ golang.org/x/perf/storage/benchfmt
 ## explicit
 golang.org/x/sync/errgroup
 golang.org/x/sync/syncmap
-# golang.org/x/sys v0.0.0-20211102061401-a2f17f7b995c
+# golang.org/x/sys v0.0.0-20211216021012-1d35b9e2eb4e
 ## explicit; go 1.17
 golang.org/x/sys/execabs
 golang.org/x/sys/internal/unsafeheader
@@ -1561,7 +1567,7 @@ golang.org/x/text/width
 # golang.org/x/time v0.0.0-20210723032227-1f47c861a9ac
 ## explicit
 golang.org/x/time/rate
-# golang.org/x/tools v0.1.7
+# golang.org/x/tools v0.1.8-0.20211029000441-d6a9af8af023
 ## explicit; go 1.17
 golang.org/x/tools/cmd/goyacc
 golang.org/x/tools/container/intsets
@@ -1843,3 +1849,4 @@ vitess.io/vitess/go/vt/vtgate/evalengine
 # go.etcd.io/etcd/pkg/v3 => go.etcd.io/etcd/pkg/v3 v3.0.0-20201109164711-01844fd28560
 # github.com/docker/docker => github.com/moby/moby v20.10.6+incompatible
 # github.com/maruel/panicparse/v2 => github.com/cockroachdb/panicparse/v2 v2.0.0-20211103220158-604c82a44f1e
+# github.com/cockroachdb/pebble => github.com/itsbilal/pebble v0.0.0-20211217164346-1d01451ab268

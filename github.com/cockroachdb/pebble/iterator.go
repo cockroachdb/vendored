@@ -11,11 +11,12 @@ import (
 	"unsafe"
 
 	"github.com/cockroachdb/errors"
+	"github.com/cockroachdb/redact"
+
 	"github.com/cockroachdb/pebble/internal/base"
 	"github.com/cockroachdb/pebble/internal/fastrand"
 	"github.com/cockroachdb/pebble/internal/invariants"
 	"github.com/cockroachdb/pebble/internal/manifest"
-	"github.com/cockroachdb/redact"
 )
 
 // iterPos describes the state of the internal iterator, in terms of whether it is
@@ -211,12 +212,8 @@ func (i *Iterator) findNextEntry(limit []byte) {
 	i.pos = iterPosCurForward
 
 	// Close the closer for the current value if one was open.
-	if i.valueCloser != nil {
-		i.err = i.valueCloser.Close()
-		i.valueCloser = nil
-		if i.err != nil {
-			return
-		}
+	if i.closeValueCloser() != nil {
+		return
 	}
 
 	for i.iterKey != nil {
@@ -254,12 +251,23 @@ func (i *Iterator) findNextEntry(limit []byte) {
 
 		case InternalKeyKindMerge:
 			var valueMerger ValueMerger
-			valueMerger, i.err = i.merge(i.key, i.iterValue)
+			valueMerger, i.err = i.merge(key.UserKey, i.iterValue)
 			if i.err == nil {
 				i.mergeNext(key, valueMerger)
 			}
 			if i.err == nil {
-				i.value, i.valueCloser, i.err = valueMerger.Finish(true /* includesBase */)
+				var needDelete bool
+				i.value, needDelete, i.valueCloser, i.err = finishValueMerger(valueMerger, true /* includesBase */)
+				if i.err == nil && needDelete {
+					i.iterValidityState = IterExhausted
+					if i.pos != iterPosNext {
+						i.nextUserKey()
+					}
+					if i.closeValueCloser() == nil {
+						i.pos = iterPosCurForward
+						continue
+					}
+				}
 			} else {
 				// mergeNext may have been called, which can set
 				// i.iterValidityState=IterValid.
@@ -273,6 +281,14 @@ func (i *Iterator) findNextEntry(limit []byte) {
 			return
 		}
 	}
+}
+
+func (i *Iterator) closeValueCloser() error {
+	if i.valueCloser != nil {
+		i.err = i.valueCloser.Close()
+		i.valueCloser = nil
+	}
+	return i.err
 }
 
 func (i *Iterator) nextUserKey() {
@@ -435,7 +451,15 @@ func (i *Iterator) findPrevEntry(limit []byte) {
 				// We've iterated to the previous user key.
 				i.pos = iterPosPrev
 				if valueMerger != nil {
-					i.value, i.valueCloser, i.err = valueMerger.Finish(true /* includesBase */)
+					var needDelete bool
+					i.value, needDelete, i.valueCloser, i.err = finishValueMerger(valueMerger, true /* includesBase */)
+					if i.err == nil && needDelete {
+						i.value = nil
+						i.iterValidityState = IterExhausted
+						if i.closeValueCloser() == nil {
+							continue
+						}
+					}
 				}
 				if i.err != nil {
 					i.iterValidityState = IterExhausted
@@ -522,7 +546,13 @@ func (i *Iterator) findPrevEntry(limit []byte) {
 	if i.iterValidityState == IterValid {
 		i.pos = iterPosPrev
 		if valueMerger != nil {
-			i.value, i.valueCloser, i.err = valueMerger.Finish(true /* includesBase */)
+			var needDelete bool
+			i.value, needDelete, i.valueCloser, i.err = finishValueMerger(valueMerger, true /* includesBase */)
+			if i.err == nil && needDelete {
+				i.key = nil
+				i.value = nil
+				i.iterValidityState = IterExhausted
+			}
 		}
 		if i.err != nil {
 			i.iterValidityState = IterExhausted
@@ -622,6 +652,7 @@ func (i *Iterator) SeekGEWithLimit(key []byte, limit []byte) IterValidityState {
 		key = upperBound
 	}
 	seekInternalIter := true
+	trySeekUsingNext := false
 	// The following noop optimization only applies when i.batch == nil, since
 	// an iterator over a batch is iterating over mutable data, that may have
 	// changed since the last seek.
@@ -641,6 +672,23 @@ func (i *Iterator) SeekGEWithLimit(key []byte, limit []byte) IterValidityState {
 					return i.iterValidityState
 				}
 			}
+			// cmp == 0 is not safe to optimize since
+			// - i.pos could be at iterPosNext, due to a merge.
+			// - Even if i.pos were at iterPosCurForward, we could have a DELETE,
+			//   SET pair for a key, and the iterator would have moved past DELETE
+			//   but stayed at iterPosCurForward. A similar situation occurs for a
+			//   MERGE, SET pair where the MERGE is consumed and the iterator is
+			//   at the SET.
+			// We also leverage the IterAtLimit <=> i.pos invariant defined in the
+			// comment on iterValidityState, to exclude any cases where i.pos
+			// is iterPosCur{Forward,Reverse}Paused. This avoids the need to
+			// special-case those iterator positions and their interactions with
+			// trySeekUsingNext, as the main uses for trySeekUsingNext in CockroachDB
+			// do not use limited Seeks in the first place.
+			trySeekUsingNext = cmp < 0 && i.iterValidityState != IterAtLimit && limit == nil
+			if invariants.Enabled && trySeekUsingNext && disableSeekOpt(key, uintptr(unsafe.Pointer(i))) {
+				trySeekUsingNext = false
+			}
 			if i.pos == iterPosCurForwardPaused && i.cmp(key, i.iterKey.UserKey) <= 0 {
 				// Have some work to do, but don't need to seek, and we can
 				// start doing findNextEntry from i.iterKey.
@@ -649,7 +697,7 @@ func (i *Iterator) SeekGEWithLimit(key []byte, limit []byte) IterValidityState {
 		}
 	}
 	if seekInternalIter {
-		i.iterKey, i.iterValue = i.iter.SeekGE(key)
+		i.iterKey, i.iterValue = i.iter.SeekGE(key, trySeekUsingNext)
 		i.stats.ForwardSeekCount[InternalIterCall]++
 	}
 	i.findNextEntry(limit)
@@ -865,7 +913,7 @@ func (i *Iterator) First() bool {
 	i.lastPositioningOp = unknownLastPositionOp
 	i.stats.ForwardSeekCount[InterfaceCall]++
 	if lowerBound := i.opts.GetLowerBound(); lowerBound != nil {
-		i.iterKey, i.iterValue = i.iter.SeekGE(lowerBound)
+		i.iterKey, i.iterValue = i.iter.SeekGE(lowerBound, false /* trySeekUsingNext */)
 		i.stats.ForwardSeekCount[InternalIterCall]++
 	} else {
 		i.iterKey, i.iterValue = i.iter.First()
@@ -930,7 +978,7 @@ func (i *Iterator) NextWithLimit(limit []byte) IterValidityState {
 		// We're positioned before the first key. Need to reposition to point to
 		// the first key.
 		if lowerBound := i.opts.GetLowerBound(); lowerBound != nil {
-			i.iterKey, i.iterValue = i.iter.SeekGE(lowerBound)
+			i.iterKey, i.iterValue = i.iter.SeekGE(lowerBound, false /* trySeekUsingNext */)
 			i.stats.ForwardSeekCount[InternalIterCall]++
 		} else {
 			i.iterKey, i.iterValue = i.iter.First()
@@ -956,7 +1004,7 @@ func (i *Iterator) NextWithLimit(limit []byte) IterValidityState {
 			// We're positioned before the first key. Need to reposition to point to
 			// the first key.
 			if lowerBound := i.opts.GetLowerBound(); lowerBound != nil {
-				i.iterKey, i.iterValue = i.iter.SeekGE(lowerBound)
+				i.iterKey, i.iterValue = i.iter.SeekGE(lowerBound, false /* trySeekUsingNext */)
 				i.stats.ForwardSeekCount[InternalIterCall]++
 			} else {
 				i.iterKey, i.iterValue = i.iter.First()

@@ -20,8 +20,8 @@ import (
 	"github.com/cockroachdb/pebble/internal/cache"
 	"github.com/cockroachdb/pebble/internal/crc"
 	"github.com/cockroachdb/pebble/internal/invariants"
+	"github.com/cockroachdb/pebble/internal/keyspan"
 	"github.com/cockroachdb/pebble/internal/private"
-	"github.com/cockroachdb/pebble/internal/rangedel"
 	"github.com/cockroachdb/pebble/vfs"
 )
 
@@ -113,9 +113,9 @@ type singleLevelIterator struct {
 	// dataBH refers to the last data block that the iterator considered
 	// loading. It may not actually have loaded the block, due to an error or
 	// because it was considered irrelevant.
-	dataBH     BlockHandle
-	err        error
-	closeHook  func(i Iterator) error
+	dataBH    BlockHandle
+	err       error
+	closeHook func(i Iterator) error
 
 	// boundsCmp and positionedUsingLatestBounds are for optimizing iteration
 	// that uses multiple adjacent bounds. The seek after setting a new bound
@@ -252,7 +252,8 @@ func checkTwoLevelIterator(obj interface{}) {
 // synonmous with Reader.NewIter, but allows for reusing of the iterator
 // between different Readers.
 func (i *singleLevelIterator) init(
-	r *Reader, lower, upper []byte, filterer *BlockPropertiesFilterer) error {
+	r *Reader, lower, upper []byte, filterer *BlockPropertiesFilterer,
+) error {
 	if r.err != nil {
 		return r.err
 	}
@@ -319,6 +320,7 @@ func (i *singleLevelIterator) initBounds() {
 }
 
 type loadBlockResult int8
+
 const (
 	loadBlockOK loadBlockResult = iota
 	// Could be due to error or because no block left to load.
@@ -330,15 +332,29 @@ const (
 // unpositioned. If unsuccessful, it sets i.err to any error encountered, which
 // may be nil if we have simply exhausted the entire table.
 func (i *singleLevelIterator) loadBlock() loadBlockResult {
-	// Ensure the data block iterator is invalidated even if loading of the block
-	// fails.
-	i.data.invalidate()
 	if !i.index.Valid() {
+		// Ensure the data block iterator is invalidated even if loading of the block
+		// fails.
+		i.data.invalidate()
 		return loadBlockFailed
 	}
 	// Load the next block.
 	v := i.index.Value()
 	bhp, err := decodeBlockHandleWithProperties(v)
+	if i.dataBH == bhp.BlockHandle && i.data.Valid() {
+		// We're already at the data block we want to load. Reset bounds in case
+		// they changed since the last seek, but don't reload the block from cache
+		// or disk.
+		//
+		// It's safe to leave i.data in its original state here, as all callers to
+		// loadBlock make an absolute positioning call (i.e. a seek, first, or last)
+		// to `i.data` right after loadBlock returns loadBlockOK.
+		i.initBounds()
+		return loadBlockOK
+	}
+	// Ensure the data block iterator is invalidated even if loading of the block
+	// fails.
+	i.data.invalidate()
 	i.dataBH = bhp.BlockHandle
 	if err != nil {
 		i.err = errCorruptIndexEntry
@@ -459,14 +475,21 @@ func (i *singleLevelIterator) recordOffset() uint64 {
 // SeekGE implements internalIterator.SeekGE, as documented in the pebble
 // package. Note that SeekGE only checks the upper bound. It is up to the
 // caller to ensure that key is greater than or equal to the lower bound.
-func (i *singleLevelIterator) SeekGE(key []byte) (*InternalKey, []byte) {
+func (i *singleLevelIterator) SeekGE(key []byte, trySeekUsingNext bool) (*InternalKey, []byte) {
+	// The i.exhaustedBounds comparison indicates that the upper bound was
+	// reached. The i.data.isDataInvalidated() indicates that the sstable was
+	// exhausted.
+	if trySeekUsingNext && (i.exhaustedBounds == +1 || i.data.isDataInvalidated()) {
+		// Already exhausted, so return nil.
+		return nil, nil
+	}
 	i.exhaustedBounds = 0
 	i.err = nil // clear cached iteration error
 	boundsCmp := i.boundsCmp
 	// Seek optimization only applies until iterator is first positioned after SetBounds.
 	i.boundsCmp = 0
 	i.positionedUsingLatestBounds = true
-	return i.seekGEHelper(key, boundsCmp, false /* trySeekUsingNext */)
+	return i.seekGEHelper(key, boundsCmp, trySeekUsingNext)
 }
 
 // seekGEHelper contains the common functionality for SeekGE and SeekPrefixGE.
@@ -500,7 +523,7 @@ func (i *singleLevelIterator) seekGEHelper(
 		// caller claimed externally known invariant represented by
 		// trySeekUsingNext=true.
 		if trySeekUsingNext {
-			// seekPrefixGE has already ensured
+			// seekPrefixGE or SeekGE has already ensured
 			// !i.data.isDataInvalidated() && i.exhaustedBounds != +1
 			currKey := i.data.Key()
 			value := i.data.Value()
@@ -522,7 +545,7 @@ func (i *singleLevelIterator) seekGEHelper(
 		}
 		// Slow-path.
 		var ikey *InternalKey
-		if ikey, _ = i.index.SeekGE(key); ikey == nil {
+		if ikey, _ = i.index.SeekGE(key, false /* trySeekUsingNext */); ikey == nil {
 			// The target key is greater than any key in the sstable. Invalidate the
 			// block iterator so that a subsequent call to Prev() will return the last
 			// key in the table.
@@ -548,7 +571,7 @@ func (i *singleLevelIterator) seekGEHelper(
 		}
 	}
 	if !dontSeekWithinBlock {
-		if ikey, val := i.data.SeekGE(key); ikey != nil {
+		if ikey, val := i.data.SeekGE(key, false /* trySeekUsingNext */); ikey != nil {
 			if i.blockUpper != nil && i.cmp(ikey.UserKey, i.blockUpper) >= 0 {
 				i.exhaustedBounds = +1
 				return nil, nil
@@ -652,7 +675,7 @@ func (i *singleLevelIterator) SeekLT(key []byte) (*InternalKey, []byte) {
 		}
 	} else {
 		var ikey *InternalKey
-		if ikey, _ = i.index.SeekGE(key); ikey == nil {
+		if ikey, _ = i.index.SeekGE(key, false /* trySeekUsingNext */); ikey == nil {
 			ikey, _ = i.index.Last()
 			if ikey == nil {
 				return nil, nil
@@ -1039,7 +1062,7 @@ func (i *compactionIterator) String() string {
 	return i.reader.fileNum.String()
 }
 
-func (i *compactionIterator) SeekGE(key []byte) (*InternalKey, []byte) {
+func (i *compactionIterator) SeekGE(key []byte, trySeekUsingNext bool) (*InternalKey, []byte) {
 	panic("pebble: SeekGE unimplemented")
 }
 
@@ -1161,7 +1184,8 @@ func (i *twoLevelIterator) loadIndex() loadBlockResult {
 }
 
 func (i *twoLevelIterator) init(
-	r *Reader, lower, upper []byte, filterer *BlockPropertiesFilterer) error {
+	r *Reader, lower, upper []byte, filterer *BlockPropertiesFilterer,
+) error {
 	if r.err != nil {
 		return r.err
 	}
@@ -1191,7 +1215,7 @@ func (i *twoLevelIterator) String() string {
 // SeekGE implements internalIterator.SeekGE, as documented in the pebble
 // package. Note that SeekGE only checks the upper bound. It is up to the
 // caller to ensure that key is greater than or equal to the lower bound.
-func (i *twoLevelIterator) SeekGE(key []byte) (*InternalKey, []byte) {
+func (i *twoLevelIterator) SeekGE(key []byte, trySeekUsingNext bool) (*InternalKey, []byte) {
 	i.exhaustedBounds = 0
 	i.err = nil // clear cached iteration error
 
@@ -1199,8 +1223,17 @@ func (i *twoLevelIterator) SeekGE(key []byte) (*InternalKey, []byte) {
 	if i.topLevelIndex.isDataInvalidated() || !i.topLevelIndex.Valid() || i.boundsCmp <= 0 ||
 		i.cmp(key, i.topLevelIndex.Key().UserKey) > 0 {
 		// Slow-path: need to position the topLevelIndex.
+		//
+		// TODO(bilal): improve this slow-path to be able to use Next, when
+		// trySeekUsingNext is true, since the fast path never applies for
+		// practical uses of SeekGE in CockroachDB (they never set
+		// monotonic bounds). To apply it here, we would need to confirm that
+		// the topLevelIndex can continue using the same second level index
+		// block, and in that case we don't need to invalidate and reload the
+		// singleLevelIterator state.
+		trySeekUsingNext = false
 		var ikey *InternalKey
-		if ikey, _ = i.topLevelIndex.SeekGE(key); ikey == nil {
+		if ikey, _ = i.topLevelIndex.SeekGE(key, false /* trySeekUsingNext */); ikey == nil {
 			i.data.invalidate()
 			i.index.invalidate()
 			return nil, nil
@@ -1234,7 +1267,7 @@ func (i *twoLevelIterator) SeekGE(key []byte) (*InternalKey, []byte) {
 	// it must be at the right position.
 
 	if !dontSeekWithinSingleLevelIter {
-		if ikey, val := i.singleLevelIterator.SeekGE(key); ikey != nil {
+		if ikey, val := i.singleLevelIterator.SeekGE(key, trySeekUsingNext); ikey != nil {
 			return ikey, val
 		}
 	}
@@ -1293,7 +1326,7 @@ func (i *twoLevelIterator) SeekPrefixGE(
 		// singleLevelIterator state.
 		trySeekUsingNext = false
 		var ikey *InternalKey
-		if ikey, _ = i.topLevelIndex.SeekGE(key); ikey == nil {
+		if ikey, _ = i.topLevelIndex.SeekGE(key, trySeekUsingNext); ikey == nil {
 			i.data.invalidate()
 			i.index.invalidate()
 			return nil, nil
@@ -1351,7 +1384,7 @@ func (i *twoLevelIterator) SeekLT(key []byte) (*InternalKey, []byte) {
 	// whether the topLevelIndex is positioned after the position that would
 	// be returned by doing i.topLevelIndex.SeekGE(). To know this we would
 	// need to know the index key preceding the current one.
-	if ikey, _ = i.topLevelIndex.SeekGE(key); ikey == nil {
+	if ikey, _ = i.topLevelIndex.SeekGE(key, false /* trySeekUsingNext */); ikey == nil {
 		if ikey, _ = i.topLevelIndex.Last(); ikey == nil {
 			i.data.invalidate()
 			i.index.invalidate()
@@ -1630,7 +1663,7 @@ func (i *twoLevelCompactionIterator) Close() error {
 	return i.twoLevelIterator.Close()
 }
 
-func (i *twoLevelCompactionIterator) SeekGE(key []byte) (*InternalKey, []byte) {
+func (i *twoLevelCompactionIterator) SeekGE(key []byte, trySeekUsingNext bool) (*InternalKey, []byte) {
 	panic("pebble: SeekGE unimplemented")
 }
 
@@ -2015,6 +2048,7 @@ type Reader struct {
 	indexBH           BlockHandle
 	filterBH          BlockHandle
 	rangeDelBH        BlockHandle
+	rangeKeyBH        BlockHandle
 	rangeDelTransform blockTransform
 	propertiesBH      BlockHandle
 	metaIndexBH       BlockHandle
@@ -2052,60 +2086,12 @@ func (r *Reader) Close() error {
 	return nil
 }
 
-// get is a testing helper that simulates a read and helps verify bloom filters
-// until they are available through iterators.
-func (r *Reader) get(key []byte) (value []byte, err error) {
-	if r.err != nil {
-		return nil, r.err
-	}
-
-	if r.tableFilter != nil {
-		dataH, err := r.readFilter()
-		if err != nil {
-			return nil, err
-		}
-		var lookupKey []byte
-		if r.Split != nil {
-			lookupKey = key[:r.Split(key)]
-		} else {
-			lookupKey = key
-		}
-		mayContain := r.tableFilter.mayContain(dataH.Get(), lookupKey)
-		dataH.Release()
-		if !mayContain {
-			return nil, base.ErrNotFound
-		}
-	}
-
-	i, err := r.NewIter(nil /* lower */, nil /* upper */)
-	if err != nil {
-		return nil, err
-	}
-	ikey, value := i.SeekGE(key)
-
-	if ikey == nil || r.Compare(key, ikey.UserKey) != 0 {
-		err := i.Close()
-		if err == nil {
-			err = base.ErrNotFound
-		}
-		return nil, err
-	}
-
-	// The value will be "freed" when the iterator is closed, so make a copy
-	// which will outlast the lifetime of the iterator.
-	newValue := make([]byte, len(value))
-	copy(newValue, value)
-	if err := i.Close(); err != nil {
-		return nil, err
-	}
-	return newValue, nil
-}
-
 // NewIterWithBlockPropertyFilters returns an iterator for the contents of the
 // table. If an error occurs, NewIterWithBlockPropertyFilters cleans up after
 // itself and returns a nil iterator.
 func (r *Reader) NewIterWithBlockPropertyFilters(
-	lower, upper []byte, filterer *BlockPropertiesFilterer) (Iterator, error) {
+	lower, upper []byte, filterer *BlockPropertiesFilterer,
+) (Iterator, error) {
 	// NB: pebble.tableCache wraps the returned iterator with one which performs
 	// reference counting on the Reader, preventing the Reader from being closed
 	// until the final iterator closes.
@@ -2178,6 +2164,24 @@ func (r *Reader) NewRawRangeDelIter() (base.InternalIterator, error) {
 	return i, nil
 }
 
+// NewRawRangeKeyIter returns an internal iterator for the contents of the
+// range-key block for the table. Returns nil if the table does not contain any
+// range keys.
+func (r *Reader) NewRawRangeKeyIter() (base.InternalIterator, error) {
+	if r.rangeKeyBH.Length == 0 {
+		return nil, nil
+	}
+	h, err := r.readRangeKey()
+	if err != nil {
+		return nil, err
+	}
+	i := &blockIter{}
+	if err := i.initHandle(r.Compare, h, r.Properties.GlobalSeqNum); err != nil {
+		return nil, err
+	}
+	return i, nil
+}
+
 func (r *Reader) readIndex() (cache.Handle, error) {
 	return r.readBlock(r.indexBH, nil /* transform */, nil /* readaheadState */)
 }
@@ -2188,6 +2192,10 @@ func (r *Reader) readFilter() (cache.Handle, error) {
 
 func (r *Reader) readRangeDel() (cache.Handle, error) {
 	return r.readBlock(r.rangeDelBH, r.rangeDelTransform, nil /* readaheadState */)
+}
+
+func (r *Reader) readRangeKey() (cache.Handle, error) {
+	return r.readBlock(r.rangeKeyBH, nil /* transform */, nil /* readaheadState */)
 }
 
 // readBlock reads and decompresses a block from disk into memory.
@@ -2307,24 +2315,24 @@ func (r *Reader) transformRangeDelV1(b []byte) ([]byte, error) {
 	if err := iter.init(r.Compare, b, r.Properties.GlobalSeqNum); err != nil {
 		return nil, err
 	}
-	var tombstones []rangedel.Tombstone
+	var tombstones []keyspan.Span
 	for key, value := iter.First(); key != nil; key, value = iter.Next() {
-		t := rangedel.Tombstone{
+		t := keyspan.Span{
 			Start: *key,
 			End:   value,
 		}
 		tombstones = append(tombstones, t)
 	}
-	rangedel.Sort(r.Compare, tombstones)
+	keyspan.Sort(r.Compare, tombstones)
 
 	// Fragment the tombstones, outputting them directly to a block writer.
 	rangeDelBlock := blockWriter{
 		restartInterval: 1,
 	}
-	frag := rangedel.Fragmenter{
+	frag := keyspan.Fragmenter{
 		Cmp:    r.Compare,
 		Format: r.FormatKey,
-		Emit: func(fragmented []rangedel.Tombstone) {
+		Emit: func(fragmented []keyspan.Span) {
 			for i := range fragmented {
 				t := &fragmented[i]
 				rangeDelBlock.add(t.Start, t.End)
@@ -2332,8 +2340,7 @@ func (r *Reader) transformRangeDelV1(b []byte) ([]byte, error) {
 		},
 	}
 	for i := range tombstones {
-		t := &tombstones[i]
-		frag.Add(t.Start, t.End)
+		frag.Add(tombstones[i])
 	}
 	frag.Finish()
 
@@ -2391,6 +2398,10 @@ func (r *Reader) readMetaindex(metaindexBH BlockHandle) error {
 		if !r.rawTombstones {
 			r.rangeDelTransform = r.transformRangeDelV1
 		}
+	}
+
+	if bh, ok := meta[metaRangeKeyName]; ok {
+		r.rangeKeyBH = bh
 	}
 
 	for name, fp := range r.opts.Filters {
@@ -2565,7 +2576,7 @@ func (r *Reader) EstimateDiskUsage(start, end []byte) (uint64, error) {
 			return 0, err
 		}
 
-		key, val := topIter.SeekGE(start)
+		key, val := topIter.SeekGE(start, false /* trySeekUsingNext */)
 		if key == nil {
 			// The range falls completely after this file, or an error occurred.
 			return 0, topIter.Error()
@@ -2585,7 +2596,7 @@ func (r *Reader) EstimateDiskUsage(start, end []byte) (uint64, error) {
 			return 0, err
 		}
 
-		key, val = topIter.SeekGE(end)
+		key, val = topIter.SeekGE(end, false /* trySeekUsingNext */)
 		if key == nil {
 			if err := topIter.Error(); err != nil {
 				return 0, err
@@ -2610,7 +2621,7 @@ func (r *Reader) EstimateDiskUsage(start, end []byte) (uint64, error) {
 	// startIdxIter should not be nil at this point, while endIdxIter can be if the
 	// range spans past the end of the file.
 
-	key, val := startIdxIter.SeekGE(start)
+	key, val := startIdxIter.SeekGE(start, false /* trySeekUsingNext */)
 	if key == nil {
 		// The range falls completely after this file, or an error occurred.
 		return 0, startIdxIter.Error()
@@ -2624,7 +2635,7 @@ func (r *Reader) EstimateDiskUsage(start, end []byte) (uint64, error) {
 		// The range spans beyond this file. Include data blocks through the last.
 		return r.Properties.DataSize - startBH.Offset, nil
 	}
-	key, val = endIdxIter.SeekGE(end)
+	key, val = endIdxIter.SeekGE(end, false /* trySeekUsingNext */)
 	if key == nil {
 		if err := endIdxIter.Error(); err != nil {
 			return 0, err

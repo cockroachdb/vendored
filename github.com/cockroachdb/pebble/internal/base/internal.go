@@ -51,6 +51,15 @@ const (
 	// https://github.com/cockroachdb/pebble/issues/1255.
 	InternalKeyKindSetWithDelete InternalKeyKind = 18
 
+	// InternalKeyKindRangeKeyDelete removes all range keys within a key range.
+	// See the internal/rangekey package for more details.
+	InternalKeyKindRangeKeyDelete InternalKeyKind = 19
+	// InternalKeyKindRangeKeySet and InternalKeyKindRangeUnset represent
+	// keys that set and unset values associated with ranges of key
+	// space. See the internal/rangekey package for more details.
+	InternalKeyKindRangeKeyUnset InternalKeyKind = 20
+	InternalKeyKindRangeKeySet   InternalKeyKind = 21
+
 	// This maximum value isn't part of the file format. It's unlikely,
 	// but future extensions may increase this value.
 	//
@@ -60,7 +69,7 @@ const (
 	// which sorts 'less than or equal to' any other valid internalKeyKind, when
 	// searching for any kind of internal key formed by a certain user key and
 	// seqNum.
-	InternalKeyKindMax InternalKeyKind = 18
+	InternalKeyKindMax InternalKeyKind = 21
 
 	// A marker for an invalid key.
 	InternalKeyKindInvalid InternalKeyKind = 255
@@ -81,15 +90,18 @@ const (
 )
 
 var internalKeyKindNames = []string{
-	InternalKeyKindDelete:        "DEL",
-	InternalKeyKindSet:           "SET",
-	InternalKeyKindMerge:         "MERGE",
-	InternalKeyKindLogData:       "LOGDATA",
-	InternalKeyKindSingleDelete:  "SINGLEDEL",
-	InternalKeyKindRangeDelete:   "RANGEDEL",
-	InternalKeyKindSeparator:     "SEPARATOR",
-	InternalKeyKindSetWithDelete: "SETWITHDEL",
-	InternalKeyKindInvalid:       "INVALID",
+	InternalKeyKindDelete:         "DEL",
+	InternalKeyKindSet:            "SET",
+	InternalKeyKindMerge:          "MERGE",
+	InternalKeyKindLogData:        "LOGDATA",
+	InternalKeyKindSingleDelete:   "SINGLEDEL",
+	InternalKeyKindRangeDelete:    "RANGEDEL",
+	InternalKeyKindSeparator:      "SEPARATOR",
+	InternalKeyKindSetWithDelete:  "SETWITHDEL",
+	InternalKeyKindRangeKeySet:    "RANGEKEYSET",
+	InternalKeyKindRangeKeyUnset:  "RANGEKEYUNSET",
+	InternalKeyKindRangeKeyDelete: "RANGEKEYDEL",
+	InternalKeyKindInvalid:        "INVALID",
 }
 
 func (k InternalKeyKind) String() string {
@@ -146,14 +158,17 @@ func MakeRangeDeleteSentinelKey(userKey []byte) InternalKey {
 }
 
 var kindsMap = map[string]InternalKeyKind{
-	"DEL":        InternalKeyKindDelete,
-	"SINGLEDEL":  InternalKeyKindSingleDelete,
-	"RANGEDEL":   InternalKeyKindRangeDelete,
-	"SET":        InternalKeyKindSet,
-	"MERGE":      InternalKeyKindMerge,
-	"INVALID":    InternalKeyKindInvalid,
-	"SEPARATOR":  InternalKeyKindSeparator,
-	"SETWITHDEL": InternalKeyKindSetWithDelete,
+	"DEL":           InternalKeyKindDelete,
+	"SINGLEDEL":     InternalKeyKindSingleDelete,
+	"RANGEDEL":      InternalKeyKindRangeDelete,
+	"SET":           InternalKeyKindSet,
+	"MERGE":         InternalKeyKindMerge,
+	"INVALID":       InternalKeyKindInvalid,
+	"SEPARATOR":     InternalKeyKindSeparator,
+	"SETWITHDEL":    InternalKeyKindSetWithDelete,
+	"RANGEKEYSET":   InternalKeyKindRangeKeySet,
+	"RANGEKEYUNSET": InternalKeyKindRangeKeyUnset,
+	"RANGEKEYDEL":   InternalKeyKindRangeKeyDelete,
 }
 
 // ParseInternalKey parses the string representation of an internal key. The
@@ -197,8 +212,8 @@ func DecodeInternalKey(encodedKey []byte) InternalKey {
 // InternalCompare compares two internal keys using the specified comparison
 // function. For equal user keys, internal keys compare in descending sequence
 // number order. For equal user keys and sequence numbers, internal keys
-// compare in descending kind order (though this should never happen in
-// practice).
+// compare in descending kind order (this may happen in practice among range
+// keys).
 func InternalCompare(userCmp Compare, a, b InternalKey) int {
 	if x := userCmp(a.UserKey, b.UserKey); x != 0 {
 		return x
