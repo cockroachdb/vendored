@@ -44,6 +44,10 @@ var (
 	// ErrReadOnly is returned when a write operation is performed on a read-only
 	// database.
 	ErrReadOnly = errors.New("pebble: read-only")
+	// errNoSplit indicates that the user is trying to perform a range key
+	// operation but the configured Comparer does not provide a Split
+	// implementation.
+	errNoSplit = errors.New("pebble: Comparer.Split required for range key operations")
 )
 
 // Reader is a readable key/value store.
@@ -108,10 +112,12 @@ type Writer interface {
 	// It is safe to modify the contents of the arguments after SingleDelete returns.
 	SingleDelete(key []byte, o *WriteOptions) error
 
-	// DeleteRange deletes all of the keys (and values) in the range [start,end)
-	// (inclusive on start, exclusive on end).
+	// DeleteRange deletes all of the point keys (and values) in the range
+	// [start,end) (inclusive on start, exclusive on end). DeleteRange does NOT
+	// delete overlapping range keys (eg, keys set via RangeKeySet).
 	//
-	// It is safe to modify the contents of the arguments after Delete returns.
+	// It is safe to modify the contents of the arguments after DeleteRange
+	// returns.
 	DeleteRange(start, end []byte, o *WriteOptions) error
 
 	// LogData adds the specified to the batch. The data will be written to the
@@ -399,6 +405,11 @@ type DB struct {
 		}
 	}
 
+	// rangeKeys is a temporary field so that Pebble can provide a non-durable
+	// implementation of range keys in advance of the real implementation.
+	// TODO(jackson): Remove this.
+	rangeKeys *RangeKeysArena
+
 	// Normally equal to time.Now() but may be overridden in tests.
 	timeNow func() time.Time
 }
@@ -614,6 +625,20 @@ func (d *DB) Apply(batch *Batch, opts *WriteOptions) error {
 		return errors.New("pebble: WAL disabled")
 	}
 
+	if batch.countRangeKeys > 0 {
+		if d.split == nil {
+			return errNoSplit
+		}
+		if d.opts.Experimental.RangeKeys == nil {
+			panic("pebble: range keys require the Experimental.RangeKeys option")
+		}
+		// TODO(jackson): Assert that all range key operands are suffixless.
+
+		// TODO(jackson): Once the format major version for range keys is
+		// introduced, error if the batch includes range keys but the active
+		// format major version doesn't enable them.
+	}
+
 	if batch.db == nil {
 		batch.refreshMemTableSize()
 	}
@@ -655,6 +680,16 @@ func (d *DB) commitApply(b *Batch, mem *memTable) error {
 		d.mu.Lock()
 		d.maybeScheduleDelayedFlush(mem)
 		d.mu.Unlock()
+	}
+
+	// If the batch contains range keys, add them to the range key skiplist.
+	// This is temporary, while we work on implementing range keys. It allows us
+	// to provide an implementation of range keys that aren't persisted, so
+	// CockroachDB packages may build and prototype against them.
+	// TODO(jackson): When the durable implementation is complete, remove this
+	// and the range-key arena.
+	if b.countRangeKeys > 0 {
+		d.applyBatchRangeKeys(b)
 	}
 
 	if mem.writerUnref() {
@@ -745,6 +780,9 @@ func (d *DB) newIterInternal(batch *Batch, s *Snapshot, o *IterOptions) *Iterato
 	if err := d.closed.Load(); err != nil {
 		panic(err)
 	}
+	if o.rangeKeys() && d.opts.Experimental.RangeKeys == nil {
+		panic("pebble: range keys require the Experimental.RangeKeys option")
+	}
 
 	// Grab and reference the current readState. This prevents the underlying
 	// files in the associated version from being deleted if there is a current
@@ -777,6 +815,13 @@ func (d *DB) newIterInternal(batch *Batch, s *Snapshot, o *IterOptions) *Iterato
 		batch:               batch,
 		newIters:            d.newIters,
 		seqNum:              seqNum,
+	}
+
+	if o.rangeKeys() {
+		// TODO(jackson): Pool range-key iterator objects.
+		dbi.rangeKey = &iteratorRangeKeyState{
+			rangeKeyIter: d.newRangeKeyIter(seqNum, o),
+		}
 	}
 	if o != nil {
 		dbi.opts = *o
@@ -826,73 +871,86 @@ func finishInitializingIter(buf *iterAlloc) *Iterator {
 		numMergingLevels++
 		numLevelIters++
 	}
-	if numMergingLevels > cap(mlevels) {
-		mlevels = make([]mergingIterLevel, 0, numMergingLevels)
-	}
-	if numLevelIters > cap(levels) {
-		levels = make([]levelIter, 0, numLevelIters)
-	}
 
-	// Top-level is the batch, if any.
-	if batch != nil {
-		mlevels = append(mlevels, mergingIterLevel{
-			iter:         batch.newInternalIter(&dbi.opts),
-			rangeDelIter: batch.newRangeDelIter(&dbi.opts),
-		})
-	}
-
-	// Next are the memtables.
-	for i := len(memtables) - 1; i >= 0; i-- {
-		mem := memtables[i]
-		// We only need to read from memtables which contain sequence numbers older
-		// than seqNum.
-		if logSeqNum := mem.logSeqNum; logSeqNum >= seqNum {
-			continue
+	if dbi.opts.pointKeys() {
+		if numMergingLevels > cap(mlevels) {
+			mlevels = make([]mergingIterLevel, 0, numMergingLevels)
 		}
-		mlevels = append(mlevels, mergingIterLevel{
-			iter:         mem.newIter(&dbi.opts),
-			rangeDelIter: mem.newRangeDelIter(&dbi.opts),
-		})
-	}
-
-	// Next are the file levels: L0 sub-levels followed by lower levels.
-	mlevelsIndex := len(mlevels)
-	levelsIndex := len(levels)
-	mlevels = mlevels[:numMergingLevels]
-	levels = levels[:numLevelIters]
-
-	addLevelIterForFiles := func(files manifest.LevelIterator, level manifest.Level) {
-		li := &levels[levelsIndex]
-
-		li.init(dbi.opts, dbi.cmp, dbi.split, dbi.newIters, files, level, nil)
-		li.initRangeDel(&mlevels[mlevelsIndex].rangeDelIter)
-		li.initSmallestLargestUserKey(&mlevels[mlevelsIndex].smallestUserKey,
-			&mlevels[mlevelsIndex].largestUserKey,
-			&mlevels[mlevelsIndex].isLargestUserKeyRangeDelSentinel)
-		li.initIsSyntheticIterBoundsKey(&mlevels[mlevelsIndex].isSyntheticIterBoundsKey)
-		mlevels[mlevelsIndex].iter = li
-
-		levelsIndex++
-		mlevelsIndex++
-	}
-
-	// Add level iterators for the L0 sublevels, iterating from newest to
-	// oldest.
-	for i := len(current.L0SublevelFiles) - 1; i >= 0; i-- {
-		addLevelIterForFiles(current.L0SublevelFiles[i].Iter(), manifest.L0Sublevel(i))
-	}
-
-	// Add level iterators for the non-empty non-L0 levels.
-	for level := 1; level < len(current.Levels); level++ {
-		if current.Levels[level].Empty() {
-			continue
+		if numLevelIters > cap(levels) {
+			levels = make([]levelIter, 0, numLevelIters)
 		}
-		addLevelIterForFiles(current.Levels[level].Iter(), manifest.Level(level))
+
+		// Top-level is the batch, if any.
+		if batch != nil {
+			mlevels = append(mlevels, mergingIterLevel{
+				iter:         batch.newInternalIter(&dbi.opts),
+				rangeDelIter: batch.newRangeDelIter(&dbi.opts),
+			})
+		}
+
+		// Next are the memtables.
+		for i := len(memtables) - 1; i >= 0; i-- {
+			mem := memtables[i]
+			// We only need to read from memtables which contain sequence numbers older
+			// than seqNum.
+			if logSeqNum := mem.logSeqNum; logSeqNum >= seqNum {
+				continue
+			}
+			mlevels = append(mlevels, mergingIterLevel{
+				iter:         mem.newIter(&dbi.opts),
+				rangeDelIter: mem.newRangeDelIter(&dbi.opts),
+			})
+		}
+
+		// Next are the file levels: L0 sub-levels followed by lower levels.
+		mlevelsIndex := len(mlevels)
+		levelsIndex := len(levels)
+		mlevels = mlevels[:numMergingLevels]
+		levels = levels[:numLevelIters]
+
+		addLevelIterForFiles := func(files manifest.LevelIterator, level manifest.Level) {
+			li := &levels[levelsIndex]
+
+			li.init(dbi.opts, dbi.cmp, dbi.split, dbi.newIters, files, level, nil)
+			li.initRangeDel(&mlevels[mlevelsIndex].rangeDelIter)
+			li.initSmallestLargestUserKey(&mlevels[mlevelsIndex].smallestUserKey,
+				&mlevels[mlevelsIndex].largestUserKey,
+				&mlevels[mlevelsIndex].isLargestUserKeyRangeDelSentinel)
+			li.initIsSyntheticIterBoundsKey(&mlevels[mlevelsIndex].isSyntheticIterBoundsKey)
+			mlevels[mlevelsIndex].iter = li
+
+			levelsIndex++
+			mlevelsIndex++
+		}
+
+		// Add level iterators for the L0 sublevels, iterating from newest to
+		// oldest.
+		for i := len(current.L0SublevelFiles) - 1; i >= 0; i-- {
+			addLevelIterForFiles(current.L0SublevelFiles[i].Iter(), manifest.L0Sublevel(i))
+		}
+
+		// Add level iterators for the non-empty non-L0 levels.
+		for level := 1; level < len(current.Levels); level++ {
+			if current.Levels[level].Empty() {
+				continue
+			}
+			addLevelIterForFiles(current.Levels[level].Iter(), manifest.Level(level))
+		}
+		buf.merging.init(&dbi.opts, dbi.cmp, dbi.split, mlevels...)
+		buf.merging.snapshot = seqNum
+		buf.merging.elideRangeTombstones = true
+	} else {
+		// This is a merging iterator with no levels, that produces nothing.
+		buf.merging.init(&dbi.opts, dbi.cmp, dbi.split)
 	}
 
-	buf.merging.init(&dbi.opts, dbi.cmp, dbi.split, mlevels...)
-	buf.merging.snapshot = seqNum
-	buf.merging.elideRangeTombstones = true
+	// For the in-memory prototype of range keys, wrap the merging iterator with
+	// an interleaving iterator. The dbi.rangeKeysIter is an iterator into
+	// fragmented range keys read from the global range key arena.
+	if dbi.rangeKey != nil {
+		dbi.rangeKey.iter.Init(&buf.merging, dbi.rangeKey.rangeKeyIter)
+		dbi.iter = &dbi.rangeKey.iter
+	}
 	return dbi
 }
 
@@ -1183,6 +1241,7 @@ func (d *DB) Metrics() *Metrics {
 	*metrics = d.mu.versions.metrics
 	metrics.Compact.EstimatedDebt = d.mu.versions.picker.estimatedCompactionDebt(0)
 	metrics.Compact.InProgressBytes = atomic.LoadInt64(&d.mu.versions.atomic.atomicInProgressBytes)
+	metrics.Compact.NumInProgress = int64(d.mu.compact.compactingCount)
 	for _, m := range d.mu.mem.queue {
 		metrics.MemTable.Size += m.totalBytes()
 	}

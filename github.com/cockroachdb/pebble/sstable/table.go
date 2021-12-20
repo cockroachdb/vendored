@@ -83,14 +83,26 @@ The table file format looks like:
 [data block 1]
 ...
 [data block N-1]
-[meta block 0]
-[meta block 1]
-...
-[meta block K-1]
+[meta filter block] (optional)
+[index block] (for single level index)
+[meta rangedel block] (optional)
+[meta range key block] (optional)
+[meta properties block]
 [metaindex block]
-[index block]
 [footer]
 <end_of_file>
+
+A Reader eagerly loads the footer, metaindex block and meta properties block,
+because the data contained in those blocks is needed on every read, and even
+before reading. For example, the meta properties block is used to verify the
+comparer and merger are compatible, and the metaindex block contains the
+location of the meta properties (and other meta blocks). In situations where
+file system locality matters, or one wants to minimize number of read
+requests when eagerly loading these blocks, having these three as a suffix
+of the file is convenient.
+
+The interleaving of the index block(s) between the meta blocks is done to
+match RocksDB/LevelDB behavior.
 
 Each block consists of some data and a 5 byte trailer: a 1 byte block type and a
 4 byte checksum. The checksum is computed over the compressed data and the first
@@ -98,20 +110,22 @@ byte of the trailer (i.e. the block type), and is serialized as little-endian.
 The block type gives the per-block compression used; each block is compressed
 independently. The checksum algorithm is described in the pebble/crc package.
 
-The decompressed block data consists of a sequence of key/value entries
-followed by a trailer. Each key is encoded as a shared prefix length and a
-remainder string. For example, if two adjacent keys are "tweedledee" and
-"tweedledum", then the second key would be encoded as {8, "um"}. The shared
-prefix length is varint encoded. The remainder string and the value are
-encoded as a varint-encoded length followed by the literal contents. To
-continue the example, suppose that the key "tweedledum" mapped to the value
+Most blocks, other than the meta filter block, contain key/value pairs. The
+remainder of this comment refers to the decompressed block, which has its 5 byte
+trailer stripped. The decompressed block data consists of a sequence of such
+key/value entries followed by a block suffix. Each key is encoded as a shared
+prefix length and a remainder string. For example, if two adjacent keys are
+"tweedledee" and "tweedledum", then the second key would be encoded as {8,
+"um"}. The shared prefix length is varint encoded. The remainder string and the
+value are encoded as a varint-encoded length followed by the literal contents.
+To continue the example, suppose that the key "tweedledum" mapped to the value
 "socks". The encoded key/value entry would be: "\x08\x02\x05umsocks".
 
 Every block has a restart interval I. Every I'th key/value entry in that block
 is called a restart point, and shares no key prefix with the previous entry.
 Continuing the example above, if the key after "tweedledum" was "two", but was
 part of a restart point, then that key would be encoded as {0, "two"} instead
-of {2, "o"}. If a block has P restart points, then the block trailer consists
+of {2, "o"}. If a block has P restart points, then the block suffix consists
 of (P+1)*4 bytes: (P+1) little-endian uint32 values. The first P of these
 uint32 values are the block offsets of each restart point. The final uint32
 value is P itself. Thus, when seeking for a particular key, one can use binary
@@ -124,13 +138,21 @@ is a key that is >= every key in block i and is < every key i block i+1. The
 successor for the final block is a key that is >= every key in block N-1. The
 index block restart interval is 1: every entry is a restart point.
 
-
 A block handle is an offset, a length, and optional block properties (for data
 blocks and first/lower level index blocks); the length does not include the 5
 byte trailer. All numbers are varint-encoded, with no padding between the two
 values. The maximum size of an encoded block handle without properties is 20
 bytes. It is not advised to have properties that accumulate to be longer than
 100 bytes.
+
+Instead of a single index block, the sstable can have a two-level index (this
+is used to prevent a single huge index block). A two-level index consists of a
+sequence of lower-level index blocks with block handles for data blocks
+followed by a single top-level index block with block handles for the
+lower-level index blocks.
+
+The metaindex block also contains block handles as values, with keys being
+the names of the meta blocks.
 
 */
 
@@ -159,6 +181,7 @@ const (
 	levelDBFormatVersion  = 0
 	rocksDBFormatVersion2 = 2
 
+	metaRangeKeyName   = "pebble.range_key"
 	metaPropertiesName = "rocksdb.properties"
 	metaRangeDelName   = "rocksdb.range_del"
 	metaRangeDelV2Name = "rocksdb.range_del2"
