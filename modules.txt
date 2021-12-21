@@ -1,4 +1,4 @@
-# cloud.google.com/go v0.97.0
+# cloud.google.com/go v0.99.0
 ## explicit; go 1.11
 cloud.google.com/go
 cloud.google.com/go/compute/metadata
@@ -931,9 +931,6 @@ github.com/google/skylark/syntax
 # github.com/google/uuid v1.3.0
 ## explicit
 github.com/google/uuid
-# github.com/google/wire v0.5.0
-## explicit; go 1.12
-github.com/google/wire
 # github.com/googleapis/gax-go/v2 v2.1.1
 ## explicit; go 1.11
 github.com/googleapis/gax-go/v2
@@ -1549,20 +1546,6 @@ go.uber.org/zap/internal/bufferpool
 go.uber.org/zap/internal/color
 go.uber.org/zap/internal/exit
 go.uber.org/zap/zapcore
-# gocloud.dev v0.24.0
-## explicit; go 1.12
-gocloud.dev/gcerrors
-gocloud.dev/gcp
-gocloud.dev/internal/gcerr
-gocloud.dev/internal/oc
-gocloud.dev/internal/openurl
-gocloud.dev/internal/retry
-gocloud.dev/internal/useragent
-gocloud.dev/pubsub
-gocloud.dev/pubsub/batcher
-gocloud.dev/pubsub/driver
-gocloud.dev/pubsub/gcppubsub
-gocloud.dev/pubsub/mempubsub
 # golang.org/x/crypto v0.0.0-20210817164053-32db794688a5
 ## explicit; go 1.17
 golang.org/x/crypto/bcrypt
@@ -1623,7 +1606,7 @@ golang.org/x/perf/storage/benchfmt
 golang.org/x/sync/errgroup
 golang.org/x/sync/semaphore
 golang.org/x/sync/syncmap
-# golang.org/x/sys v0.0.0-20211102061401-a2f17f7b995c
+# golang.org/x/sys v0.0.0-20211210111614-af8b64212486
 ## explicit; go 1.17
 golang.org/x/sys/execabs
 golang.org/x/sys/internal/unsafeheader
@@ -1730,7 +1713,7 @@ golang.org/x/tools/txtar
 ## explicit; go 1.11
 golang.org/x/xerrors
 golang.org/x/xerrors/internal
-# google.golang.org/api v0.60.0
+# google.golang.org/api v0.63.0
 ## explicit; go 1.11
 google.golang.org/api/googleapi
 google.golang.org/api/googleapi/transport
@@ -1764,7 +1747,7 @@ google.golang.org/appengine/internal/socket
 google.golang.org/appengine/internal/urlfetch
 google.golang.org/appengine/socket
 google.golang.org/appengine/urlfetch
-# google.golang.org/genproto v0.0.0-20211129164237-f09f9a12af12
+# google.golang.org/genproto v0.0.0-20211208223120-3a66f561d7aa
 ## explicit; go 1.11
 google.golang.org/genproto/googleapis/api/annotations
 google.golang.org/genproto/googleapis/api/expr/v1alpha1
@@ -1781,7 +1764,7 @@ google.golang.org/genproto/protobuf/api
 google.golang.org/genproto/protobuf/field_mask
 google.golang.org/genproto/protobuf/ptype
 google.golang.org/genproto/protobuf/source_context
-# google.golang.org/grpc v1.42.0
+# google.golang.org/grpc v1.43.0
 ## explicit; go 1.14
 google.golang.org/grpc
 google.golang.org/grpc/attributes
@@ -1793,6 +1776,8 @@ google.golang.org/grpc/balancer/grpclb/grpc_lb_v1
 google.golang.org/grpc/balancer/grpclb/state
 google.golang.org/grpc/balancer/roundrobin
 google.golang.org/grpc/balancer/weightedroundrobin
+google.golang.org/grpc/balancer/weightedtarget
+google.golang.org/grpc/balancer/weightedtarget/weightedaggregator
 google.golang.org/grpc/binarylog/grpc_binarylog_v1
 google.golang.org/grpc/codes
 google.golang.org/grpc/connectivity
@@ -1817,6 +1802,7 @@ google.golang.org/grpc/health/grpc_health_v1
 google.golang.org/grpc/internal
 google.golang.org/grpc/internal/admin
 google.golang.org/grpc/internal/backoff
+google.golang.org/grpc/internal/balancergroup
 google.golang.org/grpc/internal/balancerload
 google.golang.org/grpc/internal/binarylog
 google.golang.org/grpc/internal/buffer
@@ -1843,7 +1829,6 @@ google.golang.org/grpc/internal/syscall
 google.golang.org/grpc/internal/transport
 google.golang.org/grpc/internal/transport/networktype
 google.golang.org/grpc/internal/wrr
-google.golang.org/grpc/internal/xds/env
 google.golang.org/grpc/internal/xds/matcher
 google.golang.org/grpc/internal/xds/rbac
 google.golang.org/grpc/keepalive
@@ -1859,7 +1844,6 @@ google.golang.org/grpc/xds/csds
 google.golang.org/grpc/xds/googledirectpath
 google.golang.org/grpc/xds/internal
 google.golang.org/grpc/xds/internal/balancer
-google.golang.org/grpc/xds/internal/balancer/balancergroup
 google.golang.org/grpc/xds/internal/balancer/cdsbalancer
 google.golang.org/grpc/xds/internal/balancer/clusterimpl
 google.golang.org/grpc/xds/internal/balancer/clustermanager
@@ -1867,20 +1851,23 @@ google.golang.org/grpc/xds/internal/balancer/clusterresolver
 google.golang.org/grpc/xds/internal/balancer/loadstore
 google.golang.org/grpc/xds/internal/balancer/priority
 google.golang.org/grpc/xds/internal/balancer/ringhash
-google.golang.org/grpc/xds/internal/balancer/weightedtarget
-google.golang.org/grpc/xds/internal/balancer/weightedtarget/weightedaggregator
+google.golang.org/grpc/xds/internal/clusterspecifier
 google.golang.org/grpc/xds/internal/httpfilter
 google.golang.org/grpc/xds/internal/httpfilter/fault
 google.golang.org/grpc/xds/internal/httpfilter/rbac
 google.golang.org/grpc/xds/internal/httpfilter/router
 google.golang.org/grpc/xds/internal/resolver
 google.golang.org/grpc/xds/internal/server
-google.golang.org/grpc/xds/internal/version
 google.golang.org/grpc/xds/internal/xdsclient
 google.golang.org/grpc/xds/internal/xdsclient/bootstrap
+google.golang.org/grpc/xds/internal/xdsclient/controller
+google.golang.org/grpc/xds/internal/xdsclient/controller/version
+google.golang.org/grpc/xds/internal/xdsclient/controller/version/v2
+google.golang.org/grpc/xds/internal/xdsclient/controller/version/v3
 google.golang.org/grpc/xds/internal/xdsclient/load
-google.golang.org/grpc/xds/internal/xdsclient/v2
-google.golang.org/grpc/xds/internal/xdsclient/v3
+google.golang.org/grpc/xds/internal/xdsclient/pubsub
+google.golang.org/grpc/xds/internal/xdsclient/xdsresource
+google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version
 # google.golang.org/grpc/examples v0.0.0-20210324172016-702608ffae4d
 ## explicit; go 1.11
 # google.golang.org/protobuf v1.27.1
