@@ -1261,8 +1261,8 @@ github.com/openzipkin/zipkin-go/model
 github.com/pelletier/go-toml
 # github.com/peterbourgon/g2s v0.0.0-20170223122336-d4e7ad98afea
 ## explicit
-# github.com/petermattis/goid v0.0.0-20180202154549-b0b1615b78e5
-## explicit
+# github.com/petermattis/goid v0.0.0-20211229010228-4d14c490ee36
+## explicit; go 1.17
 github.com/petermattis/goid
 # github.com/pierrec/lz4 v2.6.0+incompatible
 ## explicit
