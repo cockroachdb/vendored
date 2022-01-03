@@ -113,7 +113,6 @@ github.com/Shopify/sarama
 github.com/Shopify/toxiproxy/client
 # github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d
 ## explicit
-github.com/StackExchange/wmi
 # github.com/VividCortex/ewma v1.1.1
 ## explicit
 github.com/VividCortex/ewma
@@ -732,7 +731,7 @@ github.com/go-kit/log/level
 # github.com/go-logfmt/logfmt v0.5.1
 ## explicit; go 1.17
 github.com/go-logfmt/logfmt
-# github.com/go-ole/go-ole v1.2.4
+# github.com/go-ole/go-ole v1.2.6
 ## explicit; go 1.12
 github.com/go-ole/go-ole
 github.com/go-ole/go-ole/oleutil
@@ -1161,6 +1160,9 @@ github.com/linkedin/goavro/v2
 # github.com/lufia/iostat v1.0.0
 ## explicit
 github.com/lufia/iostat
+# github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0
+## explicit; go 1.16
+github.com/lufia/plan9stats
 # github.com/magiconair/properties v1.8.4
 ## explicit; go 1.13
 github.com/magiconair/properties
@@ -1282,6 +1284,9 @@ github.com/pkg/profile
 # github.com/pmezard/go-difflib v1.0.0
 ## explicit
 github.com/pmezard/go-difflib/difflib
+# github.com/power-devops/perfstat v0.0.0-20210106213030-5aafc221ea8c
+## explicit; go 1.14
+github.com/power-devops/perfstat
 # github.com/pquerna/cachecontrol v0.0.0-20200921180117-858c6e7e6b7e
 ## explicit; go 1.14
 github.com/pquerna/cachecontrol
@@ -1348,14 +1353,16 @@ github.com/russross/blackfriday/v2
 github.com/sasha-s/go-deadlock
 # github.com/shirou/gopsutil v3.21.10+incompatible
 ## explicit
-github.com/shirou/gopsutil/cpu
-github.com/shirou/gopsutil/disk
-github.com/shirou/gopsutil/host
-github.com/shirou/gopsutil/internal/common
-github.com/shirou/gopsutil/load
-github.com/shirou/gopsutil/mem
-github.com/shirou/gopsutil/net
-github.com/shirou/gopsutil/process
+# github.com/shirou/gopsutil/v3 v3.21.12
+## explicit; go 1.15
+github.com/shirou/gopsutil/v3/cpu
+github.com/shirou/gopsutil/v3/disk
+github.com/shirou/gopsutil/v3/host
+github.com/shirou/gopsutil/v3/internal/common
+github.com/shirou/gopsutil/v3/load
+github.com/shirou/gopsutil/v3/mem
+github.com/shirou/gopsutil/v3/net
+github.com/shirou/gopsutil/v3/process
 # github.com/shurcooL/sanitized_anchor_name v1.0.0
 ## explicit
 github.com/shurcooL/sanitized_anchor_name
@@ -1447,6 +1454,9 @@ github.com/xdg/scram
 # github.com/xdg/stringprep v1.0.3
 ## explicit
 github.com/xdg/stringprep
+# github.com/yusufpapurcu/wmi v1.2.2
+## explicit; go 1.16
+github.com/yusufpapurcu/wmi
 # github.com/zabawaba99/go-gitignore v0.0.0-20200117185801-39e6bddfb292
 ## explicit
 github.com/zabawaba99/go-gitignore
