@@ -15,7 +15,7 @@ static int getdrivestat(io_registry_entry_t d, DriveStats *stat);
 static int fillstat(io_registry_entry_t d, DriveStats *stat);
 
 int
-readdrivestat(DriveStats a[], int n)
+lufia_iostat_v1_readdrivestat(DriveStats a[], int n)
 {
 	mach_port_t port;
 	CFMutableDictionaryRef match;
@@ -24,7 +24,7 @@ readdrivestat(DriveStats a[], int n)
 	kern_return_t status;
 	int na, rv;
 
-	IOMasterPort(bootstrap_port, &port);
+	IOMainPort(bootstrap_port, &port);
 	match = IOServiceMatching("IOMedia");
 	CFDictionaryAddValue(match, CFSTR(kIOMediaWholeKey), kCFBooleanTrue);
 	status = IOServiceGetMatchingServices(port, match, &drives);
@@ -95,6 +95,10 @@ static struct {
 	{kIOBlockStorageDriverStatisticsTotalWriteTimeKey, offsetof(DriveStats, writetime)},
 	{kIOBlockStorageDriverStatisticsLatentReadTimeKey, offsetof(DriveStats, readlat)},
 	{kIOBlockStorageDriverStatisticsLatentWriteTimeKey, offsetof(DriveStats, writelat)},
+	{kIOBlockStorageDriverStatisticsReadErrorsKey, offsetof(DriveStats, readerrs)},
+	{kIOBlockStorageDriverStatisticsWriteErrorsKey, offsetof(DriveStats, writeerrs)},
+	{kIOBlockStorageDriverStatisticsReadRetriesKey, offsetof(DriveStats, readretries)},
+	{kIOBlockStorageDriverStatisticsWriteRetriesKey, offsetof(DriveStats, writeretries)},
 };
 
 static int
@@ -130,7 +134,7 @@ fillstat(io_registry_entry_t d, DriveStats *stat)
 }
 
 int
-readcpustat(CPUStats *stats)
+lufia_iostat_v1_readcpustat(CPUStats *stats)
 {
 	mach_port_t port;
 	host_cpu_load_info_data_t load;

@@ -111,8 +111,6 @@ github.com/Shopify/sarama
 # github.com/Shopify/toxiproxy v2.1.4+incompatible
 ## explicit
 github.com/Shopify/toxiproxy/client
-# github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d
-## explicit
 # github.com/VividCortex/ewma v1.1.1
 ## explicit
 github.com/VividCortex/ewma
@@ -1157,8 +1155,8 @@ github.com/lib/pq/auth/kerberos
 # github.com/linkedin/goavro/v2 v2.10.0
 ## explicit; go 1.12
 github.com/linkedin/goavro/v2
-# github.com/lufia/iostat v1.0.0
-## explicit
+# github.com/lufia/iostat v1.2.1
+## explicit; go 1.14
 github.com/lufia/iostat
 # github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0
 ## explicit; go 1.16
@@ -1351,8 +1349,6 @@ github.com/russross/blackfriday/v2
 # github.com/sasha-s/go-deadlock v0.3.1
 ## explicit
 github.com/sasha-s/go-deadlock
-# github.com/shirou/gopsutil v3.21.10+incompatible
-## explicit
 # github.com/shirou/gopsutil/v3 v3.21.12
 ## explicit; go 1.15
 github.com/shirou/gopsutil/v3/cpu
