@@ -20,8 +20,8 @@ import (
 	"github.com/cockroachdb/pebble/internal/cache"
 	"github.com/cockroachdb/pebble/internal/crc"
 	"github.com/cockroachdb/pebble/internal/invariants"
+	"github.com/cockroachdb/pebble/internal/keyspan"
 	"github.com/cockroachdb/pebble/internal/private"
-	"github.com/cockroachdb/pebble/internal/rangedel"
 	"github.com/cockroachdb/pebble/vfs"
 )
 
@@ -113,9 +113,9 @@ type singleLevelIterator struct {
 	// dataBH refers to the last data block that the iterator considered
 	// loading. It may not actually have loaded the block, due to an error or
 	// because it was considered irrelevant.
-	dataBH     BlockHandle
-	err        error
-	closeHook  func(i Iterator) error
+	dataBH    BlockHandle
+	err       error
+	closeHook func(i Iterator) error
 
 	// boundsCmp and positionedUsingLatestBounds are for optimizing iteration
 	// that uses multiple adjacent bounds. The seek after setting a new bound
@@ -252,7 +252,8 @@ func checkTwoLevelIterator(obj interface{}) {
 // synonmous with Reader.NewIter, but allows for reusing of the iterator
 // between different Readers.
 func (i *singleLevelIterator) init(
-	r *Reader, lower, upper []byte, filterer *BlockPropertiesFilterer) error {
+	r *Reader, lower, upper []byte, filterer *BlockPropertiesFilterer,
+) error {
 	if r.err != nil {
 		return r.err
 	}
@@ -319,6 +320,7 @@ func (i *singleLevelIterator) initBounds() {
 }
 
 type loadBlockResult int8
+
 const (
 	loadBlockOK loadBlockResult = iota
 	// Could be due to error or because no block left to load.
@@ -1161,7 +1163,8 @@ func (i *twoLevelIterator) loadIndex() loadBlockResult {
 }
 
 func (i *twoLevelIterator) init(
-	r *Reader, lower, upper []byte, filterer *BlockPropertiesFilterer) error {
+	r *Reader, lower, upper []byte, filterer *BlockPropertiesFilterer,
+) error {
 	if r.err != nil {
 		return r.err
 	}
@@ -2015,6 +2018,7 @@ type Reader struct {
 	indexBH           BlockHandle
 	filterBH          BlockHandle
 	rangeDelBH        BlockHandle
+	rangeKeyBH        BlockHandle
 	rangeDelTransform blockTransform
 	propertiesBH      BlockHandle
 	metaIndexBH       BlockHandle
@@ -2052,60 +2056,12 @@ func (r *Reader) Close() error {
 	return nil
 }
 
-// get is a testing helper that simulates a read and helps verify bloom filters
-// until they are available through iterators.
-func (r *Reader) get(key []byte) (value []byte, err error) {
-	if r.err != nil {
-		return nil, r.err
-	}
-
-	if r.tableFilter != nil {
-		dataH, err := r.readFilter()
-		if err != nil {
-			return nil, err
-		}
-		var lookupKey []byte
-		if r.Split != nil {
-			lookupKey = key[:r.Split(key)]
-		} else {
-			lookupKey = key
-		}
-		mayContain := r.tableFilter.mayContain(dataH.Get(), lookupKey)
-		dataH.Release()
-		if !mayContain {
-			return nil, base.ErrNotFound
-		}
-	}
-
-	i, err := r.NewIter(nil /* lower */, nil /* upper */)
-	if err != nil {
-		return nil, err
-	}
-	ikey, value := i.SeekGE(key)
-
-	if ikey == nil || r.Compare(key, ikey.UserKey) != 0 {
-		err := i.Close()
-		if err == nil {
-			err = base.ErrNotFound
-		}
-		return nil, err
-	}
-
-	// The value will be "freed" when the iterator is closed, so make a copy
-	// which will outlast the lifetime of the iterator.
-	newValue := make([]byte, len(value))
-	copy(newValue, value)
-	if err := i.Close(); err != nil {
-		return nil, err
-	}
-	return newValue, nil
-}
-
 // NewIterWithBlockPropertyFilters returns an iterator for the contents of the
 // table. If an error occurs, NewIterWithBlockPropertyFilters cleans up after
 // itself and returns a nil iterator.
 func (r *Reader) NewIterWithBlockPropertyFilters(
-	lower, upper []byte, filterer *BlockPropertiesFilterer) (Iterator, error) {
+	lower, upper []byte, filterer *BlockPropertiesFilterer,
+) (Iterator, error) {
 	// NB: pebble.tableCache wraps the returned iterator with one which performs
 	// reference counting on the Reader, preventing the Reader from being closed
 	// until the final iterator closes.
@@ -2178,6 +2134,24 @@ func (r *Reader) NewRawRangeDelIter() (base.InternalIterator, error) {
 	return i, nil
 }
 
+// NewRawRangeKeyIter returns an internal iterator for the contents of the
+// range-key block for the table. Returns nil if the table does not contain any
+// range keys.
+func (r *Reader) NewRawRangeKeyIter() (base.InternalIterator, error) {
+	if r.rangeKeyBH.Length == 0 {
+		return nil, nil
+	}
+	h, err := r.readRangeKey()
+	if err != nil {
+		return nil, err
+	}
+	i := &blockIter{}
+	if err := i.initHandle(r.Compare, h, r.Properties.GlobalSeqNum); err != nil {
+		return nil, err
+	}
+	return i, nil
+}
+
 func (r *Reader) readIndex() (cache.Handle, error) {
 	return r.readBlock(r.indexBH, nil /* transform */, nil /* readaheadState */)
 }
@@ -2188,6 +2162,10 @@ func (r *Reader) readFilter() (cache.Handle, error) {
 
 func (r *Reader) readRangeDel() (cache.Handle, error) {
 	return r.readBlock(r.rangeDelBH, r.rangeDelTransform, nil /* readaheadState */)
+}
+
+func (r *Reader) readRangeKey() (cache.Handle, error) {
+	return r.readBlock(r.rangeKeyBH, nil /* transform */, nil /* readaheadState */)
 }
 
 // readBlock reads and decompresses a block from disk into memory.
@@ -2307,24 +2285,24 @@ func (r *Reader) transformRangeDelV1(b []byte) ([]byte, error) {
 	if err := iter.init(r.Compare, b, r.Properties.GlobalSeqNum); err != nil {
 		return nil, err
 	}
-	var tombstones []rangedel.Tombstone
+	var tombstones []keyspan.Span
 	for key, value := iter.First(); key != nil; key, value = iter.Next() {
-		t := rangedel.Tombstone{
+		t := keyspan.Span{
 			Start: *key,
 			End:   value,
 		}
 		tombstones = append(tombstones, t)
 	}
-	rangedel.Sort(r.Compare, tombstones)
+	keyspan.Sort(r.Compare, tombstones)
 
 	// Fragment the tombstones, outputting them directly to a block writer.
 	rangeDelBlock := blockWriter{
 		restartInterval: 1,
 	}
-	frag := rangedel.Fragmenter{
+	frag := keyspan.Fragmenter{
 		Cmp:    r.Compare,
 		Format: r.FormatKey,
-		Emit: func(fragmented []rangedel.Tombstone) {
+		Emit: func(fragmented []keyspan.Span) {
 			for i := range fragmented {
 				t := &fragmented[i]
 				rangeDelBlock.add(t.Start, t.End)
@@ -2332,8 +2310,7 @@ func (r *Reader) transformRangeDelV1(b []byte) ([]byte, error) {
 		},
 	}
 	for i := range tombstones {
-		t := &tombstones[i]
-		frag.Add(t.Start, t.End)
+		frag.Add(tombstones[i])
 	}
 	frag.Finish()
 
@@ -2393,6 +2370,10 @@ func (r *Reader) readMetaindex(metaindexBH BlockHandle) error {
 		}
 	}
 
+	if bh, ok := meta[metaRangeKeyName]; ok {
+		r.rangeKeyBH = bh
+	}
+
 	for name, fp := range r.opts.Filters {
 		types := []struct {
 			ftype  FilterType
@@ -2433,6 +2414,7 @@ func (r *Reader) Layout() (*Layout, error) {
 		Data:       make([]BlockHandle, 0, r.Properties.NumDataBlocks),
 		Filter:     r.filterBH,
 		RangeDel:   r.rangeDelBH,
+		RangeKey:   r.rangeKeyBH,
 		Properties: r.propertiesBH,
 		MetaIndex:  r.metaIndexBH,
 		Footer:     r.footerBH,
@@ -2497,7 +2479,7 @@ func (r *Reader) ValidateBlockChecksums() error {
 	var blocks []BlockHandle
 	blocks = append(blocks, l.Data...)
 	blocks = append(blocks, l.Index...)
-	blocks = append(blocks, l.TopIndex, l.Filter, l.RangeDel, l.Properties, l.MetaIndex)
+	blocks = append(blocks, l.TopIndex, l.Filter, l.RangeDel, l.RangeKey, l.Properties, l.MetaIndex)
 
 	// Sorting by offset ensures we are performing a sequential scan of the
 	// file.
@@ -2738,6 +2720,7 @@ type Layout struct {
 	TopIndex   BlockHandle
 	Filter     BlockHandle
 	RangeDel   BlockHandle
+	RangeKey   BlockHandle
 	Properties BlockHandle
 	MetaIndex  BlockHandle
 	Footer     BlockHandle
@@ -2768,6 +2751,9 @@ func (l *Layout) Describe(
 	}
 	if l.RangeDel.Length != 0 {
 		blocks = append(blocks, block{l.RangeDel, "range-del"})
+	}
+	if l.RangeKey.Length != 0 {
+		blocks = append(blocks, block{l.RangeKey, "range-key"})
 	}
 	if l.Properties.Length != 0 {
 		blocks = append(blocks, block{l.Properties, "properties"})
@@ -2880,7 +2866,7 @@ func (l *Layout) Describe(
 
 		var lastKey InternalKey
 		switch b.name {
-		case "data", "range-del":
+		case "data", "range-del", "range-key":
 			iter, _ := newBlockIter(r.Compare, h.Get())
 			for key, value := iter.First(); key != nil; key, value = iter.Next() {
 				ptr := unsafe.Pointer(uintptr(iter.ptr) + uintptr(iter.offset))
