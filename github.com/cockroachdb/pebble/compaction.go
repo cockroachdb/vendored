@@ -19,9 +19,9 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/errors/oserror"
 	"github.com/cockroachdb/pebble/internal/base"
+	"github.com/cockroachdb/pebble/internal/keyspan"
 	"github.com/cockroachdb/pebble/internal/manifest"
 	"github.com/cockroachdb/pebble/internal/private"
-	"github.com/cockroachdb/pebble/internal/rangedel"
 	"github.com/cockroachdb/pebble/sstable"
 	"github.com/cockroachdb/pebble/vfs"
 )
@@ -106,7 +106,9 @@ type compactionOutputSplitter interface {
 	// shouldSplitBefore returns whether we should split outputs before the
 	// specified "current key". The return value is splitNow or noSplit.
 	// splitNow means a split is advised before the specified key, and noSplit
-	// means no split is advised.
+	// means no split is advised. If shouldSplitBefore(a) advises a split then
+	// shouldSplitBefore(b) should also advise a split given b >= a, until
+	// onNewOutput is called.
 	shouldSplitBefore(key *InternalKey, tw *sstable.Writer) compactionSplitSuggestion
 	// onNewOutput updates internal splitter state when the compaction switches
 	// to a new sstable, and returns the next limit for the new output which
@@ -323,26 +325,22 @@ func (a *splitterGroup) onNewOutput(key *InternalKey) []byte {
 // the boundary between atomic compaction units). Use this splitter to wrap
 // any splitters that don't guarantee user key splits (i.e. splitters that make
 // their determination in ways other than comparing the current key against a
-// limit key.
+// limit key.) If a wrapped splitter advises a split, it must continue
+// to advise a split until a new output.
 type userKeyChangeSplitter struct {
-	cmp                Compare
-	splitOnNextUserKey bool
-	savedKey           []byte
-	splitter           compactionOutputSplitter
+	cmp               Compare
+	splitter          compactionOutputSplitter
+	unsafePrevUserKey func() []byte
 }
 
 func (u *userKeyChangeSplitter) shouldSplitBefore(
 	key *InternalKey, tw *sstable.Writer,
 ) compactionSplitSuggestion {
-	if u.splitOnNextUserKey && u.cmp(u.savedKey, key.UserKey) != 0 {
-		u.splitOnNextUserKey = false
-		u.savedKey = u.savedKey[:0]
-		return splitNow
+	if split := u.splitter.shouldSplitBefore(key, tw); split != splitNow {
+		return split
 	}
-	if split := u.splitter.shouldSplitBefore(key, tw); split == splitNow {
-		u.splitOnNextUserKey = true
-		u.savedKey = append(u.savedKey[:0], key.UserKey...)
-		return noSplit
+	if u.cmp(key.UserKey, u.unsafePrevUserKey()) > 0 {
+		return splitNow
 	}
 	return noSplit
 }
@@ -454,7 +452,7 @@ type compaction struct {
 	// The range deletion tombstone fragmenter. Adds range tombstones as they are
 	// returned from `compactionIter` and fragments them for output to files.
 	// Referenced by `compactionIter` which uses it to check whether keys are deleted.
-	rangeDelFrag rangedel.Fragmenter
+	rangeDelFrag keyspan.Fragmenter
 
 	// A list of objects to close when the compaction finishes. Used by input
 	// iteration to keep rangeDelIters open for the lifetime of the compaction,
@@ -1070,7 +1068,7 @@ func (c *compaction) newInputIter(newIters tableNewIters) (_ internalIterator, r
 			// tombstones to an output file sometimes has an incomplete view
 			// of range tombstones outside the file's internal key bounds. Skip
 			// any range tombstones completely outside file bounds.
-			rangeDelIter = rangedel.Truncate(
+			rangeDelIter = keyspan.Truncate(
 				c.cmp, rangeDelIter, lowerBound.UserKey, upperBound.UserKey, &f.Smallest, &f.Largest)
 		}
 		if rangeDelIter == nil {
@@ -1534,6 +1532,8 @@ func (d *DB) flush1() error {
 	d.removeInProgressCompaction(c)
 	d.mu.versions.incrementCompactions(c.kind)
 	d.mu.versions.incrementCompactionBytes(-c.bytesWritten)
+
+	info.TotalDuration = d.timeNow().Sub(startTime)
 	d.opts.EventListener.FlushEnd(info)
 
 	// Refresh bytes flushed count.
@@ -1957,6 +1957,8 @@ func (d *DB) compact1(c *compaction, errChannel chan error) (err error) {
 	d.removeInProgressCompaction(c)
 	d.mu.versions.incrementCompactions(c.kind)
 	d.mu.versions.incrementCompactionBytes(-c.bytesWritten)
+
+	info.TotalDuration = d.timeNow().Sub(startTime)
 	d.opts.EventListener.CompactionEnd(info)
 
 	// Update the read state before deleting obsolete files because the
@@ -2110,6 +2112,16 @@ func (d *DB) runCompaction(
 		writerOpts.BlockPropertyCollectors = nil
 	}
 
+	// prevPointKey is a sstable.WriterOption that provides access to
+	// the last point key written to a writer's sstable. When a new
+	// output begins in newOutput, prevPointKey is updated to point to
+	// the new output's sstable.Writer. This allows the compaction loop
+	// to access the last written point key without requiring the
+	// compaction loop to make a copy of each key ahead of time. Users
+	// must be careful, because the byte slice returned by UnsafeKey
+	// points directly into the Writer's block buffer.
+	var prevPointKey sstable.PreviousPointKeyOpt
+
 	newOutput := func() error {
 		fileMeta := &fileMetadata{}
 		d.mu.Lock()
@@ -2144,7 +2156,7 @@ func (d *DB) runCompaction(
 		filenames = append(filenames, filename)
 		cacheOpts := private.SSTableCacheOpts(d.cacheID, fileNum).(sstable.WriterOption)
 		internalTableOpt := private.SSTableInternalTableOpt.(sstable.WriterOption)
-		tw = sstable.NewWriter(file, writerOpts, cacheOpts, internalTableOpt)
+		tw = sstable.NewWriter(file, writerOpts, cacheOpts, internalTableOpt, &prevPointKey)
 
 		fileMeta.CreationTime = time.Now().Unix()
 		ve.NewFiles = append(ve.NewFiles, newFileEntry{
@@ -2183,7 +2195,7 @@ func (d *DB) runCompaction(
 		}
 
 		// NB: clone the key because the data can be held on to by the call to
-		// compactionIter.Tombstones via rangedel.Fragmenter.FlushTo.
+		// compactionIter.Tombstones via keyspan.Fragmenter.FlushTo.
 		splitKey = append([]byte(nil), splitKey...)
 		for _, v := range iter.Tombstones(splitKey, splitL0Outputs) {
 			if tw == nil {
@@ -2257,15 +2269,15 @@ func (d *DB) runCompaction(
 			// This is not the first output file. Bound the smallest range key by the
 			// previous tables largest key.
 			prevMeta := ve.NewFiles[n-2].Meta
-			if writerMeta.SmallestRange.UserKey != nil {
-				c := d.cmp(writerMeta.SmallestRange.UserKey, prevMeta.Largest.UserKey)
+			if writerMeta.SmallestRangeDel.UserKey != nil {
+				c := d.cmp(writerMeta.SmallestRangeDel.UserKey, prevMeta.Largest.UserKey)
 				if c < 0 {
 					return errors.Errorf(
 						"pebble: smallest range tombstone start key is less than previous sstable largest key: %s < %s",
-						writerMeta.SmallestRange.Pretty(d.opts.Comparer.FormatKey),
+						writerMeta.SmallestRangeDel.Pretty(d.opts.Comparer.FormatKey),
 						prevMeta.Largest.Pretty(d.opts.Comparer.FormatKey))
 				}
-				if c == 0 && prevMeta.Largest.SeqNum() <= writerMeta.SmallestRange.SeqNum() {
+				if c == 0 && prevMeta.Largest.SeqNum() <= writerMeta.SmallestRangeDel.SeqNum() {
 					// The user key portion of the range boundary start key is equal to
 					// the previous table's largest key. We need the tables to be
 					// key-space partitioned, so force the boundary to a key that we know
@@ -2297,12 +2309,12 @@ func (d *DB) runCompaction(
 					// https://github.com/cockroachdb/pebble/pull/479#pullrequestreview-340600654
 					// into docs/range_deletions.md and reference the correctness
 					// argument here. Note that that comment might be slightly incorrect.
-					writerMeta.SmallestRange.SetSeqNum(prevMeta.Largest.SeqNum() - 1)
+					writerMeta.SmallestRangeDel.SetSeqNum(prevMeta.Largest.SeqNum() - 1)
 				}
 			}
 		}
 
-		if splitKey != nil && writerMeta.LargestRange.UserKey != nil {
+		if splitKey != nil && writerMeta.LargestRangeDel.UserKey != nil {
 			// The current file is not the last output file and there is a range tombstone in it.
 			// If the tombstone extends into the next file, then truncate it for the purposes of
 			// computing meta.Largest. For example, say the next file's first key is c#7,1 and the
@@ -2311,9 +2323,9 @@ func (d *DB) runCompaction(
 			// c#inf where inf is the InternalKeyRangeDeleteSentinel. Note that this is just for
 			// purposes of bounds computation -- the current sstable will end up with a Largest key
 			// of c#7,1 so the range tombstone in the current file will be able to delete c#7.
-			if d.cmp(writerMeta.LargestRange.UserKey, splitKey) >= 0 {
-				writerMeta.LargestRange.UserKey = splitKey
-				writerMeta.LargestRange.Trailer = InternalKeyRangeDeleteSentinel
+			if d.cmp(writerMeta.LargestRangeDel.UserKey, splitKey) >= 0 {
+				writerMeta.LargestRangeDel.UserKey = splitKey
+				writerMeta.LargestRangeDel.Trailer = InternalKeyRangeDeleteSentinel
 			}
 		}
 
@@ -2382,6 +2394,16 @@ func (d *DB) runCompaction(
 		outputSplitters[0] = &userKeyChangeSplitter{
 			cmp:      c.cmp,
 			splitter: outputSplitters[0],
+			unsafePrevUserKey: func() []byte {
+				// Return the largest point key written to tw or the start of
+				// the current range deletion in the fragmenter, whichever is
+				// greater.
+				prevPoint := prevPointKey.UnsafeKey()
+				if c.cmp(prevPoint.UserKey, c.rangeDelFrag.Start()) > 0 {
+					return prevPoint.UserKey
+				}
+				return c.rangeDelFrag.Start()
+			},
 		}
 		outputSplitters = append(outputSplitters, &l0LimitSplitter{c: c, ve: ve})
 	}
@@ -2436,7 +2458,7 @@ func (d *DB) runCompaction(
 				// written later during `finishOutput()`. We add them to the
 				// `Fragmenter` now to make them visible to `compactionIter` so covered
 				// keys in the same snapshot stripe can be elided.
-				c.rangeDelFrag.Add(iter.cloneKey(*key), val)
+				c.rangeDelFrag.Add(keyspan.Span{Start: iter.cloneKey(*key), End: val})
 				continue
 			}
 			if tw == nil {
