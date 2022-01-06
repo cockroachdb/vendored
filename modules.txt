@@ -298,126 +298,152 @@ github.com/bgentry/go-netrc/netrc
 # github.com/biogo/store v0.0.0-20160505134755-913427a1d5e8
 ## explicit
 github.com/biogo/store/llrb
-# github.com/bufbuild/buf v0.42.1 => github.com/cockroachdb/buf v0.42.2-0.20210706083726-883d34031660
+# github.com/bufbuild/buf v0.56.0
 ## explicit; go 1.16
 github.com/bufbuild/buf/cmd/buf
-github.com/bufbuild/buf/internal/buf/bufanalysis
-github.com/bufbuild/buf/internal/buf/bufapiclient
-github.com/bufbuild/buf/internal/buf/bufapimodule
-github.com/bufbuild/buf/internal/buf/bufapp
-github.com/bufbuild/buf/internal/buf/bufcheck
-github.com/bufbuild/buf/internal/buf/bufcheck/bufbreaking
-github.com/bufbuild/buf/internal/buf/bufcheck/bufbreaking/internal/bufbreakingbuild
-github.com/bufbuild/buf/internal/buf/bufcheck/bufbreaking/internal/bufbreakingcheck
-github.com/bufbuild/buf/internal/buf/bufcheck/bufbreaking/internal/bufbreakingv1beta1
-github.com/bufbuild/buf/internal/buf/bufcheck/buflint
-github.com/bufbuild/buf/internal/buf/bufcheck/buflint/internal/buflintbuild
-github.com/bufbuild/buf/internal/buf/bufcheck/buflint/internal/buflintcheck
-github.com/bufbuild/buf/internal/buf/bufcheck/buflint/internal/buflintv1beta1
-github.com/bufbuild/buf/internal/buf/bufcheck/internal
-github.com/bufbuild/buf/internal/buf/bufcli
-github.com/bufbuild/buf/internal/buf/bufconfig
-github.com/bufbuild/buf/internal/buf/bufcore
-github.com/bufbuild/buf/internal/buf/bufcore/bufimage
-github.com/bufbuild/buf/internal/buf/bufcore/bufimage/bufimagebuild
-github.com/bufbuild/buf/internal/buf/bufcore/bufimage/bufimagemodify
-github.com/bufbuild/buf/internal/buf/bufcore/bufimage/bufimageutil
-github.com/bufbuild/buf/internal/buf/bufcore/bufmodule
-github.com/bufbuild/buf/internal/buf/bufcore/bufmodule/bufmodulebuild
-github.com/bufbuild/buf/internal/buf/bufcore/bufmodule/bufmodulecache
-github.com/bufbuild/buf/internal/buf/bufcore/bufmodule/bufmoduleprotoparse
-github.com/bufbuild/buf/internal/buf/bufcore/bufmodule/internal
-github.com/bufbuild/buf/internal/buf/bufcore/internal/bufcorevalidate
-github.com/bufbuild/buf/internal/buf/buffetch
-github.com/bufbuild/buf/internal/buf/buffetch/internal
-github.com/bufbuild/buf/internal/buf/bufgen
-github.com/bufbuild/buf/internal/buf/bufprint
-github.com/bufbuild/buf/internal/buf/buftransport
-github.com/bufbuild/buf/internal/buf/bufwire
-github.com/bufbuild/buf/internal/buf/bufwork
-github.com/bufbuild/buf/internal/buf/cmd/buf
-github.com/bufbuild/buf/internal/buf/cmd/buf/command/beta/mod/modexport
-github.com/bufbuild/buf/internal/buf/cmd/buf/command/beta/mod/modinit
-github.com/bufbuild/buf/internal/buf/cmd/buf/command/beta/mod/modupdate
-github.com/bufbuild/buf/internal/buf/cmd/buf/command/beta/push
-github.com/bufbuild/buf/internal/buf/cmd/buf/command/beta/registry/branch/branchcreate
-github.com/bufbuild/buf/internal/buf/cmd/buf/command/beta/registry/branch/branchlist
-github.com/bufbuild/buf/internal/buf/cmd/buf/command/beta/registry/organization/organizationcreate
-github.com/bufbuild/buf/internal/buf/cmd/buf/command/beta/registry/organization/organizationdelete
-github.com/bufbuild/buf/internal/buf/cmd/buf/command/beta/registry/organization/organizationget
-github.com/bufbuild/buf/internal/buf/cmd/buf/command/beta/registry/repository/repositorycreate
-github.com/bufbuild/buf/internal/buf/cmd/buf/command/beta/registry/repository/repositorydelete
-github.com/bufbuild/buf/internal/buf/cmd/buf/command/beta/registry/repository/repositoryget
-github.com/bufbuild/buf/internal/buf/cmd/buf/command/beta/registry/repository/repositorylist
-github.com/bufbuild/buf/internal/buf/cmd/buf/command/beta/registry/tag/tagcreate
-github.com/bufbuild/buf/internal/buf/cmd/buf/command/beta/registry/tag/taglist
-github.com/bufbuild/buf/internal/buf/cmd/buf/command/breaking
-github.com/bufbuild/buf/internal/buf/cmd/buf/command/build
-github.com/bufbuild/buf/internal/buf/cmd/buf/command/config/configlsbreakingrules
-github.com/bufbuild/buf/internal/buf/cmd/buf/command/config/configlslintrules
-github.com/bufbuild/buf/internal/buf/cmd/buf/command/config/internal
-github.com/bufbuild/buf/internal/buf/cmd/buf/command/convert
-github.com/bufbuild/buf/internal/buf/cmd/buf/command/generate
-github.com/bufbuild/buf/internal/buf/cmd/buf/command/lint
-github.com/bufbuild/buf/internal/buf/cmd/buf/command/lsfiles
-github.com/bufbuild/buf/internal/buf/cmd/buf/command/protoc
-github.com/bufbuild/buf/internal/gen/data/datawkt
-github.com/bufbuild/buf/internal/gen/proto/api/buf/alpha/registry/v1alpha1/registryv1alpha1api
-github.com/bufbuild/buf/internal/gen/proto/apiclient/buf/alpha/registry/v1alpha1/registryv1alpha1apiclient
-github.com/bufbuild/buf/internal/gen/proto/apiclientgrpc/buf/alpha/registry/v1alpha1/registryv1alpha1apiclientgrpc
-github.com/bufbuild/buf/internal/gen/proto/apiclienttwirp/buf/alpha/registry/v1alpha1/registryv1alpha1apiclienttwirp
-github.com/bufbuild/buf/internal/gen/proto/go/buf/alpha/api/v1alpha1
-github.com/bufbuild/buf/internal/gen/proto/go/buf/alpha/image/v1
-github.com/bufbuild/buf/internal/gen/proto/go/buf/alpha/module/v1alpha1
-github.com/bufbuild/buf/internal/gen/proto/go/buf/alpha/registry/v1alpha1
-github.com/bufbuild/buf/internal/pkg/app
-github.com/bufbuild/buf/internal/pkg/app/appcmd
-github.com/bufbuild/buf/internal/pkg/app/appflag
-github.com/bufbuild/buf/internal/pkg/app/applog
-github.com/bufbuild/buf/internal/pkg/app/appname
-github.com/bufbuild/buf/internal/pkg/app/appproto
-github.com/bufbuild/buf/internal/pkg/app/appproto/appprotoexec
-github.com/bufbuild/buf/internal/pkg/app/appproto/appprotoos
-github.com/bufbuild/buf/internal/pkg/cert/certclient
-github.com/bufbuild/buf/internal/pkg/diff
-github.com/bufbuild/buf/internal/pkg/encoding
-github.com/bufbuild/buf/internal/pkg/filelock
-github.com/bufbuild/buf/internal/pkg/filepathextended
-github.com/bufbuild/buf/internal/pkg/git
-github.com/bufbuild/buf/internal/pkg/httpauth
-github.com/bufbuild/buf/internal/pkg/interrupt
-github.com/bufbuild/buf/internal/pkg/ioextended
-github.com/bufbuild/buf/internal/pkg/netconfig
-github.com/bufbuild/buf/internal/pkg/netextended
-github.com/bufbuild/buf/internal/pkg/netrc
-github.com/bufbuild/buf/internal/pkg/normalpath
-github.com/bufbuild/buf/internal/pkg/observability
-github.com/bufbuild/buf/internal/pkg/observability/observabilityzap
-github.com/bufbuild/buf/internal/pkg/osextended
-github.com/bufbuild/buf/internal/pkg/protodescriptor
-github.com/bufbuild/buf/internal/pkg/protoencoding
-github.com/bufbuild/buf/internal/pkg/protosource
-github.com/bufbuild/buf/internal/pkg/prototime
-github.com/bufbuild/buf/internal/pkg/protoversion
-github.com/bufbuild/buf/internal/pkg/rpc
-github.com/bufbuild/buf/internal/pkg/rpc/rpcauth
-github.com/bufbuild/buf/internal/pkg/rpc/rpcgrpc
-github.com/bufbuild/buf/internal/pkg/rpc/rpcheader
-github.com/bufbuild/buf/internal/pkg/rpc/rpchttp
-github.com/bufbuild/buf/internal/pkg/rpc/rpctwirp
-github.com/bufbuild/buf/internal/pkg/storage
-github.com/bufbuild/buf/internal/pkg/storage/storagearchive
-github.com/bufbuild/buf/internal/pkg/storage/storagemem
-github.com/bufbuild/buf/internal/pkg/storage/storageos
-github.com/bufbuild/buf/internal/pkg/storage/storageutil
-github.com/bufbuild/buf/internal/pkg/stringutil
-github.com/bufbuild/buf/internal/pkg/thread
-github.com/bufbuild/buf/internal/pkg/tmp
-github.com/bufbuild/buf/internal/pkg/transport/grpc/grpcclient
-github.com/bufbuild/buf/internal/pkg/transport/http/httpclient
-github.com/bufbuild/buf/internal/pkg/transport/twirp/twirpclient
-github.com/bufbuild/buf/internal/pkg/uuidutil
-github.com/bufbuild/buf/internal/pkg/zaputil
+github.com/bufbuild/buf/private/buf/bufapp
+github.com/bufbuild/buf/private/buf/bufcheck
+github.com/bufbuild/buf/private/buf/bufcheck/bufbreaking
+github.com/bufbuild/buf/private/buf/bufcheck/bufbreaking/bufbreakingconfig
+github.com/bufbuild/buf/private/buf/bufcheck/bufbreaking/internal/bufbreakingbuild
+github.com/bufbuild/buf/private/buf/bufcheck/bufbreaking/internal/bufbreakingcheck
+github.com/bufbuild/buf/private/buf/bufcheck/bufbreaking/internal/bufbreakingv1
+github.com/bufbuild/buf/private/buf/bufcheck/bufbreaking/internal/bufbreakingv1beta1
+github.com/bufbuild/buf/private/buf/bufcheck/buflint
+github.com/bufbuild/buf/private/buf/bufcheck/buflint/buflintconfig
+github.com/bufbuild/buf/private/buf/bufcheck/buflint/internal/buflintbuild
+github.com/bufbuild/buf/private/buf/bufcheck/buflint/internal/buflintcheck
+github.com/bufbuild/buf/private/buf/bufcheck/buflint/internal/buflintv1
+github.com/bufbuild/buf/private/buf/bufcheck/buflint/internal/buflintv1beta1
+github.com/bufbuild/buf/private/buf/bufcheck/internal
+github.com/bufbuild/buf/private/buf/bufcli
+github.com/bufbuild/buf/private/buf/bufconfig
+github.com/bufbuild/buf/private/buf/buffetch
+github.com/bufbuild/buf/private/buf/buffetch/internal
+github.com/bufbuild/buf/private/buf/bufgen
+github.com/bufbuild/buf/private/buf/bufmigrate
+github.com/bufbuild/buf/private/buf/bufprint
+github.com/bufbuild/buf/private/buf/bufwire
+github.com/bufbuild/buf/private/buf/bufwork
+github.com/bufbuild/buf/private/buf/cmd/buf
+github.com/bufbuild/buf/private/buf/cmd/buf/command/alpha/registry/token/tokencreate
+github.com/bufbuild/buf/private/buf/cmd/buf/command/alpha/registry/token/tokendelete
+github.com/bufbuild/buf/private/buf/cmd/buf/command/alpha/registry/token/tokenget
+github.com/bufbuild/buf/private/buf/cmd/buf/command/alpha/registry/token/tokenlist
+github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/commit/commitget
+github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/commit/commitlist
+github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/organization/organizationcreate
+github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/organization/organizationdelete
+github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/organization/organizationget
+github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/plugin/plugincreate
+github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/plugin/plugindelete
+github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/plugin/pluginlist
+github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/plugin/pluginversion/pluginversionlist
+github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/repository/repositorycreate
+github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/repository/repositorydelete
+github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/repository/repositoryget
+github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/repository/repositorylist
+github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/tag/tagcreate
+github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/tag/taglist
+github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/template/templatecreate
+github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/template/templatedelete
+github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/template/templatelist
+github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/template/templateversion/templateversioncreate
+github.com/bufbuild/buf/private/buf/cmd/buf/command/beta/registry/template/templateversion/templateversionlist
+github.com/bufbuild/buf/private/buf/cmd/buf/command/breaking
+github.com/bufbuild/buf/private/buf/cmd/buf/command/build
+github.com/bufbuild/buf/private/buf/cmd/buf/command/config/configlsbreakingrules
+github.com/bufbuild/buf/private/buf/cmd/buf/command/config/configlslintrules
+github.com/bufbuild/buf/private/buf/cmd/buf/command/config/configmigratev1beta1
+github.com/bufbuild/buf/private/buf/cmd/buf/command/config/internal
+github.com/bufbuild/buf/private/buf/cmd/buf/command/convert
+github.com/bufbuild/buf/private/buf/cmd/buf/command/export
+github.com/bufbuild/buf/private/buf/cmd/buf/command/generate
+github.com/bufbuild/buf/private/buf/cmd/buf/command/lint
+github.com/bufbuild/buf/private/buf/cmd/buf/command/login
+github.com/bufbuild/buf/private/buf/cmd/buf/command/logout
+github.com/bufbuild/buf/private/buf/cmd/buf/command/lsfiles
+github.com/bufbuild/buf/private/buf/cmd/buf/command/mod/modclearcache
+github.com/bufbuild/buf/private/buf/cmd/buf/command/mod/modinit
+github.com/bufbuild/buf/private/buf/cmd/buf/command/mod/modprune
+github.com/bufbuild/buf/private/buf/cmd/buf/command/mod/modupdate
+github.com/bufbuild/buf/private/buf/cmd/buf/command/protoc
+github.com/bufbuild/buf/private/buf/cmd/buf/command/push
+github.com/bufbuild/buf/private/bufpkg/bufanalysis
+github.com/bufbuild/buf/private/bufpkg/bufapiclient
+github.com/bufbuild/buf/private/bufpkg/bufapimodule
+github.com/bufbuild/buf/private/bufpkg/bufimage
+github.com/bufbuild/buf/private/bufpkg/bufimage/bufimagebuild
+github.com/bufbuild/buf/private/bufpkg/bufimage/bufimagemodify
+github.com/bufbuild/buf/private/bufpkg/bufimage/bufimageutil
+github.com/bufbuild/buf/private/bufpkg/buflock
+github.com/bufbuild/buf/private/bufpkg/bufmodule
+github.com/bufbuild/buf/private/bufpkg/bufmodule/bufmodulebuild
+github.com/bufbuild/buf/private/bufpkg/bufmodule/bufmodulecache
+github.com/bufbuild/buf/private/bufpkg/bufmodule/bufmoduleconfig
+github.com/bufbuild/buf/private/bufpkg/bufmodule/bufmoduleprotoparse
+github.com/bufbuild/buf/private/bufpkg/bufmodule/internal
+github.com/bufbuild/buf/private/bufpkg/bufplugin
+github.com/bufbuild/buf/private/bufpkg/bufrpc
+github.com/bufbuild/buf/private/bufpkg/buftransport
+github.com/bufbuild/buf/private/gen/data/datawkt
+github.com/bufbuild/buf/private/gen/proto/api/buf/alpha/registry/v1alpha1/registryv1alpha1api
+github.com/bufbuild/buf/private/gen/proto/apiclient/buf/alpha/registry/v1alpha1/registryv1alpha1apiclient
+github.com/bufbuild/buf/private/gen/proto/apiclientgrpc/buf/alpha/registry/v1alpha1/registryv1alpha1apiclientgrpc
+github.com/bufbuild/buf/private/gen/proto/apiclienttwirp/buf/alpha/registry/v1alpha1/registryv1alpha1apiclienttwirp
+github.com/bufbuild/buf/private/gen/proto/go/buf/alpha/image/v1
+github.com/bufbuild/buf/private/gen/proto/go/buf/alpha/module/v1alpha1
+github.com/bufbuild/buf/private/gen/proto/go/buf/alpha/registry/v1alpha1
+github.com/bufbuild/buf/private/pkg/app
+github.com/bufbuild/buf/private/pkg/app/appcmd
+github.com/bufbuild/buf/private/pkg/app/appflag
+github.com/bufbuild/buf/private/pkg/app/applog
+github.com/bufbuild/buf/private/pkg/app/appname
+github.com/bufbuild/buf/private/pkg/app/appproto
+github.com/bufbuild/buf/private/pkg/app/appproto/appprotoexec
+github.com/bufbuild/buf/private/pkg/app/appproto/appprotoos
+github.com/bufbuild/buf/private/pkg/app/appverbose
+github.com/bufbuild/buf/private/pkg/cert/certclient
+github.com/bufbuild/buf/private/pkg/diff
+github.com/bufbuild/buf/private/pkg/encoding
+github.com/bufbuild/buf/private/pkg/filelock
+github.com/bufbuild/buf/private/pkg/filepathextended
+github.com/bufbuild/buf/private/pkg/git
+github.com/bufbuild/buf/private/pkg/httpauth
+github.com/bufbuild/buf/private/pkg/interrupt
+github.com/bufbuild/buf/private/pkg/ioextended
+github.com/bufbuild/buf/private/pkg/netextended
+github.com/bufbuild/buf/private/pkg/netrc
+github.com/bufbuild/buf/private/pkg/normalpath
+github.com/bufbuild/buf/private/pkg/observability
+github.com/bufbuild/buf/private/pkg/observability/observabilityzap
+github.com/bufbuild/buf/private/pkg/osextended
+github.com/bufbuild/buf/private/pkg/protodescriptor
+github.com/bufbuild/buf/private/pkg/protoencoding
+github.com/bufbuild/buf/private/pkg/protosource
+github.com/bufbuild/buf/private/pkg/prototime
+github.com/bufbuild/buf/private/pkg/protoversion
+github.com/bufbuild/buf/private/pkg/rpc
+github.com/bufbuild/buf/private/pkg/rpc/rpcauth
+github.com/bufbuild/buf/private/pkg/rpc/rpcgrpc
+github.com/bufbuild/buf/private/pkg/rpc/rpcheader
+github.com/bufbuild/buf/private/pkg/rpc/rpchttp
+github.com/bufbuild/buf/private/pkg/rpc/rpctwirp
+github.com/bufbuild/buf/private/pkg/storage
+github.com/bufbuild/buf/private/pkg/storage/storagearchive
+github.com/bufbuild/buf/private/pkg/storage/storagemem
+github.com/bufbuild/buf/private/pkg/storage/storageos
+github.com/bufbuild/buf/private/pkg/storage/storageutil
+github.com/bufbuild/buf/private/pkg/stringutil
+github.com/bufbuild/buf/private/pkg/thread
+github.com/bufbuild/buf/private/pkg/tmp
+github.com/bufbuild/buf/private/pkg/transport/grpc/grpcclient
+github.com/bufbuild/buf/private/pkg/transport/http/httpclient
+github.com/bufbuild/buf/private/pkg/transport/twirp/twirpclient
+github.com/bufbuild/buf/private/pkg/uuidutil
+github.com/bufbuild/buf/private/pkg/verbose
+github.com/bufbuild/buf/private/pkg/zaputil
+github.com/bufbuild/buf/private/usage
 # github.com/cenkalti/backoff v2.2.1+incompatible
 ## explicit
 github.com/cenkalti/backoff
@@ -791,7 +817,7 @@ github.com/go-swagger/go-swagger/cmd/swagger/commands/initcmd
 github.com/go-swagger/go-swagger/codescan
 github.com/go-swagger/go-swagger/generator
 github.com/go-swagger/go-swagger/scan
-# github.com/gofrs/flock v0.8.0
+# github.com/gofrs/flock v0.8.1
 ## explicit
 github.com/gofrs/flock
 # github.com/gofrs/uuid v4.0.0+incompatible
@@ -1076,7 +1102,7 @@ github.com/jcmturner/rpc/v2/ndr
 # github.com/jessevdk/go-flags v1.5.0
 ## explicit; go 1.15
 github.com/jessevdk/go-flags
-# github.com/jhump/protoreflect v1.8.3-0.20210302193947-8255811fc3c0
+# github.com/jhump/protoreflect v1.9.1-0.20210817181203-db1a327a393e
 ## explicit; go 1.13
 github.com/jhump/protoreflect/codec
 github.com/jhump/protoreflect/desc
@@ -1162,7 +1188,7 @@ github.com/lufia/iostat
 # github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0
 ## explicit; go 1.16
 github.com/lufia/plan9stats
-# github.com/magiconair/properties v1.8.4
+# github.com/magiconair/properties v1.8.5
 ## explicit; go 1.13
 github.com/magiconair/properties
 # github.com/mailru/easyjson v0.7.6
@@ -1256,7 +1282,7 @@ github.com/opencontainers/image-spec/specs-go/v1
 # github.com/openzipkin/zipkin-go v0.2.5
 ## explicit; go 1.12
 github.com/openzipkin/zipkin-go/model
-# github.com/pelletier/go-toml v1.8.1
+# github.com/pelletier/go-toml v1.9.3
 ## explicit; go 1.12
 github.com/pelletier/go-toml
 # github.com/peterbourgon/g2s v0.0.0-20170223122336-d4e7ad98afea
@@ -1381,8 +1407,8 @@ github.com/spf13/afero/mem
 # github.com/spf13/cast v1.3.1
 ## explicit
 github.com/spf13/cast
-# github.com/spf13/cobra v1.1.3
-## explicit; go 1.12
+# github.com/spf13/cobra v1.2.1
+## explicit; go 1.14
 github.com/spf13/cobra
 github.com/spf13/cobra/doc
 # github.com/spf13/jwalterweatherman v1.1.0
@@ -1391,7 +1417,7 @@ github.com/spf13/jwalterweatherman
 # github.com/spf13/pflag v1.0.5
 ## explicit; go 1.12
 github.com/spf13/pflag
-# github.com/spf13/viper v1.7.1
+# github.com/spf13/viper v1.8.1
 ## explicit; go 1.12
 github.com/spf13/viper
 # github.com/stretchr/testify v1.7.0
@@ -1410,7 +1436,7 @@ github.com/tklauser/numcpus
 # github.com/toqueteos/webbrowser v1.2.0
 ## explicit; go 1.12
 github.com/toqueteos/webbrowser
-# github.com/twitchtv/twirp v7.1.1+incompatible
+# github.com/twitchtv/twirp v8.1.0+incompatible
 ## explicit
 github.com/twitchtv/twirp
 github.com/twitchtv/twirp/ctxsetters
@@ -1624,8 +1650,8 @@ golang.org/x/sys/plan9
 golang.org/x/sys/unix
 golang.org/x/sys/windows
 golang.org/x/sys/windows/registry
-# golang.org/x/term v0.0.0-20210220032956-6a3ed077a48d
-## explicit; go 1.11
+# golang.org/x/term v0.0.0-20210615171337-6886f2dfbf5b
+## explicit; go 1.17
 golang.org/x/term
 # golang.org/x/text v0.3.7
 ## explicit; go 1.17
@@ -1988,7 +2014,6 @@ vitess.io/vitess/go/vt/vterrors
 vitess.io/vitess/go/vt/vtgate/evalengine
 # github.com/olekukonko/tablewriter => github.com/cockroachdb/tablewriter v0.0.5-0.20200105123400-bd15540e8847
 # github.com/abourget/teamcity => github.com/cockroachdb/teamcity v0.0.0-20180905144921-8ca25c33eb11
-# github.com/bufbuild/buf => github.com/cockroachdb/buf v0.42.2-0.20210706083726-883d34031660
 # vitess.io/vitess => github.com/cockroachdb/vitess v0.0.0-20210218160543-54524729cc82
 # gopkg.in/yaml.v2 => github.com/cockroachdb/yaml v0.0.0-20210825132133-2d6955c8edbc
 # github.com/knz/go-libedit => github.com/otan-cockroach/go-libedit v1.10.2-0.20201030151939-7cced08450e7

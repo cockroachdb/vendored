@@ -35,19 +35,17 @@ Twirp uses github pull requests. Fork, hack away at your changes and submit. Mos
  * Add tests that cover your contribution. Overall code coverage should not decrease.
  * Twirp officially supports the last 3 releases of Go.
  * Protobuf version 3.x.x to generate code with the protoc command.
- * The Python implementation uses Python 2.7. As such, it is not suitable for production use in its current form.
  * For linters and other tools, we use [retool](https://github.com/twitchtv/retool). If `make setup` is not able to install it, you can install it in your path with `go get github.com/twitchtv/retool` and then install tools with `retool build`.
 
 ### Running tests
 
 Generally you want to make changes and run `make`, which will install all
-dependencies we know about, build the core, and run all of the tests that we
-have against Go and Python code. A few notes:
+dependencies we know about, build the core, and run tests. A few notes:
 
- * Make sure to clone the repo on `$GOPATH/src/github.com/twitchtv/twirp`
- * Run Go unit tests with `make test_core`, or just the tests with `go test -race ./...` (make sure to re-generate code with `make generate` before running unit tests).
+ * Clone the repo on `$GOPATH/src/github.com/twitchtv/twirp` (go modules not supported yet).
+ * Run Go unit tests with `make test`.
  * Most tests of the Go server are in `internal/twirptest/service_test.go`.
- * Integration tests running the full stack in both Go and Python auto-generated clients are in the [clientcompat](./clientcompat) directory.
+ * Integration tests running the full stack in Go are in the [clientcompat](./clientcompat) directory.
 
 ## Contributing Documentation
 
@@ -74,12 +72,11 @@ Twirp uses Github releases. To make a new release:
 
  1. Merge all changes that should be included in the release into the master branch.
  2. Update the version constant in `internal/gen/version.go`. Please respect [semantic versioning](http://semver.org/): `v<major>.<minor>.<patch>`.
- 3. Run `make generate` and run tests. Check that generated test files include a header comment with the new version.
+ 3. Run `make test_all` to re-generate code and run tests. Check that generated test files include the new version in the header comment.
  4. Add a new commit to master with a message like "Version vX.X.X release" and push.
  5. Tag the commit you just made: `git tag vX.X.X` and `git push origin --tags`.
  6. Go to Github https://github.com/twitchtv/twirp/releases and "Draft a new release".
- 7. Make sure to document changes, upgrade instructions are very important.
- 8. Run `make release_gen` to generate release assets in the `release` directory. This requires Docker to be installed. Then Upload all files in the `release` directory as part of the release.
+ 7. Make sure that all new functionality is properly documented, on code comments, PR description, and include links and/or upgrade instructions on the release. For example the [v7 release](https://github.com/twitchtv/twirp/releases/tag/v7.0.0). Minor releases can just include a link to the PR/PRs that were merged included into the release.
 
 
 ## Code of Conduct
