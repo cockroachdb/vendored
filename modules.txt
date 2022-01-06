@@ -1445,12 +1445,15 @@ github.com/twpayne/go-kml
 # github.com/wadey/gocovmerge v0.0.0-20160331181800-b5bfa59ec0ad
 ## explicit
 github.com/wadey/gocovmerge
-# github.com/xdg/scram v1.0.3
-## explicit
-github.com/xdg/scram
-# github.com/xdg/stringprep v1.0.3
-## explicit
-github.com/xdg/stringprep
+# github.com/xdg-go/pbkdf2 v1.0.0
+## explicit; go 1.9
+github.com/xdg-go/pbkdf2
+# github.com/xdg-go/scram v1.0.2
+## explicit; go 1.11
+github.com/xdg-go/scram
+# github.com/xdg-go/stringprep v1.0.2
+## explicit; go 1.11
+github.com/xdg-go/stringprep
 # github.com/yusufpapurcu/wmi v1.2.2
 ## explicit; go 1.16
 github.com/yusufpapurcu/wmi
