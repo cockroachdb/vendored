@@ -473,9 +473,9 @@ github.com/cncf/xds/go/xds/core/v3
 github.com/cncf/xds/go/xds/data/orca/v3
 github.com/cncf/xds/go/xds/type/matcher/v3
 github.com/cncf/xds/go/xds/type/v3
-# github.com/cockroachdb/apd/v2 v2.0.2
-## explicit
-github.com/cockroachdb/apd/v2
+# github.com/cockroachdb/apd/v3 v3.0.0
+## explicit; go 1.13
+github.com/cockroachdb/apd/v3
 # github.com/cockroachdb/circuitbreaker v2.2.2-0.20190114160014-a614b14ccf63+incompatible
 ## explicit
 github.com/cockroachdb/circuitbreaker
