@@ -58,6 +58,21 @@ type BlockPropertyCollector = sstable.BlockPropertyCollector
 // BlockPropertyFilter exports the sstable.BlockPropertyFilter type.
 type BlockPropertyFilter = sstable.BlockPropertyFilter
 
+// IterKeyType configures which types of keys an iterator should surface.
+type IterKeyType int8
+
+const (
+	// IterKeyTypePointsOnly configures an iterator to iterate over point keys
+	// only.
+	IterKeyTypePointsOnly IterKeyType = iota
+	// IterKeyTypeRangesOnly configures an iterator to iterate over range keys
+	// only.
+	IterKeyTypeRangesOnly
+	// IterKeyTypePointsAndRanges configures an iterator iterate over both point
+	// keys and range keys simultaneously.
+	IterKeyTypePointsAndRanges
+)
+
 // IterOptions hold the optional per-query parameters for NewIter.
 //
 // Like Options, a nil *IterOptions is valid and means to use the default
@@ -84,6 +99,14 @@ type IterOptions struct {
 	// across all filters, i.e., all filters must indicate that the block is
 	// relevant.
 	BlockPropertyFilters []BlockPropertyFilter
+	// KeyTypes configures which types of keys to iterate over: point keys,
+	// range keys, or both.
+	KeyTypes IterKeyType
+	// RangeKeyMasking can be used to enable automatic masking of point keys by
+	// range keys. Range key masking is only supported during combined range key
+	// and point key iteration mode (IterKeyTypePointsAndRanges).
+	RangeKeyMasking RangeKeyMasking
+
 	// Internal options.
 	logger Logger
 }
@@ -104,11 +127,50 @@ func (o *IterOptions) GetUpperBound() []byte {
 	return o.UpperBound
 }
 
+func (o *IterOptions) pointKeys() bool {
+	if o == nil {
+		return true
+	}
+	return o.KeyTypes == IterKeyTypePointsOnly || o.KeyTypes == IterKeyTypePointsAndRanges
+}
+
+func (o *IterOptions) rangeKeys() bool {
+	if o == nil {
+		return false
+	}
+	return o.KeyTypes == IterKeyTypeRangesOnly || o.KeyTypes == IterKeyTypePointsAndRanges
+}
+
 func (o *IterOptions) getLogger() Logger {
 	if o == nil || o.logger == nil {
 		return DefaultLogger
 	}
 	return o.logger
+}
+
+// RangeKeyMasking configures automatic hiding of point keys by range keys. A
+// non-nil Suffix enables range-key masking. When enabled, range keys with
+// suffixes ≤ Suffix behave as masks. All point keys that are contained within a
+// masking range key's bounds and have suffixes less than the range key's suffix
+// are automatically skipped.
+//
+// Specifically, when configured with a RangeKeyMasking.Suffix _s_, and there
+// exists a range key with suffix _r_ covering a point key with suffix _p_, and
+//
+//     _s_ ≤ _r_ < _p_
+//
+// then the point key is elided.
+//
+// Range-key masking may only be used when iterating over both point keys and
+// range keys with IterKeyTypePointsAndRanges.
+type RangeKeyMasking struct {
+	// Suffix configures which range keys may mask point keys. Only range keys
+	// that are defined at suffixes less than or equal to Suffix will mask point
+	// keys.
+	Suffix []byte
+
+	// TODO(jackson): Add fields necessary for constructing and updating block
+	// property collectors.
 }
 
 // WriteOptions hold the optional per-query parameters for Set and Delete
@@ -321,6 +383,12 @@ type Options struct {
 		// there isn't enough disk space available. Setting this to 0 disables
 		// deletion pacing, which is also the default.
 		MinDeletionRate int
+
+		// RangeKeys enables the experimental use of range keys, stored in an
+		// in-memory nondurable arena. This option is only intended to be
+		// temporary, to allow the Pebble metamorphic tests to reuse the
+		// range-key arena across DB restarts.
+		RangeKeys *RangeKeysArena
 
 		// ReadCompactionRate controls the frequency of read triggered
 		// compactions by adjusting `AllowedSeeks` in manifest.FileMetadata:
