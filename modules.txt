@@ -84,7 +84,7 @@ github.com/PuerkitoBio/goquery
 github.com/PuerkitoBio/purell
 # github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578
 github.com/PuerkitoBio/urlesc
-# github.com/Shopify/sarama v1.29.0
+# github.com/Shopify/sarama v1.30.0
 ## explicit
 github.com/Shopify/sarama
 # github.com/Shopify/toxiproxy v2.1.4+incompatible
@@ -121,9 +121,6 @@ github.com/apache/arrow/go/arrow/float16
 github.com/apache/arrow/go/arrow/internal/cpu
 github.com/apache/arrow/go/arrow/internal/debug
 github.com/apache/arrow/go/arrow/memory
-# github.com/apache/thrift v0.15.0
-## explicit
-github.com/apache/thrift/lib/go/thrift
 # github.com/armon/circbuf v0.0.0-20150827004946-bbbad097214e
 ## explicit
 github.com/armon/circbuf
@@ -608,8 +605,6 @@ github.com/fsnotify/fsnotify
 github.com/ghemawat/stream
 # github.com/ghodss/yaml v1.0.0
 github.com/ghodss/yaml
-# github.com/go-logfmt/logfmt v0.5.0
-github.com/go-logfmt/logfmt
 # github.com/go-ole/go-ole v1.2.4
 github.com/go-ole/go-ole
 github.com/go-ole/go-ole/oleutil
@@ -948,10 +943,12 @@ github.com/kisielk/errcheck/errcheck
 ## explicit
 github.com/kisielk/gotool
 github.com/kisielk/gotool/internal/load
-# github.com/klauspost/compress v1.12.2
+# github.com/klauspost/compress v1.13.6
+github.com/klauspost/compress
 github.com/klauspost/compress/flate
 github.com/klauspost/compress/fse
 github.com/klauspost/compress/huff0
+github.com/klauspost/compress/internal/snapref
 github.com/klauspost/compress/zip
 github.com/klauspost/compress/zstd
 github.com/klauspost/compress/zstd/internal/xxhash
@@ -1074,8 +1071,6 @@ github.com/nlopes/slack/slackutilsx
 # github.com/olekukonko/tablewriter v0.0.5-0.20200416053754-163badb3bac6 => github.com/cockroachdb/tablewriter v0.0.5-0.20200105123400-bd15540e8847
 ## explicit
 github.com/olekukonko/tablewriter
-# github.com/onsi/gomega v1.10.3
-## explicit
 # github.com/opencontainers/go-digest v1.0.0
 ## explicit
 github.com/opencontainers/go-digest
@@ -1086,21 +1081,23 @@ github.com/opencontainers/image-spec/specs-go/v1
 # github.com/opennota/wd v0.0.0-20180911144301-b446539ab1e7
 ## explicit
 # github.com/opentracing-contrib/go-observer v0.0.0-20170622124052-a52f23424492
-## explicit
 github.com/opentracing-contrib/go-observer
 # github.com/opentracing/opentracing-go v1.2.0
 ## explicit
 github.com/opentracing/opentracing-go
 github.com/opentracing/opentracing-go/ext
 github.com/opentracing/opentracing-go/log
-# github.com/openzipkin-contrib/zipkin-go-opentracing v0.3.5
+# github.com/openzipkin-contrib/zipkin-go-opentracing v0.4.5
 ## explicit
 github.com/openzipkin-contrib/zipkin-go-opentracing
-github.com/openzipkin-contrib/zipkin-go-opentracing/flag
-github.com/openzipkin-contrib/zipkin-go-opentracing/thrift/gen-go/scribe
-github.com/openzipkin-contrib/zipkin-go-opentracing/thrift/gen-go/zipkincore
-github.com/openzipkin-contrib/zipkin-go-opentracing/types
-github.com/openzipkin-contrib/zipkin-go-opentracing/wire
+# github.com/openzipkin/zipkin-go v0.3.0
+## explicit
+github.com/openzipkin/zipkin-go
+github.com/openzipkin/zipkin-go/idgenerator
+github.com/openzipkin/zipkin-go/model
+github.com/openzipkin/zipkin-go/propagation
+github.com/openzipkin/zipkin-go/propagation/b3
+github.com/openzipkin/zipkin-go/reporter
 # github.com/pelletier/go-toml v1.8.1
 github.com/pelletier/go-toml
 # github.com/peterbourgon/g2s v0.0.0-20170223122336-d4e7ad98afea
@@ -1110,7 +1107,7 @@ github.com/pelletier/go-toml
 github.com/petermattis/goid
 # github.com/philhofer/fwd v1.0.0
 github.com/philhofer/fwd
-# github.com/pierrec/lz4 v2.6.0+incompatible
+# github.com/pierrec/lz4 v2.6.1+incompatible
 github.com/pierrec/lz4
 github.com/pierrec/lz4/internal/xxh32
 # github.com/pierrre/geohash v1.0.0
@@ -1250,6 +1247,7 @@ github.com/wadey/gocovmerge
 ## explicit
 github.com/xdg/scram
 # github.com/xdg/stringprep v1.0.3
+## explicit
 github.com/xdg/stringprep
 # github.com/zabawaba99/go-gitignore v0.0.0-20200117185801-39e6bddfb292
 ## explicit
@@ -1298,7 +1296,7 @@ go.uber.org/zap/internal/bufferpool
 go.uber.org/zap/internal/color
 go.uber.org/zap/internal/exit
 go.uber.org/zap/zapcore
-# golang.org/x/crypto v0.0.0-20210711020723-a769d52b0f97
+# golang.org/x/crypto v0.0.0-20210920023735-84f357641f63
 ## explicit
 golang.org/x/crypto/bcrypt
 golang.org/x/crypto/blowfish
@@ -1322,7 +1320,7 @@ golang.org/x/mod/internal/lazyregexp
 golang.org/x/mod/modfile
 golang.org/x/mod/module
 golang.org/x/mod/semver
-# golang.org/x/net v0.0.0-20210805182204-aaa1db679c0d
+# golang.org/x/net v0.0.0-20210917221730-978cfadd31cf
 ## explicit
 golang.org/x/net/context
 golang.org/x/net/context/ctxhttp
@@ -1503,7 +1501,7 @@ google.golang.org/genproto/protobuf/api
 google.golang.org/genproto/protobuf/field_mask
 google.golang.org/genproto/protobuf/ptype
 google.golang.org/genproto/protobuf/source_context
-# google.golang.org/grpc v1.39.1
+# google.golang.org/grpc v1.43.0
 ## explicit
 google.golang.org/grpc
 google.golang.org/grpc/attributes
@@ -1516,6 +1514,7 @@ google.golang.org/grpc/binarylog/grpc_binarylog_v1
 google.golang.org/grpc/codes
 google.golang.org/grpc/connectivity
 google.golang.org/grpc/credentials
+google.golang.org/grpc/credentials/insecure
 google.golang.org/grpc/encoding
 google.golang.org/grpc/encoding/proto
 google.golang.org/grpc/grpclog
