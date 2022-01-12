@@ -10,6 +10,7 @@ import (
 
 	"github.com/cockroachdb/pebble/internal/base"
 	"github.com/cockroachdb/pebble/internal/invariants"
+	"github.com/cockroachdb/pebble/internal/keyspan"
 	"github.com/cockroachdb/pebble/internal/manifest"
 )
 
@@ -18,7 +19,7 @@ import (
 // iterated through.
 type tableNewIters func(
 	file *manifest.FileMetadata, opts *IterOptions, bytesIterated *uint64,
-) (internalIterator, internalIterator, error)
+) (internalIterator, keyspan.FragmentIterator, error)
 
 // levelIter provides a merged view of the sstables in a level.
 //
@@ -82,8 +83,8 @@ type levelIter struct {
 	// close iter and *rangeDelIterPtr since we could reuse it in the next seek. But
 	// we need to set *rangeDelIterPtr to nil because of the aforementioned contract.
 	// This copy is used to revive the *rangeDelIterPtr in the case of reuse.
-	rangeDelIterPtr  *internalIterator
-	rangeDelIterCopy internalIterator
+	rangeDelIterPtr  *keyspan.FragmentIterator
+	rangeDelIterCopy keyspan.FragmentIterator
 	files            manifest.LevelIterator
 	err              error
 
@@ -194,7 +195,7 @@ func (l *levelIter) init(
 	l.bytesIterated = bytesIterated
 }
 
-func (l *levelIter) initRangeDel(rangeDelIter *internalIterator) {
+func (l *levelIter) initRangeDel(rangeDelIter *keyspan.FragmentIterator) {
 	l.rangeDelIterPtr = rangeDelIter
 }
 
@@ -335,7 +336,7 @@ func (l *levelIter) loadFile(file *fileMetadata, dir int) loadFileReturnIndicato
 			continue
 		}
 
-		var rangeDelIter internalIterator
+		var rangeDelIter keyspan.FragmentIterator
 		l.iter, rangeDelIter, l.err = l.newIters(l.files.Current(), &l.tableOpts, l.bytesIterated)
 		if l.err != nil {
 			return noFileLoaded
@@ -379,7 +380,7 @@ func (l *levelIter) verify(key *InternalKey, val []byte) (*InternalKey, []byte) 
 	return key, val
 }
 
-func (l *levelIter) SeekGE(key []byte) (*InternalKey, []byte) {
+func (l *levelIter) SeekGE(key []byte, trySeekUsingNext bool) (*InternalKey, []byte) {
 	l.err = nil // clear cached iteration error
 	if l.isSyntheticIterBoundsKey != nil {
 		*l.isSyntheticIterBoundsKey = false
@@ -387,10 +388,16 @@ func (l *levelIter) SeekGE(key []byte) (*InternalKey, []byte) {
 
 	// NB: the top-level Iterator has already adjusted key based on
 	// IterOptions.LowerBound.
-	if l.loadFile(l.findFileGE(key), +1) == noFileLoaded {
+	loadFileIndicator := l.loadFile(l.findFileGE(key), +1)
+	if loadFileIndicator == noFileLoaded {
 		return nil, nil
 	}
-	if ikey, val := l.iter.SeekGE(key); ikey != nil {
+	if loadFileIndicator == newFileLoaded {
+		// File changed, so l.iter has changed, and that iterator is not
+		// positioned appropriately.
+		trySeekUsingNext = false
+	}
+	if ikey, val := l.iter.SeekGE(key, trySeekUsingNext); ikey != nil {
 		return l.verify(ikey, val)
 	}
 	return l.verify(l.skipEmptyFileForward())
