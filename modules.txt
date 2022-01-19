@@ -538,7 +538,7 @@ github.com/cockroachdb/gostdlib/x/tools/internal/span
 # github.com/cockroachdb/logtags v0.0.0-20211118104740-dabe8e521a4f
 ## explicit; go 1.16
 github.com/cockroachdb/logtags
-# github.com/cockroachdb/pebble v0.0.0-20220112164547-3d0ff924d13a
+# github.com/cockroachdb/pebble v0.0.0-20220118190613-20f8dd034791
 ## explicit; go 1.13
 github.com/cockroachdb/pebble
 github.com/cockroachdb/pebble/bloom
@@ -583,7 +583,7 @@ github.com/cockroachdb/returncheck
 # github.com/cockroachdb/sentry-go v0.6.1-cockroachdb.2
 ## explicit; go 1.12
 github.com/cockroachdb/sentry-go
-# github.com/cockroachdb/stress v0.0.0-20170808184505-29b5d31b4c3a
+# github.com/cockroachdb/stress v0.0.0-20220119200057-43d99a9e6d7f
 ## explicit
 github.com/cockroachdb/stress
 # github.com/cockroachdb/tools v0.0.0-20211112185054-642e51449b40

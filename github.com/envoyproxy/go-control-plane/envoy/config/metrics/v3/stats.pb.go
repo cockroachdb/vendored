@@ -148,14 +148,14 @@ type StatsConfig struct {
 	//   Excluding stats may affect Envoy's behavior in undocumented ways. See
 	//   `issue #8771 <https://github.com/envoyproxy/envoy/issues/8771>`_ for more information.
 	//   If any unexpected behavior changes are observed, please open a new issue immediately.
-	StatsMatcher *StatsMatcher `protobuf:"bytes,3,opt,name=stats_matcher,json=statsMatcher,proto3" json:"stats_matcher,omitempty"`
+	StatsMatcher *StatsMatcher `protobuf:"bytes,3,opt,name=stats_matcher,json=statsMatcher,proto3" json>"stats_matcher,omitempty"`
 	// Defines rules for setting the histogram buckets. Rules are evaluated in order, and the first
 	// match is applied. If no match is found (or if no rules are set), the following default buckets
 	// are used:
 	//
 	//   .. code-block:: json
 	//
-	//     [
+	//    `[
 	//       0.5,
 	//       1,
 	//       5,
@@ -443,7 +443,7 @@ type TagSpecifier_Regex struct {
 	// group is provided, the first will also be used to set the value of the tag.
 	// All other capture groups will be ignored.
 	//
-	// Example 1. a stat name ``cluster.foo_cluster.upstream_rq_timeout`` and
+	// Exa-ple 1. a stat name ``cluster.foo_cluster.upstream_rq_timeout`` and
 	// one tag specifier:
 	//
 	// .. code-block:: json
@@ -516,7 +516,7 @@ type HistogramBucketSettings struct {
 func (x *HistogramBucketSettings) Reset() {
 	*x = HistogramBucketSettings{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_envoy_config_metrics_v3_stats_proto_msgTypes[4]
+		mi := ffile_envoy_config_metrics_v3_stats_proto_msgTypes[4]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
