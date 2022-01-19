@@ -22,25 +22,44 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"regexp"
 	"runtime"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
 )
 
 var (
-	flags        = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
-	flagP        = flags.Int("p", runtime.NumCPU(), "run `N` processes in parallel")
-	flagTimeout  = flags.Duration("timeout", 0, "timeout each process after `duration`")
-	flagKill     = flags.Bool("kill", true, "kill timed out processes if true, otherwise just print pid (to attach with gdb)")
-	flagFailure  = flags.String("failure", "", "fail only if output matches `regexp`")
-	flagIgnore   = flags.String("ignore", "", "ignore failure if output matches `regexp`")
-	flagMaxTime  = flags.Duration("maxtime", 0, "maximum time to run")
-	flagMaxRuns  = flags.Int("maxruns", 0, "maximum number of runs")
-	flagMaxFails = flags.Int("maxfails", 1, "maximum number of failures")
-	flagStdErr   = flags.Bool("stderr", true, "output failures to STDERR instead of to a temp file")
+	flags             = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
+	flagP             = flags.Int("p", runtime.NumCPU(), "run `N` processes in parallel")
+	flagTimeout       = flags.Duration("timeout", 0, "timeout each process after `duration`")
+	flagKill          = flags.Bool("kill", true, "kill timed out processes if true, otherwise just print pid (to attach with gdb)")
+	flagFailure       = flags.String("failure", "", "fail only if output matches `regexp`")
+	flagIgnore        = flags.String("ignore", "", "ignore failure if output matches `regexp`")
+	flagMaxTime       = flags.Duration("maxtime", 0, "maximum time to run")
+	flagMaxRuns       = flags.Int("maxruns", 0, "maximum number of runs")
+	flagMaxFails      = flags.Int("maxfails", 1, "maximum number of failures")
+	flagStdErr        = flags.Bool("stderr", true, "output failures to STDERR instead of to a temp file")
+	flagBazel         = flags.Bool("bazel", false, "run in bazel compatibility mode (propagates TEST_TMPDIR to TMPDIR)")
+	flagShardableVars = flags.String("shardable-artifacts", "", "comma-separated list of ENV_VAR=program pairs; sub-processes will get their own copy of each shardable artifact, and those artifacts will be merged with `program` when all sub-processes have completed. It is valid for `program` to be an executable plus a list of command-line arguments separated by spaces.")
 )
+
+type runResult struct {
+	// true iff the run succeeded
+	success bool
+	// the combined stdout and stderr from the run
+	output []byte
+	// if shardable-artifacts is set, this will be the path to a
+	// temporary directory containing the sharded artifacts for this run
+	shardDir string
+}
+
+type mergeProgram struct {
+	program string
+	args    []string
+}
 
 func roundToSeconds(d time.Duration) time.Duration {
 	return time.Duration(d.Seconds()+0.5) * time.Second
@@ -50,6 +69,39 @@ func run() error {
 	if err := flags.Parse(os.Args[1:]); err != nil {
 		return err
 	}
+	if *flagBazel {
+		testTmpdir := os.Getenv("TEST_TMPDIR")
+		if testTmpdir == "" {
+			return fmt.Errorf("-bazel set but TEST_TMPDIR not set")
+		}
+		if err := os.Setenv("TMPDIR", testTmpdir); err != nil {
+			return err
+		}
+	}
+	// map of environment variable to the merge program for that shardable artifact.
+	shardableArtifacts := make(map[string]mergeProgram)
+	for _, envProgramPair := range strings.Split(*flagShardableVars, ",") {
+		if envProgramPair == "" {
+			continue
+		}
+		if !strings.Contains(envProgramPair, "=") {
+			return fmt.Errorf("expected -shardable-artifacts argument to contain =; got %s", envProgramPair)
+		}
+		envProgramAndArgs := strings.Split(envProgramPair, "=")
+		env := envProgramAndArgs[0]
+		programArgs := strings.Split(envProgramAndArgs[1], " ")
+		shardableArtifacts[env] = mergeProgram{program: programArgs[0], args: programArgs[1:]}
+	}
+	var shardableArtifactsDir string
+	if len(shardableArtifacts) != 0 {
+		var err error
+		shardableArtifactsDir, err = ioutil.TempDir("", "go-stress-shards")
+		if err != nil {
+			return err
+		}
+	}
+	environ := os.Environ()
+	environ = environ[0:len(environ):len(environ)]
 	if *flagP <= 0 || *flagTimeout < 0 || len(flags.Args()) == 0 {
 		var b bytes.Buffer
 		flags.SetOutput(&b)
@@ -93,16 +145,36 @@ func run() error {
 
 	startTime := time.Now()
 
-	res := make(chan []byte)
+	res := make(chan runResult)
 	wg.Add(*flagP)
 	for i := 0; i < *flagP; i++ {
-		go func(ctx context.Context) {
+		go func(ctx context.Context, shardNum int) {
 			defer wg.Done()
+			run := 1
 			for {
+				var shardDir string
+				if len(shardableArtifacts) > 0 {
+					shardDir = filepath.Join(shardableArtifactsDir, fmt.Sprintf("%d-%d", shardNum, run))
+					if err := os.MkdirAll(shardDir, 0755); err != nil {
+						panic(err)
+					}
+				}
 				select {
 				case <-ctx.Done():
+					if shardDir != "" {
+						if err := os.RemoveAll(shardDir); err != nil {
+							panic(err)
+						}
+					}
 					return
-				case res <- func(ctx context.Context) []byte {
+				case res <- func(ctx context.Context) runResult {
+					var result runResult
+					result.shardDir = shardDir
+					subenviron := environ
+					for env, _ := range shardableArtifacts {
+						shardpath := filepath.Join(result.shardDir, env)
+						subenviron = append(subenviron, fmt.Sprintf("%s=%s", env, shardpath))
+					}
 					var cmd *exec.Cmd
 					if *flagTimeout > 0 {
 						if *flagKill {
@@ -116,20 +188,26 @@ func run() error {
 						}
 					}
 					cmd = exec.CommandContext(ctx, flags.Args()[0], flags.Args()[1:]...)
+					cmd.Env = subenviron
 					out, err := cmd.CombinedOutput()
+					result.output = out
 					if err != nil && (failureRe == nil || failureRe.Match(out)) && (ignoreRe == nil || !ignoreRe.Match(out)) {
-						out = append(out, fmt.Sprintf("\n\nERROR: %v\n", err)...)
+						result.output = append(out, fmt.Sprintf("\n\nERROR: %v\n", err)...)
 					} else {
-						out = []byte{}
+						result.success = true
 					}
-					return out
+					return result
 				}(ctx):
 				}
+				run += 1
 			}
-		}(ctx)
+		}(ctx, i)
 	}
 	runs, fails := 0, 0
 	ticker := time.NewTicker(5 * time.Second).C
+	// Map of environment variable -> list of files to merge for that environment variable.
+	filesToMerge := make(map[string][]string)
+	var extraDirToDelete string
 	for {
 		select {
 		case out := <-res:
@@ -137,7 +215,28 @@ func run() error {
 			if *flagMaxRuns > 0 && runs >= *flagMaxRuns {
 				cancel()
 			}
-			if len(out) == 0 {
+			if !out.success || len(filesToMerge) == 0 {
+				for env, _ := range shardableArtifacts {
+					shardedArtifact := filepath.Join(out.shardDir, env)
+					files, ok := filesToMerge[env]
+					if !ok {
+						filesToMerge[env] = []string{shardedArtifact}
+					} else {
+						filesToMerge[env] = append(files, shardedArtifact)
+					}
+				}
+				// Note: if there are only successful runs, we want to run the
+				// merge program with the artifacts from the successful run, but
+				// delete it afterward.
+				if out.success {
+					extraDirToDelete = out.shardDir
+				}
+			} else if out.shardDir != "" {
+				if err := os.RemoveAll(out.shardDir); err != nil {
+					return err
+				}
+			}
+			if out.success {
 				continue
 			}
 			fails++
@@ -145,22 +244,22 @@ func run() error {
 				cancel()
 			}
 			if *flagStdErr {
-				fmt.Fprintf(os.Stderr, "\n%s\n", out)
+				fmt.Fprintf(os.Stderr, "\n%s\n", out.output)
 			} else {
 				f, err := ioutil.TempFile("", "go-stress")
 				if err != nil {
 					return fmt.Errorf("failed to create temp file: %v", err)
 				}
-				if _, err := f.Write(out); err != nil {
+				if _, err := f.Write(out.output); err != nil {
 					return fmt.Errorf("failed to write temp file: %v", err)
 				}
 				if err := f.Close(); err != nil {
 					return fmt.Errorf("failed to close temp file: %v", err)
 				}
-				if len(out) > 2<<10 {
-					out = out[:2<<10]
+				if len(out.output) > 2<<10 {
+					out.output = out.output[:2<<10]
 				}
-				fmt.Printf("\n%s\n%s\n", f.Name(), out)
+				fmt.Printf("\n%s\n%s\n", f.Name(), out.output)
 			}
 		case <-ticker:
 			fmt.Printf("%v runs so far, %v failures, over %s\n",
@@ -170,6 +269,30 @@ func run() error {
 			fmt.Printf("%v runs completed, %v failures, over %s\n",
 				runs, fails, roundToSeconds(time.Since(startTime)))
 
+			// Merge sharded artifacts.
+			for env, mergeProgram := range shardableArtifacts {
+				output, err := os.Create(os.Getenv(env))
+				if err != nil {
+					return err
+				}
+				allArgs := append(mergeProgram.args, filesToMerge[env]...)
+				cmd := exec.Command(mergeProgram.program, allArgs...)
+				cmd.Stdout = output
+				cmd.Stderr = os.Stderr
+				err = cmd.Run()
+				if err != nil {
+					return err
+				}
+				err = output.Close()
+				if err != nil {
+					return err
+				}
+			}
+			if extraDirToDelete != "" {
+				if err := os.RemoveAll(extraDirToDelete); err != nil {
+					return err
+				}
+			}
 			switch err := ctx.Err(); err {
 			// A context timeout in this case is indicative of no failures
 			// being detected in the allotted duration.
