@@ -1,0 +1,30 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/cockroachdb/pebble
+BenchmarkNextPrefix/versions=1-10         	   14080	     84172 ns/op	       9 B/op	       1 allocs/op
+BenchmarkNextPrefix/versions=1-10         	   14128	     84666 ns/op	       9 B/op	       1 allocs/op
+BenchmarkNextPrefix/versions=1-10         	   14508	     81494 ns/op	       8 B/op	       1 allocs/op
+BenchmarkNextPrefix/versions=1-10         	   14782	     81288 ns/op	       8 B/op	       1 allocs/op
+BenchmarkNextPrefix/versions=1-10         	   14787	     81388 ns/op	       8 B/op	       1 allocs/op
+BenchmarkNextPrefix/versions=2-10         	   12352	     97216 ns/op	       9 B/op	       1 allocs/op
+BenchmarkNextPrefix/versions=2-10         	   12363	     99574 ns/op	       8 B/op	       1 allocs/op
+BenchmarkNextPrefix/versions=2-10         	   12356	     97241 ns/op	       9 B/op	       1 allocs/op
+BenchmarkNextPrefix/versions=2-10         	   12308	     97551 ns/op	       8 B/op	       1 allocs/op
+BenchmarkNextPrefix/versions=2-10         	   12325	     97463 ns/op	       9 B/op	       1 allocs/op
+BenchmarkNextPrefix/versions=10-10        	    5328	    218838 ns/op	      10 B/op	       1 allocs/op
+BenchmarkNextPrefix/versions=10-10        	    5372	    218770 ns/op	      10 B/op	       1 allocs/op
+BenchmarkNextPrefix/versions=10-10        	    5348	    218619 ns/op	      10 B/op	       1 allocs/op
+BenchmarkNextPrefix/versions=10-10        	    5378	    219008 ns/op	      10 B/op	       1 allocs/op
+BenchmarkNextPrefix/versions=10-10        	    5358	    218602 ns/op	      10 B/op	       1 allocs/op
+BenchmarkNextPrefix/versions=100-10       	     768	   1542057 ns/op	      22 B/op	       1 allocs/op
+BenchmarkNextPrefix/versions=100-10       	     765	   1542886 ns/op	      23 B/op	       1 allocs/op
+BenchmarkNextPrefix/versions=100-10       	     764	   1544128 ns/op	      23 B/op	       1 allocs/op
+BenchmarkNextPrefix/versions=100-10       	     769	   1541502 ns/op	      22 B/op	       1 allocs/op
+BenchmarkNextPrefix/versions=100-10       	     765	   1543573 ns/op	      23 B/op	       1 allocs/op
+BenchmarkNextPrefix/versions=1000-10      	      43	  27517910 ns/op	     581 B/op	       6 allocs/op
+BenchmarkNextPrefix/versions=1000-10      	      43	  27297972 ns/op	     568 B/op	       6 allocs/op
+BenchmarkNextPrefix/versions=1000-10      	      43	  27071684 ns/op	     573 B/op	       6 allocs/op
+BenchmarkNextPrefix/versions=1000-10      	      43	  27012515 ns/op	     580 B/op	       6 allocs/op
+BenchmarkNextPrefix/versions=1000-10      	      44	  27195651 ns/op	     556 B/op	       5 allocs/op
+PASS
+ok  	github.com/cockroachdb/pebble	51.468s
