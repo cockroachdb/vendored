@@ -1262,6 +1262,9 @@ github.com/morikuni/aec
 # github.com/mwitkow/go-proto-validators v0.0.0-20180403085117-0950a7990007
 ## explicit
 github.com/mwitkow/go-proto-validators
+# github.com/nsf/jsondiff v0.0.0-20210926074059-1e845ec5d249
+## explicit; go 1.16
+github.com/nsf/jsondiff
 # github.com/oklog/ulid v1.3.1
 ## explicit
 github.com/oklog/ulid
