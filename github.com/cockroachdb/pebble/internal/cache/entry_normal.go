@@ -15,7 +15,7 @@ import (
 	"github.com/cockroachdb/pebble/internal/manual"
 )
 
-const (
+var (
 	entrySize            = int(unsafe.Sizeof(entry{}))
 	entryAllocCacheLimit = 128
 	// Avoid using runtime.SetFinalizer in race builds as finalizers tickle a bug

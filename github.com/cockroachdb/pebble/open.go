@@ -459,6 +459,20 @@ func Open(dirname string, opts *Options) (db *DB, _ error) {
 	d.maybeScheduleFlush()
 	d.maybeScheduleCompaction()
 
+	go func() {
+		for {
+			select {
+			case <-time.After(10*time.Second):
+			case <-d.closedCh:
+					return
+			}
+			d.mu.Lock()
+			n := len(d.mu.snapshots.toSlice())
+			d.mu.Unlock()
+			d.opts.Logger.Infof("XXX %d snapshots open", n)
+		}
+	}()
+
 	// Note: this is a no-op if invariants are disabled or race is enabled.
 	//
 	// Setting a finalizer on *DB causes *DB to never be reclaimed and the

@@ -8,10 +8,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"runtime/debug"
 	"runtime/pprof"
 	"sync"
 	"sync/atomic"
+	"time"
 	"unsafe"
 
 	"github.com/cockroachdb/errors"
@@ -243,6 +245,11 @@ type tableCacheKey struct {
 	fileNum FileNum
 }
 
+type tsStack struct {
+	stack []byte
+	ts time.Time
+}
+
 type tableCacheShard struct {
 	// WARNING: The following struct `atomic` contains fields are accessed atomically.
 	//
@@ -261,7 +268,7 @@ type tableCacheShard struct {
 		sync.RWMutex
 		nodes map[tableCacheKey]*tableCacheNode
 		// The iters map is only created and populated in race builds.
-		iters map[sstable.Iterator][]byte
+		iters map[sstable.Iterator]tsStack
 
 		handHot  *tableCacheNode
 		handCold *tableCacheNode
@@ -283,9 +290,26 @@ func (c *tableCacheShard) init(size int) {
 	c.mu.coldTarget = size
 	c.releasingCh = make(chan *tableCacheValue, 100)
 	go c.releaseLoop()
+	go func() {
+		for {
+			select {
+			case <-c.releasingCh:
+				return
+			case <-time.After(10 * time.Second):
+				c.mu.RLock()
+				for _, s := range c.mu.iters {
+					if dur := time.Since(s.ts); dur > 10*time.Second {
+						fmt.Fprintf(os.Stderr, "XXX slow iter: %s:\n%s\n", dur, s.stack)
+					}
+				}
+				c.mu.RUnlock()
+				fmt.Fprintf(os.Stderr, "XXX (done checking iters)\n")
+			}
+		}
+	}()
 
 	if invariants.RaceEnabled {
-		c.mu.iters = make(map[sstable.Iterator][]byte)
+		c.mu.iters = make(map[sstable.Iterator]tsStack)
 	}
 }
 
@@ -358,7 +382,7 @@ func (c *tableCacheShard) newIters(
 	atomic.AddInt32(dbOpts.atomic.iterCount, 1)
 	if invariants.RaceEnabled {
 		c.mu.Lock()
-		c.mu.iters[iter] = debug.Stack()
+		c.mu.iters[iter] = tsStack{stack: debug.Stack(), ts: time.Now()}
 		c.mu.Unlock()
 	}
 

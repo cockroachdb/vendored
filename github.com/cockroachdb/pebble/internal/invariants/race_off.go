@@ -5,7 +5,10 @@
 //go:build !race
 // +build !race
 
+
 package invariants
 
+import "os"
+
 // RaceEnabled is true if we were built with the "race" build tag.
-const RaceEnabled = false
+var RaceEnabled = os.Getenv("COCKROACH_PEBBLE_RACE_ENABLED") != ""
