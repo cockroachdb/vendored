@@ -145,7 +145,18 @@ type Writer struct {
 	// either the output of w.split (i.e. a prefix extractor) if w.split is not
 	// nil, or the full keys otherwise.
 	filter          filterWriter
-	indexPartitions []indexBlockWriterAndBlockProperties
+	indexPartitions []indexBlockAndBlockProperties
+
+	// sepScratch is reusable scratch space for computing separator keys.
+	sepScratch []byte
+
+	// indexBlockAlloc is used to bulk-allocate byte slices used to store index
+	// blocks in indexPartitions. These live until the index finishes.
+	indexBlockAlloc []byte
+	// indexSepAlloc is used to bulk-allocate index block seperator slices stored
+	// in indexPartitions. These live until the index finishes.
+	indexSepAlloc []byte
+
 	// To allow potentially overlapping (i.e. un-fragmented) range keys spans to
 	// be added to the Writer, a keyspan.Fragmenter and rangekey.Coalescer are
 	// used to retain the keys and values, emitting fragmented, coalesced spans as
@@ -164,6 +175,26 @@ type Writer struct {
 type checksummer struct {
 	checksumType ChecksumType
 	xxHasher     *xxhash.Digest
+}
+
+func (c *checksummer) checksum(block []byte, blockType []byte) (checksum uint32) {
+	// Calculate the checksum.
+	switch c.checksumType {
+	case ChecksumTypeCRC32c:
+		checksum = crc.New(block).Update(blockType).Value()
+	case ChecksumTypeXXHash64:
+		if c.xxHasher == nil {
+			c.xxHasher = xxhash.New()
+		} else {
+			c.xxHasher.Reset()
+		}
+		c.xxHasher.Write(block)
+		c.xxHasher.Write(blockType)
+		checksum = uint32(c.xxHasher.Sum64())
+	default:
+		panic(errors.Newf("unsupported checksum type: %d", c.checksumType))
+	}
+	return checksum
 }
 
 type blockBuf struct {
@@ -185,15 +216,37 @@ type blockBuf struct {
 type dataBlockBuf struct {
 	blockBuf
 	dataBlock blockWriter
+
+	// uncompressed is a reference to a byte slice which is owned by the dataBlockBuf. It is the
+	// next byte slice to be compressed. The uncompressed byte slice will be backed by the
+	// dataBlock.buf.
+	uncompressed []byte
+	// compressed is a reference to a byte slice which is owned by the dataBlockBuf. It is the
+	// compressed byte slice which must be written to disk. The compressed byte slice may be
+	// backed by the dataBlock.buf, or the dataBlockBuf.compressedBuf, depending on whether
+	// we use the result of the compression.
+	compressed []byte
+}
+
+func (d *dataBlockBuf) finish() {
+	d.uncompressed = d.dataBlock.finish()
+}
+
+func (d *dataBlockBuf) compressAndChecksum(c Compression) {
+	d.compressed = compressAndChecksum(d.uncompressed, c, &d.blockBuf)
 }
 
 func (w *Writer) Error() error {
 	return w.err
 }
 
-type indexBlockWriterAndBlockProperties struct {
-	writer     blockWriter
+type indexBlockAndBlockProperties struct {
+	nEntries int
+	// sep is the last key added to this block, for computing a separator later.
+	sep        InternalKey
 	properties []byte
+	// block is the encoded block produced by blockWriter.finish.
+	block []byte
 }
 
 // Set sets the value for the given key. The sequence number is set to
@@ -312,6 +365,11 @@ func (w *Writer) addPoint(key InternalKey, value []byte) error {
 		// semantically identical, because we need to ensure that SmallestPoint.UserKey
 		// is not nil. This is required by WriterMetadata.Smallest in order to
 		// distinguish between an unset SmallestPoint and a zero-length one.
+		// NB: We don't clone this off of some alloc-pool since it will outlive this
+		// Writer as a field of the returned metadata that users like compaction.go
+		// then hang on to, and would otherwise continue to alias that whole pool's
+		// slice if we did so. So since we'll need to allocate it its own slice at
+		// some point anyway, we may as well do so here.
 		w.meta.SmallestPoint = w.meta.LargestPoint.Clone()
 	}
 
@@ -689,15 +747,12 @@ func (w *Writer) maybeFlush(key InternalKey, value []byte) error {
 	}
 
 	err := func() error {
-		finishedBlock := w.dataBlockBuf.dataBlock.finish()
-		b, err := compressAndChecksum(
-			finishedBlock, w.compression, &w.dataBlockBuf.blockBuf,
-		)
-		if err != nil {
-			return err
-		}
+		w.dataBlockBuf.finish()
+		w.dataBlockBuf.compressAndChecksum(w.compression)
+
 		var bh BlockHandle
-		if bh, err = w.writeCompressedBlock(b, w.dataBlockBuf.tmp[:]); err != nil {
+		var err error
+		if bh, err = w.writeCompressedBlock(w.dataBlockBuf.compressed, w.dataBlockBuf.tmp[:]); err != nil {
 			return err
 		}
 
@@ -751,16 +806,25 @@ func (w *Writer) addIndexEntry(prevKey, key InternalKey, bhp BlockHandleWithProp
 		// In particular, it must have a non-zero length.
 		return nil
 	}
+
+	// Make a rough guess that we want key-sized scratch to compute the separator.
+	if cap(w.sepScratch) < key.Size() {
+		w.sepScratch = make([]byte, 0, key.Size()*2)
+	}
+
 	var sep InternalKey
 	if key.UserKey == nil && key.Trailer == 0 {
-		sep = prevKey.Successor(w.compare, w.successor, nil)
+		sep = prevKey.Successor(w.compare, w.successor, w.sepScratch[:0])
 	} else {
-		sep = prevKey.Separator(w.compare, w.separator, nil, key)
+		sep = prevKey.Separator(w.compare, w.separator, w.sepScratch[:0], key)
 	}
 	encoded := encodeBlockHandleWithProperties(tmp, bhp)
 
 	if supportsTwoLevelIndex(w.tableFormat) &&
 		shouldFlush(sep, encoded, &w.indexBlock, w.indexBlockSize, w.indexBlockSizeThreshold) {
+		if cap(w.indexPartitions) == 0 {
+			w.indexPartitions = make([]indexBlockAndBlockProperties, 0, 32)
+		}
 		// Enable two level indexes if there is more than one index block.
 		w.twoLevelIndex = true
 		if err := w.finishIndexBlock(); err != nil {
@@ -805,6 +869,19 @@ func shouldFlush(
 	return newSize > blockSize
 }
 
+const keyAllocSize = 256 << 10
+
+func cloneKeyWithBuf(k InternalKey, buf []byte) ([]byte, InternalKey) {
+	if len(k.UserKey) == 0 {
+		return buf, k
+	}
+	if len(buf) < len(k.UserKey) {
+		buf = make([]byte, len(k.UserKey)+keyAllocSize)
+	}
+	n := copy(buf, k.UserKey)
+	return buf[n:], InternalKey{UserKey: buf[:n:n], Trailer: k.Trailer}
+}
+
 // finishIndexBlock finishes the current index block and adds it to the top
 // level index block. This is only used when two level indexes are enabled.
 func (w *Writer) finishIndexBlock() error {
@@ -819,14 +896,17 @@ func (w *Writer) finishIndexBlock() error {
 			w.blockPropsEncoder.addProp(shortID(i), scratch)
 		}
 	}
-	w.indexPartitions = append(w.indexPartitions,
-		indexBlockWriterAndBlockProperties{
-			writer:     w.indexBlock,
-			properties: w.blockPropsEncoder.props(),
-		})
-	w.indexBlock = blockWriter{
-		restartInterval: 1,
+	part := indexBlockAndBlockProperties{nEntries: w.indexBlock.nEntries, properties: w.blockPropsEncoder.props()}
+	w.indexSepAlloc, part.sep = cloneKeyWithBuf(base.DecodeInternalKey(w.indexBlock.curKey), w.indexSepAlloc)
+	bk := w.indexBlock.finish()
+	if len(w.indexBlockAlloc) < len(bk) {
+		// Allocate enough bytes for approximately 16 index blocks.
+		w.indexBlockAlloc = make([]byte, len(bk)*16)
 	}
+	n := copy(w.indexBlockAlloc, bk)
+	part.block = w.indexBlockAlloc[:n:n]
+	w.indexBlockAlloc = w.indexBlockAlloc[n:]
+	w.indexPartitions = append(w.indexPartitions, part)
 	return nil
 }
 
@@ -838,9 +918,9 @@ func (w *Writer) writeTwoLevelIndex() (BlockHandle, error) {
 
 	for i := range w.indexPartitions {
 		b := &w.indexPartitions[i]
-		w.props.NumDataBlocks += uint64(b.writer.nEntries)
-		sep := base.DecodeInternalKey(b.writer.curKey)
-		data := b.writer.finish()
+		w.props.NumDataBlocks += uint64(b.nEntries)
+
+		data := b.block
 		w.props.IndexSize += uint64(len(data))
 		bh, err := w.writeBlock(data, w.compression, &w.blockBuf)
 		if err != nil {
@@ -851,7 +931,7 @@ func (w *Writer) writeTwoLevelIndex() (BlockHandle, error) {
 			Props:       b.properties,
 		}
 		encoded := encodeBlockHandleWithProperties(w.blockBuf.tmp[:], bhp)
-		w.topLevelIndexBlock.add(sep, encoded)
+		w.topLevelIndexBlock.add(b.sep, encoded)
 	}
 
 	// NB: RocksDB includes the block trailer length in the index size
@@ -864,7 +944,7 @@ func (w *Writer) writeTwoLevelIndex() (BlockHandle, error) {
 	return w.writeBlock(w.topLevelIndexBlock.finish(), w.compression, &w.blockBuf)
 }
 
-func compressAndChecksum(b []byte, compression Compression, blockBuf *blockBuf) ([]byte, error) {
+func compressAndChecksum(b []byte, compression Compression, blockBuf *blockBuf) []byte {
 	// Compress the buffer, discarding the result if the improvement isn't at
 	// least 12.5%.
 	blockType, compressed := compressBlock(compression, b, blockBuf.compressedBuf)
@@ -880,24 +960,9 @@ func compressAndChecksum(b []byte, compression Compression, blockBuf *blockBuf) 
 	blockBuf.tmp[0] = byte(blockType)
 
 	// Calculate the checksum.
-	var checksum uint32
-	switch blockBuf.checksummer.checksumType {
-	case ChecksumTypeCRC32c:
-		checksum = crc.New(b).Update(blockBuf.tmp[:1]).Value()
-	case ChecksumTypeXXHash64:
-		if blockBuf.checksummer.xxHasher == nil {
-			blockBuf.checksummer.xxHasher = xxhash.New()
-		} else {
-			blockBuf.checksummer.xxHasher.Reset()
-		}
-		blockBuf.checksummer.xxHasher.Write(b)
-		blockBuf.checksummer.xxHasher.Write(blockBuf.tmp[:1])
-		checksum = uint32(blockBuf.checksummer.xxHasher.Sum64())
-	default:
-		return nil, errors.Newf("unsupported checksum type: %d", blockBuf.checksummer.checksumType)
-	}
+	checksum := blockBuf.checksummer.checksum(b, blockBuf.tmp[:1])
 	binary.LittleEndian.PutUint32(blockBuf.tmp[1:5], checksum)
-	return b, nil
+	return b
 }
 
 func (w *Writer) writeCompressedBlock(
@@ -932,10 +997,7 @@ func (w *Writer) writeCompressedBlock(
 func (w *Writer) writeBlock(
 	b []byte, compression Compression, blockBuf *blockBuf,
 ) (BlockHandle, error) {
-	b, err := compressAndChecksum(b, compression, blockBuf)
-	if err != nil {
-		return BlockHandle{}, err
-	}
+	b = compressAndChecksum(b, compression, blockBuf)
 	return w.writeCompressedBlock(b, blockBuf.tmp[:])
 }
 

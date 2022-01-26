@@ -405,6 +405,7 @@ func (k compactionKind) String() string {
 type compaction struct {
 	kind      compactionKind
 	cmp       Compare
+	equal     Equal
 	formatKey base.FormatKey
 	logger    Logger
 	version   *version
@@ -519,6 +520,7 @@ func newCompaction(pc *pickedCompaction, opts *Options, bytesCompacted *uint64) 
 	c := &compaction{
 		kind:                compactionKindDefault,
 		cmp:                 pc.cmp,
+		equal:               opts.equal(),
 		formatKey:           opts.Comparer.FormatKey,
 		score:               pc.score,
 		inputs:              pc.inputs,
@@ -563,6 +565,7 @@ func newDeleteOnlyCompaction(opts *Options, cur *version, inputs []compactionLev
 	c := &compaction{
 		kind:      compactionKindDeleteOnly,
 		cmp:       opts.Comparer.Compare,
+		equal:     opts.equal(),
 		formatKey: opts.Comparer.FormatKey,
 		logger:    opts.Logger,
 		version:   cur,
@@ -651,6 +654,7 @@ func newFlush(
 	c := &compaction{
 		kind:                compactionKindFlush,
 		cmp:                 opts.Comparer.Compare,
+		equal:               opts.equal(),
 		formatKey:           opts.Comparer.FormatKey,
 		logger:              opts.Logger,
 		version:             cur,
@@ -2070,7 +2074,7 @@ func (d *DB) runCompaction(
 		return nil, pendingOutputs, err
 	}
 	c.allowedZeroSeqNum = c.allowZeroSeqNum()
-	iter := newCompactionIter(c.cmp, c.formatKey, d.merge, iiter, snapshots,
+	iter := newCompactionIter(c.cmp, c.equal, c.formatKey, d.merge, iiter, snapshots,
 		&c.rangeDelFrag, c.allowedZeroSeqNum, c.elideTombstone,
 		c.elideRangeTombstone, d.FormatMajorVersion())
 
@@ -2171,6 +2175,8 @@ func (d *DB) runCompaction(
 		return nil
 	}
 
+	// splitL0Outputs is true during flushes and intra-L0 compactions with flush
+	// splits enabled.
 	splitL0Outputs := c.outputLevel.level == 0 && d.opts.FlushSplitBytes > 0
 
 	// finishOutput is called with the a user key up to which all tombstones
@@ -2200,7 +2206,8 @@ func (d *DB) runCompaction(
 		}
 
 		// NB: clone the key because the data can be held on to by the call to
-		// compactionIter.Tombstones via keyspan.Fragmenter.FlushTo.
+		// compactionIter.Tombstones via keyspan.Fragmenter.FlushTo, and by the
+		// WriterMetadata.LargestRangeDel.UserKey.
 		splitKey = append([]byte(nil), splitKey...)
 		for _, v := range iter.Tombstones(splitKey, splitL0Outputs) {
 			if tw == nil {
@@ -2382,11 +2389,11 @@ func (d *DB) runCompaction(
 	// we start off with splitters for file sizes, grandparent limits, and (for
 	// L0 splits) L0 limits, before wrapping them in an splitterGroup.
 	//
-	// There is a complication here: We may not be able to switch SSTables
-	// right away when we are splitting an L0 output. We do not split the
-	// same user key across different sstables within one flush, so the
-	// userKeyChangeSplitter ensures we are at a user key change boundary when
-	// doing a split.
+	// There is a complication here: We may not be able to switch SSTables right
+	// away when we are splitting an L0 output. We do not split the same user
+	// key across different sstables within one flush or intra-L0 compaction, so
+	// the userKeyChangeSplitter ensures we are at a user key change boundary
+	// when doing a split.
 	outputSplitters := []compactionOutputSplitter{
 		&fileSizeSplitter{maxFileSize: c.maxOutputFileSize},
 		&grandparentLimitSplitter{c: c, ve: ve},
@@ -2440,15 +2447,6 @@ func (d *DB) runCompaction(
 		prevPointSeqNum := InternalKeySeqNumMax
 		for ; key != nil; key, val = iter.Next() {
 			if split := splitter.shouldSplitBefore(key, tw); split == splitNow {
-				if splitL0Outputs {
-					// Flush all tombstones up until key.UserKey, and
-					// truncate them at that key.
-					//
-					// The fragmenter could save the passed-in key. As this
-					// key could live beyond the write into the current
-					// sstable output file, make a copy.
-					c.rangeDelFrag.TruncateAndFlushTo(key.Clone().UserKey)
-				}
 				break
 			}
 
@@ -2514,11 +2512,11 @@ func (d *DB) runCompaction(
 			//
 			// Where d is a flush split key (i.e. splitterSuggestion = 'd').
 			// Since d.MERGE.5 has already been written to this output by this
-			// point (as it's <= splitterSuggestion), and flushes cannot have
-			// user keys split across multiple sstables, we have to set
-			// splitKey to a key greater than 'd' to ensure the range deletion
-			// also gets flushed. Setting the splitKey to nil is the simplest
-			// way to ensure that.
+			// point (as it's <= splitterSuggestion), and outputs written to L0
+			// cannot have user keys split across multiple sstables, we have to
+			// set splitKey to a key greater than 'd' to ensure the range
+			// deletion also gets flushed. Setting the splitKey to nil is the
+			// simplest way to ensure that.
 			//
 			// TODO(jackson): This case is only problematic if splitKey equals
 			// the user key of the last point key added. We don't need to
