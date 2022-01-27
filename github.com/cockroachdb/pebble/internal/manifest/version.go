@@ -85,7 +85,8 @@ type FileMetadata struct {
 	// Reference count for the file: incremented when a file is added to a
 	// version and decremented when the version is unreferenced. The file is
 	// obsolete when the reference count falls to zero.
-	refs int32
+	Refs   int32
+	Zombie bool
 	// FileNum is the file number.
 	FileNum base.FileNum
 	// Size is the size of the file, in bytes.

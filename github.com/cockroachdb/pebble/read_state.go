@@ -6,6 +6,8 @@ package pebble
 
 import (
 	"fmt"
+	"github.com/cockroachdb/pebble/internal/humanize"
+	"github.com/cockroachdb/pebble/internal/manifest"
 	"runtime/debug"
 	"sort"
 	"strings"
@@ -33,8 +35,9 @@ type readState struct {
 	memtables flushableList
 
 	// DEBUGGING.
-	iterMap sync.Map
-	doneC   chan struct{}
+	createdAt time.Time
+	iterMap   sync.Map
+	doneC     chan struct{}
 }
 
 // ref adds a reference to the readState.
@@ -151,8 +154,9 @@ func (s *readState) initDebug() {
 	// Spawn a goroutine that reports on the current state of the open refs on the
 	// read state.
 	s.doneC = make(chan struct{})
+	s.createdAt = time.Now()
 	go func() {
-		t := time.NewTicker(30 * time.Second)
+		t := time.NewTicker(5 * time.Second)
 		for {
 			select {
 			case <-s.doneC:
@@ -188,6 +192,23 @@ func (s *readState) cleanupDebug() {
 func (s *readState) debug() string {
 	var sb strings.Builder
 	sb.WriteString("--- READ STATE DEBUG---\n")
+	sb.WriteString(fmt.Sprintf("age: %s (created @ %s)\n", time.Since(s.createdAt), s.createdAt))
+
+	// Compute size of all files in this manifest.
+	var totalSize, zeroRefsSize uint64
+	var totalCount, zeroRefCount uint64
+	for _, l := range s.current.Levels {
+		l.Slice().Each(func(m *manifest.FileMetadata) {
+			totalSize += m.Size
+			totalCount++
+			if m.Zombie {
+				zeroRefsSize += m.Size
+				zeroRefCount++
+			}
+		})
+	}
+	sb.WriteString(fmt.Sprintf("total table size: %s (%d tables)\n", humanize.Uint64(totalSize), totalCount))
+	sb.WriteString(fmt.Sprintf("zero ref table size: %s (%d tables)\n", humanize.Uint64(zeroRefsSize), zeroRefCount))
 
 	// Sort our debug info from oldest to largest.
 	var dbgs []iterDebug
@@ -198,6 +219,8 @@ func (s *readState) debug() string {
 	sort.Slice(dbgs, func(i, j int) bool {
 		return dbgs[i].allocated.Before(dbgs[j].allocated)
 	})
+
+	sb.WriteString("iters:\n")
 	for _, dbg := range dbgs {
 		sb.WriteString(dbg.String())
 	}
