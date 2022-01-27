@@ -537,6 +537,7 @@ func (d *DB) getInternal(key []byte, b *Batch, s *Snapshot) ([]byte, io.Closer, 
 		readState:    readState,
 		keyBuf:       buf.keyBuf,
 	}
+	readState.addDebug(i)
 
 	if !i.First() {
 		err := i.Close()
@@ -908,6 +909,7 @@ func (d *DB) newIterInternal(batch *Batch, s *Snapshot, o *IterOptions) *Iterato
 		newIters:            d.newIters,
 		seqNum:              seqNum,
 	}
+	readState.addDebug(dbi)
 
 	if o.rangeKeys() {
 		// TODO(jackson): Pool range-key iterator objects.

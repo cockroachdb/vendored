@@ -4,7 +4,15 @@
 
 package pebble
 
-import "sync/atomic"
+import (
+	"fmt"
+	"runtime/debug"
+	"sort"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+)
 
 // readState encapsulates the state needed for reading (the current version and
 // list of memtables). Loading the readState is done without grabbing
@@ -23,6 +31,10 @@ type readState struct {
 	refcnt    int32
 	current   *version
 	memtables flushableList
+
+	// DEBUGGING.
+	iterMap sync.Map
+	doneC   chan struct{}
 }
 
 // ref adds a reference to the readState.
@@ -42,6 +54,7 @@ func (s *readState) unref() {
 	for _, mem := range s.memtables {
 		mem.readerUnref()
 	}
+	s.cleanupDebug()
 
 	// The last reference to the readState was released. Check to see if there
 	// are new obsolete tables to delete.
@@ -60,6 +73,7 @@ func (s *readState) unrefLocked() {
 	for _, mem := range s.memtables {
 		mem.readerUnref()
 	}
+	s.cleanupDebug()
 
 	// NB: Unlike readState.unref(), we don't attempt to cleanup newly obsolete
 	// tables as unrefLocked() is only called during DB shutdown to release the
@@ -103,4 +117,90 @@ func (d *DB) updateReadStateLocked(checker func(*DB) error) {
 	if old != nil {
 		old.unrefLocked()
 	}
+}
+
+type iterDebug struct {
+	iter      *Iterator
+	allocated time.Time
+	stack     []byte
+}
+
+func (d *iterDebug) String() string {
+	iterStr := "(closed)"
+	if d.iter.iter != nil {
+		iterStr = d.iter.iter.String()
+	}
+	return fmt.Sprintf(
+		"iter: %s, age: %s (allocated @ %s), stack:\n%s\n",
+		iterStr,
+		time.Since(d.allocated),
+		d.allocated,
+		string(d.stack),
+	)
+}
+
+func newIterDebug(i *Iterator) iterDebug {
+	return iterDebug{
+		iter:      i,
+		allocated: time.Now(),
+		stack:     debug.Stack(),
+	}
+}
+
+func (s *readState) initDebug() {
+	// Spawn a goroutine that reports on the current state of the open refs on the
+	// read state.
+	s.doneC = make(chan struct{})
+	go func() {
+		t := time.NewTicker(30 * time.Second)
+		for {
+			select {
+			case <-s.doneC:
+				return
+			case <-t.C:
+				fmt.Println(s.debug())
+			}
+		}
+	}()
+}
+
+func (s *readState) addDebug(i *Iterator) {
+	if s.doneC == nil {
+		s.initDebug()
+	}
+	s.iterMap.Store(i, newIterDebug(i))
+}
+
+func (s *readState) removeDebug(i *Iterator) {
+	s.iterMap.Delete(i)
+}
+
+func (s *readState) cleanupDebug() {
+	s.iterMap.Range(func(key, _ interface{}) bool {
+		s.iterMap.Delete(key)
+		return true
+	})
+	if s.doneC != nil {
+		close(s.doneC)
+	}
+}
+
+func (s *readState) debug() string {
+	var sb strings.Builder
+	sb.WriteString("--- READ STATE DEBUG---\n")
+
+	// Sort our debug info from oldest to largest.
+	var dbgs []iterDebug
+	s.iterMap.Range(func(_, value interface{}) bool {
+		dbgs = append(dbgs, value.(iterDebug))
+		return true
+	})
+	sort.Slice(dbgs, func(i, j int) bool {
+		return dbgs[i].allocated.Before(dbgs[j].allocated)
+	})
+	for _, dbg := range dbgs {
+		sb.WriteString(dbg.String())
+	}
+
+	return sb.String()
 }
