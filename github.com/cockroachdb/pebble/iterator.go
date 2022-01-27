@@ -1479,6 +1479,7 @@ func (i *Iterator) Close() error {
 			}
 		}
 
+		i.readState.removeDebug(i)
 		i.readState.unref()
 		i.readState = nil
 	}
@@ -1624,6 +1625,7 @@ func (i *Iterator) Clone() (*Iterator, error) {
 		newIters:            i.newIters,
 		seqNum:              i.seqNum,
 	}
+	readState.addDebug(dbi)
 	if i.rangeKey != nil {
 		// TODO(jackson): Pool range-key iterator objects.
 		dbi.rangeKey = &iteratorRangeKeyState{
