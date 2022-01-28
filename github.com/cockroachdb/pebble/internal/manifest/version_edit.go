@@ -551,6 +551,7 @@ func (b *BulkVersionEdit) Apply(
 
 		for _, f := range deletedMap {
 			addZombie(f.FileNum, f.Size)
+			f.Zombie = true
 			if obsolete := v.Levels[level].tree.delete(f); obsolete {
 				// Deleting a file from the B-Tree may decrement its
 				// reference count. However, because we cloned the
@@ -586,6 +587,7 @@ func (b *BulkVersionEdit) Apply(
 				return nil, nil, errors.Wrap(err, "pebble")
 			}
 			removeZombie(f.FileNum)
+			f.Zombie = false
 			// Track the keys with the smallest and largest keys, so that we can
 			// check consistency of the modified span.
 			if sm == nil || base.InternalCompare(cmp, sm.Smallest, f.Smallest) > 0 {
