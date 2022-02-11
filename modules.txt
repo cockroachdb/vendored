@@ -914,6 +914,9 @@ github.com/google/pprof/profile
 github.com/google/pprof/third_party/d3
 github.com/google/pprof/third_party/d3flamegraph
 github.com/google/pprof/third_party/svgpan
+# github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
+## explicit; go 1.13
+github.com/google/shlex
 # github.com/google/skylark v0.0.0-20181101142754-a5f7082aabed
 ## explicit
 github.com/google/skylark/syntax
