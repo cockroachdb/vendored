@@ -91,6 +91,9 @@ github.com/Masterminds/goutils
 # github.com/Masterminds/semver v1.5.0
 ## explicit
 github.com/Masterminds/semver
+# github.com/Masterminds/semver/v3 v3.1.1
+## explicit; go 1.12
+github.com/Masterminds/semver/v3
 # github.com/Masterminds/sprig v2.22.0+incompatible
 ## explicit
 github.com/Masterminds/sprig
@@ -139,6 +142,9 @@ github.com/andy-kimball/arenaskl/internal/fastrand
 # github.com/andybalholm/cascadia v1.2.0
 ## explicit; go 1.13
 github.com/andybalholm/cascadia
+# github.com/andygrunwald/go-jira v1.14.0
+## explicit; go 1.12
+github.com/andygrunwald/go-jira
 # github.com/apache/arrow/go/arrow v0.0.0-20200923215132-ac86123a3f01
 ## explicit; go 1.12
 github.com/apache/arrow/go/arrow
@@ -697,6 +703,9 @@ github.com/envoyproxy/protoc-gen-validate/validate
 # github.com/facebookgo/clock v0.0.0-20150410010913-600d898af40a
 ## explicit
 github.com/facebookgo/clock
+# github.com/fatih/structs v1.1.0
+## explicit
+github.com/fatih/structs
 # github.com/felixge/httpsnoop v1.0.1
 ## explicit; go 1.13
 github.com/felixge/httpsnoop
@@ -839,6 +848,9 @@ github.com/golang-commonmark/mdurl
 # github.com/golang-commonmark/puny v0.0.0-20180910110745-050be392d8b8
 ## explicit
 github.com/golang-commonmark/puny
+# github.com/golang-jwt/jwt v3.2.2+incompatible
+## explicit
+github.com/golang-jwt/jwt
 # github.com/golang-jwt/jwt/v4 v4.0.0
 ## explicit; go 1.15
 github.com/golang-jwt/jwt/v4
@@ -1086,6 +1098,9 @@ github.com/jhump/protoreflect/internal/codec
 # github.com/jmespath/go-jmespath v0.4.0
 ## explicit; go 1.14
 github.com/jmespath/go-jmespath
+# github.com/jordan-wright/email v4.0.1-0.20210109023952-943e75fe5223+incompatible
+## explicit
+github.com/jordan-wright/email
 # github.com/jordanlewis/gcassert v0.0.0-20210709222130-81f5df3faab8
 ## explicit; go 1.13
 github.com/jordanlewis/gcassert
@@ -1443,6 +1458,10 @@ github.com/tklauser/numcpus
 # github.com/toqueteos/webbrowser v1.2.0
 ## explicit; go 1.12
 github.com/toqueteos/webbrowser
+# github.com/trivago/tgo v1.0.7
+## explicit
+github.com/trivago/tgo/tcontainer
+github.com/trivago/tgo/treflect
 # github.com/twitchtv/twirp v8.1.0+incompatible
 ## explicit
 github.com/twitchtv/twirp
