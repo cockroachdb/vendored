@@ -396,6 +396,8 @@ type DB struct {
 			// readCompactions is a readCompactionQueue which keeps track of the
 			// compactions which we might have to perform.
 			readCompactions readCompactionQueue
+			// See DB.RegisterFlushCompletedCallback.
+			flushCompletedCallback func()
 		}
 
 		cleaner struct {
@@ -721,11 +723,14 @@ func (d *DB) Apply(batch *Batch, opts *WriteOptions) error {
 		if d.opts.Experimental.RangeKeys == nil {
 			panic("pebble: range keys require the Experimental.RangeKeys option")
 		}
-		// TODO(jackson): Assert that all range key operands are suffixless.
+		if d.FormatMajorVersion() < FormatRangeKeys {
+			panic(fmt.Sprintf(
+				"pebble: range keys require at least format major version %d (current: %d)",
+				FormatRangeKeys, d.FormatMajorVersion(),
+			))
+		}
 
-		// TODO(jackson): Once the format major version for range keys is
-		// introduced, error if the batch includes range keys but the active
-		// format major version doesn't enable them.
+		// TODO(jackson): Assert that all range key operands are suffixless.
 	}
 
 	if batch.db == nil {
@@ -869,13 +874,27 @@ func (d *DB) newIterInternal(batch *Batch, s *Snapshot, o *IterOptions) *Iterato
 	if err := d.closed.Load(); err != nil {
 		panic(err)
 	}
-	if o.rangeKeys() && d.opts.Experimental.RangeKeys == nil {
-		panic("pebble: range keys require the Experimental.RangeKeys option")
+	if o.rangeKeys() {
+		if d.opts.Experimental.RangeKeys == nil {
+			panic("pebble: range keys require the Experimental.RangeKeys option")
+		}
+		if d.FormatMajorVersion() < FormatRangeKeys {
+			panic(fmt.Sprintf(
+				"pebble: range keys require at least format major version %d (current: %d)",
+				FormatRangeKeys, d.FormatMajorVersion(),
+			))
+		}
 	}
 	if o != nil && o.RangeKeyMasking.Suffix != nil && o.KeyTypes != IterKeyTypePointsAndRanges {
 		panic("pebble: range key masking requires IterKeyTypePointsAndRanges")
 	}
-
+	if (batch != nil || s != nil) && (o != nil && o.OnlyReadGuaranteedDurable) {
+		// We could add support for OnlyReadGuaranteedDurable on snapshots if
+		// there was a need: this would require checking that the sequence number
+		// of the snapshot has been flushed, by comparing with
+		// DB.mem.queue[0].logSeqNum.
+		panic("OnlyReadGuaranteedDurable is not supported for batches or snapshots")
+	}
 	// Grab and reference the current readState. This prevents the underlying
 	// files in the associated version from being deleted if there is a current
 	// compaction. The readState is unref'd by Iterator.Close().
@@ -931,6 +950,9 @@ func finishInitializingIter(buf *iterAlloc) *Iterator {
 	batch := dbi.batch
 	seqNum := dbi.seqNum
 	memtables := readState.memtables
+	if dbi.opts.OnlyReadGuaranteedDurable {
+		memtables = nil
+	}
 	current := readState.current
 
 	// Merging levels and levels from iterAlloc.

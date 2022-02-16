@@ -136,7 +136,7 @@ type Writer struct {
 	// for testing. Note that v2 format blocks are backwards compatible with v1
 	// format blocks.
 	rangeDelV1Format    bool
-	indexBlock          blockWriter
+	indexBlock          indexBlockBuf
 	rangeDelBlock       blockWriter
 	rangeKeyBlock       blockWriter
 	topLevelIndexBlock  blockWriter
@@ -174,12 +174,186 @@ type Writer struct {
 	// goroutine.
 	blockBuf blockBuf
 
-	queueState struct {
+	coordination struct {
 		// writeQueue is used to write data blocks to disk. The writeQueue is primarily
 		// used to maintain the order in which data blocks must be written to disk. For
 		// this reason, every single data block write must be done through the writeQueue.
 		writeQueue *writeQueue
+
+		sizeEstimate sizeEstimate
 	}
+}
+
+type indexBlockBuf struct {
+	// block will only be accessed from the writeQueue goroutine if parallelism is enabled.
+	block blockWriter
+
+	sizeEstimate struct {
+		useMutex bool
+		mu       sync.Mutex
+		// numInflight is the number of index entries which are inflight and are yet to be added to the
+		// index block.
+		numInflight uint64
+		// totalSize is the estimated size of the index block. This should match indexBlock.estimatedSize().
+		totalSize uint64
+		// numEntries is the total number of entries added to the index block.
+		numEntries uint64
+		// maxEstimatedSize stores the maximum result returned from indexBlockBuf.estimatedSize. It
+		// ensures that values returned from subsequent calls to Writer.EstimatedSize never decrease.
+		maxEstimatedSize uint64
+		// emptySize is the size of an empty index block.
+		emptySize uint64
+	}
+}
+
+func (i *indexBlockBuf) size() uint64 {
+	if i.sizeEstimate.useMutex {
+		i.sizeEstimate.mu.Lock()
+		defer i.sizeEstimate.mu.Unlock()
+	}
+
+	avgSize := float64(0)
+	if i.sizeEstimate.numEntries > 0 {
+		avgSize = float64(i.sizeEstimate.totalSize) / float64(i.sizeEstimate.numEntries)
+	}
+
+	total := i.sizeEstimate.totalSize + i.sizeEstimate.numInflight*uint64(avgSize)
+	if total > i.sizeEstimate.maxEstimatedSize {
+		i.sizeEstimate.maxEstimatedSize = total
+	} else {
+		total = i.sizeEstimate.maxEstimatedSize
+	}
+
+	if total == 0 {
+		return emptyBlockSize
+	}
+
+	return total
+}
+
+func (i *indexBlockBuf) addInflight() {
+	if i.sizeEstimate.useMutex {
+		i.sizeEstimate.mu.Lock()
+		defer i.sizeEstimate.mu.Unlock()
+	}
+
+	i.sizeEstimate.numInflight++
+}
+
+func (i *indexBlockBuf) indexEntryWritten() {
+	size := i.block.estimatedSize()
+
+	if i.sizeEstimate.useMutex {
+		i.sizeEstimate.mu.Lock()
+		defer i.sizeEstimate.mu.Unlock()
+	}
+
+	// When the Writer is closed, we write entries which aren't inflight. At that point
+	// all inflight entries must already be written.
+	if i.sizeEstimate.numInflight > 0 {
+		i.sizeEstimate.numInflight--
+	}
+
+	i.sizeEstimate.numEntries++
+	i.sizeEstimate.totalSize = uint64(size)
+}
+
+func (i *indexBlockBuf) add(key InternalKey, value []byte) {
+	i.block.add(key, value)
+	i.indexEntryWritten()
+}
+
+func (i *indexBlockBuf) finish() []byte {
+	b := i.block.finish()
+	i.clearEstimate()
+	return b
+}
+
+func (i *indexBlockBuf) clearEstimate() {
+	if i.sizeEstimate.useMutex {
+		i.sizeEstimate.mu.Lock()
+		defer i.sizeEstimate.mu.Unlock()
+	}
+
+	i.sizeEstimate.numEntries = 0
+	i.sizeEstimate.numInflight = 0
+	i.sizeEstimate.maxEstimatedSize = 0
+	i.sizeEstimate.totalSize = 0
+}
+
+// sizeEstimate is used for sstable size estimation. sizeEstimate can be accessed by
+// the Writer client, writeQueue, compressionQueue goroutines. Fields should only be
+// read/updated through the functions defined on the *sizeEstimate type.
+type sizeEstimate struct {
+	// If we don't do block compression, block writes in parallel, then we don't need to take
+	// the performance hit of synchronizing using this mutex.
+	useMutex bool
+	mu       sync.Mutex
+
+	// maxEstimatedSize stores the maximum result returned from sizeEstimate.size. It ensures
+	// that values returned from subsequent calls to Writer.EstimatedSize never decrease. We need
+	// to do this, because the compressed size of the inflight blocks before compression is an
+	// estimate, and the true compressed size of the inflight blocks might be lower.
+	maxEstimatedSize uint64
+	// totalSize is the total size of the data which we've written to disk. This will match
+	// Writer.meta.Size.
+	totalSize uint64
+	// inflightSize is the uncompressed size of the inflight data blocks. This is computed as
+	// an estimate.
+	inflightSize uint64
+
+	// size is the total compressed size of the finished data blocks.
+	compressedSize uint64
+	// uncompressedSize is total uncompressed size of the finished data blocks.
+	uncompressedSize uint64
+}
+
+// newTotalSize is the new w.meta.Size. inflightSize is the uncompressed block size estimate which
+// was previously added to sizeEstimate.inflightSize. writtenSize is the compressed size of the block
+// which was written to disk.
+func (s *sizeEstimate) dataBlockWritten(newTotalSize uint64, inflightSize int, writtenSize int) {
+	if s.useMutex {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+	}
+
+	// Update fields required which are used to compute the compression ratio.
+	s.uncompressedSize += uint64(inflightSize)
+	s.compressedSize += uint64(writtenSize)
+
+	s.totalSize = newTotalSize
+	s.inflightSize -= uint64(inflightSize)
+}
+
+// size is an estimated size of datablock data which has been written to disk.
+func (s *sizeEstimate) size() uint64 {
+	if s.useMutex {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+	}
+
+	ratio := float64(1)
+	if s.uncompressedSize > 0 {
+		ratio = float64(s.compressedSize) / float64(s.uncompressedSize)
+	}
+
+	estimatedInflightSize := uint64(float64(s.inflightSize) * ratio)
+	total := estimatedInflightSize + s.totalSize
+	if total > s.maxEstimatedSize {
+		s.maxEstimatedSize = total
+	} else {
+		total = s.maxEstimatedSize
+	}
+	return total
+}
+
+func (s *sizeEstimate) addInflightDataBlock(size int) {
+	if s.useMutex {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+	}
+
+	s.inflightSize += uint64(size)
 }
 
 var writeTaskPool = sync.Pool{
@@ -769,6 +943,9 @@ func (w *Writer) maybeAddToFilter(key []byte) {
 }
 
 func (w *Writer) flush(key InternalKey) error {
+	estimatedUncompressedSize := w.dataBlockBuf.dataBlock.estimatedSize()
+	w.coordination.sizeEstimate.addInflightDataBlock(estimatedUncompressedSize)
+
 	w.dataBlockBuf.finish()
 	w.dataBlockBuf.compressAndChecksum(w.compression)
 
@@ -779,9 +956,13 @@ func (w *Writer) flush(key InternalKey) error {
 	writeTask.compressionDone <- true
 	writeTask.buf = w.dataBlockBuf
 	writeTask.indexSepKey = key
+	writeTask.inflightSize = estimatedUncompressedSize
+
+	// The writeTask corresponds to an unwritten index entry.
+	w.indexBlock.addInflight()
 
 	w.dataBlockBuf = nil
-	err = w.queueState.writeQueue.addSync(writeTask)
+	err = w.coordination.writeQueue.addSync(writeTask)
 	w.dataBlockBuf = newDataBlockBuf(w.restartInterval, w.checksumType)
 
 	return err
@@ -847,7 +1028,7 @@ func (w *Writer) addIndexEntry(prevKey, key InternalKey, bhp BlockHandleWithProp
 	encoded := encodeBlockHandleWithProperties(tmp, bhp)
 
 	if supportsTwoLevelIndex(w.tableFormat) &&
-		shouldFlush(sep, encoded, &w.indexBlock, w.indexBlockSize, w.indexBlockSizeThreshold) {
+		shouldFlush(sep, encoded, &w.indexBlock.block, w.indexBlockSize, w.indexBlockSizeThreshold) {
 		if cap(w.indexPartitions) == 0 {
 			w.indexPartitions = make([]indexBlockAndBlockProperties, 0, 32)
 		}
@@ -922,8 +1103,12 @@ func (w *Writer) finishIndexBlock() error {
 			w.blockPropsEncoder.addProp(shortID(i), scratch)
 		}
 	}
-	part := indexBlockAndBlockProperties{nEntries: w.indexBlock.nEntries, properties: w.blockPropsEncoder.props()}
-	w.indexSepAlloc, part.sep = cloneKeyWithBuf(base.DecodeInternalKey(w.indexBlock.curKey), w.indexSepAlloc)
+	part := indexBlockAndBlockProperties{
+		nEntries: w.indexBlock.block.nEntries, properties: w.blockPropsEncoder.props(),
+	}
+	w.indexSepAlloc, part.sep = cloneKeyWithBuf(
+		base.DecodeInternalKey(w.indexBlock.block.curKey), w.indexSepAlloc,
+	)
 	bk := w.indexBlock.finish()
 	if len(w.indexBlockAlloc) < len(bk) {
 		// Allocate enough bytes for approximately 16 index blocks.
@@ -1066,7 +1251,7 @@ func (w *Writer) Close() (err error) {
 	// finish must be called before we check for an error, because finish will
 	// block until every single task added to the writeQueue has been processed,
 	// and an error could be encountered while any of those tasks are processed.
-	if err = w.queueState.writeQueue.finish(); err != nil {
+	if err = w.coordination.writeQueue.finish(); err != nil {
 		w.err = err
 	}
 
@@ -1076,7 +1261,7 @@ func (w *Writer) Close() (err error) {
 
 	// Finish the last data block, or force an empty data block if there
 	// aren't any data blocks at all.
-	if w.dataBlockBuf.dataBlock.nEntries > 0 || w.indexBlock.nEntries == 0 {
+	if w.dataBlockBuf.dataBlock.nEntries > 0 || w.indexBlock.block.nEntries == 0 {
 		bh, err := w.writeBlock(w.dataBlockBuf.dataBlock.finish(), w.compression, &w.dataBlockBuf.blockBuf)
 		if err != nil {
 			w.err = err
@@ -1129,8 +1314,8 @@ func (w *Writer) Close() (err error) {
 		// NB: RocksDB includes the block trailer length in the index size
 		// property, though it doesn't include the trailer in the filter size
 		// property.
-		w.props.IndexSize = uint64(w.indexBlock.estimatedSize()) + blockTrailerLen
-		w.props.NumDataBlocks = uint64(w.indexBlock.nEntries)
+		w.props.IndexSize = uint64(w.indexBlock.size()) + blockTrailerLen
+		w.props.NumDataBlocks = uint64(w.indexBlock.block.nEntries)
 
 		// Write the single level index block.
 		indexBH, err = w.writeBlock(w.indexBlock.finish(), w.compression, &w.blockBuf)
@@ -1313,7 +1498,8 @@ func (w *Writer) Close() (err error) {
 // EstimatedSize returns the estimated size of the sstable being written if a
 // called to Finish() was made without adding additional keys.
 func (w *Writer) EstimatedSize() uint64 {
-	return w.meta.Size + uint64(w.dataBlockBuf.dataBlock.estimatedSize()+w.indexBlock.estimatedSize())
+	return w.coordination.sizeEstimate.size() +
+		uint64(w.dataBlockBuf.dataBlock.estimatedSize()) + w.indexBlock.size()
 }
 
 // Metadata returns the metadata for the finished sstable. Only valid to call
@@ -1388,8 +1574,10 @@ func NewWriter(f writeCloseSyncer, o WriterOptions, extraOpts ...WriterOption) *
 		cache:                   o.Cache,
 		restartInterval:         o.BlockRestartInterval,
 		checksumType:            o.Checksum,
-		indexBlock: blockWriter{
-			restartInterval: 1,
+		indexBlock: indexBlockBuf{
+			block: blockWriter{
+				restartInterval: 1,
+			},
 		},
 		rangeDelBlock: blockWriter{
 			restartInterval: 1,
@@ -1412,10 +1600,14 @@ func NewWriter(f writeCloseSyncer, o WriterOptions, extraOpts ...WriterOption) *
 	w.blockBuf = blockBuf{
 		checksummer: checksummer{checksumType: o.Checksum},
 	}
+
+	// We only need to use a mutex when we decide to truly write blocks in parallel.
+	w.coordination.sizeEstimate.useMutex = false
+
 	// We're creating the writeQueue with a size of 0, because we won't be using
-	// the async queue until parallel compression is enabled, and we do all block
-	// writes through writeQueue.addSync.
-	w.queueState.writeQueue = newWriteQueue(0, w)
+	// the async queue until parallelism is enabled, and we do all block writes
+	// through writeQueue.addSync.
+	w.coordination.writeQueue = newWriteQueue(0, w)
 
 	if f == nil {
 		w.err = errors.New("pebble: nil file")
