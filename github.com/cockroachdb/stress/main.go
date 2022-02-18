@@ -271,6 +271,10 @@ func run() error {
 
 			// Merge sharded artifacts.
 			for env, mergeProgram := range shardableArtifacts {
+				if len(filesToMerge[env]) == 0 {
+					fmt.Printf("stress: skipping merge for artifact %s\n", env)
+					continue
+				}
 				output, err := os.Create(os.Getenv(env))
 				if err != nil {
 					return err
