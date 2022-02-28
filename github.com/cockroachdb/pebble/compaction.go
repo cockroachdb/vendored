@@ -641,12 +641,13 @@ func (c *compaction) setupInuseKeyRanges() {
 	if c.outputLevel.level == 0 {
 		level = 0
 	}
-	c.inuseKeyRanges = calculateInuseKeyRanges(c.version, c.cmp, level,
-		c.smallest.UserKey, c.largest.UserKey)
+	c.inuseKeyRanges = calculateInuseKeyRanges(
+		c.version, c.cmp, level, numLevels-1, c.smallest.UserKey, c.largest.UserKey,
+	)
 }
 
 func calculateInuseKeyRanges(
-	v *version, cmp base.Compare, level int, smallest, largest []byte,
+	v *version, cmp base.Compare, level, maxLevel int, smallest, largest []byte,
 ) []manifest.UserKeyRange {
 	// Use two slices, alternating which one is input and which one is output
 	// as we descend the LSM.
@@ -660,7 +661,7 @@ func calculateInuseKeyRanges(
 		level++
 	}
 
-	for ; level < numLevels; level++ {
+	for ; level <= maxLevel; level++ {
 		// NB: We always treat `largest` as inclusive for simplicity, because
 		// there's little consequence to calculating slightly broader in-use key
 		// ranges.
@@ -1096,8 +1097,9 @@ type manualCompaction struct {
 	level       int
 	outputLevel int
 	done        chan error
-	start       InternalKey
-	end         InternalKey
+	start       []byte
+	end         []byte
+	split       bool
 }
 
 type readCompaction struct {
@@ -1339,53 +1341,22 @@ func (d *DB) maybeScheduleDelayedFlush(tbl *memTable) {
 	}()
 }
 
-// RegisterFlushCompletedCallback is an experimental feature that is subject
-// to change/removal without notice. It is expected to be used in concert with
-// IterOptions.OnlyReadGuaranteedDurable. It provides a best-effort
-// notification when a flush completion may have advanced what state is
-// durable (see the assumptions around durability listed in the code comment
-// for OnlyReadGuaranteedDurable). It is explicitly not named (something like)
-// RegisterDurabilityAdvancedCallback since a caller may want to rely on the
-// invocation of this callback being coarse-grained, and use it to poll the DB
-// state using an Iterator with OnlyReadGuaranteedDurable=true.
-//
-// Only a single callback func can be registered. Repeated calls will replace
-// the previous registered callback.
-func (d *DB) RegisterFlushCompletedCallback(cb func()) {
-	d.mu.Lock()
-	d.mu.compact.flushCompletedCallback = cb
-	d.mu.Unlock()
-}
-
 func (d *DB) flush() {
 	pprof.Do(context.Background(), flushLabels, func(context.Context) {
-		var didFlush bool
-		var flushCompletedCallback func()
-		func() {
-			d.mu.Lock()
-			defer d.mu.Unlock()
-			var err error
-			if didFlush, err = d.flush1(); err != nil {
-				// TODO(peter): count consecutive flush errors and backoff.
-				d.opts.EventListener.BackgroundError(err)
-			}
-			d.mu.compact.flushing = false
-			// More flush work may have arrived while we were flushing, so schedule
-			// another flush if needed.
-			d.maybeScheduleFlush()
-			// The flush may have produced too many files in a level, so schedule a
-			// compaction if needed.
-			d.maybeScheduleCompaction()
-			d.mu.compact.cond.Broadcast()
-			flushCompletedCallback = d.mu.compact.flushCompletedCallback
-		}()
-		// NB: Running callback without holding any locks, to guard against
-		// callback implementation causing a deadlock. This does mean that if a
-		// new callback is registered to replace the previous one, there is no
-		// guarantee that the previous one will not be subsequently called.
-		if didFlush && flushCompletedCallback != nil {
-			flushCompletedCallback()
+		d.mu.Lock()
+		defer d.mu.Unlock()
+		if err := d.flush1(); err != nil {
+			// TODO(peter): count consecutive flush errors and backoff.
+			d.opts.EventListener.BackgroundError(err)
 		}
+		d.mu.compact.flushing = false
+		// More flush work may have arrived while we were flushing, so schedule
+		// another flush if needed.
+		d.maybeScheduleFlush()
+		// The flush may have produced too many files in a level, so schedule a
+		// compaction if needed.
+		d.maybeScheduleCompaction()
+		d.mu.compact.cond.Broadcast()
 	})
 }
 
@@ -1394,7 +1365,7 @@ func (d *DB) flush() {
 //
 // d.mu must be held when calling this, but the mutex may be dropped and
 // re-acquired during the course of this method.
-func (d *DB) flush1() (didFlush bool, err error) {
+func (d *DB) flush1() error {
 	var n int
 	for ; n < len(d.mu.mem.queue)-1; n++ {
 		if !d.mu.mem.queue[n].readyForFlush() {
@@ -1403,7 +1374,7 @@ func (d *DB) flush1() (didFlush bool, err error) {
 	}
 	if n == 0 {
 		// None of the immutable memtables are ready for flushing.
-		return false, nil
+		return nil
 	}
 
 	// Require that every memtable being flushed has a log number less than the
@@ -1413,7 +1384,7 @@ func (d *DB) flush1() (didFlush bool, err error) {
 		for i := 0; i < n; i++ {
 			logNum := d.mu.mem.queue[i].logNum
 			if logNum >= minUnflushedLogNum {
-				return false, errFlushInvariant
+				return errFlushInvariant
 			}
 		}
 	}
@@ -1482,9 +1453,6 @@ func (d *DB) flush1() (didFlush bool, err error) {
 	d.mu.versions.incrementCompactions(c.kind)
 	d.mu.versions.incrementCompactionBytes(-c.bytesWritten)
 
-	info.TotalDuration = d.timeNow().Sub(startTime)
-	d.opts.EventListener.FlushEnd(info)
-
 	// Refresh bytes flushed count.
 	atomic.StoreUint64(&d.atomic.bytesFlushed, 0)
 
@@ -1495,6 +1463,16 @@ func (d *DB) flush1() (didFlush bool, err error) {
 		d.updateReadStateLocked(d.opts.DebugCheck)
 		d.updateTableStatsLocked(ve.NewFiles)
 	}
+	if err == nil {
+		// TODO(jackson): Remove this when range keys are persisted to sstables.
+		err = d.applyFlushedRangeKeys(flushed)
+	}
+	// Signal FlushEnd after installing the new readState. This helps for unit
+	// tests that use the callback to trigger a read using an iterator with
+	// IterOptions.OnlyReadGuaranteedDurable.
+	info.TotalDuration = d.timeNow().Sub(startTime)
+	d.opts.EventListener.FlushEnd(info)
+
 	d.deleteObsoleteFiles(jobID, false /* waitForOngoing */)
 
 	// Mark all the memtables we flushed as flushed. Note that we do this last so
@@ -1511,7 +1489,7 @@ func (d *DB) flush1() (didFlush bool, err error) {
 		flushed[i].readerUnref()
 		close(flushed[i].flushed)
 	}
-	return true, err
+	return err
 }
 
 // maybeScheduleCompactionAsync should be used when
@@ -1583,7 +1561,7 @@ func (d *DB) maybeScheduleCompactionPicker(
 	// cheap and reduce future compaction work.
 	if len(d.mu.compact.deletionHints) > 0 &&
 		d.mu.compact.compactingCount < d.opts.MaxConcurrentCompactions &&
-		!d.opts.private.disableAutomaticCompactions {
+		!d.opts.DisableAutomaticCompactions {
 		v := d.mu.versions.currentVersion()
 		snapshots := d.mu.snapshots.toSlice()
 		inputs, unresolvedHints := checkDeleteCompactionHints(d.cmp, v, d.mu.compact.deletionHints, snapshots)
@@ -1618,7 +1596,7 @@ func (d *DB) maybeScheduleCompactionPicker(
 		}
 	}
 
-	for !d.opts.private.disableAutomaticCompactions && d.mu.compact.compactingCount < d.opts.MaxConcurrentCompactions {
+	for !d.opts.DisableAutomaticCompactions && d.mu.compact.compactingCount < d.opts.MaxConcurrentCompactions {
 		env.inProgressCompactions = d.getInProgressCompactionInfoLocked(nil)
 		env.readCompactionEnv = readCompactionEnv{
 			readCompactions:          &d.mu.compact.readCompactions,
@@ -2259,8 +2237,15 @@ func (d *DB) runCompaction(
 			)
 		}
 
-		meta.Smallest = writerMeta.Smallest(d.cmp)
-		meta.Largest = writerMeta.Largest(d.cmp)
+		if writerMeta.HasPointKeys {
+			meta.ExtendPointKeyBounds(d.cmp, writerMeta.SmallestPoint, writerMeta.LargestPoint)
+		}
+		if writerMeta.HasRangeDelKeys {
+			meta.ExtendPointKeyBounds(d.cmp, writerMeta.SmallestRangeDel, writerMeta.LargestRangeDel)
+		}
+		if writerMeta.HasRangeKeys {
+			meta.ExtendRangeKeyBounds(d.cmp, writerMeta.SmallestRangeKey, writerMeta.LargestRangeKey)
+		}
 
 		// Verify that the sstable bounds fall within the compaction input
 		// bounds. This is a sanity check that we don't have a logic error

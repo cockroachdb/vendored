@@ -163,6 +163,7 @@ type Iterator struct {
 	prefixOrFullSeekKey []byte
 	readSampling        readSampling
 	stats               IteratorStats
+	closeHook           func()
 
 	// Following fields are only used in Clone.
 	// Non-nil if this Iterator includes a Batch.
@@ -208,6 +209,16 @@ type iteratorRangeKeyState struct {
 	// buf is used to save range-key data before moving the range-key iterator.
 	// Start and end boundaries, suffixes and values are all copied into buf.
 	buf []byte
+}
+
+// isEphemeralPosition returns true iff the current iterator position is
+// ephemeral, and won't be visited during subsequent relative positioning
+// operations.
+//
+// The iterator position resulting from a SeekGE or SeekPrefixGE that lands on a
+// straddling range key without a coincident point key is such a position.
+func (i *Iterator) isEphemeralPosition() bool {
+	return i.rangeKey != nil && i.rangeKey.rangeKeyOnly && !i.equal(i.rangeKey.start, i.key)
 }
 
 type lastPositioningOpKind int8
@@ -1269,8 +1280,24 @@ func (i *Iterator) PrevWithLimit(limit []byte) IterValidityState {
 		// Already at the right place.
 	}
 	if i.pos == iterPosCurForward || i.pos == iterPosNext || i.pos == iterPosCurForwardPaused {
-		stepAgain := i.pos == iterPosNext
 		// Switching direction.
+		stepAgain := i.pos == iterPosNext
+
+		// Synthetic range key markers are a special case. Consider SeekGE(b)
+		// which finds a range key [a, c). To ensure the user observes the range
+		// key, the Iterator pauses at Key() = b. The iterator must advance the
+		// internal iterator to see if there's also a coincident point key at
+		// 'b', leaving the iterator at iterPosNext if there's not.
+		//
+		// This is a problem: Synthetic range key markers are only interleaved
+		// during the original seek. A subsequent Prev() of i.iter will not move
+		// back onto the synthetic range key marker. In this case where the
+		// previous iterator position was a synthetic range key start boundary,
+		// we must not step a second time.
+		if i.isEphemeralPosition() {
+			stepAgain = false
+		}
+
 		// We set i.iterValidityState to IterExhausted here to force the calls
 		// to prevUserKey to save the current key i.iter is pointing at in
 		// order to determine when the prev user-key is reached.
@@ -1481,6 +1508,10 @@ func (i *Iterator) Close() error {
 
 		i.readState.unref()
 		i.readState = nil
+	}
+
+	if i.closeHook != nil {
+		i.closeHook()
 	}
 
 	// Close the closer for the current value if one was open.

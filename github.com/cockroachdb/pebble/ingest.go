@@ -13,6 +13,7 @@ import (
 	"github.com/cockroachdb/pebble/internal/keyspan"
 	"github.com/cockroachdb/pebble/internal/manifest"
 	"github.com/cockroachdb/pebble/internal/private"
+	"github.com/cockroachdb/pebble/internal/rangekey"
 	"github.com/cockroachdb/pebble/sstable"
 	"github.com/cockroachdb/pebble/vfs"
 )
@@ -84,8 +85,6 @@ func ingestLoad1(
 	meta.FileNum = fileNum
 	meta.Size = uint64(stat.Size())
 	meta.CreationTime = time.Now().Unix()
-	meta.Smallest = InternalKey{}
-	meta.Largest = InternalKey{}
 
 	// Avoid loading into into the table cache for collecting stats if we
 	// don't need to. If there are no range deletions, we have all the
@@ -98,22 +97,18 @@ func ingestLoad1(
 	// calculating stats before we can remove the original link.
 	maybeSetStatsFromProperties(meta, &r.Properties)
 
-	smallestSet, largestSet := false, false
-	empty := true
-
 	{
 		iter, err := r.NewIter(nil /* lower */, nil /* upper */)
 		if err != nil {
 			return nil, err
 		}
 		defer iter.Close()
+		var smallest InternalKey
 		if key, _ := iter.First(); key != nil {
 			if err := ingestValidateKey(opts, key); err != nil {
 				return nil, err
 			}
-			empty = false
-			meta.Smallest = key.Clone()
-			smallestSet = true
+			smallest = (*key).Clone()
 		}
 		if err := iter.Error(); err != nil {
 			return nil, err
@@ -122,9 +117,7 @@ func ingestLoad1(
 			if err := ingestValidateKey(opts, key); err != nil {
 				return nil, err
 			}
-			empty = false
-			meta.Largest = key.Clone()
-			largestSet = true
+			meta.ExtendPointKeyBounds(opts.Comparer.Compare, smallest, key.Clone())
 		}
 		if err := iter.Error(); err != nil {
 			return nil, err
@@ -137,15 +130,12 @@ func ingestLoad1(
 	}
 	if iter != nil {
 		defer iter.Close()
+		var smallest InternalKey
 		if key, _ := iter.First(); key != nil {
 			if err := ingestValidateKey(opts, key); err != nil {
 				return nil, err
 			}
-			empty = false
-			if !smallestSet ||
-				base.InternalCompare(opts.Comparer.Compare, meta.Smallest, *key) > 0 {
-				meta.Smallest = key.Clone()
-			}
+			smallest = (*key).Clone()
 		}
 		if err := iter.Error(); err != nil {
 			return nil, err
@@ -154,18 +144,57 @@ func ingestLoad1(
 			if err := ingestValidateKey(opts, key); err != nil {
 				return nil, err
 			}
-			empty = false
 			end := base.MakeRangeDeleteSentinelKey(val)
-			if !largestSet ||
-				base.InternalCompare(opts.Comparer.Compare, meta.Largest, end) < 0 {
-				meta.Largest = end.Clone()
+			meta.ExtendPointKeyBounds(opts.Comparer.Compare, smallest, end.Clone())
+		}
+	}
+
+	// Update the range-key bounds for the table.
+	{
+		iter, err := r.NewRawRangeKeyIter()
+		if err != nil {
+			return nil, err
+		}
+		if iter != nil {
+			defer iter.Close()
+			var smallest InternalKey
+			if key, _ := iter.First(); key != nil {
+				if err := ingestValidateKey(opts, key); err != nil {
+					return nil, err
+				}
+				smallest = (*key).Clone()
+			}
+			if err := iter.Error(); err != nil {
+				return nil, err
+			}
+			if key, value := iter.Last(); key != nil {
+				if err := ingestValidateKey(opts, key); err != nil {
+					return nil, err
+				}
+				// As range keys are fragmented, the end key of the last range key in
+				// the table provides the upper bound for the table.
+				end, _, ok := rangekey.DecodeEndKey(key.Kind(), value)
+				if !ok {
+					return nil, errors.Newf("pebble: could not decode range end key")
+				}
+				k := base.MakeRangeKeySentinelKey(key.Kind(), end).Clone()
+				meta.ExtendRangeKeyBounds(opts.Comparer.Compare, smallest, k.Clone())
+			}
+			if err := iter.Error(); err != nil {
+				return nil, err
 			}
 		}
 	}
 
-	if empty {
+	if !meta.HasPointKeys && !meta.HasRangeKeys {
 		return nil, nil
 	}
+
+	// Sanity check that the various bounds on the file were set consistently.
+	if err := meta.Validate(opts.Comparer.Compare, opts.Comparer.FormatKey); err != nil {
+		return nil, err
+	}
+
 	return meta, nil
 }
 
@@ -313,19 +342,46 @@ func ingestMemtableOverlaps(cmp Compare, mem flushable, meta []*fileMetadata) bo
 	return false
 }
 
-func ingestUpdateSeqNum(opts *Options, dirname string, seqNum uint64, meta []*fileMetadata) error {
+func ingestUpdateSeqNum(
+	cmp Compare,
+	format base.FormatKey,
+	seqNum uint64,
+	meta []*fileMetadata,
+) error {
+	setSeqFn := func(k base.InternalKey) base.InternalKey {
+		return base.MakeInternalKey(k.UserKey, seqNum, k.Kind())
+	}
 	for _, m := range meta {
-		m.Smallest = base.MakeInternalKey(m.Smallest.UserKey, seqNum, m.Smallest.Kind())
-		// Don't update the seqnum for the largest key if that key is a range
-		// deletion sentinel key as doing so unintentionally extends the bounds of
-		// the table.
-		if m.Largest.Trailer != InternalKeyRangeDeleteSentinel {
-			m.Largest = base.MakeInternalKey(m.Largest.UserKey, seqNum, m.Largest.Kind())
+		// NB: we set the fields directly here, rather than via their Extend*
+		// methods, as we are updating sequence numbers.
+		if m.HasPointKeys {
+			m.SmallestPointKey = setSeqFn(m.SmallestPointKey)
+		}
+		if m.HasRangeKeys {
+			m.SmallestRangeKey = setSeqFn(m.SmallestRangeKey)
+		}
+		m.Smallest = setSeqFn(m.Smallest)
+		// Only update the seqnum for the largest key if that key is not an
+		// "exclusive sentinel" (i.e. a range deletion sentinel or a range key
+		// boundary), as doing so effectively drops the exclusive sentinel (by
+		// lowering the seqnum from the max value), and extends the bounds of the
+		// table.
+		// NB: as the largest range key is always an exclusive sentinel, it is never
+		// updated.
+		if m.HasPointKeys && !m.LargestPointKey.IsExclusiveSentinel() {
+			m.LargestPointKey = setSeqFn(m.LargestPointKey)
+		}
+		if !m.Largest.IsExclusiveSentinel() {
+			m.Largest = setSeqFn(m.Largest)
 		}
 		// Setting smallestSeqNum == largestSeqNum triggers the setting of
 		// Properties.GlobalSeqNum when an sstable is loaded.
 		m.SmallestSeqNum = seqNum
 		m.LargestSeqNum = seqNum
+		// Ensure the new bounds are consistent.
+		if err := m.Validate(cmp, format); err != nil {
+			return err
+		}
 		seqNum++
 	}
 	return nil
@@ -611,7 +667,9 @@ func (d *DB) Ingest(paths []string) error {
 		// metadata. Writing the metadata to the manifest when the
 		// version edit is applied is the mechanism that persists the
 		// sequence number. The sstables themselves are left unmodified.
-		if err = ingestUpdateSeqNum(d.opts, d.dirname, seqNum, meta); err != nil {
+		if err = ingestUpdateSeqNum(
+			d.cmp, d.opts.Comparer.FormatKey, seqNum, meta,
+		); err != nil {
 			return
 		}
 

@@ -93,12 +93,16 @@ type IterOptions struct {
 	// false to skip scanning. This function must be thread-safe since the same
 	// function can be used by multiple iterators, if the iterator is cloned.
 	TableFilter func(userProps map[string]string) bool
-	// BlockPropertyFilters can be used to avoid scanning tables and blocks in
-	// tables. It is requires that this slice is sorted in increasing order of
-	// the BlockPropertyFilter.ShortID. This slice represents an intersection
-	// across all filters, i.e., all filters must indicate that the block is
-	// relevant.
-	BlockPropertyFilters []BlockPropertyFilter
+	// PointKeyFilters can be used to avoid scanning tables and blocks in tables
+	// when iterating over point keys. It is requires that this slice is sorted in
+	// increasing order of the BlockPropertyFilter.ShortID. This slice represents
+	// an intersection across all filters, i.e., all filters must indicate that the
+	// block is relevant.
+	PointKeyFilters []BlockPropertyFilter
+	// RangeKeyFilters can be usefd to avoid scanning tables and blocks in tables
+	// when iterating over range keys. The same requirements that apply to
+	// PointKeyFilters apply here too.
+	RangeKeyFilters []BlockPropertyFilter
 	// KeyTypes configures which types of keys to iterate over: point keys,
 	// range keys, or both.
 	KeyTypes IterKeyType
@@ -576,9 +580,16 @@ type Options struct {
 	Merger *Merger
 
 	// MaxConcurrentCompactions specifies the maximum number of concurrent
-	// compactions. The default is 1. Concurrent compactions are only performed
-	// when L0 read-amplification passes the L0CompactionConcurrency threshold.
+	// compactions. The default is 1. Concurrent compactions are performed
+	// - when L0 read-amplification passes the L0CompactionConcurrency threshold
+	// - for automatic background compactions
+	// - when a manual compaction for a level is split and parallelized
 	MaxConcurrentCompactions int
+
+	// DisableAutomaticCompactions dictates whether automatic compactions are
+	// scheduled or not. The default is false (enabled). This option is only used
+	// externally when running a manual compaction, and internally for tests.
+	DisableAutomaticCompactions bool
 
 	// NumPrevManifest is the number of non-current or older manifests which
 	// we want to keep around for debugging purposes. By default, we're going
@@ -657,9 +668,6 @@ type Options struct {
 
 		// A private option to disable stats collection.
 		disableTableStats bool
-
-		// A private option disable automatic compactions.
-		disableAutomaticCompactions bool
 
 		// minCompactionRate sets the minimum rate at which compactions occur. The
 		// default is 4 MB/s. Currently disabled as this option has no effect while
