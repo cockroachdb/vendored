@@ -229,7 +229,7 @@ type Writer struct {
 	rkBuf      []byte
 	// dataBlockBuf consists of the state which is currently owned by and used by
 	// the Writer client goroutine. This state can be handed off to other goroutines.
-	dataBlockBuf *dataBlockBuf
+	dataBlockBuf dataBlockBuf
 	// blockBuf consists of the state which is owned by and used by the Writer client
 	// goroutine.
 	blockBuf blockBuf
@@ -317,9 +317,6 @@ func (s *sizeEstimate) clear() {
 type indexBlockBuf struct {
 	// block will only be accessed from the writeQueue goroutine.
 	block blockWriter
-
-	// sepScratch is reusable scratch space for computing separator keys.
-	sepScratch []byte
 
 	size struct {
 		useMutex bool
@@ -510,19 +507,14 @@ type dataBlockBuf struct {
 	// dataBlockProps is set when Writer.finishDataBlockProps is called. The dataBlockProps slice is
 	// a shallow copy of the internal buffer of the dataBlockBuf.blockPropsEncoder.
 	dataBlockProps []byte
+
+	// sepScratch is reusable scratch space for computing separator keys.
+	sepScratch []byte
 }
 
-var dataBlockBufPool = sync.Pool{
-	New: func() interface{} {
-		return &dataBlockBuf{}
-	},
-}
-
-func newDataBlockBuf(restartInterval int, checksumType ChecksumType) *dataBlockBuf {
-	d := dataBlockBufPool.Get().(*dataBlockBuf)
+func (d *dataBlockBuf) init(restartInterval int, checksumType ChecksumType) {
 	d.dataBlock.restartInterval = restartInterval
 	d.checksummer.checksumType = checksumType
-	return d
 }
 
 func (d *dataBlockBuf) finish() {
@@ -1050,7 +1042,7 @@ func (w *Writer) flush(key InternalKey) error {
 	var err error
 
 	// We're finishing a data block.
-	err = w.finishDataBlockProps(w.dataBlockBuf)
+	err = w.finishDataBlockProps(&w.dataBlockBuf)
 	if err != nil {
 		return err
 	}
@@ -1060,7 +1052,7 @@ func (w *Writer) flush(key InternalKey) error {
 
 	// Determine if the index block should be flushed.
 	prevKey := base.DecodeInternalKey(w.dataBlockBuf.dataBlock.curKey)
-	sep := w.indexEntrySep(prevKey, key, w.indexBlock)
+	sep := w.indexEntrySep(prevKey, key, &w.dataBlockBuf)
 	// We determine that we should flush an index block from the Writer client goroutine, but
 	// we actually finish the index block from the writeQueue. When we determine that an index
 	// block should be flushed, we need to call BlockPropertyCollector.FinishIndexBlock. But
@@ -1091,7 +1083,7 @@ func (w *Writer) flush(key InternalKey) error {
 	// We're setting compressionDone to indicate that compression of this block
 	// has already been completed.
 	writeTask.compressionDone <- true
-	writeTask.buf = w.dataBlockBuf
+	writeTask.buf = &w.dataBlockBuf
 	writeTask.indexEntrySep = sep
 	writeTask.inflightSize = estimatedUncompressedSize
 	writeTask.currIndexBlock = w.indexBlock
@@ -1102,9 +1094,7 @@ func (w *Writer) flush(key InternalKey) error {
 	// The writeTask corresponds to an unwritten index entry.
 	w.indexBlock.addInflight(writeTask.indexInflightSize)
 
-	w.dataBlockBuf = nil
 	err = w.coordination.writeQueue.addSync(writeTask)
-	w.dataBlockBuf = newDataBlockBuf(w.restartInterval, w.checksumType)
 
 	return err
 }
@@ -1154,24 +1144,24 @@ func (w *Writer) finishDataBlockProps(buf *dataBlockBuf) error {
 func (w *Writer) maybeAddBlockPropertiesToBlockHandle(
 	bh BlockHandle,
 ) (BlockHandleWithProperties, error) {
-	err := w.finishDataBlockProps(w.dataBlockBuf)
+	err := w.finishDataBlockProps(&w.dataBlockBuf)
 	if err != nil {
 		return BlockHandleWithProperties{}, err
 	}
 	return BlockHandleWithProperties{BlockHandle: bh, Props: w.dataBlockBuf.dataBlockProps}, nil
 }
 
-func (w *Writer) indexEntrySep(prevKey, key InternalKey, indexBlockBuf *indexBlockBuf) InternalKey {
+func (w *Writer) indexEntrySep(prevKey, key InternalKey, dataBlockBuf *dataBlockBuf) InternalKey {
 	// Make a rough guess that we want key-sized scratch to compute the separator.
-	if cap(indexBlockBuf.sepScratch) < key.Size() {
-		indexBlockBuf.sepScratch = make([]byte, 0, key.Size()*2)
+	if cap(dataBlockBuf.sepScratch) < key.Size() {
+		dataBlockBuf.sepScratch = make([]byte, 0, key.Size()*2)
 	}
 
 	var sep InternalKey
 	if key.UserKey == nil && key.Trailer == 0 {
-		sep = prevKey.Successor(w.compare, w.successor, indexBlockBuf.sepScratch[:0])
+		sep = prevKey.Successor(w.compare, w.successor, dataBlockBuf.sepScratch[:0])
 	} else {
-		sep = prevKey.Separator(w.compare, w.separator, indexBlockBuf.sepScratch[:0], key)
+		sep = prevKey.Separator(w.compare, w.separator, dataBlockBuf.sepScratch[:0], key)
 	}
 	return sep
 }
@@ -1215,7 +1205,7 @@ func (w *Writer) addPrevDataBlockToIndexBlockProps() {
 // called synchronously once Writer.Close is called. addIndexEntrySync should only be called if we're sure that
 // index entries aren't being written asynchronously.
 func (w *Writer) addIndexEntrySync(prevKey, key InternalKey, bhp BlockHandleWithProperties, tmp []byte) error {
-	sep := w.indexEntrySep(prevKey, key, w.indexBlock)
+	sep := w.indexEntrySep(prevKey, key, &w.dataBlockBuf)
 	shouldFlush := supportsTwoLevelIndex(
 		w.tableFormat) && w.indexBlock.shouldFlush(
 		sep, encodedBHPEstimatedSize, w.indexBlockSize, w.indexBlockSizeThreshold,
@@ -1794,7 +1784,7 @@ func NewWriter(f writeCloseSyncer, o WriterOptions, extraOpts ...WriterOption) *
 		coalescer: rangekey.Coalescer{},
 	}
 
-	w.dataBlockBuf = newDataBlockBuf(w.restartInterval, w.checksumType)
+	w.dataBlockBuf.init(w.restartInterval, w.checksumType)
 
 	w.blockBuf = blockBuf{
 		checksummer: checksummer{checksumType: o.Checksum},
