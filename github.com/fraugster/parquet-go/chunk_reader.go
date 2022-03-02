@@ -3,6 +3,7 @@ package goparquet
 import (
 	"context"
 	"fmt"
+	"hash/crc32"
 	"io"
 	"math/bits"
 
@@ -28,27 +29,9 @@ func getDictValuesDecoder(typ *parquet.SchemaElement) (valuesDecoder, error) {
 	case parquet.Type_DOUBLE:
 		return &doublePlainDecoder{}, nil
 	case parquet.Type_INT32:
-		var unSigned bool
-		if typ.ConvertedType != nil {
-			if *typ.ConvertedType == parquet.ConvertedType_UINT_8 || *typ.ConvertedType == parquet.ConvertedType_UINT_16 || *typ.ConvertedType == parquet.ConvertedType_UINT_32 {
-				unSigned = true
-			}
-		}
-		if typ.LogicalType != nil && typ.LogicalType.INTEGER != nil && !typ.LogicalType.INTEGER.IsSigned {
-			unSigned = true
-		}
-		return &int32PlainDecoder{unSigned: unSigned}, nil
+		return &int32PlainDecoder{}, nil
 	case parquet.Type_INT64:
-		var unSigned bool
-		if typ.ConvertedType != nil {
-			if *typ.ConvertedType == parquet.ConvertedType_UINT_64 {
-				unSigned = true
-			}
-		}
-		if typ.LogicalType != nil && typ.LogicalType.INTEGER != nil && !typ.LogicalType.INTEGER.IsSigned {
-			unSigned = true
-		}
-		return &int64PlainDecoder{unSigned: unSigned}, nil
+		return &int64PlainDecoder{}, nil
 	case parquet.Type_INT96:
 		return &int96PlainDecoder{}, nil
 	}
@@ -56,14 +39,12 @@ func getDictValuesDecoder(typ *parquet.SchemaElement) (valuesDecoder, error) {
 	return nil, errors.Errorf("type %s is not supported for dict value encoder", typ)
 }
 
-func getBooleanValuesDecoder(pageEncoding parquet.Encoding, dictValues []interface{}) (valuesDecoder, error) {
+func getBooleanValuesDecoder(pageEncoding parquet.Encoding) (valuesDecoder, error) {
 	switch pageEncoding {
 	case parquet.Encoding_PLAIN:
 		return &booleanPlainDecoder{}, nil
 	case parquet.Encoding_RLE:
 		return &booleanRLEDecoder{}, nil
-	case parquet.Encoding_RLE_DICTIONARY:
-		return &dictDecoder{values: dictValues}, nil
 	default:
 		return nil, errors.Errorf("unsupported encoding %s for boolean", pageEncoding)
 	}
@@ -78,7 +59,7 @@ func getByteArrayValuesDecoder(pageEncoding parquet.Encoding, dictValues []inter
 	case parquet.Encoding_DELTA_BYTE_ARRAY:
 		return &byteArrayDeltaDecoder{}, nil
 	case parquet.Encoding_RLE_DICTIONARY:
-		return &dictDecoder{values: dictValues}, nil
+		return &dictDecoder{uniqueValues: dictValues}, nil
 	default:
 		return nil, errors.Errorf("unsupported encoding %s for binary", pageEncoding)
 	}
@@ -91,51 +72,33 @@ func getFixedLenByteArrayValuesDecoder(pageEncoding parquet.Encoding, len int, d
 	case parquet.Encoding_DELTA_BYTE_ARRAY:
 		return &byteArrayDeltaDecoder{}, nil
 	case parquet.Encoding_RLE_DICTIONARY:
-		return &dictDecoder{values: dictValues}, nil
+		return &dictDecoder{uniqueValues: dictValues}, nil
 	default:
 		return nil, errors.Errorf("unsupported encoding %s for fixed_len_byte_array(%d)", pageEncoding, len)
 	}
 }
 
 func getInt32ValuesDecoder(pageEncoding parquet.Encoding, typ *parquet.SchemaElement, dictValues []interface{}) (valuesDecoder, error) {
-	var unSigned bool
-	if typ.ConvertedType != nil {
-		if *typ.ConvertedType == parquet.ConvertedType_UINT_8 || *typ.ConvertedType == parquet.ConvertedType_UINT_16 || *typ.ConvertedType == parquet.ConvertedType_UINT_32 {
-			unSigned = true
-		}
-	}
-	if typ.LogicalType != nil && typ.LogicalType.INTEGER != nil && !typ.LogicalType.INTEGER.IsSigned {
-		unSigned = true
-	}
 	switch pageEncoding {
 	case parquet.Encoding_PLAIN:
-		return &int32PlainDecoder{unSigned: unSigned}, nil
+		return &int32PlainDecoder{}, nil
 	case parquet.Encoding_DELTA_BINARY_PACKED:
-		return &int32DeltaBPDecoder{unSigned: unSigned}, nil
+		return &int32DeltaBPDecoder{}, nil
 	case parquet.Encoding_RLE_DICTIONARY:
-		return &dictDecoder{values: dictValues}, nil
+		return &dictDecoder{uniqueValues: dictValues}, nil
 	default:
 		return nil, errors.Errorf("unsupported encoding %s for int32", pageEncoding)
 	}
 }
 
 func getInt64ValuesDecoder(pageEncoding parquet.Encoding, typ *parquet.SchemaElement, dictValues []interface{}) (valuesDecoder, error) {
-	var unSigned bool
-	if typ.ConvertedType != nil {
-		if *typ.ConvertedType == parquet.ConvertedType_UINT_64 {
-			unSigned = true
-		}
-	}
-	if typ.LogicalType != nil && typ.LogicalType.INTEGER != nil && !typ.LogicalType.INTEGER.IsSigned {
-		unSigned = true
-	}
 	switch pageEncoding {
 	case parquet.Encoding_PLAIN:
-		return &int64PlainDecoder{unSigned: unSigned}, nil
+		return &int64PlainDecoder{}, nil
 	case parquet.Encoding_DELTA_BINARY_PACKED:
-		return &int64DeltaBPDecoder{unSigned: unSigned}, nil
+		return &int64DeltaBPDecoder{}, nil
 	case parquet.Encoding_RLE_DICTIONARY:
-		return &dictDecoder{values: dictValues}, nil
+		return &dictDecoder{uniqueValues: dictValues}, nil
 	default:
 		return nil, errors.Errorf("unsupported encoding %s for int64", pageEncoding)
 	}
@@ -149,7 +112,7 @@ func getValuesDecoder(pageEncoding parquet.Encoding, typ *parquet.SchemaElement,
 
 	switch *typ.Type {
 	case parquet.Type_BOOLEAN:
-		return getBooleanValuesDecoder(pageEncoding, dictValues)
+		return getBooleanValuesDecoder(pageEncoding)
 
 	case parquet.Type_BYTE_ARRAY:
 		return getByteArrayValuesDecoder(pageEncoding, dictValues)
@@ -164,7 +127,7 @@ func getValuesDecoder(pageEncoding parquet.Encoding, typ *parquet.SchemaElement,
 		case parquet.Encoding_PLAIN:
 			return &floatPlainDecoder{}, nil
 		case parquet.Encoding_RLE_DICTIONARY:
-			return &dictDecoder{values: dictValues}, nil
+			return &dictDecoder{uniqueValues: dictValues}, nil
 		}
 
 	case parquet.Type_DOUBLE:
@@ -172,7 +135,7 @@ func getValuesDecoder(pageEncoding parquet.Encoding, typ *parquet.SchemaElement,
 		case parquet.Encoding_PLAIN:
 			return &doublePlainDecoder{}, nil
 		case parquet.Encoding_RLE_DICTIONARY:
-			return &dictDecoder{values: dictValues}, nil
+			return &dictDecoder{uniqueValues: dictValues}, nil
 		}
 
 	case parquet.Type_INT32:
@@ -186,7 +149,7 @@ func getValuesDecoder(pageEncoding parquet.Encoding, typ *parquet.SchemaElement,
 		case parquet.Encoding_PLAIN:
 			return &int96PlainDecoder{}, nil
 		case parquet.Encoding_RLE_DICTIONARY:
-			return &dictDecoder{values: dictValues}, nil
+			return &dictDecoder{uniqueValues: dictValues}, nil
 		}
 
 	default:
@@ -196,18 +159,28 @@ func getValuesDecoder(pageEncoding parquet.Encoding, typ *parquet.SchemaElement,
 	return nil, errors.Errorf("unsupported encoding %s for %s type", pageEncoding, typ.Type)
 }
 
-func createDataReader(r io.Reader, codec parquet.CompressionCodec, compressedSize int32, uncompressedSize int32) (io.Reader, error) {
+func readPageBlock(r io.Reader, codec parquet.CompressionCodec, compressedSize int32, uncompressedSize int32, validateCRC bool, crc *int32) ([]byte, error) {
 	if compressedSize < 0 || uncompressedSize < 0 {
 		return nil, errors.New("invalid page data size")
 	}
 
-	return newBlockReader(r, codec, compressedSize, uncompressedSize)
+	dataPageBlock, err := io.ReadAll(io.LimitReader(r, int64(compressedSize)))
+	if err != nil {
+		return nil, errors.Wrap(err, "read failed")
+	}
+
+	if validateCRC && crc != nil {
+		if sum := crc32.ChecksumIEEE(dataPageBlock); sum != uint32(*crc) {
+			return nil, fmt.Errorf("CRC32 check failed: expected CRC32 %x, got %x", sum, uint32(*crc))
+		}
+	}
+
+	return dataPageBlock, nil
 }
 
-func readPages(ctx context.Context, r *offsetReader, col *Column, chunkMeta *parquet.ColumnMetaData, dDecoder, rDecoder getLevelDecoder) ([]pageReader, error) {
+func readPages(ctx context.Context, sch *schema, r *offsetReader, col *Column, chunkMeta *parquet.ColumnMetaData, dDecoder, rDecoder getLevelDecoder) (pages []pageReader, useDict bool, err error) {
 	var (
 		dictPage *dictPageReader
-		pages    []pageReader
 	)
 
 	for {
@@ -216,35 +189,34 @@ func readPages(ctx context.Context, r *offsetReader, col *Column, chunkMeta *par
 		}
 		ph := &parquet.PageHeader{}
 		if err := readThrift(ctx, ph, r); err != nil {
-			return nil, err
+			return nil, false, err
 		}
 
 		if ph.Type == parquet.PageType_DICTIONARY_PAGE {
 			if dictPage != nil {
-				return nil, errors.New("there should be only one dictionary")
+				return nil, false, errors.New("there should be only one dictionary")
 			}
-			p := &dictPageReader{}
+			p := &dictPageReader{validateCRC: sch.validateCRC}
 			de, err := getDictValuesDecoder(col.Element())
 			if err != nil {
-				return nil, err
+				return nil, false, err
 			}
 			if err := p.init(de); err != nil {
-				return nil, err
+				return nil, false, err
 			}
 
-			// re-use the value dictionary store
-			p.values = col.getColumnStore().values.values
 			if err := p.read(r, ph, chunkMeta.Codec); err != nil {
-				return nil, err
+				return nil, false, err
 			}
 
 			dictPage = p
+
 			// Go to the next data Page
 			// if we have a DictionaryPageOffset we should return to DataPageOffset
 			if chunkMeta.DictionaryPageOffset != nil {
 				if *chunkMeta.DictionaryPageOffset != r.offset {
 					if _, err := r.Seek(chunkMeta.DataPageOffset, io.SeekStart); err != nil {
-						return nil, err
+						return nil, false, err
 					}
 				}
 			}
@@ -262,7 +234,7 @@ func readPages(ctx context.Context, r *offsetReader, col *Column, chunkMeta *par
 				ph: ph,
 			}
 		default:
-			return nil, errors.Errorf("DATA_PAGE or DATA_PAGE_V2 type supported, but was %s", ph.Type)
+			return nil, false, errors.Errorf("DATA_PAGE or DATA_PAGE_V2 type supported, but was %s", ph.Type)
 		}
 		var dictValue []interface{}
 		if dictPage != nil {
@@ -272,16 +244,16 @@ func readPages(ctx context.Context, r *offsetReader, col *Column, chunkMeta *par
 			return getValuesDecoder(typ, col.Element(), clone(dictValue))
 		}
 		if err := p.init(dDecoder, rDecoder, fn); err != nil {
-			return nil, err
+			return nil, false, err
 		}
 
-		if err := p.read(r, ph, chunkMeta.Codec); err != nil {
-			return nil, err
+		if err := p.read(r, ph, chunkMeta.Codec, sch.validateCRC); err != nil {
+			return nil, false, err
 		}
 		pages = append(pages, p)
 	}
 
-	return pages, nil
+	return pages, dictPage != nil, nil
 }
 
 func clone(in []interface{}) []interface{} {
@@ -318,9 +290,9 @@ func skipChunk(r io.Seeker, col *Column, chunk *parquet.ColumnChunk) error {
 	return err
 }
 
-func readChunk(ctx context.Context, r io.ReadSeeker, col *Column, chunk *parquet.ColumnChunk) ([]pageReader, error) {
+func readChunk(ctx context.Context, sch *schema, r io.ReadSeeker, col *Column, chunk *parquet.ColumnChunk) (pages []pageReader, useDict bool, err error) {
 	if chunk.FilePath != nil {
-		return nil, fmt.Errorf("nyi: data is in another file: '%s'", *chunk.FilePath)
+		return nil, false, fmt.Errorf("nyi: data is in another file: '%s'", *chunk.FilePath)
 	}
 
 	c := col.Index()
@@ -328,11 +300,11 @@ func readChunk(ctx context.Context, r io.ReadSeeker, col *Column, chunk *parquet
 	// as we cannot read it from r
 	// see https://issues.apache.org/jira/browse/PARQUET-291
 	if chunk.MetaData == nil {
-		return nil, errors.Errorf("missing meta data for Column %c", c)
+		return nil, false, errors.Errorf("missing meta data for Column %c", c)
 	}
 
 	if typ := *col.Element().Type; chunk.MetaData.Type != typ {
-		return nil, errors.Errorf("wrong type in Column chunk metadata, expected %s was %s",
+		return nil, false, errors.Errorf("wrong type in Column chunk metadata, expected %s was %s",
 			typ, chunk.MetaData.Type)
 	}
 
@@ -341,9 +313,8 @@ func readChunk(ctx context.Context, r io.ReadSeeker, col *Column, chunk *parquet
 		offset = *chunk.MetaData.DictionaryPageOffset
 	}
 	// Seek to the beginning of the first Page
-	_, err := r.Seek(offset, io.SeekStart)
-	if err != nil {
-		return nil, err
+	if _, err := r.Seek(offset, io.SeekStart); err != nil {
+		return nil, false, err
 	}
 
 	reader := &offsetReader{
@@ -381,50 +352,42 @@ func readChunk(ctx context.Context, r io.ReadSeeker, col *Column, chunk *parquet
 			return &levelDecoderWrapper{decoder: constDecoder(0), max: col.MaxDefinitionLevel()}, nil
 		}
 	}
-	return readPages(ctx, reader, col, chunk.MetaData, dDecoder, rDecoder)
+	return readPages(ctx, sch, reader, col, chunk.MetaData, dDecoder, rDecoder)
 }
 
-func readPageData(col *Column, pages []pageReader) error {
+func readPageData(col *Column, pages []pageReader, useDict bool) error {
 	s := col.getColumnStore()
-	for i := range pages {
-		data, dl, rl, err := pages[i].readValues(int(pages[i].numValues()))
-		if err != nil {
-			return err
-		}
-
-		// using append to make sure we handle the multiple data page correctly
-		s.rLevels.appendArray(rl)
-		s.dLevels.appendArray(dl)
-
-		s.values.values = append(s.values.values, data...)
-		s.values.noDictMode = true
+	s.pageIdx, s.pages = 0, pages
+	s.useDict = useDict
+	if err := s.readNextPage(); err != nil {
+		return nil
 	}
 
 	return nil
 }
 
-func readRowGroup(ctx context.Context, r io.ReadSeeker, schema SchemaReader, rowGroups *parquet.RowGroup) error {
-	dataCols := schema.Columns()
-	schema.resetData()
-	schema.setNumRecords(rowGroups.NumRows)
+func readRowGroup(ctx context.Context, r io.ReadSeeker, sch *schema, rowGroups *parquet.RowGroup) error {
+	dataCols := sch.Columns()
+	sch.resetData()
+	sch.setNumRecords(rowGroups.NumRows)
 	for _, c := range dataCols {
 		idx := c.Index()
 		if len(rowGroups.Columns) <= idx {
 			return fmt.Errorf("column index %d is out of bounds", idx)
 		}
 		chunk := rowGroups.Columns[c.Index()]
-		if !schema.isSelected(c.flatName) {
+		if !sch.isSelected(c.flatName) {
 			if err := skipChunk(r, c, chunk); err != nil {
 				return err
 			}
 			c.data.skipped = true
 			continue
 		}
-		pages, err := readChunk(ctx, r, c, chunk)
+		pages, useDict, err := readChunk(ctx, sch, r, c, chunk)
 		if err != nil {
 			return err
 		}
-		if err := readPageData(c, pages); err != nil {
+		if err := readPageData(c, pages, useDict); err != nil {
 			return err
 		}
 	}

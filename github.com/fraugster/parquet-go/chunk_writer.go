@@ -1,27 +1,27 @@
 package goparquet
 
 import (
+	"bytes"
 	"context"
+	"math"
 	"sort"
 
 	"github.com/fraugster/parquet-go/parquet"
 	"github.com/pkg/errors"
 )
 
-func getBooleanValuesEncoder(pageEncoding parquet.Encoding, store *dictStore) (valuesEncoder, error) {
+func getBooleanValuesEncoder(pageEncoding parquet.Encoding) (valuesEncoder, error) {
 	switch pageEncoding {
 	case parquet.Encoding_PLAIN:
 		return &booleanPlainEncoder{}, nil
 	case parquet.Encoding_RLE:
 		return &booleanRLEEncoder{}, nil
-	case parquet.Encoding_RLE_DICTIONARY:
-		return &dictEncoder{dictStore: *store}, nil
 	default:
 		return nil, errors.Errorf("unsupported encoding %s for boolean", pageEncoding)
 	}
 }
 
-func getByteArrayValuesEncoder(pageEncoding parquet.Encoding, store *dictStore) (valuesEncoder, error) {
+func getByteArrayValuesEncoder(pageEncoding parquet.Encoding, dictValues []interface{}) (valuesEncoder, error) {
 	switch pageEncoding {
 	case parquet.Encoding_PLAIN:
 		return &byteArrayPlainEncoder{}, nil
@@ -30,74 +30,64 @@ func getByteArrayValuesEncoder(pageEncoding parquet.Encoding, store *dictStore) 
 	case parquet.Encoding_DELTA_BYTE_ARRAY:
 		return &byteArrayDeltaEncoder{}, nil
 	case parquet.Encoding_RLE_DICTIONARY:
-		return &dictEncoder{dictStore: *store}, nil
+		return &dictEncoder{dictValues: dictValues}, nil
 	default:
 		return nil, errors.Errorf("unsupported encoding %s for binary", pageEncoding)
 	}
 }
 
-func getFixedLenByteArrayValuesEncoder(pageEncoding parquet.Encoding, len int, store *dictStore) (valuesEncoder, error) {
+func getFixedLenByteArrayValuesEncoder(pageEncoding parquet.Encoding, len int, dictValues []interface{}) (valuesEncoder, error) {
 	switch pageEncoding {
 	case parquet.Encoding_PLAIN:
 		return &byteArrayPlainEncoder{length: len}, nil
 	case parquet.Encoding_DELTA_BYTE_ARRAY:
 		return &byteArrayDeltaEncoder{}, nil
 	case parquet.Encoding_RLE_DICTIONARY:
-		return &dictEncoder{dictStore: *store}, nil
+		return &dictEncoder{dictValues: dictValues}, nil
 	default:
 		return nil, errors.Errorf("unsupported encoding %s for fixed_len_byte_array(%d)", pageEncoding, len)
 	}
 }
 
-func getInt32ValuesEncoder(pageEncoding parquet.Encoding, typ *parquet.SchemaElement, store *dictStore) (valuesEncoder, error) {
-	var unSigned bool
-	if typ.ConvertedType != nil {
-		if *typ.ConvertedType == parquet.ConvertedType_UINT_8 || *typ.ConvertedType == parquet.ConvertedType_UINT_16 || *typ.ConvertedType == parquet.ConvertedType_UINT_32 {
-			unSigned = true
-		}
-	}
-	if typ.LogicalType != nil && typ.LogicalType.INTEGER != nil && !typ.LogicalType.INTEGER.IsSigned {
-		unSigned = true
-	}
+func getInt32ValuesEncoder(pageEncoding parquet.Encoding, typ *parquet.SchemaElement, dictValues []interface{}) (valuesEncoder, error) {
 	switch pageEncoding {
 	case parquet.Encoding_PLAIN:
-		return &int32PlainEncoder{unSigned: unSigned}, nil
+		return &int32PlainEncoder{}, nil
 	case parquet.Encoding_DELTA_BINARY_PACKED:
-		return &int32DeltaBPEncoder{unSigned: unSigned}, nil
-	case parquet.Encoding_RLE_DICTIONARY:
-		return &dictEncoder{
-			dictStore: *store,
+		return &int32DeltaBPEncoder{
+			deltaBitPackEncoder32: deltaBitPackEncoder32{
+				blockSize:      128,
+				miniBlockCount: 4,
+			},
 		}, nil
+	case parquet.Encoding_RLE_DICTIONARY:
+		return &dictEncoder{dictValues: dictValues}, nil
 	default:
 		return nil, errors.Errorf("unsupported encoding %s for int32", pageEncoding)
 	}
 }
 
-func getInt64ValuesEncoder(pageEncoding parquet.Encoding, typ *parquet.SchemaElement, store *dictStore) (valuesEncoder, error) {
-	var unSigned bool
-	if typ.ConvertedType != nil {
-		if *typ.ConvertedType == parquet.ConvertedType_UINT_64 {
-			unSigned = true
-		}
-	}
-	if typ.LogicalType != nil && typ.LogicalType.INTEGER != nil && !typ.LogicalType.INTEGER.IsSigned {
-		unSigned = true
-	}
+func getInt64ValuesEncoder(pageEncoding parquet.Encoding, typ *parquet.SchemaElement, dictValues []interface{}) (valuesEncoder, error) {
 	switch pageEncoding {
 	case parquet.Encoding_PLAIN:
-		return &int64PlainEncoder{unSigned: unSigned}, nil
+		return &int64PlainEncoder{}, nil
 	case parquet.Encoding_DELTA_BINARY_PACKED:
-		return &int64DeltaBPEncoder{unSigned: unSigned}, nil
+		return &int64DeltaBPEncoder{
+			deltaBitPackEncoder64: deltaBitPackEncoder64{
+				blockSize:      128,
+				miniBlockCount: 4,
+			},
+		}, nil
 	case parquet.Encoding_RLE_DICTIONARY:
 		return &dictEncoder{
-			dictStore: *store,
+			dictValues: dictValues,
 		}, nil
 	default:
 		return nil, errors.Errorf("unsupported encoding %s for int64", pageEncoding)
 	}
 }
 
-func getValuesEncoder(pageEncoding parquet.Encoding, typ *parquet.SchemaElement, store *dictStore) (valuesEncoder, error) {
+func getValuesEncoder(pageEncoding parquet.Encoding, typ *parquet.SchemaElement, dictValues []interface{}) (valuesEncoder, error) {
 	// Change the deprecated value
 	if pageEncoding == parquet.Encoding_PLAIN_DICTIONARY {
 		pageEncoding = parquet.Encoding_RLE_DICTIONARY
@@ -105,16 +95,16 @@ func getValuesEncoder(pageEncoding parquet.Encoding, typ *parquet.SchemaElement,
 
 	switch *typ.Type {
 	case parquet.Type_BOOLEAN:
-		return getBooleanValuesEncoder(pageEncoding, store)
+		return getBooleanValuesEncoder(pageEncoding)
 
 	case parquet.Type_BYTE_ARRAY:
-		return getByteArrayValuesEncoder(pageEncoding, store)
+		return getByteArrayValuesEncoder(pageEncoding, dictValues)
 
 	case parquet.Type_FIXED_LEN_BYTE_ARRAY:
 		if typ.TypeLength == nil {
 			return nil, errors.Errorf("type %s with nil type len", typ.Type)
 		}
-		return getFixedLenByteArrayValuesEncoder(pageEncoding, int(*typ.TypeLength), store)
+		return getFixedLenByteArrayValuesEncoder(pageEncoding, int(*typ.TypeLength), dictValues)
 
 	case parquet.Type_FLOAT:
 		switch pageEncoding {
@@ -122,7 +112,7 @@ func getValuesEncoder(pageEncoding parquet.Encoding, typ *parquet.SchemaElement,
 			return &floatPlainEncoder{}, nil
 		case parquet.Encoding_RLE_DICTIONARY:
 			return &dictEncoder{
-				dictStore: *store,
+				dictValues: dictValues,
 			}, nil
 		}
 
@@ -132,15 +122,15 @@ func getValuesEncoder(pageEncoding parquet.Encoding, typ *parquet.SchemaElement,
 			return &doublePlainEncoder{}, nil
 		case parquet.Encoding_RLE_DICTIONARY:
 			return &dictEncoder{
-				dictStore: *store,
+				dictValues: dictValues,
 			}, nil
 		}
 
 	case parquet.Type_INT32:
-		return getInt32ValuesEncoder(pageEncoding, typ, store)
+		return getInt32ValuesEncoder(pageEncoding, typ, dictValues)
 
 	case parquet.Type_INT64:
-		return getInt64ValuesEncoder(pageEncoding, typ, store)
+		return getInt64ValuesEncoder(pageEncoding, typ, dictValues)
 
 	case parquet.Type_INT96:
 		switch pageEncoding {
@@ -148,7 +138,7 @@ func getValuesEncoder(pageEncoding parquet.Encoding, typ *parquet.SchemaElement,
 			return &int96PlainEncoder{}, nil
 		case parquet.Encoding_RLE_DICTIONARY:
 			return &dictEncoder{
-				dictStore: *store,
+				dictValues: dictValues,
 			}, nil
 		}
 
@@ -173,27 +163,9 @@ func getDictValuesEncoder(typ *parquet.SchemaElement) (valuesEncoder, error) {
 	case parquet.Type_DOUBLE:
 		return &doublePlainEncoder{}, nil
 	case parquet.Type_INT32:
-		var unSigned bool
-		if typ.ConvertedType != nil {
-			if *typ.ConvertedType == parquet.ConvertedType_UINT_8 || *typ.ConvertedType == parquet.ConvertedType_UINT_16 || *typ.ConvertedType == parquet.ConvertedType_UINT_32 {
-				unSigned = true
-			}
-		}
-		if typ.LogicalType != nil && typ.LogicalType.INTEGER != nil && !typ.LogicalType.INTEGER.IsSigned {
-			unSigned = true
-		}
-		return &int32PlainEncoder{unSigned: unSigned}, nil
+		return &int32PlainEncoder{}, nil
 	case parquet.Type_INT64:
-		var unSigned bool
-		if typ.ConvertedType != nil {
-			if *typ.ConvertedType == parquet.ConvertedType_UINT_64 {
-				unSigned = true
-			}
-		}
-		if typ.LogicalType != nil && typ.LogicalType.INTEGER != nil && !typ.LogicalType.INTEGER.IsSigned {
-			unSigned = true
-		}
-		return &int64PlainEncoder{unSigned: unSigned}, nil
+		return &int64PlainEncoder{}, nil
 	case parquet.Type_INT96:
 		return &int96PlainEncoder{}, nil
 	}
@@ -201,12 +173,11 @@ func getDictValuesEncoder(typ *parquet.SchemaElement) (valuesEncoder, error) {
 	return nil, errors.Errorf("type %s is not supported for dict value encoder", typ)
 }
 
-func writeChunk(ctx context.Context, w writePos, schema SchemaWriter, col *Column, codec parquet.CompressionCodec, pageFn newDataPageFunc, kvMetaData map[string]string) (*parquet.ColumnChunk, error) {
+func writeChunk(ctx context.Context, w writePos, sch *schema, col *Column, codec parquet.CompressionCodec, pageFn newDataPageFunc, kvMetaData map[string]string) (*parquet.ColumnChunk, error) {
 	pos := w.Pos() // Save the position before writing data
 	chunkOffset := pos
 	var (
 		dictPageOffset *int64
-		useDict        bool
 		// NOTE :
 		// This is documentation on these two field :
 		//  - TotalUncompressedSize: total byte size of all uncompressed pages in this column chunk (including the headers) *
@@ -216,15 +187,45 @@ func writeChunk(ctx context.Context, w writePos, schema SchemaWriter, col *Colum
 		totalComp   int64
 		totalUnComp int64
 	)
-	if col.data.useDictionary() {
-		useDict = true
+
+	// flush final data page before writing dictionary page (if applicable) and all data pages.
+	if err := col.data.flushPage(sch, true); err != nil {
+		return nil, err
+	}
+
+	dictValues := []interface{}{}
+	indices := map[interface{}]int32{}
+
+	for _, page := range col.data.dataPages {
+		for _, v := range page.values {
+			k := mapKey(v)
+			if _, ok := indices[k]; !ok {
+				idx := int32(len(dictValues))
+				indices[k] = idx
+				dictValues = append(dictValues, v)
+			}
+		}
+	}
+
+	useDict := true
+	if len(dictValues) > math.MaxInt16 {
+		useDict = false
+	}
+	if *col.Type() == parquet.Type_BOOLEAN { // never ever use dictionary encoding on booleans.
+		useDict = false
+	}
+	if !col.data.useDictionary() {
+		useDict = false
+	}
+
+	if useDict {
 		tmp := pos // make a copy, do not use the pos here
 		dictPageOffset = &tmp
 		dict := &dictPageWriter{}
-		if err := dict.init(schema, col, codec); err != nil {
+		if err := dict.init(sch, col, codec, dictValues); err != nil {
 			return nil, err
 		}
-		compSize, unCompSize, err := dict.write(ctx, w)
+		compSize, unCompSize, err := dict.write(ctx, sch, w)
 		if err != nil {
 			return nil, err
 		}
@@ -235,16 +236,35 @@ func writeChunk(ctx context.Context, w writePos, schema SchemaWriter, col *Colum
 		pos = w.Pos() // Move position for data pos
 	}
 
-	page := pageFn(useDict)
+	var (
+		compSize, unCompSize  int
+		numValues, nullValues int64
+	)
 
-	if err := page.init(schema, col, codec); err != nil {
-		return nil, err
+	for _, page := range col.data.dataPages {
+		pw := pageFn(useDict, dictValues, page, sch.enableCRC)
+
+		if err := pw.init(sch, col, codec); err != nil {
+			return nil, err
+		}
+
+		var buf bytes.Buffer
+
+		compressed, uncompressed, err := pw.write(ctx, &buf)
+		if err != nil {
+			return nil, err
+		}
+
+		compSize += compressed
+		unCompSize += uncompressed
+		numValues += page.numValues
+		nullValues += page.nullValues
+		if _, err := w.Write(buf.Bytes()); err != nil {
+			return nil, err
+		}
 	}
 
-	compSize, unCompSize, err := page.write(ctx, w)
-	if err != nil {
-		return nil, err
-	}
+	col.data.dataPages = nil
 
 	totalComp += w.Pos() - pos
 	// Header size plus the rLevel and dLevel size
@@ -270,13 +290,12 @@ func writeChunk(ctx context.Context, w writePos, schema SchemaWriter, col *Colum
 		return keyValueMetaData[i].Key < keyValueMetaData[j].Key
 	})
 
-	nullCount := int64(col.data.values.nullValueCount())
-	distinctCount := int64(col.data.values.numDistinctValues())
+	distinctCount := int64(len(dictValues))
 
 	stats := &parquet.Statistics{
-		MinValue:      col.data.minValue(),
-		MaxValue:      col.data.maxValue(),
-		NullCount:     &nullCount,
+		MinValue:      col.data.getStats().minValue(),
+		MaxValue:      col.data.getStats().maxValue(),
+		NullCount:     &nullValues,
 		DistinctCount: &distinctCount,
 	}
 
@@ -288,7 +307,7 @@ func writeChunk(ctx context.Context, w writePos, schema SchemaWriter, col *Colum
 			Encodings:             encodings,
 			PathInSchema:          col.pathArray(),
 			Codec:                 codec,
-			NumValues:             int64(col.data.values.numValues() + col.data.values.nullValueCount()),
+			NumValues:             numValues + nullValues,
 			TotalUncompressedSize: totalUnComp,
 			TotalCompressedSize:   totalComp,
 			KeyValueMetadata:      keyValueMetaData,
@@ -307,11 +326,11 @@ func writeChunk(ctx context.Context, w writePos, schema SchemaWriter, col *Colum
 	return ch, nil
 }
 
-func writeRowGroup(ctx context.Context, w writePos, schema SchemaWriter, codec parquet.CompressionCodec, pageFn newDataPageFunc, h *flushRowGroupOptionHandle) ([]*parquet.ColumnChunk, error) {
-	dataCols := schema.Columns()
+func writeRowGroup(ctx context.Context, w writePos, sch *schema, codec parquet.CompressionCodec, pageFn newDataPageFunc, h *flushRowGroupOptionHandle) ([]*parquet.ColumnChunk, error) {
+	dataCols := sch.Columns()
 	var res = make([]*parquet.ColumnChunk, 0, len(dataCols))
 	for _, ci := range dataCols {
-		ch, err := writeChunk(ctx, w, schema, ci, codec, pageFn, h.getMetaData(ci.FlatName()))
+		ch, err := writeChunk(ctx, w, sch, ci, codec, pageFn, h.getMetaData(ci.FlatName()))
 		if err != nil {
 			return nil, err
 		}
