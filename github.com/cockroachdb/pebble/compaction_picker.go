@@ -103,8 +103,8 @@ type pickedCompaction struct {
 	// score of the chosen compaction. Taken from candidateLevelInfo.
 	score float64
 
-	// readTrigger is true if the compaction was triggered due to reads.
-	readTriggered bool
+	// kind indicates the kind of compaction.
+	kind compactionKind
 
 	// startLevel is the level that is being compacted. Inputs from startLevel
 	// and outputLevel will be merged to produce a set of outputLevel files.
@@ -142,12 +142,7 @@ type pickedCompaction struct {
 	version *version
 }
 
-func newPickedCompaction(opts *Options, cur *version, startLevel, baseLevel int) *pickedCompaction {
-	if startLevel > 0 && startLevel < baseLevel {
-		panic(fmt.Sprintf("invalid compaction: start level %d should not be empty (base level %d)",
-			startLevel, baseLevel))
-	}
-
+func defaultOutputLevel(startLevel, baseLevel int) int {
 	outputLevel := startLevel + 1
 	if startLevel == 0 {
 		outputLevel = baseLevel
@@ -155,10 +150,24 @@ func newPickedCompaction(opts *Options, cur *version, startLevel, baseLevel int)
 	if outputLevel >= numLevels-1 {
 		outputLevel = numLevels - 1
 	}
-	// Output level is in the range [baseLevel,numLevels]. For the purpose of
-	// determining the target output file size, overlap bytes, and expanded
-	// bytes, we want to adjust the range to [1,numLevels].
-	adjustedOutputLevel := 1 + outputLevel - baseLevel
+	return outputLevel
+}
+
+func newPickedCompaction(
+	opts *Options, cur *version, startLevel, outputLevel, baseLevel int,
+) *pickedCompaction {
+	if startLevel > 0 && startLevel < baseLevel {
+		panic(fmt.Sprintf("invalid compaction: start level %d should not be empty (base level %d)",
+			startLevel, baseLevel))
+	}
+
+	adjustedOutputLevel := outputLevel
+	if adjustedOutputLevel > 0 {
+		// Output level is in the range [baseLevel,numLevels]. For the purpose of
+		// determining the target output file size, overlap bytes, and expanded
+		// bytes, we want to adjust the range to [1,numLevels].
+		adjustedOutputLevel = 1 + outputLevel - baseLevel
+	}
 
 	pc := &pickedCompaction{
 		cmp:                    opts.Comparer.Compare,
@@ -177,11 +186,14 @@ func newPickedCompaction(opts *Options, cur *version, startLevel, baseLevel int)
 func newPickedCompactionFromL0(
 	lcf *manifest.L0CompactionFiles, opts *Options, vers *version, baseLevel int, isBase bool,
 ) *pickedCompaction {
-	pc := newPickedCompaction(opts, vers, 0, baseLevel)
-	pc.lcf = lcf
+	outputLevel := baseLevel
 	if !isBase {
-		pc.outputLevel.level = 0
+		outputLevel = 0 // Intra L0
 	}
+
+	pc := newPickedCompaction(opts, vers, 0, outputLevel, baseLevel)
+	pc.lcf = lcf
+	pc.outputLevel.level = outputLevel
 
 	// Manually build the compaction as opposed to calling
 	// pickAutoHelper. This is because L0Sublevels has already added
@@ -1005,13 +1017,14 @@ func (p *compactionPickerByScore) pickAuto(env compactionEnv) (pc *pickedCompact
 			continue
 		}
 
+		// info.level > 0
 		var ok bool
 		info.file, ok = p.pickFile(info.level, info.outputLevel, env.earliestSnapshotSeqNum)
 		if !ok {
 			continue
 		}
 
-		pc := pickAutoHelper(env, p.opts, p.vers, *info, p.baseLevel, p.diskAvailBytes)
+		pc := pickAutoLPositive(env, p.opts, p.vers, *info, p.baseLevel, p.diskAvailBytes)
 		// Fail-safe to protect against compacting the same sstable concurrently.
 		if pc != nil && !inputRangeAlreadyCompacting(env, pc) {
 			pc.score = info.score
@@ -1136,7 +1149,8 @@ func (p *compactionPickerByScore) pickElisionOnlyCompaction(
 
 	// Construct a picked compaction of the elision candidate's atomic
 	// compaction unit.
-	pc = newPickedCompaction(p.opts, p.vers, numLevels-1, p.baseLevel)
+	pc = newPickedCompaction(p.opts, p.vers, numLevels-1, numLevels-1, p.baseLevel)
+	pc.kind = compactionKindElisionOnly
 	var isCompacting bool
 	pc.startLevel.files, isCompacting = expandToAtomicUnit(p.opts.Comparer.Compare, lf.Slice(), false /* disableIsCompacting */)
 	if isCompacting {
@@ -1150,7 +1164,10 @@ func (p *compactionPickerByScore) pickElisionOnlyCompaction(
 	return nil
 }
 
-func pickAutoHelper(
+// pickAutoLPositive picks an automatic compaction for the candidate
+// file in a positive-numbered level. This function must not be used for
+// L0.
+func pickAutoLPositive(
 	env compactionEnv,
 	opts *Options,
 	vers *version,
@@ -1158,11 +1175,11 @@ func pickAutoHelper(
 	baseLevel int,
 	diskAvailBytes func() uint64,
 ) (pc *pickedCompaction) {
-	if cInfo.outputLevel == 0 {
-		return pickIntraL0(env, opts, vers)
+	if cInfo.level == 0 {
+		panic("pebble: pickAutoLPositive called for L0")
 	}
 
-	pc = newPickedCompaction(opts, vers, cInfo.level, baseLevel)
+	pc = newPickedCompaction(opts, vers, cInfo.level, defaultOutputLevel(cInfo.level, baseLevel), baseLevel)
 	if pc.outputLevel.level != cInfo.outputLevel {
 		panic("pebble: compaction picked unexpected output level")
 	}
@@ -1240,104 +1257,6 @@ func pickL0(
 	return pc
 }
 
-func pickIntraL0(env compactionEnv, opts *Options, vers *version) (pc *pickedCompaction) {
-	l0Files := vers.Levels[0]
-	end := l0Files.Iter()
-	remaining := l0Files.Len()
-	for m := end.Last(); m != nil; m = end.Prev() {
-		if m.Compacting {
-			return nil
-		}
-		if m.LargestSeqNum < env.earliestUnflushedSeqNum {
-			break
-		}
-		// Don't compact an L0 file which contains a seqnum greater than the
-		// earliest unflushed seqnum (we continue the loop, rather than exiting,
-		// see conditional above). This can happen when a file is ingested into L0
-		// yet doesn't overlap with the memtable. Consider the scenario:
-		//
-		//   ingest a#2 -> 000001:[a#2-a#2]
-		//   ingest a#3 -> 000002:[a#3-a#3]
-		//   ingest a#4 -> 000003:[a#4-a#4]
-		//   put a#5
-		//   ingest b#6 -> 000004:[b#6-b#6]
-		//   compact 000001,000002,000003,000004 -> 000005:[a#4-b#6]
-		//   flush -> 000006:[a#5-a#5]
-		//
-		// At this point, the LSM will look like:
-		//
-		//   L0
-		//     000006:[a#5-a#5]
-		//     000005:[a#4-b#6]
-		//
-		// Because 000006's largest sequence number is smaller than 000005's it
-		// is ordered before 000005. When performing reads, we’ll check 000005
-		// first which is wrong as 000006 contains the newest value of
-		// "a". Furthermore, the next L0->Lbase compaction can compact 000006
-		// without compacting 000005, further violating the level sequence number
-		// invariant.
-		//
-		// The solution to this problem is to exclude 000004 from the L0->L0
-		// compaction. Doing so, will result in an LSM like:
-		//
-		//   L0
-		//     000005:[a#4-a#4]
-		//     000006:[a#5-a#5]
-		//     000004:[b#6-b#6]
-		//
-		// And now everything is copacetic.
-		//
-		// See https://github.com/facebook/rocksdb/pull/5958.
-		remaining--
-	}
-	if remaining < minIntraL0Count {
-		return nil
-	}
-
-	compactTotalSize := end.Current().Size
-	compactTotalCount := 1
-	compactSizePerFile := uint64(math.MaxUint64)
-
-	// The compaction will be a subslice of l0Files ending with the file
-	// currently positioned beneath end. We add files to the compaction from
-	// the left until the amount of compaction work per file begins
-	// increasing.
-	compactFiles := end.Take().Slice().Reslice(func(start, end *manifest.LevelIterator) {
-		for m := start.Prev(); m != nil; m = start.Prev() {
-			if m.Compacting {
-				break
-			}
-
-			newCompactTotalSize := compactTotalSize + m.Size
-			newCompactSizePerFile := newCompactTotalSize / uint64(compactTotalCount+1)
-			if newCompactSizePerFile > compactSizePerFile {
-				break
-			}
-			compactTotalCount++
-			compactTotalSize = newCompactTotalSize
-			compactSizePerFile = newCompactSizePerFile
-		}
-		// We advanced the iterator one too far, either beyond the beginning
-		// of the level's files or to a file that triggered an early break.
-		// Move the start back over the last file that was okay.
-		start.Next()
-	})
-	if compactTotalCount < minIntraL0Count {
-		return nil
-	}
-
-	pc = newPickedCompaction(opts, vers, 0, 0)
-	pc.startLevel.files = compactFiles
-	pc.smallest, pc.largest = manifest.KeyRange(pc.cmp, compactFiles.Iter())
-	// Output only a single sstable for intra-L0 compactions. There is no current
-	// benefit to outputting multiple tables, because other parts of the code
-	// (i.e. iterators and comapction) expect L0 sstables to overlap and will
-	// thus read all of the L0 sstables anyways, even if they are partitioned.
-	pc.maxOutputFileSize = math.MaxUint64
-	pc.maxOverlapBytes = math.MaxUint64
-	return pc
-}
-
 func (p *compactionPickerByScore) pickManual(
 	env compactionEnv, manual *manualCompaction,
 ) (pc *pickedCompaction, retryLater bool) {
@@ -1386,7 +1305,7 @@ func pickManualHelper(
 	baseLevel int,
 	diskAvailBytes func() uint64,
 ) (pc *pickedCompaction) {
-	pc = newPickedCompaction(opts, vers, manual.level, baseLevel)
+	pc = newPickedCompaction(opts, vers, manual.level, defaultOutputLevel(manual.level, baseLevel), baseLevel)
 	manual.outputLevel = pc.outputLevel.level
 	cmp := opts.Comparer.Compare
 	pc.startLevel.files = vers.Overlaps(manual.level, cmp, manual.start, manual.end, false)
@@ -1442,7 +1361,7 @@ func pickReadTriggeredCompactionHelper(
 		return nil
 	}
 
-	pc = newPickedCompaction(p.opts, p.vers, rc.level, p.baseLevel)
+	pc = newPickedCompaction(p.opts, p.vers, rc.level, defaultOutputLevel(rc.level, p.baseLevel), p.baseLevel)
 
 	pc.startLevel.files = overlapSlice
 	if !pc.setupInputs(p.opts, p.diskAvailBytes()) {
@@ -1451,7 +1370,7 @@ func pickReadTriggeredCompactionHelper(
 	if inputRangeAlreadyCompacting(env, pc) {
 		return nil
 	}
-	pc.readTriggered = true
+	pc.kind = compactionKindRead
 
 	// Prevent read compactions which are too wide.
 	outputOverlaps := pc.version.Overlaps(
