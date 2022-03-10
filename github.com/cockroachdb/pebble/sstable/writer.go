@@ -32,8 +32,11 @@ var errWriterClosed = errors.New("pebble: writer is closed")
 
 // WriterMetadata holds info about a finished sstable.
 type WriterMetadata struct {
-	Size             uint64
-	SmallestPoint    InternalKey
+	Size          uint64
+	SmallestPoint InternalKey
+	// LargestPoint, LargestRangeKey, LargestRangeDel should not be accessed
+	// before Writer.Close is called, because they may only be set on
+	// Writer.Close.
 	LargestPoint     InternalKey
 	SmallestRangeDel InternalKey
 	LargestRangeDel  InternalKey
@@ -280,7 +283,7 @@ func (s *sizeEstimate) clear() {
 }
 
 type indexBlockBuf struct {
-	// block will only be accessed from the writeQueue goroutine.
+	// block will only be accessed from the writeQueue.
 	block blockWriter
 
 	size struct {
@@ -580,15 +583,35 @@ func (w *Writer) Add(key InternalKey, value []byte) error {
 }
 
 func (w *Writer) addPoint(key InternalKey, value []byte) error {
-	if !w.disableKeyOrderChecks && w.meta.LargestPoint.UserKey != nil {
-		// TODO(peter): Manually inlined version of base.InternalCompare(). This is
-		// 3.5% faster on BenchmarkWriter on go1.13. Remove if go1.14 or future
-		// versions show this to not be a performance win.
-		x := w.compare(w.meta.LargestPoint.UserKey, key.UserKey)
-		if x > 0 || (x == 0 && w.meta.LargestPoint.Trailer < key.Trailer) {
-			w.err = errors.Errorf("pebble: keys must be added in order: %s, %s",
-				w.meta.LargestPoint.Pretty(w.formatKey), key.Pretty(w.formatKey))
-			return w.err
+	if !w.disableKeyOrderChecks && w.dataBlockBuf.dataBlock.nEntries >= 1 {
+		// curKey is guaranteed to be the last point key which was added to the Writer.
+		// Inlining base.DecodeInternalKey has a 2-3% improve in the BenchmarkWriter
+		// benchmark.
+		encodedKey := w.dataBlockBuf.dataBlock.curKey
+		n := len(encodedKey) - base.InternalTrailerLen
+		var trailer uint64
+		if n >= 0 {
+			trailer = binary.LittleEndian.Uint64(encodedKey[n:])
+			encodedKey = encodedKey[:n:n]
+		} else {
+			trailer = uint64(InternalKeyKindInvalid)
+			encodedKey = nil
+		}
+		largestPointKey := InternalKey{
+			UserKey: encodedKey,
+			Trailer: trailer,
+		}
+
+		if largestPointKey.UserKey != nil {
+			// TODO(peter): Manually inlined version of base.InternalCompare(). This is
+			// 3.5% faster on BenchmarkWriter on go1.13. Remove if go1.14 or future
+			// versions show this to not be a performance win.
+			x := w.compare(largestPointKey.UserKey, key.UserKey)
+			if x > 0 || (x == 0 && largestPointKey.Trailer < key.Trailer) {
+				w.err = errors.Errorf("pebble: keys must be added in order: %s, %s",
+					largestPointKey.Pretty(w.formatKey), key.Pretty(w.formatKey))
+				return w.err
+			}
 		}
 	}
 
@@ -613,23 +636,18 @@ func (w *Writer) addPoint(key InternalKey, value []byte) error {
 	w.dataBlockBuf.dataBlock.add(key, value)
 
 	w.meta.updateSeqNum(key.SeqNum())
-	k := base.InternalKey{
-		// block.curKey contains the most recently added key to the block.
-		UserKey: w.dataBlockBuf.dataBlock.curKey[:len(w.dataBlockBuf.dataBlock.curKey)-8],
-		Trailer: key.Trailer,
-	}
-	w.meta.SetLargestPointKey(k)
-	if w.meta.SmallestPoint.UserKey == nil {
-		// NB: we clone w.meta.LargestPoint rather than "key", even though they are
-		// semantically identical, because we need to ensure that SmallestPoint.UserKey
-		// is not nil. This is required by WriterMetadata.Smallest in order to
-		// distinguish between an unset SmallestPoint and a zero-length one.
-		// NB: We don't clone this off of some alloc-pool since it will outlive this
-		// Writer as a field of the returned metadata that users like compaction.go
-		// then hang on to, and would otherwise continue to alias that whole pool's
-		// slice if we did so. So since we'll need to allocate it its own slice at
-		// some point anyway, we may as well do so here.
-		w.meta.SetSmallestPointKey(w.meta.LargestPoint.Clone())
+
+	if !w.meta.HasPointKeys {
+		k := base.DecodeInternalKey(w.dataBlockBuf.dataBlock.curKey)
+		// NB: We need to ensure that SmallestPoint.UserKey is set, so we create
+		// an InternalKey which is semantically identical to the key, but won't
+		// have a nil UserKey. We do this, because key.UserKey could be nil, and
+		// we don't want SmallestPoint.UserKey to be nil.
+		//
+		// todo(bananabrick): Determine if it's okay to have a nil SmallestPoint
+		// .UserKey now that we don't rely on a nil UserKey to determine if the
+		// key has been set or not.
+		w.meta.SetSmallestPointKey(k.Clone())
 	}
 
 	w.props.NumEntries++
@@ -1015,7 +1033,12 @@ func (w *Writer) flush(key InternalKey) error {
 	w.dataBlockBuf.finish()
 	w.dataBlockBuf.compressAndChecksum(w.compression)
 
-	// Determine if the index block should be flushed.
+	// Determine if the index block should be flushed. Since we're accessing the
+	// dataBlockBuf.dataBlock.curKey here, we have to make sure that once we start
+	// to pool the dataBlockBufs, the curKey isn't used by the Writer once the
+	// dataBlockBuf is added back to a sync.Pool. In this particular case, the
+	// byte slice which supports "sep" will eventually be copied when "sep" is
+	// added to the index block.
 	prevKey := base.DecodeInternalKey(w.dataBlockBuf.dataBlock.curKey)
 	sep := w.indexEntrySep(prevKey, key, &w.dataBlockBuf)
 	// We determine that we should flush an index block from the Writer client goroutine, but
@@ -1131,9 +1154,15 @@ func (w *Writer) indexEntrySep(prevKey, key InternalKey, dataBlockBuf *dataBlock
 	return sep
 }
 
-// addIndexEntry adds an index entry for the specified key and block handle. addIndexEntry can be called from
-// both the Writer client goroutine, and the writeQueue goroutine. If the flushIndexBuf != nil, then the
-// indexProps, as they're used when the index block is finished.
+// addIndexEntry adds an index entry for the specified key and block handle.
+// addIndexEntry can be called from both the Writer client goroutine, and the
+// writeQueue goroutine. If the flushIndexBuf != nil, then the indexProps, as
+// they're used when the index block is finished.
+//
+// Invariant:
+// 1. addIndexEntry must not store references to the sep InternalKey, the tmp
+//    byte slice, bhp.Props. That is, these must be either deep copied or
+//    encoded.
 func (w *Writer) addIndexEntry(
 	sep InternalKey, bhp BlockHandleWithProperties, tmp []byte,
 	flushIndexBuf *indexBlockBuf, writeTo *indexBlockBuf, inflightSize int, indexProps []byte) error {
@@ -1166,10 +1195,16 @@ func (w *Writer) addPrevDataBlockToIndexBlockProps() {
 	}
 }
 
-// addIndexEntrySync adds an index entry for the specified key and block handle. Writer.addIndexEntry is only
-// called synchronously once Writer.Close is called. addIndexEntrySync should only be called if we're sure that
-// index entries aren't being written asynchronously.
-func (w *Writer) addIndexEntrySync(prevKey, key InternalKey, bhp BlockHandleWithProperties, tmp []byte) error {
+// addIndexEntrySync adds an index entry for the specified key and block handle.
+// Writer.addIndexEntry is only called synchronously once Writer.Close is called.
+// addIndexEntrySync should only be called if we're sure that index entries
+// aren't being written asynchronously.
+//
+// Invariant:
+// 1. addIndexEntry must not store references to the prevKey, key InternalKey's,
+//    the tmp byte slice. That is, these must be either deep copied or encoded.
+func (w *Writer) addIndexEntrySync(
+	prevKey, key InternalKey, bhp BlockHandleWithProperties, tmp []byte) error {
 	sep := w.indexEntrySep(prevKey, key, &w.dataBlockBuf)
 	shouldFlush := supportsTwoLevelIndex(
 		w.tableFormat) && w.indexBlock.shouldFlush(
@@ -1237,6 +1272,12 @@ func cloneKeyWithBuf(k InternalKey, buf []byte) ([]byte, InternalKey) {
 	return buf[n:], InternalKey{UserKey: buf[:n:n], Trailer: k.Trailer}
 }
 
+// Invariants: The byte slice returned by finishIndexBlockProps is heap-allocated
+//  and has its own lifetime, independent of the Writer and the blockPropsEncoder,
+// and it is safe to:
+// 1. Reuse w.blockPropsEncoder without first encoding the byte slice returned.
+// 2. Store the byte slice in the Writer since it is a copy and not supported by
+//    an underlying buffer.
 func (w *Writer) finishIndexBlockProps() ([]byte, error) {
 	w.blockPropsEncoder.resetProps()
 	for i := range w.blockPropCollectors {
@@ -1254,6 +1295,13 @@ func (w *Writer) finishIndexBlockProps() ([]byte, error) {
 
 // finishIndexBlock finishes the current index block and adds it to the top
 // level index block. This is only used when two level indexes are enabled.
+//
+// Invariants:
+// 1. The props slice passed into finishedIndexBlock must not be a
+//    owned by any other struct, since it will be stored in the Writer.indexPartitions
+//    slice.
+// 2. None of the buffers owned by indexBuf will be shallow copied and stored elsewhere.
+//    That is, it must be safe to reuse indexBuf after finishIndexBlock has been called.
 func (w *Writer) finishIndexBlock(indexBuf *indexBlockBuf, props []byte) error {
 	part := indexBlockAndBlockProperties{
 		nEntries: indexBuf.block.nEntries, properties: props,
@@ -1413,6 +1461,20 @@ func (w *Writer) Close() (err error) {
 
 	if w.err != nil {
 		return w.err
+	}
+
+	// The w.meta.LargestPointKey is only used once the Writer is closed, so it is safe to set it
+	// when the Writer is closed.
+	//
+	// The following invariants ensure that setting the largest key at this point of a Writer close
+	// is correct:
+	// 1. Keys must only be added to the Writer in an increasing order.
+	// 2. The current w.dataBlockBuf is guaranteed to have the latest key added to the Writer. This
+	//    must be true, because a w.dataBlockBuf is only switched out when a dataBlock is flushed,
+	//    however, if a dataBlock is flushed, then we add a key to the new w.dataBlockBuf in the
+	//    addPoint function after the flush occurs.
+	if w.dataBlockBuf.dataBlock.nEntries >= 1 {
+		w.meta.SetLargestPointKey(base.DecodeInternalKey(w.dataBlockBuf.dataBlock.curKey))
 	}
 
 	// Finish the last data block, or force an empty data block if there
@@ -1685,13 +1747,19 @@ type PreviousPointKeyOpt struct {
 
 // UnsafeKey returns the last point key written to the writer to which this
 // option was passed during creation. The returned key points directly into
-// a buffer belonging the Writer. The value's lifetime ends the next time a
+// a buffer belonging to the Writer. The value's lifetime ends the next time a
 // point key is added to the Writer.
 func (o PreviousPointKeyOpt) UnsafeKey() base.InternalKey {
 	if o.w == nil {
 		return base.InvalidInternalKey
 	}
-	return o.w.meta.LargestPoint
+
+	if o.w.dataBlockBuf.dataBlock.nEntries >= 1 {
+		// o.w.dataBlockBuf.dataBlock.curKey is guaranteed to point to the last point key
+		// which was added to the Writer.
+		return base.DecodeInternalKey(o.w.dataBlockBuf.dataBlock.curKey)
+	}
+	return base.InternalKey{}
 }
 
 func (o *PreviousPointKeyOpt) writerApply(w *Writer) {

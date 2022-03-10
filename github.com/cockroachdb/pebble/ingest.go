@@ -86,7 +86,7 @@ func ingestLoad1(
 	meta.Size = uint64(stat.Size())
 	meta.CreationTime = time.Now().Unix()
 
-	// Avoid loading into into the table cache for collecting stats if we
+	// Avoid loading into the table cache for collecting stats if we
 	// don't need to. If there are no range deletions, we have all the
 	// information to compute the stats here.
 	//
@@ -557,7 +557,7 @@ func ingestTargetLevel(
 //
 // The steps for ingestion are:
 //
-//   1. Allocate file numbers for every sstable beign ingested.
+//   1. Allocate file numbers for every sstable being ingested.
 //   2. Load the metadata for all sstables being ingest.
 //   3. Sort the sstables by smallest key, verifying non overlap.
 //   4. Hard link (or copy) the sstables into the DB directory.
@@ -584,7 +584,10 @@ func (d *DB) Ingest(paths []string) error {
 	if d.opts.ReadOnly {
 		return ErrReadOnly
 	}
+	return d.ingest(paths, ingestTargetLevel)
+}
 
+func (d *DB) ingest(paths []string, targetLevelFunc ingestTargetLevelFunc) error {
 	// Allocate file numbers for all of the files being ingested and mark them as
 	// pending in order to prevent them from being deleted. Note that this causes
 	// the file number ordering to be out of alignment with sequence number
@@ -681,7 +684,7 @@ func (d *DB) Ingest(paths []string) error {
 
 		// Assign the sstables to the correct level in the LSM and apply the
 		// version edit.
-		ve, err = d.ingestApply(jobID, meta)
+		ve, err = d.ingestApply(jobID, meta, targetLevelFunc)
 	}
 
 	d.commit.AllocateSeqNum(len(meta), prepare, apply)
@@ -719,7 +722,17 @@ func (d *DB) Ingest(paths []string) error {
 	return err
 }
 
-func (d *DB) ingestApply(jobID int, meta []*fileMetadata) (*versionEdit, error) {
+type ingestTargetLevelFunc func(
+	newIters tableNewIters,
+	iterOps IterOptions,
+	cmp Compare,
+	v *version,
+	baseLevel int,
+	compactions map[*compaction]struct{},
+	meta *fileMetadata,
+) (int, error)
+
+func (d *DB) ingestApply(jobID int, meta []*fileMetadata, findTargetLevel ingestTargetLevelFunc) (*versionEdit, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
@@ -744,7 +757,7 @@ func (d *DB) ingestApply(jobID int, meta []*fileMetadata) (*versionEdit, error) 
 		m := meta[i]
 		f := &ve.NewFiles[i]
 		var err error
-		f.Level, err = ingestTargetLevel(d.newIters, iterOps, d.cmp, current, baseLevel, d.mu.compact.inProgress, m)
+		f.Level, err = findTargetLevel(d.newIters, iterOps, d.cmp, current, baseLevel, d.mu.compact.inProgress, m)
 		if err != nil {
 			d.mu.versions.logUnlock()
 			return nil, err
@@ -760,7 +773,7 @@ func (d *DB) ingestApply(jobID int, meta []*fileMetadata) (*versionEdit, error) 
 		levelMetrics.BytesIngested += m.Size
 		levelMetrics.TablesIngested++
 	}
-	if err := d.mu.versions.logAndApply(jobID, ve, metrics, func() []compactionInfo {
+	if err := d.mu.versions.logAndApply(jobID, ve, metrics, false /* forceRotation */, func() []compactionInfo {
 		return d.getInProgressCompactionInfoLocked(nil)
 	}); err != nil {
 		return nil, err
