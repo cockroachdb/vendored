@@ -594,7 +594,7 @@ github.com/cockroachdb/redact/internal/rfmt/fmtsort
 # github.com/cockroachdb/returncheck v0.0.0-20200612231554-92cdbca611dd
 ## explicit
 github.com/cockroachdb/returncheck
-# github.com/cockroachdb/stress v0.0.0-20220217190341-94cf65c2a29f
+# github.com/cockroachdb/stress v0.0.0-20220310203902-58fb4627376e
 ## explicit
 github.com/cockroachdb/stress
 # github.com/cockroachdb/tools v0.0.0-20211112185054-642e51449b40

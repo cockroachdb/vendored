@@ -187,12 +187,33 @@ func run() error {
 							}).Stop()
 						}
 					}
+					combinedOutput, err := ioutil.TempFile("", "stress-stdouterr")
+					if err != nil {
+						panic(err)
+					}
+					defer func() { _ = os.Remove(combinedOutput.Name()) }()
 					cmd = exec.CommandContext(ctx, flags.Args()[0], flags.Args()[1:]...)
 					cmd.Env = subenviron
-					out, err := cmd.CombinedOutput()
-					result.output = out
-					if err != nil && (failureRe == nil || failureRe.Match(out)) && (ignoreRe == nil || !ignoreRe.Match(out)) {
-						result.output = append(out, fmt.Sprintf("\n\nERROR: %v\n", err)...)
+					cmd.Stdout = combinedOutput
+					cmd.Stderr = combinedOutput
+					cmdErr := cmd.Run()
+					_, err = combinedOutput.Seek(0, 0)
+					if err != nil {
+						result.output = []byte("stress: could not seek to beginning of stdout/stderr for test")
+					} else {
+						out, err := ioutil.ReadAll(combinedOutput)
+						if err != nil {
+							result.output = []byte("stress: could not read stdout/stderr for test")
+						} else {
+							result.output = out
+						}
+					}
+					err = combinedOutput.Close()
+					if err != nil {
+						panic(err)
+					}
+					if cmdErr != nil && (failureRe == nil || failureRe.Match(result.output)) && (ignoreRe == nil || !ignoreRe.Match(result.output)) {
+						result.output = append(result.output, fmt.Sprintf("\n\nERROR: %v\n", err)...)
 					} else {
 						result.success = true
 					}
