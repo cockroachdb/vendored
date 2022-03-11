@@ -202,7 +202,7 @@ github.com/cockroachdb/crlfmt/internal/render
 # github.com/cockroachdb/datadriven v1.0.1-0.20220214170620-9913f5bc19b7
 ## explicit
 github.com/cockroachdb/datadriven
-# github.com/cockroachdb/errors v1.8.9
+# github.com/cockroachdb/errors v1.9.0
 ## explicit
 github.com/cockroachdb/errors
 github.com/cockroachdb/errors/assert
