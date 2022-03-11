@@ -530,26 +530,24 @@ func (mi *mergeInfo) computeMergeInfo() {
 			}
 		case reflect.Struct:
 			switch {
-			case !isPointer && isSlice:
-				// This case is for the gogoproto nullable extension, specifically when
-				// we have a repeated struct with nullable=false.
+			case isSlice && !isPointer: // E.g. []pb.T
 				mergeInfo := getMergeInfo(tf)
+				zero := reflect.Zero(tf)
 				mfi.merge = func(dst, src pointer) {
-					dstSlice := dst.getSlice(tf)
-					srcSlice := src.getSlice(tf)
-
-					numExisting := dstSlice.Len()
-					numNew := srcSlice.Len()
-					newSlice := reflect.MakeSlice(reflect.SliceOf(tf), numExisting+numNew, numExisting+numNew)
-					reflect.Copy(newSlice, dstSlice)
-					// Clone each element from src.
-					for i := 0; i < numNew; i++ {
-						mergeInfo.merge(
-							valToPointer(newSlice.Index(numExisting+i).Addr()),
-							valToPointer(srcSlice.Index(i).Addr()),
-						)
+					// TODO: Make this faster?
+					dstsp := dst.asPointerTo(f.Type)
+					dsts := dstsp.Elem()
+					srcs := src.asPointerTo(f.Type).Elem()
+					for i := 0; i < srcs.Len(); i++ {
+						dsts = reflect.Append(dsts, zero)
+						srcElement := srcs.Index(i).Addr()
+						dstElement := dsts.Index(dsts.Len() - 1).Addr()
+						mergeInfo.merge(valToPointer(dstElement), valToPointer(srcElement))
 					}
-					dstSlice.Set(newSlice)
+					if dsts.IsNil() {
+						dsts = reflect.MakeSlice(f.Type, 0, 0)
+					}
+					dstsp.Elem().Set(dsts)
 				}
 			case !isPointer:
 				mergeInfo := getMergeInfo(tf)

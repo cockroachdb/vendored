@@ -1,4 +1,4 @@
-# cloud.google.com/go v0.45.1 => github.com/cockroachdb/google-cloud-go v0.45.2-0.20210623224357-4fefe580b8d5
+# cloud.google.com/go v0.62.0 => github.com/cockroachdb/google-cloud-go v0.45.2-0.20210623224357-4fefe580b8d5
 ## explicit
 cloud.google.com/go/compute/metadata
 cloud.google.com/go/iam
@@ -202,7 +202,7 @@ github.com/cockroachdb/crlfmt/internal/render
 # github.com/cockroachdb/datadriven v1.0.1-0.20201212195501-e89bf9ee1861
 ## explicit
 github.com/cockroachdb/datadriven
-# github.com/cockroachdb/errors v1.8.3
+# github.com/cockroachdb/errors v1.8.4
 ## explicit
 github.com/cockroachdb/errors
 github.com/cockroachdb/errors/assert
@@ -392,7 +392,7 @@ github.com/go-sql-driver/mysql
 ## explicit
 # github.com/gogo/googleapis v1.2.0
 github.com/gogo/googleapis/google/rpc
-# github.com/gogo/protobuf v1.3.2 => github.com/cockroachdb/gogoproto v1.2.1-0.20210111172841-8b6737fea948
+# github.com/gogo/protobuf v1.3.2
 ## explicit
 github.com/gogo/protobuf/gogoproto
 github.com/gogo/protobuf/jsonpb
@@ -448,12 +448,14 @@ github.com/golang/geo/s1
 github.com/golang/geo/s2
 # github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 github.com/golang/glog
+# github.com/golang/groupcache v0.0.0-20190702054246-869f871628b6
+github.com/golang/groupcache/lru
 # github.com/golang/mock v1.5.0
 ## explicit
 github.com/golang/mock/gomock
 github.com/golang/mock/mockgen
 github.com/golang/mock/mockgen/model
-# github.com/golang/protobuf v1.4.2
+# github.com/golang/protobuf v1.5.2
 ## explicit
 github.com/golang/protobuf/descriptor
 github.com/golang/protobuf/jsonpb
@@ -474,7 +476,7 @@ github.com/google/btree
 # github.com/google/flatbuffers v1.11.0
 ## explicit
 github.com/google/flatbuffers/go
-# github.com/google/go-cmp v0.5.2
+# github.com/google/go-cmp v0.5.5
 ## explicit
 github.com/google/go-cmp/cmp
 github.com/google/go-cmp/cmp/cmpopts
@@ -520,7 +522,7 @@ github.com/gorilla/websocket
 # github.com/goware/modvendor v0.3.0
 ## explicit
 github.com/goware/modvendor
-# github.com/grpc-ecosystem/grpc-gateway v1.13.0 => github.com/cockroachdb/grpc-gateway v1.14.6-0.20200519165156-52697fc4a249
+# github.com/grpc-ecosystem/grpc-gateway v1.16.0 => github.com/cockroachdb/grpc-gateway v1.14.6-0.20200519165156-52697fc4a249
 ## explicit
 github.com/grpc-ecosystem/grpc-gateway/codegenerator
 github.com/grpc-ecosystem/grpc-gateway/internal
@@ -537,8 +539,6 @@ github.com/grpc-ecosystem/grpc-gateway/utilities
 github.com/grpc-ecosystem/grpc-opentracing/go/otgrpc
 # github.com/hashicorp/go-uuid v1.0.2
 github.com/hashicorp/go-uuid
-# github.com/hashicorp/golang-lru v0.5.3
-github.com/hashicorp/golang-lru/simplelru
 # github.com/huandu/xstrings v1.3.0
 github.com/huandu/xstrings
 # github.com/ianlancetaylor/demangle v0.0.0-20181102032728-5e5cf60278f6
@@ -636,10 +636,10 @@ github.com/jordanlewis/gcassert
 ## explicit
 github.com/kevinburke/go-bindata
 github.com/kevinburke/go-bindata/go-bindata
-# github.com/kisielk/errcheck v1.2.0
+# github.com/kisielk/errcheck v1.5.0
 ## explicit
 github.com/kisielk/errcheck
-github.com/kisielk/errcheck/internal/errcheck
+github.com/kisielk/errcheck/errcheck
 # github.com/kisielk/gotool v1.0.0
 ## explicit
 github.com/kisielk/gotool
@@ -906,7 +906,7 @@ go.etcd.io/etcd/raft/v3/confchange
 go.etcd.io/etcd/raft/v3/quorum
 go.etcd.io/etcd/raft/v3/raftpb
 go.etcd.io/etcd/raft/v3/tracker
-# go.opencensus.io v0.22.0
+# go.opencensus.io v0.22.4
 go.opencensus.io
 go.opencensus.io/internal
 go.opencensus.io/internal/tagencoding
@@ -946,7 +946,7 @@ golang.org/x/crypto/ssh/knownhosts
 # golang.org/x/exp v0.0.0-20210212053707-62dc52270d37
 ## explicit
 golang.org/x/exp/rand
-# golang.org/x/lint v0.0.0-20200130185559-910be7a94367
+# golang.org/x/lint v0.0.0-20200302205851-738671d3881b
 ## explicit
 golang.org/x/lint
 golang.org/x/lint/golint
@@ -970,7 +970,7 @@ golang.org/x/net/internal/socks
 golang.org/x/net/internal/timeseries
 golang.org/x/net/proxy
 golang.org/x/net/trace
-# golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45
+# golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
 ## explicit
 golang.org/x/oauth2
 golang.org/x/oauth2/google
@@ -1092,19 +1092,21 @@ golang.org/x/tools/txtar
 # golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1
 golang.org/x/xerrors
 golang.org/x/xerrors/internal
-# google.golang.org/api v0.9.0
+# google.golang.org/api v0.30.0
 ## explicit
-google.golang.org/api/gensupport
 google.golang.org/api/googleapi
-google.golang.org/api/googleapi/internal/uritemplates
 google.golang.org/api/googleapi/transport
 google.golang.org/api/internal
+google.golang.org/api/internal/gensupport
+google.golang.org/api/internal/third_party/uritemplates
 google.golang.org/api/iterator
 google.golang.org/api/option
+google.golang.org/api/option/internaloption
 google.golang.org/api/storage/v1
+google.golang.org/api/transport/cert
 google.golang.org/api/transport/http
 google.golang.org/api/transport/http/internal/propagation
-# google.golang.org/appengine v1.6.1
+# google.golang.org/appengine v1.6.6
 google.golang.org/appengine
 google.golang.org/appengine/internal
 google.golang.org/appengine/internal/app_identity
@@ -1115,7 +1117,7 @@ google.golang.org/appengine/internal/modules
 google.golang.org/appengine/internal/remote_api
 google.golang.org/appengine/internal/urlfetch
 google.golang.org/appengine/urlfetch
-# google.golang.org/genproto v0.0.0-20200218151345-dad8c97a84f5
+# google.golang.org/genproto v0.0.0-20200825200019-8632dd797987
 ## explicit
 google.golang.org/genproto/googleapis/api/annotations
 google.golang.org/genproto/googleapis/api/httpbody
@@ -1124,13 +1126,14 @@ google.golang.org/genproto/googleapis/rpc/code
 google.golang.org/genproto/googleapis/rpc/status
 google.golang.org/genproto/googleapis/type/expr
 google.golang.org/genproto/protobuf/field_mask
-# google.golang.org/grpc v1.29.1
+# google.golang.org/grpc v1.31.0
 ## explicit
 google.golang.org/grpc
 google.golang.org/grpc/attributes
 google.golang.org/grpc/backoff
 google.golang.org/grpc/balancer
 google.golang.org/grpc/balancer/base
+google.golang.org/grpc/balancer/grpclb/state
 google.golang.org/grpc/balancer/roundrobin
 google.golang.org/grpc/binarylog/grpc_binarylog_v1
 google.golang.org/grpc/codes
@@ -1147,6 +1150,7 @@ google.golang.org/grpc/internal/balancerload
 google.golang.org/grpc/internal/binarylog
 google.golang.org/grpc/internal/buffer
 google.golang.org/grpc/internal/channelz
+google.golang.org/grpc/internal/credentials
 google.golang.org/grpc/internal/envconfig
 google.golang.org/grpc/internal/grpclog
 google.golang.org/grpc/internal/grpcrand
@@ -1154,26 +1158,27 @@ google.golang.org/grpc/internal/grpcsync
 google.golang.org/grpc/internal/grpcutil
 google.golang.org/grpc/internal/resolver/dns
 google.golang.org/grpc/internal/resolver/passthrough
+google.golang.org/grpc/internal/serviceconfig
 google.golang.org/grpc/internal/status
 google.golang.org/grpc/internal/syscall
 google.golang.org/grpc/internal/transport
 google.golang.org/grpc/keepalive
 google.golang.org/grpc/metadata
-google.golang.org/grpc/naming
 google.golang.org/grpc/peer
 google.golang.org/grpc/resolver
 google.golang.org/grpc/serviceconfig
 google.golang.org/grpc/stats
 google.golang.org/grpc/status
 google.golang.org/grpc/tap
-# google.golang.org/protobuf v1.23.0
+# google.golang.org/grpc/examples v0.0.0-20210324172016-702608ffae4d
+## explicit
+# google.golang.org/protobuf v1.26.0
 ## explicit
 google.golang.org/protobuf/encoding/protojson
 google.golang.org/protobuf/encoding/prototext
 google.golang.org/protobuf/encoding/protowire
 google.golang.org/protobuf/internal/descfmt
 google.golang.org/protobuf/internal/descopts
-google.golang.org/protobuf/internal/detectknown
 google.golang.org/protobuf/internal/detrand
 google.golang.org/protobuf/internal/encoding/defval
 google.golang.org/protobuf/internal/encoding/json
@@ -1181,14 +1186,12 @@ google.golang.org/protobuf/internal/encoding/messageset
 google.golang.org/protobuf/internal/encoding/tag
 google.golang.org/protobuf/internal/encoding/text
 google.golang.org/protobuf/internal/errors
-google.golang.org/protobuf/internal/fieldnum
-google.golang.org/protobuf/internal/fieldsort
 google.golang.org/protobuf/internal/filedesc
 google.golang.org/protobuf/internal/filetype
 google.golang.org/protobuf/internal/flags
-google.golang.org/protobuf/internal/genname
+google.golang.org/protobuf/internal/genid
 google.golang.org/protobuf/internal/impl
-google.golang.org/protobuf/internal/mapsort
+google.golang.org/protobuf/internal/order
 google.golang.org/protobuf/internal/pragma
 google.golang.org/protobuf/internal/set
 google.golang.org/protobuf/internal/strs
@@ -1202,6 +1205,7 @@ google.golang.org/protobuf/runtime/protoimpl
 google.golang.org/protobuf/types/descriptorpb
 google.golang.org/protobuf/types/known/anypb
 google.golang.org/protobuf/types/known/durationpb
+google.golang.org/protobuf/types/known/fieldmaskpb
 google.golang.org/protobuf/types/known/timestamppb
 google.golang.org/protobuf/types/known/wrapperspb
 google.golang.org/protobuf/types/pluginpb
@@ -1243,12 +1247,11 @@ gopkg.in/jcmturner/gokrb5.v7/types
 # gopkg.in/jcmturner/rpc.v1 v1.1.0
 gopkg.in/jcmturner/rpc.v1/mstypes
 gopkg.in/jcmturner/rpc.v1/ndr
-# gopkg.in/square/go-jose.v2 v2.5.1
-## explicit
+# gopkg.in/square/go-jose.v2 v2.2.2
 gopkg.in/square/go-jose.v2
 gopkg.in/square/go-jose.v2/cipher
 gopkg.in/square/go-jose.v2/json
-# gopkg.in/yaml.v2 v2.3.0 => github.com/cockroachdb/yaml v0.0.0-20180705215940-0e2822948641
+# gopkg.in/yaml.v2 v2.4.0 => github.com/cockroachdb/yaml v0.0.0-20180705215940-0e2822948641
 ## explicit
 gopkg.in/yaml.v2
 # gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776
@@ -1298,7 +1301,6 @@ vitess.io/vitess/go/vt/sysvars
 vitess.io/vitess/go/vt/vterrors
 vitess.io/vitess/go/vt/vtgate/evalengine
 # cloud.google.com/go => github.com/cockroachdb/google-cloud-go v0.45.2-0.20210623224357-4fefe580b8d5
-# github.com/gogo/protobuf => github.com/cockroachdb/gogoproto v1.2.1-0.20210111172841-8b6737fea948
 # github.com/grpc-ecosystem/grpc-gateway => github.com/cockroachdb/grpc-gateway v1.14.6-0.20200519165156-52697fc4a249
 # github.com/olekukonko/tablewriter => github.com/cockroachdb/tablewriter v0.0.5-0.20200105123400-bd15540e8847
 # github.com/abourget/teamcity => github.com/cockroachdb/teamcity v0.0.0-20180905144921-8ca25c33eb11
