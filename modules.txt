@@ -508,7 +508,7 @@ github.com/cockroachdb/crlfmt/internal/render
 # github.com/cockroachdb/datadriven v1.0.1
 ## explicit; go 1.17
 github.com/cockroachdb/datadriven
-# github.com/cockroachdb/errors v1.9.0
+# github.com/cockroachdb/errors v1.8.9
 ## explicit; go 1.13
 github.com/cockroachdb/errors
 github.com/cockroachdb/errors/assert
@@ -552,7 +552,7 @@ github.com/cockroachdb/gostdlib/x/tools/internal/span
 # github.com/cockroachdb/logtags v0.0.0-20211118104740-dabe8e521a4f
 ## explicit; go 1.16
 github.com/cockroachdb/logtags
-# github.com/cockroachdb/pebble v0.0.0-20220310010958-93d472261892
+# github.com/cockroachdb/pebble v0.0.0-20220307192532-e2b7bb844759
 ## explicit; go 1.13
 github.com/cockroachdb/pebble
 github.com/cockroachdb/pebble/bloom
@@ -594,7 +594,7 @@ github.com/cockroachdb/redact/internal/rfmt/fmtsort
 # github.com/cockroachdb/returncheck v0.0.0-20200612231554-92cdbca611dd
 ## explicit
 github.com/cockroachdb/returncheck
-# github.com/cockroachdb/stress v0.0.0-20220310203902-58fb4627376e
+# github.com/cockroachdb/stress v0.0.0-20220217190341-94cf65c2a29f
 ## explicit
 github.com/cockroachdb/stress
 # github.com/cockroachdb/tools v0.0.0-20211112185054-642e51449b40
@@ -909,8 +909,11 @@ github.com/google/go-cmp/cmp/internal/value
 # github.com/google/go-github v17.0.0+incompatible
 ## explicit
 github.com/google/go-github/github
-# github.com/google/go-querystring v1.0.0
-## explicit
+# github.com/google/go-github/v42 v42.0.0
+## explicit; go 1.17
+github.com/google/go-github/v42/github
+# github.com/google/go-querystring v1.1.0
+## explicit; go 1.10
 github.com/google/go-querystring/query
 # github.com/google/pprof v0.0.0-20210827144239-02619b876842
 ## explicit; go 1.14
@@ -1626,10 +1629,17 @@ golang.org/x/crypto/argon2
 golang.org/x/crypto/bcrypt
 golang.org/x/crypto/blake2b
 golang.org/x/crypto/blowfish
+golang.org/x/crypto/cast5
 golang.org/x/crypto/ed25519
 golang.org/x/crypto/ed25519/internal/edwards25519
 golang.org/x/crypto/md4
 golang.org/x/crypto/ocsp
+golang.org/x/crypto/openpgp
+golang.org/x/crypto/openpgp/armor
+golang.org/x/crypto/openpgp/elgamal
+golang.org/x/crypto/openpgp/errors
+golang.org/x/crypto/openpgp/packet
+golang.org/x/crypto/openpgp/s2k
 golang.org/x/crypto/pbkdf2
 golang.org/x/crypto/pkcs12
 golang.org/x/crypto/pkcs12/internal/rc2
