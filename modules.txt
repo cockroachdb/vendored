@@ -28,15 +28,15 @@ cloud.google.com/go/storage/internal/apiv2
 # github.com/Azure/azure-pipeline-go v0.2.3
 ## explicit; go 1.14
 github.com/Azure/azure-pipeline-go/pipeline
-# github.com/Azure/azure-sdk-for-go v57.1.0+incompatible
+# github.com/Azure/azure-sdk-for-go v62.2.0+incompatible
 ## explicit
 github.com/Azure/azure-sdk-for-go/profiles/latest/compute/mgmt/compute
 github.com/Azure/azure-sdk-for-go/profiles/latest/network/mgmt/network
 github.com/Azure/azure-sdk-for-go/profiles/latest/resources/mgmt/resources
 github.com/Azure/azure-sdk-for-go/profiles/latest/resources/mgmt/subscriptions
 github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-07-01/compute
-github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-07-01/compute
-github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-03-01/network
+github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-12-01/compute
+github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-05-01/network
 github.com/Azure/azure-sdk-for-go/services/resources/mgmt/2020-10-01/resources
 github.com/Azure/azure-sdk-for-go/services/resources/mgmt/2021-01-01/subscriptions
 github.com/Azure/azure-sdk-for-go/version
@@ -164,7 +164,7 @@ github.com/armon/circbuf
 # github.com/asaskevich/govalidator v0.0.0-20200907205600-7a23bdc65eef
 ## explicit; go 1.13
 github.com/asaskevich/govalidator
-# github.com/aws/aws-sdk-go v1.40.37
+# github.com/aws/aws-sdk-go v1.43.17
 ## explicit; go 1.11
 github.com/aws/aws-sdk-go/aws
 github.com/aws/aws-sdk-go/aws/arn
@@ -218,7 +218,7 @@ github.com/aws/aws-sdk-go/service/sso
 github.com/aws/aws-sdk-go/service/sso/ssoiface
 github.com/aws/aws-sdk-go/service/sts
 github.com/aws/aws-sdk-go/service/sts/stsiface
-# github.com/aws/aws-sdk-go-v2 v1.9.1
+# github.com/aws/aws-sdk-go-v2 v1.15.0
 ## explicit; go 1.15
 github.com/aws/aws-sdk-go-v2
 github.com/aws/aws-sdk-go-v2/aws
@@ -281,7 +281,7 @@ github.com/aws/aws-sdk-go-v2/service/sso/types
 github.com/aws/aws-sdk-go-v2/service/sts
 github.com/aws/aws-sdk-go-v2/service/sts/internal/endpoints
 github.com/aws/aws-sdk-go-v2/service/sts/types
-# github.com/aws/smithy-go v1.8.0
+# github.com/aws/smithy-go v1.11.1
 ## explicit; go 1.15
 github.com/aws/smithy-go
 github.com/aws/smithy-go/document
@@ -898,8 +898,8 @@ github.com/google/btree
 # github.com/google/flatbuffers v2.0.0+incompatible
 ## explicit
 github.com/google/flatbuffers/go
-# github.com/google/go-cmp v0.5.6
-## explicit; go 1.8
+# github.com/google/go-cmp v0.5.7
+## explicit; go 1.11
 github.com/google/go-cmp/cmp
 github.com/google/go-cmp/cmp/cmpopts
 github.com/google/go-cmp/cmp/internal/diff
