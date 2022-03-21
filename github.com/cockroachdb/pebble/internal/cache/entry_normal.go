@@ -8,6 +8,7 @@
 package cache
 
 import (
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -56,7 +57,7 @@ func newEntryAllocCache() *entryAllocCache {
 	if !entriesGoAllocated {
 		// Note: this is a no-op if invariants and tracing are disabled or race is
 		// enabled.
-		invariants.SetFinalizer(c, freeEntryAllocCache)
+		runtime.SetFinalizer(c, freeEntryAllocCache)
 	}
 	return c
 }
