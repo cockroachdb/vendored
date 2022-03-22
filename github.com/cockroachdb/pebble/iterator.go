@@ -11,14 +11,13 @@ import (
 	"unsafe"
 
 	"github.com/cockroachdb/errors"
-	"github.com/cockroachdb/redact"
-
 	"github.com/cockroachdb/pebble/internal/base"
 	"github.com/cockroachdb/pebble/internal/fastrand"
 	"github.com/cockroachdb/pebble/internal/humanize"
 	"github.com/cockroachdb/pebble/internal/invariants"
 	"github.com/cockroachdb/pebble/internal/manifest"
 	"github.com/cockroachdb/pebble/internal/rangekey"
+	"github.com/cockroachdb/redact"
 )
 
 // iterPos describes the state of the internal iterator, in terms of whether it
@@ -625,7 +624,7 @@ func (i *Iterator) findPrevEntry(limit []byte) {
 		// the key space being iterated over in which there are no point keys.
 		// Since limits are best effort, ignoring the limit in this case is
 		// allowed by the contract of limit.
-		if firstLoopIter && limit != nil && i.cmp(limit, i.iterKey.UserKey) > 0 && !i.iterHasRangeKey() {
+		if firstLoopIter && limit != nil && i.cmp(limit, i.iterKey.UserKey) > 0 && !i.rangeKeyWithinLimit(limit) {
 			i.iterValidityState = IterAtLimit
 			i.pos = iterPosCurReversePaused
 			return
@@ -705,7 +704,7 @@ func (i *Iterator) findPrevEntry(limit []byte) {
 			// other than the firstLoopIter case above, where we could step
 			// to a different user key and start processing it for returning
 			// to the caller.
-			if limit != nil && i.iterKey != nil && i.cmp(limit, i.iterKey.UserKey) > 0 && !i.iterHasRangeKey() {
+			if limit != nil && i.iterKey != nil && i.cmp(limit, i.iterKey.UserKey) > 0 && !i.rangeKeyWithinLimit(limit) {
 				i.iterValidityState = IterAtLimit
 				i.pos = iterPosCurReversePaused
 				return
@@ -866,7 +865,17 @@ func (i *Iterator) SeekGE(key []byte) bool {
 	return i.SeekGEWithLimit(key, nil) == IterValid
 }
 
-// SeekGEWithLimit ...
+// SeekGEWithLimit moves the iterator to the first key/value pair whose key is
+// greater than or equal to the given key.
+//
+// If limit is provided, it serves as a best-effort exclusive limit. If the
+// first key greater than or equal to the given search key is also greater than
+// or equal to limit, the Iterator may pause and return IterAtLimit. Because
+// limits are best-effort, SeekGEWithLimit may return a key beyond limit.
+//
+// If the Iterator is configured to iterate over range keys, SeekGEWithLimit
+// guarantees it will surface any range keys with bounds overlapping the
+// keyspace [key, limit).
 func (i *Iterator) SeekGEWithLimit(key []byte, limit []byte) IterValidityState {
 	lastPositioningOp := i.lastPositioningOp
 	// Set it to unknown, since this operation may not succeed, in which case
@@ -1040,12 +1049,14 @@ func (i *Iterator) SeekPrefixGE(key []byte) bool {
 	if lowerBound := i.opts.GetLowerBound(); lowerBound != nil && i.cmp(key, lowerBound) < 0 {
 		if n := i.split(lowerBound); !bytes.Equal(i.prefixOrFullSeekKey, lowerBound[:n]) {
 			i.err = errors.New("pebble: SeekPrefixGE supplied with key outside of lower bound")
+			i.iterValidityState = IterExhausted
 			return false
 		}
 		key = lowerBound
 	} else if upperBound := i.opts.GetUpperBound(); upperBound != nil && i.cmp(key, upperBound) > 0 {
 		if n := i.split(upperBound); !bytes.Equal(i.prefixOrFullSeekKey, upperBound[:n]) {
 			i.err = errors.New("pebble: SeekPrefixGE supplied with key outside of upper bound")
+			i.iterValidityState = IterExhausted
 			return false
 		}
 		key = upperBound
@@ -1077,7 +1088,17 @@ func (i *Iterator) SeekLT(key []byte) bool {
 	return i.SeekLTWithLimit(key, nil) == IterValid
 }
 
-// SeekLTWithLimit ...
+// SeekLTWithLimit moves the iterator to the last key/value pair whose key is
+// less than the given key.
+//
+// If limit is provided, it serves as a best-effort inclusive limit. If the last
+// key less than the given search key is also less than limit, the Iterator may
+// pause and return IterAtLimit. Because limits are best-effort, SeekLTWithLimit
+// may return a key beyond limit.
+//
+// If the Iterator is configured to iterate over range keys, SeekLTWithLimit
+// guarantees it will surface any range keys with bounds overlapping the
+// keyspace up to limit.
 func (i *Iterator) SeekLTWithLimit(key []byte, limit []byte) IterValidityState {
 	lastPositioningOp := i.lastPositioningOp
 	// Set it to unknown, since this operation may not succeed, in which case
@@ -1179,7 +1200,16 @@ func (i *Iterator) Next() bool {
 	return i.NextWithLimit(nil) == IterValid
 }
 
-// NextWithLimit ...
+// NextWithLimit moves the iterator to the next key/value pair.
+//
+// If limit is provided, it serves as a best-effort exclusive limit. If the next
+// key  is greater than or equal to limit, the Iterator may pause and return
+// IterAtLimit. Because limits are best-effort, NextWithLimit may return a key
+// beyond limit.
+//
+// If the Iterator is configured to iterate over range keys, NextWithLimit
+// guarantees it will surface any range keys with bounds overlapping the
+// keyspace up to limit.
 func (i *Iterator) NextWithLimit(limit []byte) IterValidityState {
 	i.stats.ForwardStepCount[InterfaceCall]++
 	if limit != nil && i.hasPrefix {
@@ -1258,7 +1288,16 @@ func (i *Iterator) Prev() bool {
 	return i.PrevWithLimit(nil) == IterValid
 }
 
-// PrevWithLimit ...
+// PrevWithLimit moves the iterator to the previous key/value pair.
+//
+// If limit is provided, it serves as a best-effort inclusive limit. If the
+// previous key is less than limit, the Iterator may pause and return
+// IterAtLimit. Because limits are best-effort, PrevWithLimit may return a key
+// beyond limit.
+//
+// If the Iterator is configured to iterate over range keys, PrevWithLimit
+// guarantees it will surface any range keys with bounds overlapping the
+// keyspace up to limit.
 func (i *Iterator) PrevWithLimit(limit []byte) IterValidityState {
 	i.stats.ReverseStepCount[InterfaceCall]++
 	if i.err != nil {
@@ -1337,10 +1376,30 @@ type RangeKeyData struct {
 	Value  []byte
 }
 
-// iterHasRangeKey returns whether or not the internalIterator has a range key
-// covering its current position.
-func (i *Iterator) iterHasRangeKey() bool {
-	return i.rangeKey != nil && i.rangeKey.iter.HasRangeKey()
+// rangeKeyWithinLimit is called during limited reverse iteration when
+// positioned over a key beyond the limit. If there exists a range key that lies
+// within the limit, the iterator must not pause in order to ensure the user has
+// an opportunity to observe the range key within limit.
+//
+// It would be valid to ignore the limit whenever there's a range key covering
+// the key, but that would introduce nondeterminism. To preserve determinism for
+// testing, the iterator ignores the limit only if the covering range key does
+// cover the keyspace within the limit.
+//
+// This awkwardness exists because range keys are interleaved at their inclusive
+// start positions. Note that limit is inclusive.
+func (i *Iterator) rangeKeyWithinLimit(limit []byte) bool {
+	if i.rangeKey == nil || !i.rangeKey.iter.HasRangeKey() {
+		// If there are no covering range keys, it is safe to to pause
+		// immediately.
+		return false
+	}
+	// If the range key ends beyond the limit, then the range key does not cover
+	// any portion of the keyspace within the limit and it is safe to pause.
+	if _, end := i.rangeKey.iter.RangeKeyBounds(); i.cmp(end, limit) <= 0 {
+		return false
+	}
+	return true
 }
 
 // setRangeKey sets the current range key to the underlying iterator's current
@@ -1451,6 +1510,8 @@ func (i *Iterator) Key() []byte {
 // Value returns the value of the current key/value pair, or nil if done. The
 // caller should not modify the contents of the returned slice, and its
 // contents may change on the next call to Next.
+//
+// Only valid if HasPointAndRange() returns true for hasPoint.
 func (i *Iterator) Value() []byte {
 	return i.value
 }

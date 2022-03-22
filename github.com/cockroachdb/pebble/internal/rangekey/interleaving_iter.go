@@ -205,7 +205,9 @@ func (i *InterleavingIter) SeekGE(key []byte, trySeekUsingNext bool) (*base.Inte
 //
 // NB: In accordance with the base.InternalIterator contract:
 //   i.lower ≤ key
-func (i *InterleavingIter) SeekPrefixGE(prefix, key []byte, trySeekUsingNext bool) (*base.InternalKey, []byte) {
+func (i *InterleavingIter) SeekPrefixGE(
+	prefix, key []byte, trySeekUsingNext bool,
+) (*base.InternalKey, []byte) {
 	i.pointKey, i.pointVal = i.pointIter.SeekPrefixGE(prefix, key, trySeekUsingNext)
 	i.pointKeyInterleaved = false
 	i.nextRangeKey(i.rangeKeyIter.SeekGE(key))
@@ -254,7 +256,14 @@ func (i *InterleavingIter) Next() (*base.InternalKey, []byte) {
 		//   points:    x*            z
 		//   ranges:        ([y-?))
 		// direction. Either way, we must move to the next point key.
-		i.pointKey, i.pointVal = i.pointIter.Next()
+		switch {
+		case i.pointKey == nil && i.lower == nil:
+			i.pointKey, i.pointVal = i.pointIter.First()
+		case i.pointKey == nil && i.lower != nil:
+			i.pointKey, i.pointVal = i.pointIter.SeekGE(i.lower, false)
+		default:
+			i.pointKey, i.pointVal = i.pointIter.Next()
+		}
 		i.pointKeyInterleaved = false
 
 		if i.rangeKey == nil {
@@ -361,7 +370,14 @@ func (i *InterleavingIter) Prev() (*base.InternalKey, []byte) {
 		//   points:    x             z*
 		//   ranges:        ([y-?))
 		// direction. Either way, we must move the point iterator backwards.
-		i.pointKey, i.pointVal = i.pointIter.Prev()
+		switch {
+		case i.pointKey == nil && i.upper == nil:
+			i.pointKey, i.pointVal = i.pointIter.Last()
+		case i.pointKey == nil && i.upper != nil:
+			i.pointKey, i.pointVal = i.pointIter.SeekLT(i.upper)
+		default:
+			i.pointKey, i.pointVal = i.pointIter.Prev()
+		}
 		i.pointKeyInterleaved = false
 	}
 
@@ -594,7 +610,9 @@ func (i *InterleavingIter) yieldPointKey(covered bool) (*base.InternalKey, []byt
 	return i.verify(i.pointKey, i.pointVal)
 }
 
-func (i *InterleavingIter) yieldSyntheticRangeKeyMarker(lowerBound []byte) (*base.InternalKey, []byte) {
+func (i *InterleavingIter) yieldSyntheticRangeKeyMarker(
+	lowerBound []byte,
+) (*base.InternalKey, []byte) {
 	i.rangeKeyMarker.UserKey = i.rangeKey.Start
 	i.rangeKeyMarker.Trailer = base.InternalKeyBoundaryRangeKey
 	i.rangeKeyInterleaved = true
