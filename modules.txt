@@ -1914,6 +1914,7 @@ google.golang.org/grpc/serviceconfig
 google.golang.org/grpc/stats
 google.golang.org/grpc/status
 google.golang.org/grpc/tap
+google.golang.org/grpc/test/bufconn
 # google.golang.org/grpc/examples v0.0.0-20210324172016-702608ffae4d
 ## explicit; go 1.11
 # google.golang.org/protobuf v1.27.1
