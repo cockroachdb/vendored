@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"os"
 	"runtime/pprof"
 	"sort"
 	"strings"
@@ -459,12 +460,13 @@ func newCompaction(pc *pickedCompaction, opts *Options, bytesCompacted *uint64) 
 
 	c.kind = pc.kind
 	if c.kind == compactionKindDefault && c.outputLevel.files.Empty() &&
-		c.startLevel.files.Len() == 1 && c.grandparents.SizeSum() <= c.maxOverlapBytes {
+		c.startLevel.files.Len() == 1 && c.grandparents.SizeSum() <= c.maxOverlapBytes &&
+		 !ingestToL0 {
 		// This compaction can be converted into a trivial move from one level
 		// to the next. We avoid such a move if there is lots of overlapping
 		// grandparent data. Otherwise, the move could create a parent file
 		// that will require a very expensive merge later on.
-		c.kind = compactionKindMove
+			c.kind = compactionKindMove
 	}
 	return c
 }
@@ -1858,6 +1860,15 @@ func (d *DB) compact(c *compaction, errChannel chan error) {
 	})
 }
 
+var pebbleCompactionDelay = func() time.Duration {
+	s := os.Getenv("COCKROACH_PEBBLE_COMPACTION_DELAY")
+	d, _ := time.ParseDuration(s)
+	if d > 0 {
+		fmt.Fprintf(os.Stderr, "slowing compactions by %s\n", d)
+	}
+	return d
+}()
+
 // compact1 runs one compaction.
 //
 // d.mu must be held when calling this, but the mutex may be dropped and
@@ -1885,8 +1896,7 @@ func (d *DB) compact1(c *compaction, errChannel chan error) (err error) {
 			getInfo:      d.getCompactionPacerInfo,
 		})
 	}
-	ve, pendingOutputs, err := d.runCompaction(jobID, c, compactionPacer)
-
+ve, pendingOutputs, err := d.runCompaction(jobID, c, compactionPacer)
 	info.Duration = d.timeNow().Sub(startTime)
 	if err == nil {
 		d.mu.versions.logLock()
@@ -2019,6 +2029,10 @@ func (d *DB) runCompaction(
 	// Note the unusual order: Unlock and then Lock.
 	d.mu.Unlock()
 	defer d.mu.Lock()
+	if c.kind == compactionKindDefault {
+		time.Sleep(pebbleCompactionDelay)
+	}
+
 
 	iiter, err := c.newInputIter(d.newIters)
 	if err != nil {

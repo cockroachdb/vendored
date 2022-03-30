@@ -5,6 +5,8 @@
 package pebble
 
 import (
+	"fmt"
+	"os"
 	"sort"
 	"time"
 
@@ -432,6 +434,14 @@ func overlapWithIterator(
 	return false
 }
 
+var ingestToL0 = func() bool {
+	t := os.Getenv("COCKROACH_DEBUG_PEBBLE_INGEST_L0") != ""
+	if t {
+		fmt.Fprintf(os.Stderr, "forcing all ingestions into L0\n")
+	}
+	return t
+}()
+
 func ingestTargetLevel(
 	newIters tableNewIters,
 	iterOps IterOptions,
@@ -455,6 +465,10 @@ func ingestTargetLevel(
 	// - no file boundary overlap with level i.
 
 	targetLevel := 0
+
+	if ingestToL0 {
+		return targetLevel, nil // HACK: always ingest into L0
+	}
 
 	// Do we overlap with keys in L0?
 	iter := v.Levels[0].Iter()
