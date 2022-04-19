@@ -114,6 +114,13 @@ type DescribeNetworkInterfacesInput struct {
 	// * ipv6-addresses.ipv6-address - An IPv6 address
 	// associated with the network interface.
 	//
+	// * interface-type - The type of network
+	// interface (api_gateway_managed | aws_codestar_connections_managed | branch | efa
+	// | gateway_load_balancer | gateway_load_balancer_endpoint |
+	// global_accelerator_managed | interface | iot_rules_managed | lambda |
+	// load_balancer | nat_gateway | network_load_balancer | quicksight |
+	// transit_gateway | trunk | vpc_endpoint).
+	//
 	// * mac-address - The MAC address of the
 	// network interface.
 	//
@@ -307,12 +314,13 @@ func NewDescribeNetworkInterfacesPaginator(client DescribeNetworkInterfacesAPICl
 		client:    client,
 		params:    params,
 		firstPage: true,
+		nextToken: params.NextToken,
 	}
 }
 
 // HasMorePages returns a boolean indicating whether more pages are available
 func (p *DescribeNetworkInterfacesPaginator) HasMorePages() bool {
-	return p.firstPage || p.nextToken != nil
+	return p.firstPage || (p.nextToken != nil && len(*p.nextToken) != 0)
 }
 
 // NextPage retrieves the next DescribeNetworkInterfaces page.
@@ -339,7 +347,10 @@ func (p *DescribeNetworkInterfacesPaginator) NextPage(ctx context.Context, optFn
 	prevToken := p.nextToken
 	p.nextToken = result.NextToken
 
-	if p.options.StopOnDuplicateToken && prevToken != nil && p.nextToken != nil && *prevToken == *p.nextToken {
+	if p.options.StopOnDuplicateToken &&
+		prevToken != nil &&
+		p.nextToken != nil &&
+		*prevToken == *p.nextToken {
 		p.nextToken = nil
 	}
 
@@ -408,8 +419,17 @@ func NewNetworkInterfaceAvailableWaiter(client DescribeNetworkInterfacesAPIClien
 // maxWaitDur is the maximum wait duration the waiter will wait. The maxWaitDur is
 // required and must be greater than zero.
 func (w *NetworkInterfaceAvailableWaiter) Wait(ctx context.Context, params *DescribeNetworkInterfacesInput, maxWaitDur time.Duration, optFns ...func(*NetworkInterfaceAvailableWaiterOptions)) error {
+	_, err := w.WaitForOutput(ctx, params, maxWaitDur, optFns...)
+	return err
+}
+
+// WaitForOutput calls the waiter function for NetworkInterfaceAvailable waiter and
+// returns the output of the successful operation. The maxWaitDur is the maximum
+// wait duration the waiter will wait. The maxWaitDur is required and must be
+// greater than zero.
+func (w *NetworkInterfaceAvailableWaiter) WaitForOutput(ctx context.Context, params *DescribeNetworkInterfacesInput, maxWaitDur time.Duration, optFns ...func(*NetworkInterfaceAvailableWaiterOptions)) (*DescribeNetworkInterfacesOutput, error) {
 	if maxWaitDur <= 0 {
-		return fmt.Errorf("maximum wait time for waiter must be greater than zero")
+		return nil, fmt.Errorf("maximum wait time for waiter must be greater than zero")
 	}
 
 	options := w.options
@@ -422,7 +442,7 @@ func (w *NetworkInterfaceAvailableWaiter) Wait(ctx context.Context, params *Desc
 	}
 
 	if options.MinDelay > options.MaxDelay {
-		return fmt.Errorf("minimum waiter delay %v must be lesser than or equal to maximum waiter delay of %v.", options.MinDelay, options.MaxDelay)
+		return nil, fmt.Errorf("minimum waiter delay %v must be lesser than or equal to maximum waiter delay of %v.", options.MinDelay, options.MaxDelay)
 	}
 
 	ctx, cancelFn := context.WithTimeout(ctx, maxWaitDur)
@@ -450,10 +470,10 @@ func (w *NetworkInterfaceAvailableWaiter) Wait(ctx context.Context, params *Desc
 
 		retryable, err := options.Retryable(ctx, params, out, err)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if !retryable {
-			return nil
+			return out, nil
 		}
 
 		remainingTime -= time.Since(start)
@@ -466,16 +486,16 @@ func (w *NetworkInterfaceAvailableWaiter) Wait(ctx context.Context, params *Desc
 			attempt, options.MinDelay, options.MaxDelay, remainingTime,
 		)
 		if err != nil {
-			return fmt.Errorf("error computing waiter delay, %w", err)
+			return nil, fmt.Errorf("error computing waiter delay, %w", err)
 		}
 
 		remainingTime -= delay
 		// sleep for the delay amount before invoking a request
 		if err := smithytime.SleepWithContext(ctx, delay); err != nil {
-			return fmt.Errorf("request cancelled while waiting, %w", err)
+			return nil, fmt.Errorf("request cancelled while waiting, %w", err)
 		}
 	}
-	return fmt.Errorf("exceeded max wait time for NetworkInterfaceAvailable waiter")
+	return nil, fmt.Errorf("exceeded max wait time for NetworkInterfaceAvailable waiter")
 }
 
 func networkInterfaceAvailableStateRetryable(ctx context.Context, input *DescribeNetworkInterfacesInput, output *DescribeNetworkInterfacesOutput, err error) (bool, error) {

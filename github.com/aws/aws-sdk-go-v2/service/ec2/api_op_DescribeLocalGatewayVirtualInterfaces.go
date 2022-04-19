@@ -37,6 +37,31 @@ type DescribeLocalGatewayVirtualInterfacesInput struct {
 	DryRun *bool
 
 	// One or more filters.
+	//
+	// * local-address - The local address.
+	//
+	// * local-bgp-asn -
+	// The Border Gateway Protocol (BGP) Autonomous System Number (ASN) of the local
+	// gateway.
+	//
+	// * local-gateway-id - The ID of the local gateway.
+	//
+	// *
+	// local-gateway-virtual-interface-id - The ID of the virtual interface.
+	//
+	// *
+	// local-gateway-virtual-interface-group-id - The ID of the virtual interface
+	// group.
+	//
+	// * owner-id - The ID of the Amazon Web Services account that owns the
+	// local gateway virtual interface.
+	//
+	// * peer-address - The peer address.
+	//
+	// *
+	// peer-bgp-asn - The peer BGP ASN.
+	//
+	// * vlan - The ID of the VLAN.
 	Filters []types.Filter
 
 	// The IDs of the virtual interfaces.
@@ -178,12 +203,13 @@ func NewDescribeLocalGatewayVirtualInterfacesPaginator(client DescribeLocalGatew
 		client:    client,
 		params:    params,
 		firstPage: true,
+		nextToken: params.NextToken,
 	}
 }
 
 // HasMorePages returns a boolean indicating whether more pages are available
 func (p *DescribeLocalGatewayVirtualInterfacesPaginator) HasMorePages() bool {
-	return p.firstPage || p.nextToken != nil
+	return p.firstPage || (p.nextToken != nil && len(*p.nextToken) != 0)
 }
 
 // NextPage retrieves the next DescribeLocalGatewayVirtualInterfaces page.
@@ -210,7 +236,10 @@ func (p *DescribeLocalGatewayVirtualInterfacesPaginator) NextPage(ctx context.Co
 	prevToken := p.nextToken
 	p.nextToken = result.NextToken
 
-	if p.options.StopOnDuplicateToken && prevToken != nil && p.nextToken != nil && *prevToken == *p.nextToken {
+	if p.options.StopOnDuplicateToken &&
+		prevToken != nil &&
+		p.nextToken != nil &&
+		*prevToken == *p.nextToken {
 		p.nextToken = nil
 	}
 

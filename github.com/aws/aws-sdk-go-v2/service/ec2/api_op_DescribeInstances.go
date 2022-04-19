@@ -151,14 +151,17 @@ type DescribeInstancesInput struct {
 	// for the instance in the launch group (for example, 0, 1, 2, and so on).
 	//
 	// *
-	// launch-time - The time when the instance was launched.
+	// launch-time - The time when the instance was launched, in the ISO 8601 format in
+	// the UTC time zone (YYYY-MM-DDThh:mm:ss.sssZ), for example,
+	// 2021-09-29T11:04:43.305Z. You can use a wildcard (*), for example, 2021-09-29T*,
+	// which matches an entire day.
+	//
+	// * metadata-options.http-tokens - The metadata
+	// request authorization state (optional | required)
 	//
 	// *
-	// metadata-options.http-tokens - The metadata request authorization state
-	// (optional | required)
-	//
-	// * metadata-options.http-put-response-hop-limit - The http
-	// metadata request put response hop limit (integer, possible values 1 to 64)
+	// metadata-options.http-put-response-hop-limit - The http metadata request put
+	// response hop limit (integer, possible values 1 to 64)
 	//
 	// *
 	// metadata-options.http-endpoint - Enable or disable metadata access on http
@@ -504,12 +507,13 @@ func NewDescribeInstancesPaginator(client DescribeInstancesAPIClient, params *De
 		client:    client,
 		params:    params,
 		firstPage: true,
+		nextToken: params.NextToken,
 	}
 }
 
 // HasMorePages returns a boolean indicating whether more pages are available
 func (p *DescribeInstancesPaginator) HasMorePages() bool {
-	return p.firstPage || p.nextToken != nil
+	return p.firstPage || (p.nextToken != nil && len(*p.nextToken) != 0)
 }
 
 // NextPage retrieves the next DescribeInstances page.
@@ -536,7 +540,10 @@ func (p *DescribeInstancesPaginator) NextPage(ctx context.Context, optFns ...fun
 	prevToken := p.nextToken
 	p.nextToken = result.NextToken
 
-	if p.options.StopOnDuplicateToken && prevToken != nil && p.nextToken != nil && *prevToken == *p.nextToken {
+	if p.options.StopOnDuplicateToken &&
+		prevToken != nil &&
+		p.nextToken != nil &&
+		*prevToken == *p.nextToken {
 		p.nextToken = nil
 	}
 
@@ -602,8 +609,17 @@ func NewInstanceExistsWaiter(client DescribeInstancesAPIClient, optFns ...func(*
 // maximum wait duration the waiter will wait. The maxWaitDur is required and must
 // be greater than zero.
 func (w *InstanceExistsWaiter) Wait(ctx context.Context, params *DescribeInstancesInput, maxWaitDur time.Duration, optFns ...func(*InstanceExistsWaiterOptions)) error {
+	_, err := w.WaitForOutput(ctx, params, maxWaitDur, optFns...)
+	return err
+}
+
+// WaitForOutput calls the waiter function for InstanceExists waiter and returns
+// the output of the successful operation. The maxWaitDur is the maximum wait
+// duration the waiter will wait. The maxWaitDur is required and must be greater
+// than zero.
+func (w *InstanceExistsWaiter) WaitForOutput(ctx context.Context, params *DescribeInstancesInput, maxWaitDur time.Duration, optFns ...func(*InstanceExistsWaiterOptions)) (*DescribeInstancesOutput, error) {
 	if maxWaitDur <= 0 {
-		return fmt.Errorf("maximum wait time for waiter must be greater than zero")
+		return nil, fmt.Errorf("maximum wait time for waiter must be greater than zero")
 	}
 
 	options := w.options
@@ -616,7 +632,7 @@ func (w *InstanceExistsWaiter) Wait(ctx context.Context, params *DescribeInstanc
 	}
 
 	if options.MinDelay > options.MaxDelay {
-		return fmt.Errorf("minimum waiter delay %v must be lesser than or equal to maximum waiter delay of %v.", options.MinDelay, options.MaxDelay)
+		return nil, fmt.Errorf("minimum waiter delay %v must be lesser than or equal to maximum waiter delay of %v.", options.MinDelay, options.MaxDelay)
 	}
 
 	ctx, cancelFn := context.WithTimeout(ctx, maxWaitDur)
@@ -644,10 +660,10 @@ func (w *InstanceExistsWaiter) Wait(ctx context.Context, params *DescribeInstanc
 
 		retryable, err := options.Retryable(ctx, params, out, err)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if !retryable {
-			return nil
+			return out, nil
 		}
 
 		remainingTime -= time.Since(start)
@@ -660,16 +676,16 @@ func (w *InstanceExistsWaiter) Wait(ctx context.Context, params *DescribeInstanc
 			attempt, options.MinDelay, options.MaxDelay, remainingTime,
 		)
 		if err != nil {
-			return fmt.Errorf("error computing waiter delay, %w", err)
+			return nil, fmt.Errorf("error computing waiter delay, %w", err)
 		}
 
 		remainingTime -= delay
 		// sleep for the delay amount before invoking a request
 		if err := smithytime.SleepWithContext(ctx, delay); err != nil {
-			return fmt.Errorf("request cancelled while waiting, %w", err)
+			return nil, fmt.Errorf("request cancelled while waiting, %w", err)
 		}
 	}
-	return fmt.Errorf("exceeded max wait time for InstanceExists waiter")
+	return nil, fmt.Errorf("exceeded max wait time for InstanceExists waiter")
 }
 
 func instanceExistsStateRetryable(ctx context.Context, input *DescribeInstancesInput, output *DescribeInstancesOutput, err error) (bool, error) {
@@ -769,8 +785,17 @@ func NewInstanceRunningWaiter(client DescribeInstancesAPIClient, optFns ...func(
 // maximum wait duration the waiter will wait. The maxWaitDur is required and must
 // be greater than zero.
 func (w *InstanceRunningWaiter) Wait(ctx context.Context, params *DescribeInstancesInput, maxWaitDur time.Duration, optFns ...func(*InstanceRunningWaiterOptions)) error {
+	_, err := w.WaitForOutput(ctx, params, maxWaitDur, optFns...)
+	return err
+}
+
+// WaitForOutput calls the waiter function for InstanceRunning waiter and returns
+// the output of the successful operation. The maxWaitDur is the maximum wait
+// duration the waiter will wait. The maxWaitDur is required and must be greater
+// than zero.
+func (w *InstanceRunningWaiter) WaitForOutput(ctx context.Context, params *DescribeInstancesInput, maxWaitDur time.Duration, optFns ...func(*InstanceRunningWaiterOptions)) (*DescribeInstancesOutput, error) {
 	if maxWaitDur <= 0 {
-		return fmt.Errorf("maximum wait time for waiter must be greater than zero")
+		return nil, fmt.Errorf("maximum wait time for waiter must be greater than zero")
 	}
 
 	options := w.options
@@ -783,7 +808,7 @@ func (w *InstanceRunningWaiter) Wait(ctx context.Context, params *DescribeInstan
 	}
 
 	if options.MinDelay > options.MaxDelay {
-		return fmt.Errorf("minimum waiter delay %v must be lesser than or equal to maximum waiter delay of %v.", options.MinDelay, options.MaxDelay)
+		return nil, fmt.Errorf("minimum waiter delay %v must be lesser than or equal to maximum waiter delay of %v.", options.MinDelay, options.MaxDelay)
 	}
 
 	ctx, cancelFn := context.WithTimeout(ctx, maxWaitDur)
@@ -811,10 +836,10 @@ func (w *InstanceRunningWaiter) Wait(ctx context.Context, params *DescribeInstan
 
 		retryable, err := options.Retryable(ctx, params, out, err)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if !retryable {
-			return nil
+			return out, nil
 		}
 
 		remainingTime -= time.Since(start)
@@ -827,16 +852,16 @@ func (w *InstanceRunningWaiter) Wait(ctx context.Context, params *DescribeInstan
 			attempt, options.MinDelay, options.MaxDelay, remainingTime,
 		)
 		if err != nil {
-			return fmt.Errorf("error computing waiter delay, %w", err)
+			return nil, fmt.Errorf("error computing waiter delay, %w", err)
 		}
 
 		remainingTime -= delay
 		// sleep for the delay amount before invoking a request
 		if err := smithytime.SleepWithContext(ctx, delay); err != nil {
-			return fmt.Errorf("request cancelled while waiting, %w", err)
+			return nil, fmt.Errorf("request cancelled while waiting, %w", err)
 		}
 	}
-	return fmt.Errorf("exceeded max wait time for InstanceRunning waiter")
+	return nil, fmt.Errorf("exceeded max wait time for InstanceRunning waiter")
 }
 
 func instanceRunningStateRetryable(ctx context.Context, input *DescribeInstancesInput, output *DescribeInstancesOutput, err error) (bool, error) {
@@ -1019,8 +1044,17 @@ func NewInstanceStoppedWaiter(client DescribeInstancesAPIClient, optFns ...func(
 // maximum wait duration the waiter will wait. The maxWaitDur is required and must
 // be greater than zero.
 func (w *InstanceStoppedWaiter) Wait(ctx context.Context, params *DescribeInstancesInput, maxWaitDur time.Duration, optFns ...func(*InstanceStoppedWaiterOptions)) error {
+	_, err := w.WaitForOutput(ctx, params, maxWaitDur, optFns...)
+	return err
+}
+
+// WaitForOutput calls the waiter function for InstanceStopped waiter and returns
+// the output of the successful operation. The maxWaitDur is the maximum wait
+// duration the waiter will wait. The maxWaitDur is required and must be greater
+// than zero.
+func (w *InstanceStoppedWaiter) WaitForOutput(ctx context.Context, params *DescribeInstancesInput, maxWaitDur time.Duration, optFns ...func(*InstanceStoppedWaiterOptions)) (*DescribeInstancesOutput, error) {
 	if maxWaitDur <= 0 {
-		return fmt.Errorf("maximum wait time for waiter must be greater than zero")
+		return nil, fmt.Errorf("maximum wait time for waiter must be greater than zero")
 	}
 
 	options := w.options
@@ -1033,7 +1067,7 @@ func (w *InstanceStoppedWaiter) Wait(ctx context.Context, params *DescribeInstan
 	}
 
 	if options.MinDelay > options.MaxDelay {
-		return fmt.Errorf("minimum waiter delay %v must be lesser than or equal to maximum waiter delay of %v.", options.MinDelay, options.MaxDelay)
+		return nil, fmt.Errorf("minimum waiter delay %v must be lesser than or equal to maximum waiter delay of %v.", options.MinDelay, options.MaxDelay)
 	}
 
 	ctx, cancelFn := context.WithTimeout(ctx, maxWaitDur)
@@ -1061,10 +1095,10 @@ func (w *InstanceStoppedWaiter) Wait(ctx context.Context, params *DescribeInstan
 
 		retryable, err := options.Retryable(ctx, params, out, err)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if !retryable {
-			return nil
+			return out, nil
 		}
 
 		remainingTime -= time.Since(start)
@@ -1077,16 +1111,16 @@ func (w *InstanceStoppedWaiter) Wait(ctx context.Context, params *DescribeInstan
 			attempt, options.MinDelay, options.MaxDelay, remainingTime,
 		)
 		if err != nil {
-			return fmt.Errorf("error computing waiter delay, %w", err)
+			return nil, fmt.Errorf("error computing waiter delay, %w", err)
 		}
 
 		remainingTime -= delay
 		// sleep for the delay amount before invoking a request
 		if err := smithytime.SleepWithContext(ctx, delay); err != nil {
-			return fmt.Errorf("request cancelled while waiting, %w", err)
+			return nil, fmt.Errorf("request cancelled while waiting, %w", err)
 		}
 	}
-	return fmt.Errorf("exceeded max wait time for InstanceStopped waiter")
+	return nil, fmt.Errorf("exceeded max wait time for InstanceStopped waiter")
 }
 
 func instanceStoppedStateRetryable(ctx context.Context, input *DescribeInstancesInput, output *DescribeInstancesOutput, err error) (bool, error) {
@@ -1233,8 +1267,17 @@ func NewInstanceTerminatedWaiter(client DescribeInstancesAPIClient, optFns ...fu
 // the maximum wait duration the waiter will wait. The maxWaitDur is required and
 // must be greater than zero.
 func (w *InstanceTerminatedWaiter) Wait(ctx context.Context, params *DescribeInstancesInput, maxWaitDur time.Duration, optFns ...func(*InstanceTerminatedWaiterOptions)) error {
+	_, err := w.WaitForOutput(ctx, params, maxWaitDur, optFns...)
+	return err
+}
+
+// WaitForOutput calls the waiter function for InstanceTerminated waiter and
+// returns the output of the successful operation. The maxWaitDur is the maximum
+// wait duration the waiter will wait. The maxWaitDur is required and must be
+// greater than zero.
+func (w *InstanceTerminatedWaiter) WaitForOutput(ctx context.Context, params *DescribeInstancesInput, maxWaitDur time.Duration, optFns ...func(*InstanceTerminatedWaiterOptions)) (*DescribeInstancesOutput, error) {
 	if maxWaitDur <= 0 {
-		return fmt.Errorf("maximum wait time for waiter must be greater than zero")
+		return nil, fmt.Errorf("maximum wait time for waiter must be greater than zero")
 	}
 
 	options := w.options
@@ -1247,7 +1290,7 @@ func (w *InstanceTerminatedWaiter) Wait(ctx context.Context, params *DescribeIns
 	}
 
 	if options.MinDelay > options.MaxDelay {
-		return fmt.Errorf("minimum waiter delay %v must be lesser than or equal to maximum waiter delay of %v.", options.MinDelay, options.MaxDelay)
+		return nil, fmt.Errorf("minimum waiter delay %v must be lesser than or equal to maximum waiter delay of %v.", options.MinDelay, options.MaxDelay)
 	}
 
 	ctx, cancelFn := context.WithTimeout(ctx, maxWaitDur)
@@ -1275,10 +1318,10 @@ func (w *InstanceTerminatedWaiter) Wait(ctx context.Context, params *DescribeIns
 
 		retryable, err := options.Retryable(ctx, params, out, err)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if !retryable {
-			return nil
+			return out, nil
 		}
 
 		remainingTime -= time.Since(start)
@@ -1291,16 +1334,16 @@ func (w *InstanceTerminatedWaiter) Wait(ctx context.Context, params *DescribeIns
 			attempt, options.MinDelay, options.MaxDelay, remainingTime,
 		)
 		if err != nil {
-			return fmt.Errorf("error computing waiter delay, %w", err)
+			return nil, fmt.Errorf("error computing waiter delay, %w", err)
 		}
 
 		remainingTime -= delay
 		// sleep for the delay amount before invoking a request
 		if err := smithytime.SleepWithContext(ctx, delay); err != nil {
-			return fmt.Errorf("request cancelled while waiting, %w", err)
+			return nil, fmt.Errorf("request cancelled while waiting, %w", err)
 		}
 	}
-	return fmt.Errorf("exceeded max wait time for InstanceTerminated waiter")
+	return nil, fmt.Errorf("exceeded max wait time for InstanceTerminated waiter")
 }
 
 func instanceTerminatedStateRetryable(ctx context.Context, input *DescribeInstancesInput, output *DescribeInstancesOutput, err error) (bool, error) {

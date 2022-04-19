@@ -18,8 +18,8 @@ import (
 // Unassigned, or Any. IAM resource-listing operations return a subset of the
 // available attributes for the resource. For example, this operation does not
 // return tags, even though they are an attribute of the returned object. To view
-// all of the information for a virtual MFA device, see ListVirtualMFADevices. You
-// can paginate the results using the MaxItems and Marker parameters.
+// tag information for a virtual MFA device, see ListMFADeviceTags. You can
+// paginate the results using the MaxItems and Marker parameters.
 func (c *Client) ListVirtualMFADevices(ctx context.Context, params *ListVirtualMFADevicesInput, optFns ...func(*Options)) (*ListVirtualMFADevicesOutput, error) {
 	if params == nil {
 		params = &ListVirtualMFADevicesInput{}
@@ -201,12 +201,13 @@ func NewListVirtualMFADevicesPaginator(client ListVirtualMFADevicesAPIClient, pa
 		client:    client,
 		params:    params,
 		firstPage: true,
+		nextToken: params.Marker,
 	}
 }
 
 // HasMorePages returns a boolean indicating whether more pages are available
 func (p *ListVirtualMFADevicesPaginator) HasMorePages() bool {
-	return p.firstPage || p.nextToken != nil
+	return p.firstPage || (p.nextToken != nil && len(*p.nextToken) != 0)
 }
 
 // NextPage retrieves the next ListVirtualMFADevices page.
@@ -233,7 +234,10 @@ func (p *ListVirtualMFADevicesPaginator) NextPage(ctx context.Context, optFns ..
 	prevToken := p.nextToken
 	p.nextToken = result.Marker
 
-	if p.options.StopOnDuplicateToken && prevToken != nil && p.nextToken != nil && *prevToken == *p.nextToken {
+	if p.options.StopOnDuplicateToken &&
+		prevToken != nil &&
+		p.nextToken != nil &&
+		*prevToken == *p.nextToken {
 		p.nextToken = nil
 	}
 

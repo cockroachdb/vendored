@@ -15,7 +15,7 @@ import (
 // available to you. If there is an event impacting a zone, you can use this
 // request to view the state and any provided messages for that zone. For more
 // information about Availability Zones, Local Zones, and Wavelength Zones, see
-// Regions, Zones and Outposts
+// Regions and zones
 // (https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-regions-availability-zones.html)
 // in the Amazon Elastic Compute Cloud User Guide.
 func (c *Client) DescribeAvailabilityZones(ctx context.Context, params *DescribeAvailabilityZonesInput, optFns ...func(*Options)) (*DescribeAvailabilityZonesOutput, error) {
@@ -71,22 +71,21 @@ type DescribeAvailabilityZonesInput struct {
 	// us-east-1).
 	//
 	// * state - The state of the Availability Zone, the Local Zone, or
-	// the Wavelength Zone (available | information | impaired | unavailable).
+	// the Wavelength Zone (available).
 	//
-	// *
-	// zone-id - The ID of the Availability Zone (for example, use1-az1), the Local
-	// Zone (for example, usw2-lax1-az1), or the Wavelength Zone (for example,
-	// us-east-1-wl1-bos-wlz-1).
+	// * zone-id - The ID of the Availability Zone
+	// (for example, use1-az1), the Local Zone (for example, usw2-lax1-az1), or the
+	// Wavelength Zone (for example, us-east-1-wl1-bos-wlz-1).
 	//
-	// * zone-type - The type of zone, for example,
-	// local-zone.
+	// * zone-type - The type
+	// of zone, for example, local-zone.
 	//
-	// * zone-name - The name of the Availability Zone (for example,
-	// us-east-1a), the Local Zone (for example, us-west-2-lax-1a), or the Wavelength
-	// Zone (for example, us-east-1-wl1-bos-wlz-1).
+	// * zone-name - The name of the Availability
+	// Zone (for example, us-east-1a), the Local Zone (for example, us-west-2-lax-1a),
+	// or the Wavelength Zone (for example, us-east-1-wl1-bos-wlz-1).
 	//
-	// * zone-type - The type of zone,
-	// for example, local-zone.
+	// * zone-type -
+	// The type of zone, for example, local-zone.
 	Filters []types.Filter
 
 	// The IDs of the Availability Zones, Local Zones, and Wavelength Zones.

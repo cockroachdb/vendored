@@ -37,12 +37,12 @@ type DescribeCoipPoolsInput struct {
 	// UnauthorizedOperation.
 	DryRun *bool
 
-	// The filters. The following are the possible values:
+	// One or more filters.
 	//
-	// * coip-pool.pool-id
+	// * coip-pool.local-gateway-route-table-id - The ID of the
+	// local gateway route table.
 	//
-	// *
-	// coip-pool.local-gateway-route-table-id
+	// * coip-pool.pool-id - The ID of the address pool.
 	Filters []types.Filter
 
 	// The maximum number of results to return with a single call. To retrieve the
@@ -181,12 +181,13 @@ func NewDescribeCoipPoolsPaginator(client DescribeCoipPoolsAPIClient, params *De
 		client:    client,
 		params:    params,
 		firstPage: true,
+		nextToken: params.NextToken,
 	}
 }
 
 // HasMorePages returns a boolean indicating whether more pages are available
 func (p *DescribeCoipPoolsPaginator) HasMorePages() bool {
-	return p.firstPage || p.nextToken != nil
+	return p.firstPage || (p.nextToken != nil && len(*p.nextToken) != 0)
 }
 
 // NextPage retrieves the next DescribeCoipPools page.
@@ -213,7 +214,10 @@ func (p *DescribeCoipPoolsPaginator) NextPage(ctx context.Context, optFns ...fun
 	prevToken := p.nextToken
 	p.nextToken = result.NextToken
 
-	if p.options.StopOnDuplicateToken && prevToken != nil && p.nextToken != nil && *prevToken == *p.nextToken {
+	if p.options.StopOnDuplicateToken &&
+		prevToken != nil &&
+		p.nextToken != nil &&
+		*prevToken == *p.nextToken {
 		p.nextToken = nil
 	}
 

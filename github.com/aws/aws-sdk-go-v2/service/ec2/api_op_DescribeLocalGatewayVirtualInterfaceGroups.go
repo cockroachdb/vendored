@@ -41,11 +41,14 @@ type DescribeLocalGatewayVirtualInterfaceGroupsInput struct {
 	// * local-gateway-id - The ID of a local gateway.
 	//
 	// *
-	// local-gateway-virtual-interface-id - The ID of the virtual interface.
-	//
-	// *
 	// local-gateway-virtual-interface-group-id - The ID of the virtual interface
 	// group.
+	//
+	// * local-gateway-virtual-interface-id - The ID of the virtual
+	// interface.
+	//
+	// * owner-id - The ID of the Amazon Web Services account that owns the
+	// local gateway virtual interface group.
 	Filters []types.Filter
 
 	// The IDs of the virtual interface groups.
@@ -187,12 +190,13 @@ func NewDescribeLocalGatewayVirtualInterfaceGroupsPaginator(client DescribeLocal
 		client:    client,
 		params:    params,
 		firstPage: true,
+		nextToken: params.NextToken,
 	}
 }
 
 // HasMorePages returns a boolean indicating whether more pages are available
 func (p *DescribeLocalGatewayVirtualInterfaceGroupsPaginator) HasMorePages() bool {
-	return p.firstPage || p.nextToken != nil
+	return p.firstPage || (p.nextToken != nil && len(*p.nextToken) != 0)
 }
 
 // NextPage retrieves the next DescribeLocalGatewayVirtualInterfaceGroups page.
@@ -219,7 +223,10 @@ func (p *DescribeLocalGatewayVirtualInterfaceGroupsPaginator) NextPage(ctx conte
 	prevToken := p.nextToken
 	p.nextToken = result.NextToken
 
-	if p.options.StopOnDuplicateToken && prevToken != nil && p.nextToken != nil && *prevToken == *p.nextToken {
+	if p.options.StopOnDuplicateToken &&
+		prevToken != nil &&
+		p.nextToken != nil &&
+		*prevToken == *p.nextToken {
 		p.nextToken = nil
 	}
 

@@ -109,21 +109,23 @@ type DescribeSnapshotsInput struct {
 	// * status -
 	// The status of the snapshot (pending | completed | error).
 	//
-	// * tag: - The
-	// key/value combination of a tag assigned to the resource. Use the tag key in the
-	// filter name and the tag value as the filter value. For example, to find all
-	// resources that have a tag with the key Owner and the value TeamA, specify
-	// tag:Owner for the filter name and TeamA for the filter value.
+	// * storage-tier - The
+	// storage tier of the snapshot (archive | standard).
 	//
-	// * tag-key - The
-	// key of a tag assigned to the resource. Use this filter to find all resources
-	// assigned a tag with a specific key, regardless of the tag value.
+	// * tag: - The key/value
+	// combination of a tag assigned to the resource. Use the tag key in the filter
+	// name and the tag value as the filter value. For example, to find all resources
+	// that have a tag with the key Owner and the value TeamA, specify tag:Owner for
+	// the filter name and TeamA for the filter value.
 	//
-	// * volume-id -
-	// The ID of the volume the snapshot is for.
+	// * tag-key - The key of a tag
+	// assigned to the resource. Use this filter to find all resources assigned a tag
+	// with a specific key, regardless of the tag value.
 	//
-	// * volume-size - The size of the
-	// volume, in GiB.
+	// * volume-id - The ID of the
+	// volume the snapshot is for.
+	//
+	// * volume-size - The size of the volume, in GiB.
 	Filters []types.Filter
 
 	// The maximum number of snapshot results returned by DescribeSnapshots in
@@ -290,12 +292,13 @@ func NewDescribeSnapshotsPaginator(client DescribeSnapshotsAPIClient, params *De
 		client:    client,
 		params:    params,
 		firstPage: true,
+		nextToken: params.NextToken,
 	}
 }
 
 // HasMorePages returns a boolean indicating whether more pages are available
 func (p *DescribeSnapshotsPaginator) HasMorePages() bool {
-	return p.firstPage || p.nextToken != nil
+	return p.firstPage || (p.nextToken != nil && len(*p.nextToken) != 0)
 }
 
 // NextPage retrieves the next DescribeSnapshots page.
@@ -322,7 +325,10 @@ func (p *DescribeSnapshotsPaginator) NextPage(ctx context.Context, optFns ...fun
 	prevToken := p.nextToken
 	p.nextToken = result.NextToken
 
-	if p.options.StopOnDuplicateToken && prevToken != nil && p.nextToken != nil && *prevToken == *p.nextToken {
+	if p.options.StopOnDuplicateToken &&
+		prevToken != nil &&
+		p.nextToken != nil &&
+		*prevToken == *p.nextToken {
 		p.nextToken = nil
 	}
 
@@ -388,8 +394,17 @@ func NewSnapshotCompletedWaiter(client DescribeSnapshotsAPIClient, optFns ...fun
 // the maximum wait duration the waiter will wait. The maxWaitDur is required and
 // must be greater than zero.
 func (w *SnapshotCompletedWaiter) Wait(ctx context.Context, params *DescribeSnapshotsInput, maxWaitDur time.Duration, optFns ...func(*SnapshotCompletedWaiterOptions)) error {
+	_, err := w.WaitForOutput(ctx, params, maxWaitDur, optFns...)
+	return err
+}
+
+// WaitForOutput calls the waiter function for SnapshotCompleted waiter and returns
+// the output of the successful operation. The maxWaitDur is the maximum wait
+// duration the waiter will wait. The maxWaitDur is required and must be greater
+// than zero.
+func (w *SnapshotCompletedWaiter) WaitForOutput(ctx context.Context, params *DescribeSnapshotsInput, maxWaitDur time.Duration, optFns ...func(*SnapshotCompletedWaiterOptions)) (*DescribeSnapshotsOutput, error) {
 	if maxWaitDur <= 0 {
-		return fmt.Errorf("maximum wait time for waiter must be greater than zero")
+		return nil, fmt.Errorf("maximum wait time for waiter must be greater than zero")
 	}
 
 	options := w.options
@@ -402,7 +417,7 @@ func (w *SnapshotCompletedWaiter) Wait(ctx context.Context, params *DescribeSnap
 	}
 
 	if options.MinDelay > options.MaxDelay {
-		return fmt.Errorf("minimum waiter delay %v must be lesser than or equal to maximum waiter delay of %v.", options.MinDelay, options.MaxDelay)
+		return nil, fmt.Errorf("minimum waiter delay %v must be lesser than or equal to maximum waiter delay of %v.", options.MinDelay, options.MaxDelay)
 	}
 
 	ctx, cancelFn := context.WithTimeout(ctx, maxWaitDur)
@@ -430,10 +445,10 @@ func (w *SnapshotCompletedWaiter) Wait(ctx context.Context, params *DescribeSnap
 
 		retryable, err := options.Retryable(ctx, params, out, err)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if !retryable {
-			return nil
+			return out, nil
 		}
 
 		remainingTime -= time.Since(start)
@@ -446,16 +461,16 @@ func (w *SnapshotCompletedWaiter) Wait(ctx context.Context, params *DescribeSnap
 			attempt, options.MinDelay, options.MaxDelay, remainingTime,
 		)
 		if err != nil {
-			return fmt.Errorf("error computing waiter delay, %w", err)
+			return nil, fmt.Errorf("error computing waiter delay, %w", err)
 		}
 
 		remainingTime -= delay
 		// sleep for the delay amount before invoking a request
 		if err := smithytime.SleepWithContext(ctx, delay); err != nil {
-			return fmt.Errorf("request cancelled while waiting, %w", err)
+			return nil, fmt.Errorf("request cancelled while waiting, %w", err)
 		}
 	}
-	return fmt.Errorf("exceeded max wait time for SnapshotCompleted waiter")
+	return nil, fmt.Errorf("exceeded max wait time for SnapshotCompleted waiter")
 }
 
 func snapshotCompletedStateRetryable(ctx context.Context, input *DescribeSnapshotsInput, output *DescribeSnapshotsOutput, err error) (bool, error) {
@@ -489,6 +504,30 @@ func snapshotCompletedStateRetryable(ctx context.Context, input *DescribeSnapsho
 
 		if match {
 			return false, nil
+		}
+	}
+
+	if err == nil {
+		pathValue, err := jmespath.Search("Snapshots[].State", output)
+		if err != nil {
+			return false, fmt.Errorf("error evaluating waiter state: %w", err)
+		}
+
+		expectedValue := "error"
+		listOfValues, ok := pathValue.([]interface{})
+		if !ok {
+			return false, fmt.Errorf("waiter comparator expected list got %T", pathValue)
+		}
+
+		for _, v := range listOfValues {
+			value, ok := v.(types.SnapshotState)
+			if !ok {
+				return false, fmt.Errorf("waiter comparator expected types.SnapshotState value, got %T", pathValue)
+			}
+
+			if string(value) == expectedValue {
+				return false, fmt.Errorf("waiter state transitioned to Failure")
+			}
 		}
 	}
 

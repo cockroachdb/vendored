@@ -33,7 +33,7 @@ func (c *Client) ImportImage(ctx context.Context, params *ImportImageInput, optF
 
 type ImportImageInput struct {
 
-	// The architecture of the virtual machine. Valid values: i386 | x86_64 | arm64
+	// The architecture of the virtual machine. Valid values: i386 | x86_64
 	Architecture *string
 
 	// The boot mode of the virtual machine.
@@ -123,10 +123,9 @@ type ImportImageInput struct {
 	// The tags to apply to the import image task during creation.
 	TagSpecifications []types.TagSpecification
 
-	// The usage operation value. For more information, see AMI billing information
-	// fields
-	// (https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/billing-info-fields.html)
-	// in the Amazon Elastic Compute Cloud User Guide.
+	// The usage operation value. For more information, see Licensing options
+	// (https://docs.aws.amazon.com/vm-import/latest/userguide/vmie_prereqs.html#prerequisites)
+	// in the VM Import/Export User Guide.
 	UsageOperation *string
 
 	noSmithyDocumentSerde

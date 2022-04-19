@@ -109,8 +109,12 @@ type DescribeInstanceTypesInput struct {
 	// for the local instance storage disks (hdd | ssd).
 	//
 	// *
+	// instance-storage-info.encryption-support - Indicates whether data is encrypted
+	// at rest (required | supported | unsupported).
+	//
+	// *
 	// instance-storage-info.nvme-support - Indicates whether non-volatile memory
-	// express (NVMe) is supported for instance store (required | supported) |
+	// express (NVMe) is supported for instance store (required | supported |
 	// unsupported).
 	//
 	// * instance-storage-info.total-size-in-gb - The total amount of
@@ -152,11 +156,14 @@ type DescribeInstanceTypesInput struct {
 	// whether the instance type supports IPv6 (true | false).
 	//
 	// *
-	// network-info.maximum-network-interfaces - The maximum number of network
-	// interfaces per instance.
+	// network-info.maximum-network-cards - The maximum number of network cards per
+	// instance.
 	//
-	// * network-info.network-performance - The network
-	// performance (for example, "25 Gigabit").
+	// * network-info.maximum-network-interfaces - The maximum number of
+	// network interfaces per instance.
+	//
+	// * network-info.network-performance - The
+	// network performance (for example, "25 Gigabit").
 	//
 	// *
 	// processor-info.supported-architecture - The CPU architecture (arm64 | i386 |
@@ -337,12 +344,13 @@ func NewDescribeInstanceTypesPaginator(client DescribeInstanceTypesAPIClient, pa
 		client:    client,
 		params:    params,
 		firstPage: true,
+		nextToken: params.NextToken,
 	}
 }
 
 // HasMorePages returns a boolean indicating whether more pages are available
 func (p *DescribeInstanceTypesPaginator) HasMorePages() bool {
-	return p.firstPage || p.nextToken != nil
+	return p.firstPage || (p.nextToken != nil && len(*p.nextToken) != 0)
 }
 
 // NextPage retrieves the next DescribeInstanceTypes page.
@@ -369,7 +377,10 @@ func (p *DescribeInstanceTypesPaginator) NextPage(ctx context.Context, optFns ..
 	prevToken := p.nextToken
 	p.nextToken = result.NextToken
 
-	if p.options.StopOnDuplicateToken && prevToken != nil && p.nextToken != nil && *prevToken == *p.nextToken {
+	if p.options.StopOnDuplicateToken &&
+		prevToken != nil &&
+		p.nextToken != nil &&
+		*prevToken == *p.nextToken {
 		p.nextToken = nil
 	}
 

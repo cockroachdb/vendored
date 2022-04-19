@@ -60,45 +60,48 @@ type DescribeSubnetsInput struct {
 	// also use cidr or cidrBlock as the filter names.
 	//
 	// * default-for-az - Indicates
-	// whether this is the default subnet for the Availability Zone. You can also use
-	// defaultForAz as the filter name.
-	//
-	// * ipv6-cidr-block-association.ipv6-cidr-block
-	// - An IPv6 CIDR block associated with the subnet.
+	// whether this is the default subnet for the Availability Zone (true | false). You
+	// can also use defaultForAz as the filter name.
 	//
 	// *
-	// ipv6-cidr-block-association.association-id - An association ID for an IPv6 CIDR
-	// block associated with the subnet.
+	// ipv6-cidr-block-association.ipv6-cidr-block - An IPv6 CIDR block associated with
+	// the subnet.
 	//
-	// * ipv6-cidr-block-association.state - The
-	// state of an IPv6 CIDR block associated with the subnet.
+	// * ipv6-cidr-block-association.association-id - An association ID
+	// for an IPv6 CIDR block associated with the subnet.
 	//
-	// * outpost-arn - The
-	// Amazon Resource Name (ARN) of the Outpost.
+	// *
+	// ipv6-cidr-block-association.state - The state of an IPv6 CIDR block associated
+	// with the subnet.
 	//
-	// * owner-id - The ID of the Amazon
-	// Web Services account that owns the subnet.
+	// * ipv6-native - Indicates whether this is an IPv6 only subnet
+	// (true | false).
 	//
-	// * state - The state of the subnet
-	// (pending | available).
+	// * outpost-arn - The Amazon Resource Name (ARN) of the
+	// Outpost.
 	//
-	// * subnet-arn - The Amazon Resource Name (ARN) of the
+	// * owner-id - The ID of the Amazon Web Services account that owns the
 	// subnet.
 	//
-	// * subnet-id - The ID of the subnet.
+	// * state - The state of the subnet (pending | available).
 	//
-	// * tag: - The key/value combination
-	// of a tag assigned to the resource. Use the tag key in the filter name and the
-	// tag value as the filter value. For example, to find all resources that have a
-	// tag with the key Owner and the value TeamA, specify tag:Owner for the filter
-	// name and TeamA for the filter value.
+	// * subnet-arn
+	// - The Amazon Resource Name (ARN) of the subnet.
 	//
-	// * tag-key - The key of a tag assigned to
-	// the resource. Use this filter to find all resources assigned a tag with a
-	// specific key, regardless of the tag value.
-	//
-	// * vpc-id - The ID of the VPC for the
+	// * subnet-id - The ID of the
 	// subnet.
+	//
+	// * tag: - The key/value combination of a tag assigned to the resource.
+	// Use the tag key in the filter name and the tag value as the filter value. For
+	// example, to find all resources that have a tag with the key Owner and the value
+	// TeamA, specify tag:Owner for the filter name and TeamA for the filter value.
+	//
+	// *
+	// tag-key - The key of a tag assigned to the resource. Use this filter to find all
+	// resources assigned a tag with a specific key, regardless of the tag value.
+	//
+	// *
+	// vpc-id - The ID of the VPC for the subnet.
 	Filters []types.Filter
 
 	// The maximum number of results to return with a single call. To retrieve the
@@ -237,12 +240,13 @@ func NewDescribeSubnetsPaginator(client DescribeSubnetsAPIClient, params *Descri
 		client:    client,
 		params:    params,
 		firstPage: true,
+		nextToken: params.NextToken,
 	}
 }
 
 // HasMorePages returns a boolean indicating whether more pages are available
 func (p *DescribeSubnetsPaginator) HasMorePages() bool {
-	return p.firstPage || p.nextToken != nil
+	return p.firstPage || (p.nextToken != nil && len(*p.nextToken) != 0)
 }
 
 // NextPage retrieves the next DescribeSubnets page.
@@ -269,7 +273,10 @@ func (p *DescribeSubnetsPaginator) NextPage(ctx context.Context, optFns ...func(
 	prevToken := p.nextToken
 	p.nextToken = result.NextToken
 
-	if p.options.StopOnDuplicateToken && prevToken != nil && p.nextToken != nil && *prevToken == *p.nextToken {
+	if p.options.StopOnDuplicateToken &&
+		prevToken != nil &&
+		p.nextToken != nil &&
+		*prevToken == *p.nextToken {
 		p.nextToken = nil
 	}
 
@@ -335,8 +342,17 @@ func NewSubnetAvailableWaiter(client DescribeSubnetsAPIClient, optFns ...func(*S
 // maximum wait duration the waiter will wait. The maxWaitDur is required and must
 // be greater than zero.
 func (w *SubnetAvailableWaiter) Wait(ctx context.Context, params *DescribeSubnetsInput, maxWaitDur time.Duration, optFns ...func(*SubnetAvailableWaiterOptions)) error {
+	_, err := w.WaitForOutput(ctx, params, maxWaitDur, optFns...)
+	return err
+}
+
+// WaitForOutput calls the waiter function for SubnetAvailable waiter and returns
+// the output of the successful operation. The maxWaitDur is the maximum wait
+// duration the waiter will wait. The maxWaitDur is required and must be greater
+// than zero.
+func (w *SubnetAvailableWaiter) WaitForOutput(ctx context.Context, params *DescribeSubnetsInput, maxWaitDur time.Duration, optFns ...func(*SubnetAvailableWaiterOptions)) (*DescribeSubnetsOutput, error) {
 	if maxWaitDur <= 0 {
-		return fmt.Errorf("maximum wait time for waiter must be greater than zero")
+		return nil, fmt.Errorf("maximum wait time for waiter must be greater than zero")
 	}
 
 	options := w.options
@@ -349,7 +365,7 @@ func (w *SubnetAvailableWaiter) Wait(ctx context.Context, params *DescribeSubnet
 	}
 
 	if options.MinDelay > options.MaxDelay {
-		return fmt.Errorf("minimum waiter delay %v must be lesser than or equal to maximum waiter delay of %v.", options.MinDelay, options.MaxDelay)
+		return nil, fmt.Errorf("minimum waiter delay %v must be lesser than or equal to maximum waiter delay of %v.", options.MinDelay, options.MaxDelay)
 	}
 
 	ctx, cancelFn := context.WithTimeout(ctx, maxWaitDur)
@@ -377,10 +393,10 @@ func (w *SubnetAvailableWaiter) Wait(ctx context.Context, params *DescribeSubnet
 
 		retryable, err := options.Retryable(ctx, params, out, err)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if !retryable {
-			return nil
+			return out, nil
 		}
 
 		remainingTime -= time.Since(start)
@@ -393,16 +409,16 @@ func (w *SubnetAvailableWaiter) Wait(ctx context.Context, params *DescribeSubnet
 			attempt, options.MinDelay, options.MaxDelay, remainingTime,
 		)
 		if err != nil {
-			return fmt.Errorf("error computing waiter delay, %w", err)
+			return nil, fmt.Errorf("error computing waiter delay, %w", err)
 		}
 
 		remainingTime -= delay
 		// sleep for the delay amount before invoking a request
 		if err := smithytime.SleepWithContext(ctx, delay); err != nil {
-			return fmt.Errorf("request cancelled while waiting, %w", err)
+			return nil, fmt.Errorf("request cancelled while waiting, %w", err)
 		}
 	}
-	return fmt.Errorf("exceeded max wait time for SubnetAvailable waiter")
+	return nil, fmt.Errorf("exceeded max wait time for SubnetAvailable waiter")
 }
 
 func subnetAvailableStateRetryable(ctx context.Context, input *DescribeSubnetsInput, output *DescribeSubnetsOutput, err error) (bool, error) {

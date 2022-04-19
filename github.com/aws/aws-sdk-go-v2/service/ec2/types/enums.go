@@ -2,6 +2,76 @@
 
 package types
 
+type AcceleratorManufacturer string
+
+// Enum values for AcceleratorManufacturer
+const (
+	AcceleratorManufacturerNvidia            AcceleratorManufacturer = "nvidia"
+	AcceleratorManufacturerAmd               AcceleratorManufacturer = "amd"
+	AcceleratorManufacturerAmazonWebServices AcceleratorManufacturer = "amazon-web-services"
+	AcceleratorManufacturerXilinx            AcceleratorManufacturer = "xilinx"
+)
+
+// Values returns all known values for AcceleratorManufacturer. Note that this can
+// be expanded in the future, and so it is only as up to date as the client. The
+// ordering of this slice is not guaranteed to be stable across updates.
+func (AcceleratorManufacturer) Values() []AcceleratorManufacturer {
+	return []AcceleratorManufacturer{
+		"nvidia",
+		"amd",
+		"amazon-web-services",
+		"xilinx",
+	}
+}
+
+type AcceleratorName string
+
+// Enum values for AcceleratorName
+const (
+	AcceleratorNameA100          AcceleratorName = "a100"
+	AcceleratorNameV100          AcceleratorName = "v100"
+	AcceleratorNameK80           AcceleratorName = "k80"
+	AcceleratorNameT4            AcceleratorName = "t4"
+	AcceleratorNameM60           AcceleratorName = "m60"
+	AcceleratorNameRadeonProV520 AcceleratorName = "radeon-pro-v520"
+	AcceleratorNameVu9p          AcceleratorName = "vu9p"
+)
+
+// Values returns all known values for AcceleratorName. Note that this can be
+// expanded in the future, and so it is only as up to date as the client. The
+// ordering of this slice is not guaranteed to be stable across updates.
+func (AcceleratorName) Values() []AcceleratorName {
+	return []AcceleratorName{
+		"a100",
+		"v100",
+		"k80",
+		"t4",
+		"m60",
+		"radeon-pro-v520",
+		"vu9p",
+	}
+}
+
+type AcceleratorType string
+
+// Enum values for AcceleratorType
+const (
+	AcceleratorTypeGpu       AcceleratorType = "gpu"
+	AcceleratorTypeFpga      AcceleratorType = "fpga"
+	AcceleratorTypeInference AcceleratorType = "inference"
+)
+
+// Values returns all known values for AcceleratorType. Note that this can be
+// expanded in the future, and so it is only as up to date as the client. The
+// ordering of this slice is not guaranteed to be stable across updates.
+func (AcceleratorType) Values() []AcceleratorType {
+	return []AcceleratorType{
+		"gpu",
+		"fpga",
+		"inference",
+	}
+}
+
 type AccountAttributeName string
 
 // Enum values for AccountAttributeName
@@ -55,6 +125,24 @@ const (
 func (AddressAttributeName) Values() []AddressAttributeName {
 	return []AddressAttributeName{
 		"domain-name",
+	}
+}
+
+type AddressFamily string
+
+// Enum values for AddressFamily
+const (
+	AddressFamilyIpv4 AddressFamily = "ipv4"
+	AddressFamilyIpv6 AddressFamily = "ipv6"
+)
+
+// Values returns all known values for AddressFamily. Note that this can be
+// expanded in the future, and so it is only as up to date as the client. The
+// ordering of this slice is not guaranteed to be stable across updates.
+func (AddressFamily) Values() []AddressFamily {
+	return []AddressFamily{
+		"ipv4",
+		"ipv6",
 	}
 }
 
@@ -184,9 +272,10 @@ type ArchitectureType string
 
 // Enum values for ArchitectureType
 const (
-	ArchitectureTypeI386  ArchitectureType = "i386"
-	ArchitectureTypeX8664 ArchitectureType = "x86_64"
-	ArchitectureTypeArm64 ArchitectureType = "arm64"
+	ArchitectureTypeI386     ArchitectureType = "i386"
+	ArchitectureTypeX8664    ArchitectureType = "x86_64"
+	ArchitectureTypeArm64    ArchitectureType = "arm64"
+	ArchitectureTypeX8664Mac ArchitectureType = "x86_64_mac"
 )
 
 // Values returns all known values for ArchitectureType. Note that this can be
@@ -197,6 +286,7 @@ func (ArchitectureType) Values() []ArchitectureType {
 		"i386",
 		"x86_64",
 		"arm64",
+		"x86_64_mac",
 	}
 }
 
@@ -382,6 +472,26 @@ func (AvailabilityZoneState) Values() []AvailabilityZoneState {
 	}
 }
 
+type BareMetal string
+
+// Enum values for BareMetal
+const (
+	BareMetalIncluded BareMetal = "included"
+	BareMetalRequired BareMetal = "required"
+	BareMetalExcluded BareMetal = "excluded"
+)
+
+// Values returns all known values for BareMetal. Note that this can be expanded in
+// the future, and so it is only as up to date as the client. The ordering of this
+// slice is not guaranteed to be stable across updates.
+func (BareMetal) Values() []BareMetal {
+	return []BareMetal{
+		"included",
+		"required",
+		"excluded",
+	}
+}
+
 type BatchState string
 
 // Enum values for BatchState
@@ -492,6 +602,26 @@ func (BundleTaskState) Values() []BundleTaskState {
 	}
 }
 
+type BurstablePerformance string
+
+// Enum values for BurstablePerformance
+const (
+	BurstablePerformanceIncluded BurstablePerformance = "included"
+	BurstablePerformanceRequired BurstablePerformance = "required"
+	BurstablePerformanceExcluded BurstablePerformance = "excluded"
+)
+
+// Values returns all known values for BurstablePerformance. Note that this can be
+// expanded in the future, and so it is only as up to date as the client. The
+// ordering of this slice is not guaranteed to be stable across updates.
+func (BurstablePerformance) Values() []BurstablePerformance {
+	return []BurstablePerformance{
+		"included",
+		"required",
+		"excluded",
+	}
+}
+
 type ByoipCidrState string
 
 // Enum values for ByoipCidrState
@@ -569,21 +699,60 @@ func (CancelSpotInstanceRequestState) Values() []CancelSpotInstanceRequestState 
 	}
 }
 
+type CapacityReservationFleetState string
+
+// Enum values for CapacityReservationFleetState
+const (
+	CapacityReservationFleetStateSubmitted          CapacityReservationFleetState = "submitted"
+	CapacityReservationFleetStateModifying          CapacityReservationFleetState = "modifying"
+	CapacityReservationFleetStateActive             CapacityReservationFleetState = "active"
+	CapacityReservationFleetStatePartiallyFulfilled CapacityReservationFleetState = "partially_fulfilled"
+	CapacityReservationFleetStateExpiring           CapacityReservationFleetState = "expiring"
+	CapacityReservationFleetStateExpired            CapacityReservationFleetState = "expired"
+	CapacityReservationFleetStateCancelling         CapacityReservationFleetState = "cancelling"
+	CapacityReservationFleetStateCancelled          CapacityReservationFleetState = "cancelled"
+	CapacityReservationFleetStateFailed             CapacityReservationFleetState = "failed"
+)
+
+// Values returns all known values for CapacityReservationFleetState. Note that
+// this can be expanded in the future, and so it is only as up to date as the
+// client. The ordering of this slice is not guaranteed to be stable across
+// updates.
+func (CapacityReservationFleetState) Values() []CapacityReservationFleetState {
+	return []CapacityReservationFleetState{
+		"submitted",
+		"modifying",
+		"active",
+		"partially_fulfilled",
+		"expiring",
+		"expired",
+		"cancelling",
+		"cancelled",
+		"failed",
+	}
+}
+
 type CapacityReservationInstancePlatform string
 
 // Enum values for CapacityReservationInstancePlatform
 const (
-	CapacityReservationInstancePlatformLinuxUnix                      CapacityReservationInstancePlatform = "Linux/UNIX"
-	CapacityReservationInstancePlatformRedHatEnterpriseLinux          CapacityReservationInstancePlatform = "Red Hat Enterprise Linux"
-	CapacityReservationInstancePlatformSuseLinux                      CapacityReservationInstancePlatform = "SUSE Linux"
-	CapacityReservationInstancePlatformWindows                        CapacityReservationInstancePlatform = "Windows"
-	CapacityReservationInstancePlatformWindowsWithSqlServer           CapacityReservationInstancePlatform = "Windows with SQL Server"
-	CapacityReservationInstancePlatformWindowsWithSqlServerEnterprise CapacityReservationInstancePlatform = "Windows with SQL Server Enterprise"
-	CapacityReservationInstancePlatformWindowsWithSqlServerStandard   CapacityReservationInstancePlatform = "Windows with SQL Server Standard"
-	CapacityReservationInstancePlatformWindowsWithSqlServerWeb        CapacityReservationInstancePlatform = "Windows with SQL Server Web"
-	CapacityReservationInstancePlatformLinuxWithSqlServerStandard     CapacityReservationInstancePlatform = "Linux with SQL Server Standard"
-	CapacityReservationInstancePlatformLinuxWithSqlServerWeb          CapacityReservationInstancePlatform = "Linux with SQL Server Web"
-	CapacityReservationInstancePlatformLinuxWithSqlServerEnterprise   CapacityReservationInstancePlatform = "Linux with SQL Server Enterprise"
+	CapacityReservationInstancePlatformLinuxUnix                        CapacityReservationInstancePlatform = "Linux/UNIX"
+	CapacityReservationInstancePlatformRedHatEnterpriseLinux            CapacityReservationInstancePlatform = "Red Hat Enterprise Linux"
+	CapacityReservationInstancePlatformSuseLinux                        CapacityReservationInstancePlatform = "SUSE Linux"
+	CapacityReservationInstancePlatformWindows                          CapacityReservationInstancePlatform = "Windows"
+	CapacityReservationInstancePlatformWindowsWithSqlServer             CapacityReservationInstancePlatform = "Windows with SQL Server"
+	CapacityReservationInstancePlatformWindowsWithSqlServerEnterprise   CapacityReservationInstancePlatform = "Windows with SQL Server Enterprise"
+	CapacityReservationInstancePlatformWindowsWithSqlServerStandard     CapacityReservationInstancePlatform = "Windows with SQL Server Standard"
+	CapacityReservationInstancePlatformWindowsWithSqlServerWeb          CapacityReservationInstancePlatform = "Windows with SQL Server Web"
+	CapacityReservationInstancePlatformLinuxWithSqlServerStandard       CapacityReservationInstancePlatform = "Linux with SQL Server Standard"
+	CapacityReservationInstancePlatformLinuxWithSqlServerWeb            CapacityReservationInstancePlatform = "Linux with SQL Server Web"
+	CapacityReservationInstancePlatformLinuxWithSqlServerEnterprise     CapacityReservationInstancePlatform = "Linux with SQL Server Enterprise"
+	CapacityReservationInstancePlatformRhelWithSqlServerStandard        CapacityReservationInstancePlatform = "RHEL with SQL Server Standard"
+	CapacityReservationInstancePlatformRhelWithSqlServerEnterprise      CapacityReservationInstancePlatform = "RHEL with SQL Server Enterprise"
+	CapacityReservationInstancePlatformRhelWithSqlServerWeb             CapacityReservationInstancePlatform = "RHEL with SQL Server Web"
+	CapacityReservationInstancePlatformRhelWithHa                       CapacityReservationInstancePlatform = "RHEL with HA"
+	CapacityReservationInstancePlatformRhelWithHaAndSqlServerStandard   CapacityReservationInstancePlatform = "RHEL with HA and SQL Server Standard"
+	CapacityReservationInstancePlatformRhelWithHaAndSqlServerEnterprise CapacityReservationInstancePlatform = "RHEL with HA and SQL Server Enterprise"
 )
 
 // Values returns all known values for CapacityReservationInstancePlatform. Note
@@ -603,6 +772,12 @@ func (CapacityReservationInstancePlatform) Values() []CapacityReservationInstanc
 		"Linux with SQL Server Standard",
 		"Linux with SQL Server Web",
 		"Linux with SQL Server Enterprise",
+		"RHEL with SQL Server Standard",
+		"RHEL with SQL Server Enterprise",
+		"RHEL with SQL Server Web",
+		"RHEL with HA",
+		"RHEL with HA and SQL Server Standard",
+		"RHEL with HA and SQL Server Enterprise",
 	}
 }
 
@@ -943,6 +1118,26 @@ func (CopyTagsFromSource) Values() []CopyTagsFromSource {
 	}
 }
 
+type CpuManufacturer string
+
+// Enum values for CpuManufacturer
+const (
+	CpuManufacturerIntel             CpuManufacturer = "intel"
+	CpuManufacturerAmd               CpuManufacturer = "amd"
+	CpuManufacturerAmazonWebServices CpuManufacturer = "amazon-web-services"
+)
+
+// Values returns all known values for CpuManufacturer. Note that this can be
+// expanded in the future, and so it is only as up to date as the client. The
+// ordering of this slice is not guaranteed to be stable across updates.
+func (CpuManufacturer) Values() []CpuManufacturer {
+	return []CpuManufacturer{
+		"intel",
+		"amd",
+		"amazon-web-services",
+	}
+}
+
 type CurrencyCodeValues string
 
 // Enum values for CurrencyCodeValues
@@ -1073,6 +1268,24 @@ func (DeleteQueuedReservedInstancesErrorCode) Values() []DeleteQueuedReservedIns
 		"reserved-instances-id-invalid",
 		"reserved-instances-not-in-queued-state",
 		"unexpected-error",
+	}
+}
+
+type DestinationFileFormat string
+
+// Enum values for DestinationFileFormat
+const (
+	DestinationFileFormatPlainText DestinationFileFormat = "plain-text"
+	DestinationFileFormatParquet   DestinationFileFormat = "parquet"
+)
+
+// Values returns all known values for DestinationFileFormat. Note that this can be
+// expanded in the future, and so it is only as up to date as the client. The
+// ordering of this slice is not guaranteed to be stable across updates.
+func (DestinationFileFormat) Values() []DestinationFileFormat {
+	return []DestinationFileFormat{
+		"plain-text",
+		"parquet",
 	}
 }
 
@@ -1445,6 +1658,48 @@ func (ExportTaskState) Values() []ExportTaskState {
 	}
 }
 
+type FastLaunchResourceType string
+
+// Enum values for FastLaunchResourceType
+const (
+	FastLaunchResourceTypeSnapshot FastLaunchResourceType = "snapshot"
+)
+
+// Values returns all known values for FastLaunchResourceType. Note that this can
+// be expanded in the future, and so it is only as up to date as the client. The
+// ordering of this slice is not guaranteed to be stable across updates.
+func (FastLaunchResourceType) Values() []FastLaunchResourceType {
+	return []FastLaunchResourceType{
+		"snapshot",
+	}
+}
+
+type FastLaunchStateCode string
+
+// Enum values for FastLaunchStateCode
+const (
+	FastLaunchStateCodeEnabling        FastLaunchStateCode = "enabling"
+	FastLaunchStateCodeEnablingFailed  FastLaunchStateCode = "enabling-failed"
+	FastLaunchStateCodeEnabled         FastLaunchStateCode = "enabled"
+	FastLaunchStateCodeEnabledFailed   FastLaunchStateCode = "enabled-failed"
+	FastLaunchStateCodeDisabling       FastLaunchStateCode = "disabling"
+	FastLaunchStateCodeDisablingFailed FastLaunchStateCode = "disabling-failed"
+)
+
+// Values returns all known values for FastLaunchStateCode. Note that this can be
+// expanded in the future, and so it is only as up to date as the client. The
+// ordering of this slice is not guaranteed to be stable across updates.
+func (FastLaunchStateCode) Values() []FastLaunchStateCode {
+	return []FastLaunchStateCode{
+		"enabling",
+		"enabling-failed",
+		"enabled",
+		"enabled-failed",
+		"disabling",
+		"disabling-failed",
+	}
+}
+
 type FastSnapshotRestoreStateCode string
 
 // Enum values for FastSnapshotRestoreStateCode
@@ -1469,6 +1724,26 @@ func (FastSnapshotRestoreStateCode) Values() []FastSnapshotRestoreStateCode {
 	}
 }
 
+type FindingsFound string
+
+// Enum values for FindingsFound
+const (
+	FindingsFoundTrue    FindingsFound = "true"
+	FindingsFoundFalse   FindingsFound = "false"
+	FindingsFoundUnknown FindingsFound = "unknown"
+)
+
+// Values returns all known values for FindingsFound. Note that this can be
+// expanded in the future, and so it is only as up to date as the client. The
+// ordering of this slice is not guaranteed to be stable across updates.
+func (FindingsFound) Values() []FindingsFound {
+	return []FindingsFound{
+		"true",
+		"false",
+		"unknown",
+	}
+}
+
 type FleetActivityStatus string
 
 // Enum values for FleetActivityStatus
@@ -1488,6 +1763,23 @@ func (FleetActivityStatus) Values() []FleetActivityStatus {
 		"pending_fulfillment",
 		"pending_termination",
 		"fulfilled",
+	}
+}
+
+type FleetCapacityReservationTenancy string
+
+// Enum values for FleetCapacityReservationTenancy
+const (
+	FleetCapacityReservationTenancyDefault FleetCapacityReservationTenancy = "default"
+)
+
+// Values returns all known values for FleetCapacityReservationTenancy. Note that
+// this can be expanded in the future, and so it is only as up to date as the
+// client. The ordering of this slice is not guaranteed to be stable across
+// updates.
+func (FleetCapacityReservationTenancy) Values() []FleetCapacityReservationTenancy {
+	return []FleetCapacityReservationTenancy{
+		"default",
 	}
 }
 
@@ -1547,6 +1839,22 @@ func (FleetExcessCapacityTerminationPolicy) Values() []FleetExcessCapacityTermin
 	}
 }
 
+type FleetInstanceMatchCriteria string
+
+// Enum values for FleetInstanceMatchCriteria
+const (
+	FleetInstanceMatchCriteriaOpen FleetInstanceMatchCriteria = "open"
+)
+
+// Values returns all known values for FleetInstanceMatchCriteria. Note that this
+// can be expanded in the future, and so it is only as up to date as the client.
+// The ordering of this slice is not guaranteed to be stable across updates.
+func (FleetInstanceMatchCriteria) Values() []FleetInstanceMatchCriteria {
+	return []FleetInstanceMatchCriteria{
+		"open",
+	}
+}
+
 type FleetOnDemandAllocationStrategy string
 
 // Enum values for FleetOnDemandAllocationStrategy
@@ -1570,7 +1878,8 @@ type FleetReplacementStrategy string
 
 // Enum values for FleetReplacementStrategy
 const (
-	FleetReplacementStrategyLaunch FleetReplacementStrategy = "launch"
+	FleetReplacementStrategyLaunch                FleetReplacementStrategy = "launch"
+	FleetReplacementStrategyLaunchBeforeTerminate FleetReplacementStrategy = "launch-before-terminate"
 )
 
 // Values returns all known values for FleetReplacementStrategy. Note that this can
@@ -1579,6 +1888,7 @@ const (
 func (FleetReplacementStrategy) Values() []FleetReplacementStrategy {
 	return []FleetReplacementStrategy{
 		"launch",
+		"launch-before-terminate",
 	}
 }
 
@@ -1694,6 +2004,28 @@ func (FpgaImageStateCode) Values() []FpgaImageStateCode {
 	}
 }
 
+type GatewayAssociationState string
+
+// Enum values for GatewayAssociationState
+const (
+	GatewayAssociationStateAssociated     GatewayAssociationState = "associated"
+	GatewayAssociationStateNotAssociated  GatewayAssociationState = "not-associated"
+	GatewayAssociationStateAssociating    GatewayAssociationState = "associating"
+	GatewayAssociationStateDisassociating GatewayAssociationState = "disassociating"
+)
+
+// Values returns all known values for GatewayAssociationState. Note that this can
+// be expanded in the future, and so it is only as up to date as the client. The
+// ordering of this slice is not guaranteed to be stable across updates.
+func (GatewayAssociationState) Values() []GatewayAssociationState {
+	return []GatewayAssociationState{
+		"associated",
+		"not-associated",
+		"associating",
+		"disassociating",
+	}
+}
+
 type GatewayType string
 
 // Enum values for GatewayType
@@ -1707,6 +2039,24 @@ const (
 func (GatewayType) Values() []GatewayType {
 	return []GatewayType{
 		"ipsec.1",
+	}
+}
+
+type HostnameType string
+
+// Enum values for HostnameType
+const (
+	HostnameTypeIpName       HostnameType = "ip-name"
+	HostnameTypeResourceName HostnameType = "resource-name"
+)
+
+// Values returns all known values for HostnameType. Note that this can be expanded
+// in the future, and so it is only as up to date as the client. The ordering of
+// this slice is not guaranteed to be stable across updates.
+func (HostnameType) Values() []HostnameType {
+	return []HostnameType{
+		"ip-name",
+		"resource-name",
 	}
 }
 
@@ -1835,6 +2185,7 @@ const (
 	ImageAttributeNameBlockDeviceMapping ImageAttributeName = "blockDeviceMapping"
 	ImageAttributeNameSriovNetSupport    ImageAttributeName = "sriovNetSupport"
 	ImageAttributeNameBootMode           ImageAttributeName = "bootMode"
+	ImageAttributeNameLastLaunchedTime   ImageAttributeName = "lastLaunchedTime"
 )
 
 // Values returns all known values for ImageAttributeName. Note that this can be
@@ -1850,6 +2201,7 @@ func (ImageAttributeName) Values() []ImageAttributeName {
 		"blockDeviceMapping",
 		"sriovNetSupport",
 		"bootMode",
+		"lastLaunchedTime",
 	}
 }
 
@@ -1945,6 +2297,24 @@ func (InstanceAttributeName) Values() []InstanceAttributeName {
 	}
 }
 
+type InstanceAutoRecoveryState string
+
+// Enum values for InstanceAutoRecoveryState
+const (
+	InstanceAutoRecoveryStateDisabled InstanceAutoRecoveryState = "disabled"
+	InstanceAutoRecoveryStateDefault  InstanceAutoRecoveryState = "default"
+)
+
+// Values returns all known values for InstanceAutoRecoveryState. Note that this
+// can be expanded in the future, and so it is only as up to date as the client.
+// The ordering of this slice is not guaranteed to be stable across updates.
+func (InstanceAutoRecoveryState) Values() []InstanceAutoRecoveryState {
+	return []InstanceAutoRecoveryState{
+		"disabled",
+		"default",
+	}
+}
+
 type InstanceEventWindowState string
 
 // Enum values for InstanceEventWindowState
@@ -1964,6 +2334,24 @@ func (InstanceEventWindowState) Values() []InstanceEventWindowState {
 		"deleting",
 		"active",
 		"deleted",
+	}
+}
+
+type InstanceGeneration string
+
+// Enum values for InstanceGeneration
+const (
+	InstanceGenerationCurrent  InstanceGeneration = "current"
+	InstanceGenerationPrevious InstanceGeneration = "previous"
+)
+
+// Values returns all known values for InstanceGeneration. Note that this can be
+// expanded in the future, and so it is only as up to date as the client. The
+// ordering of this slice is not guaranteed to be stable across updates.
+func (InstanceGeneration) Values() []InstanceGeneration {
+	return []InstanceGeneration{
+		"current",
+		"previous",
 	}
 }
 
@@ -2115,6 +2503,24 @@ func (InstanceMetadataProtocolState) Values() []InstanceMetadataProtocolState {
 	}
 }
 
+type InstanceMetadataTagsState string
+
+// Enum values for InstanceMetadataTagsState
+const (
+	InstanceMetadataTagsStateDisabled InstanceMetadataTagsState = "disabled"
+	InstanceMetadataTagsStateEnabled  InstanceMetadataTagsState = "enabled"
+)
+
+// Values returns all known values for InstanceMetadataTagsState. Note that this
+// can be expanded in the future, and so it is only as up to date as the client.
+// The ordering of this slice is not guaranteed to be stable across updates.
+func (InstanceMetadataTagsState) Values() []InstanceMetadataTagsState {
+	return []InstanceMetadataTagsState{
+		"disabled",
+		"enabled",
+	}
+}
+
 type InstanceStateName string
 
 // Enum values for InstanceStateName
@@ -2141,158 +2547,35 @@ func (InstanceStateName) Values() []InstanceStateName {
 	}
 }
 
+type InstanceStorageEncryptionSupport string
+
+// Enum values for InstanceStorageEncryptionSupport
+const (
+	InstanceStorageEncryptionSupportUnsupported InstanceStorageEncryptionSupport = "unsupported"
+	InstanceStorageEncryptionSupportRequired    InstanceStorageEncryptionSupport = "required"
+)
+
+// Values returns all known values for InstanceStorageEncryptionSupport. Note that
+// this can be expanded in the future, and so it is only as up to date as the
+// client. The ordering of this slice is not guaranteed to be stable across
+// updates.
+func (InstanceStorageEncryptionSupport) Values() []InstanceStorageEncryptionSupport {
+	return []InstanceStorageEncryptionSupport{
+		"unsupported",
+		"required",
+	}
+}
+
 type InstanceType string
 
 // Enum values for InstanceType
 const (
-	InstanceTypeT1Micro         InstanceType = "t1.micro"
-	InstanceTypeT2Nano          InstanceType = "t2.nano"
-	InstanceTypeT2Micro         InstanceType = "t2.micro"
-	InstanceTypeT2Small         InstanceType = "t2.small"
-	InstanceTypeT2Medium        InstanceType = "t2.medium"
-	InstanceTypeT2Large         InstanceType = "t2.large"
-	InstanceTypeT2Xlarge        InstanceType = "t2.xlarge"
-	InstanceTypeT22xlarge       InstanceType = "t2.2xlarge"
-	InstanceTypeT3Nano          InstanceType = "t3.nano"
-	InstanceTypeT3Micro         InstanceType = "t3.micro"
-	InstanceTypeT3Small         InstanceType = "t3.small"
-	InstanceTypeT3Medium        InstanceType = "t3.medium"
-	InstanceTypeT3Large         InstanceType = "t3.large"
-	InstanceTypeT3Xlarge        InstanceType = "t3.xlarge"
-	InstanceTypeT32xlarge       InstanceType = "t3.2xlarge"
-	InstanceTypeT3aNano         InstanceType = "t3a.nano"
-	InstanceTypeT3aMicro        InstanceType = "t3a.micro"
-	InstanceTypeT3aSmall        InstanceType = "t3a.small"
-	InstanceTypeT3aMedium       InstanceType = "t3a.medium"
-	InstanceTypeT3aLarge        InstanceType = "t3a.large"
-	InstanceTypeT3aXlarge       InstanceType = "t3a.xlarge"
-	InstanceTypeT3a2xlarge      InstanceType = "t3a.2xlarge"
-	InstanceTypeT4gNano         InstanceType = "t4g.nano"
-	InstanceTypeT4gMicro        InstanceType = "t4g.micro"
-	InstanceTypeT4gSmall        InstanceType = "t4g.small"
-	InstanceTypeT4gMedium       InstanceType = "t4g.medium"
-	InstanceTypeT4gLarge        InstanceType = "t4g.large"
-	InstanceTypeT4gXlarge       InstanceType = "t4g.xlarge"
-	InstanceTypeT4g2xlarge      InstanceType = "t4g.2xlarge"
-	InstanceTypeM1Small         InstanceType = "m1.small"
-	InstanceTypeM1Medium        InstanceType = "m1.medium"
-	InstanceTypeM1Large         InstanceType = "m1.large"
-	InstanceTypeM1Xlarge        InstanceType = "m1.xlarge"
-	InstanceTypeM3Medium        InstanceType = "m3.medium"
-	InstanceTypeM3Large         InstanceType = "m3.large"
-	InstanceTypeM3Xlarge        InstanceType = "m3.xlarge"
-	InstanceTypeM32xlarge       InstanceType = "m3.2xlarge"
-	InstanceTypeM4Large         InstanceType = "m4.large"
-	InstanceTypeM4Xlarge        InstanceType = "m4.xlarge"
-	InstanceTypeM42xlarge       InstanceType = "m4.2xlarge"
-	InstanceTypeM44xlarge       InstanceType = "m4.4xlarge"
-	InstanceTypeM410xlarge      InstanceType = "m4.10xlarge"
-	InstanceTypeM416xlarge      InstanceType = "m4.16xlarge"
-	InstanceTypeM2Xlarge        InstanceType = "m2.xlarge"
-	InstanceTypeM22xlarge       InstanceType = "m2.2xlarge"
-	InstanceTypeM24xlarge       InstanceType = "m2.4xlarge"
-	InstanceTypeCr18xlarge      InstanceType = "cr1.8xlarge"
-	InstanceTypeR3Large         InstanceType = "r3.large"
-	InstanceTypeR3Xlarge        InstanceType = "r3.xlarge"
-	InstanceTypeR32xlarge       InstanceType = "r3.2xlarge"
-	InstanceTypeR34xlarge       InstanceType = "r3.4xlarge"
-	InstanceTypeR38xlarge       InstanceType = "r3.8xlarge"
-	InstanceTypeR4Large         InstanceType = "r4.large"
-	InstanceTypeR4Xlarge        InstanceType = "r4.xlarge"
-	InstanceTypeR42xlarge       InstanceType = "r4.2xlarge"
-	InstanceTypeR44xlarge       InstanceType = "r4.4xlarge"
-	InstanceTypeR48xlarge       InstanceType = "r4.8xlarge"
-	InstanceTypeR416xlarge      InstanceType = "r4.16xlarge"
-	InstanceTypeR5Large         InstanceType = "r5.large"
-	InstanceTypeR5Xlarge        InstanceType = "r5.xlarge"
-	InstanceTypeR52xlarge       InstanceType = "r5.2xlarge"
-	InstanceTypeR54xlarge       InstanceType = "r5.4xlarge"
-	InstanceTypeR58xlarge       InstanceType = "r5.8xlarge"
-	InstanceTypeR512xlarge      InstanceType = "r5.12xlarge"
-	InstanceTypeR516xlarge      InstanceType = "r5.16xlarge"
-	InstanceTypeR524xlarge      InstanceType = "r5.24xlarge"
-	InstanceTypeR5Metal         InstanceType = "r5.metal"
-	InstanceTypeR5aLarge        InstanceType = "r5a.large"
-	InstanceTypeR5aXlarge       InstanceType = "r5a.xlarge"
-	InstanceTypeR5a2xlarge      InstanceType = "r5a.2xlarge"
-	InstanceTypeR5a4xlarge      InstanceType = "r5a.4xlarge"
-	InstanceTypeR5a8xlarge      InstanceType = "r5a.8xlarge"
-	InstanceTypeR5a12xlarge     InstanceType = "r5a.12xlarge"
-	InstanceTypeR5a16xlarge     InstanceType = "r5a.16xlarge"
-	InstanceTypeR5a24xlarge     InstanceType = "r5a.24xlarge"
-	InstanceTypeR5bLarge        InstanceType = "r5b.large"
-	InstanceTypeR5bXlarge       InstanceType = "r5b.xlarge"
-	InstanceTypeR5b2xlarge      InstanceType = "r5b.2xlarge"
-	InstanceTypeR5b4xlarge      InstanceType = "r5b.4xlarge"
-	InstanceTypeR5b8xlarge      InstanceType = "r5b.8xlarge"
-	InstanceTypeR5b12xlarge     InstanceType = "r5b.12xlarge"
-	InstanceTypeR5b16xlarge     InstanceType = "r5b.16xlarge"
-	InstanceTypeR5b24xlarge     InstanceType = "r5b.24xlarge"
-	InstanceTypeR5bMetal        InstanceType = "r5b.metal"
-	InstanceTypeR5dLarge        InstanceType = "r5d.large"
-	InstanceTypeR5dXlarge       InstanceType = "r5d.xlarge"
-	InstanceTypeR5d2xlarge      InstanceType = "r5d.2xlarge"
-	InstanceTypeR5d4xlarge      InstanceType = "r5d.4xlarge"
-	InstanceTypeR5d8xlarge      InstanceType = "r5d.8xlarge"
-	InstanceTypeR5d12xlarge     InstanceType = "r5d.12xlarge"
-	InstanceTypeR5d16xlarge     InstanceType = "r5d.16xlarge"
-	InstanceTypeR5d24xlarge     InstanceType = "r5d.24xlarge"
-	InstanceTypeR5dMetal        InstanceType = "r5d.metal"
-	InstanceTypeR5adLarge       InstanceType = "r5ad.large"
-	InstanceTypeR5adXlarge      InstanceType = "r5ad.xlarge"
-	InstanceTypeR5ad2xlarge     InstanceType = "r5ad.2xlarge"
-	InstanceTypeR5ad4xlarge     InstanceType = "r5ad.4xlarge"
-	InstanceTypeR5ad8xlarge     InstanceType = "r5ad.8xlarge"
-	InstanceTypeR5ad12xlarge    InstanceType = "r5ad.12xlarge"
-	InstanceTypeR5ad16xlarge    InstanceType = "r5ad.16xlarge"
-	InstanceTypeR5ad24xlarge    InstanceType = "r5ad.24xlarge"
-	InstanceTypeR6gMetal        InstanceType = "r6g.metal"
-	InstanceTypeR6gMedium       InstanceType = "r6g.medium"
-	InstanceTypeR6gLarge        InstanceType = "r6g.large"
-	InstanceTypeR6gXlarge       InstanceType = "r6g.xlarge"
-	InstanceTypeR6g2xlarge      InstanceType = "r6g.2xlarge"
-	InstanceTypeR6g4xlarge      InstanceType = "r6g.4xlarge"
-	InstanceTypeR6g8xlarge      InstanceType = "r6g.8xlarge"
-	InstanceTypeR6g12xlarge     InstanceType = "r6g.12xlarge"
-	InstanceTypeR6g16xlarge     InstanceType = "r6g.16xlarge"
-	InstanceTypeR6gdMetal       InstanceType = "r6gd.metal"
-	InstanceTypeR6gdMedium      InstanceType = "r6gd.medium"
-	InstanceTypeR6gdLarge       InstanceType = "r6gd.large"
-	InstanceTypeR6gdXlarge      InstanceType = "r6gd.xlarge"
-	InstanceTypeR6gd2xlarge     InstanceType = "r6gd.2xlarge"
-	InstanceTypeR6gd4xlarge     InstanceType = "r6gd.4xlarge"
-	InstanceTypeR6gd8xlarge     InstanceType = "r6gd.8xlarge"
-	InstanceTypeR6gd12xlarge    InstanceType = "r6gd.12xlarge"
-	InstanceTypeR6gd16xlarge    InstanceType = "r6gd.16xlarge"
-	InstanceTypeX116xlarge      InstanceType = "x1.16xlarge"
-	InstanceTypeX132xlarge      InstanceType = "x1.32xlarge"
-	InstanceTypeX1eXlarge       InstanceType = "x1e.xlarge"
-	InstanceTypeX1e2xlarge      InstanceType = "x1e.2xlarge"
-	InstanceTypeX1e4xlarge      InstanceType = "x1e.4xlarge"
-	InstanceTypeX1e8xlarge      InstanceType = "x1e.8xlarge"
-	InstanceTypeX1e16xlarge     InstanceType = "x1e.16xlarge"
-	InstanceTypeX1e32xlarge     InstanceType = "x1e.32xlarge"
-	InstanceTypeI2Xlarge        InstanceType = "i2.xlarge"
-	InstanceTypeI22xlarge       InstanceType = "i2.2xlarge"
-	InstanceTypeI24xlarge       InstanceType = "i2.4xlarge"
-	InstanceTypeI28xlarge       InstanceType = "i2.8xlarge"
-	InstanceTypeI3Large         InstanceType = "i3.large"
-	InstanceTypeI3Xlarge        InstanceType = "i3.xlarge"
-	InstanceTypeI32xlarge       InstanceType = "i3.2xlarge"
-	InstanceTypeI34xlarge       InstanceType = "i3.4xlarge"
-	InstanceTypeI38xlarge       InstanceType = "i3.8xlarge"
-	InstanceTypeI316xlarge      InstanceType = "i3.16xlarge"
-	InstanceTypeI3Metal         InstanceType = "i3.metal"
-	InstanceTypeI3enLarge       InstanceType = "i3en.large"
-	InstanceTypeI3enXlarge      InstanceType = "i3en.xlarge"
-	InstanceTypeI3en2xlarge     InstanceType = "i3en.2xlarge"
-	InstanceTypeI3en3xlarge     InstanceType = "i3en.3xlarge"
-	InstanceTypeI3en6xlarge     InstanceType = "i3en.6xlarge"
-	InstanceTypeI3en12xlarge    InstanceType = "i3en.12xlarge"
-	InstanceTypeI3en24xlarge    InstanceType = "i3en.24xlarge"
-	InstanceTypeI3enMetal       InstanceType = "i3en.metal"
-	InstanceTypeHi14xlarge      InstanceType = "hi1.4xlarge"
-	InstanceTypeHs18xlarge      InstanceType = "hs1.8xlarge"
+	InstanceTypeA1Medium        InstanceType = "a1.medium"
+	InstanceTypeA1Large         InstanceType = "a1.large"
+	InstanceTypeA1Xlarge        InstanceType = "a1.xlarge"
+	InstanceTypeA12xlarge       InstanceType = "a1.2xlarge"
+	InstanceTypeA14xlarge       InstanceType = "a1.4xlarge"
+	InstanceTypeA1Metal         InstanceType = "a1.metal"
 	InstanceTypeC1Medium        InstanceType = "c1.medium"
 	InstanceTypeC1Xlarge        InstanceType = "c1.xlarge"
 	InstanceTypeC3Large         InstanceType = "c3.large"
@@ -2346,7 +2629,6 @@ const (
 	InstanceTypeC5n9xlarge      InstanceType = "c5n.9xlarge"
 	InstanceTypeC5n18xlarge     InstanceType = "c5n.18xlarge"
 	InstanceTypeC5nMetal        InstanceType = "c5n.metal"
-	InstanceTypeC6gMetal        InstanceType = "c6g.metal"
 	InstanceTypeC6gMedium       InstanceType = "c6g.medium"
 	InstanceTypeC6gLarge        InstanceType = "c6g.large"
 	InstanceTypeC6gXlarge       InstanceType = "c6g.xlarge"
@@ -2355,7 +2637,7 @@ const (
 	InstanceTypeC6g8xlarge      InstanceType = "c6g.8xlarge"
 	InstanceTypeC6g12xlarge     InstanceType = "c6g.12xlarge"
 	InstanceTypeC6g16xlarge     InstanceType = "c6g.16xlarge"
-	InstanceTypeC6gdMetal       InstanceType = "c6gd.metal"
+	InstanceTypeC6gMetal        InstanceType = "c6g.metal"
 	InstanceTypeC6gdMedium      InstanceType = "c6gd.medium"
 	InstanceTypeC6gdLarge       InstanceType = "c6gd.large"
 	InstanceTypeC6gdXlarge      InstanceType = "c6gd.xlarge"
@@ -2364,6 +2646,7 @@ const (
 	InstanceTypeC6gd8xlarge     InstanceType = "c6gd.8xlarge"
 	InstanceTypeC6gd12xlarge    InstanceType = "c6gd.12xlarge"
 	InstanceTypeC6gd16xlarge    InstanceType = "c6gd.16xlarge"
+	InstanceTypeC6gdMetal       InstanceType = "c6gd.metal"
 	InstanceTypeC6gnMedium      InstanceType = "c6gn.medium"
 	InstanceTypeC6gnLarge       InstanceType = "c6gn.large"
 	InstanceTypeC6gnXlarge      InstanceType = "c6gn.xlarge"
@@ -2372,8 +2655,38 @@ const (
 	InstanceTypeC6gn8xlarge     InstanceType = "c6gn.8xlarge"
 	InstanceTypeC6gn12xlarge    InstanceType = "c6gn.12xlarge"
 	InstanceTypeC6gn16xlarge    InstanceType = "c6gn.16xlarge"
+	InstanceTypeC6iLarge        InstanceType = "c6i.large"
+	InstanceTypeC6iXlarge       InstanceType = "c6i.xlarge"
+	InstanceTypeC6i2xlarge      InstanceType = "c6i.2xlarge"
+	InstanceTypeC6i4xlarge      InstanceType = "c6i.4xlarge"
+	InstanceTypeC6i8xlarge      InstanceType = "c6i.8xlarge"
+	InstanceTypeC6i12xlarge     InstanceType = "c6i.12xlarge"
+	InstanceTypeC6i16xlarge     InstanceType = "c6i.16xlarge"
+	InstanceTypeC6i24xlarge     InstanceType = "c6i.24xlarge"
+	InstanceTypeC6i32xlarge     InstanceType = "c6i.32xlarge"
+	InstanceTypeC6iMetal        InstanceType = "c6i.metal"
 	InstanceTypeCc14xlarge      InstanceType = "cc1.4xlarge"
 	InstanceTypeCc28xlarge      InstanceType = "cc2.8xlarge"
+	InstanceTypeCg14xlarge      InstanceType = "cg1.4xlarge"
+	InstanceTypeCr18xlarge      InstanceType = "cr1.8xlarge"
+	InstanceTypeD2Xlarge        InstanceType = "d2.xlarge"
+	InstanceTypeD22xlarge       InstanceType = "d2.2xlarge"
+	InstanceTypeD24xlarge       InstanceType = "d2.4xlarge"
+	InstanceTypeD28xlarge       InstanceType = "d2.8xlarge"
+	InstanceTypeD3Xlarge        InstanceType = "d3.xlarge"
+	InstanceTypeD32xlarge       InstanceType = "d3.2xlarge"
+	InstanceTypeD34xlarge       InstanceType = "d3.4xlarge"
+	InstanceTypeD38xlarge       InstanceType = "d3.8xlarge"
+	InstanceTypeD3enXlarge      InstanceType = "d3en.xlarge"
+	InstanceTypeD3en2xlarge     InstanceType = "d3en.2xlarge"
+	InstanceTypeD3en4xlarge     InstanceType = "d3en.4xlarge"
+	InstanceTypeD3en6xlarge     InstanceType = "d3en.6xlarge"
+	InstanceTypeD3en8xlarge     InstanceType = "d3en.8xlarge"
+	InstanceTypeD3en12xlarge    InstanceType = "d3en.12xlarge"
+	InstanceTypeDl124xlarge     InstanceType = "dl1.24xlarge"
+	InstanceTypeF12xlarge       InstanceType = "f1.2xlarge"
+	InstanceTypeF14xlarge       InstanceType = "f1.4xlarge"
+	InstanceTypeF116xlarge      InstanceType = "f1.16xlarge"
 	InstanceTypeG22xlarge       InstanceType = "g2.2xlarge"
 	InstanceTypeG28xlarge       InstanceType = "g2.8xlarge"
 	InstanceTypeG34xlarge       InstanceType = "g3.4xlarge"
@@ -2392,32 +2705,79 @@ const (
 	InstanceTypeG4dn12xlarge    InstanceType = "g4dn.12xlarge"
 	InstanceTypeG4dn16xlarge    InstanceType = "g4dn.16xlarge"
 	InstanceTypeG4dnMetal       InstanceType = "g4dn.metal"
-	InstanceTypeCg14xlarge      InstanceType = "cg1.4xlarge"
-	InstanceTypeP2Xlarge        InstanceType = "p2.xlarge"
-	InstanceTypeP28xlarge       InstanceType = "p2.8xlarge"
-	InstanceTypeP216xlarge      InstanceType = "p2.16xlarge"
-	InstanceTypeP32xlarge       InstanceType = "p3.2xlarge"
-	InstanceTypeP38xlarge       InstanceType = "p3.8xlarge"
-	InstanceTypeP316xlarge      InstanceType = "p3.16xlarge"
-	InstanceTypeP3dn24xlarge    InstanceType = "p3dn.24xlarge"
-	InstanceTypeP4d24xlarge     InstanceType = "p4d.24xlarge"
-	InstanceTypeD2Xlarge        InstanceType = "d2.xlarge"
-	InstanceTypeD22xlarge       InstanceType = "d2.2xlarge"
-	InstanceTypeD24xlarge       InstanceType = "d2.4xlarge"
-	InstanceTypeD28xlarge       InstanceType = "d2.8xlarge"
-	InstanceTypeD3Xlarge        InstanceType = "d3.xlarge"
-	InstanceTypeD32xlarge       InstanceType = "d3.2xlarge"
-	InstanceTypeD34xlarge       InstanceType = "d3.4xlarge"
-	InstanceTypeD38xlarge       InstanceType = "d3.8xlarge"
-	InstanceTypeD3enXlarge      InstanceType = "d3en.xlarge"
-	InstanceTypeD3en2xlarge     InstanceType = "d3en.2xlarge"
-	InstanceTypeD3en4xlarge     InstanceType = "d3en.4xlarge"
-	InstanceTypeD3en6xlarge     InstanceType = "d3en.6xlarge"
-	InstanceTypeD3en8xlarge     InstanceType = "d3en.8xlarge"
-	InstanceTypeD3en12xlarge    InstanceType = "d3en.12xlarge"
-	InstanceTypeF12xlarge       InstanceType = "f1.2xlarge"
-	InstanceTypeF14xlarge       InstanceType = "f1.4xlarge"
-	InstanceTypeF116xlarge      InstanceType = "f1.16xlarge"
+	InstanceTypeG5Xlarge        InstanceType = "g5.xlarge"
+	InstanceTypeG52xlarge       InstanceType = "g5.2xlarge"
+	InstanceTypeG54xlarge       InstanceType = "g5.4xlarge"
+	InstanceTypeG58xlarge       InstanceType = "g5.8xlarge"
+	InstanceTypeG512xlarge      InstanceType = "g5.12xlarge"
+	InstanceTypeG516xlarge      InstanceType = "g5.16xlarge"
+	InstanceTypeG524xlarge      InstanceType = "g5.24xlarge"
+	InstanceTypeG548xlarge      InstanceType = "g5.48xlarge"
+	InstanceTypeG5gXlarge       InstanceType = "g5g.xlarge"
+	InstanceTypeG5g2xlarge      InstanceType = "g5g.2xlarge"
+	InstanceTypeG5g4xlarge      InstanceType = "g5g.4xlarge"
+	InstanceTypeG5g8xlarge      InstanceType = "g5g.8xlarge"
+	InstanceTypeG5g16xlarge     InstanceType = "g5g.16xlarge"
+	InstanceTypeG5gMetal        InstanceType = "g5g.metal"
+	InstanceTypeHi14xlarge      InstanceType = "hi1.4xlarge"
+	InstanceTypeHpc6a48xlarge   InstanceType = "hpc6a.48xlarge"
+	InstanceTypeHs18xlarge      InstanceType = "hs1.8xlarge"
+	InstanceTypeH12xlarge       InstanceType = "h1.2xlarge"
+	InstanceTypeH14xlarge       InstanceType = "h1.4xlarge"
+	InstanceTypeH18xlarge       InstanceType = "h1.8xlarge"
+	InstanceTypeH116xlarge      InstanceType = "h1.16xlarge"
+	InstanceTypeI2Xlarge        InstanceType = "i2.xlarge"
+	InstanceTypeI22xlarge       InstanceType = "i2.2xlarge"
+	InstanceTypeI24xlarge       InstanceType = "i2.4xlarge"
+	InstanceTypeI28xlarge       InstanceType = "i2.8xlarge"
+	InstanceTypeI3Large         InstanceType = "i3.large"
+	InstanceTypeI3Xlarge        InstanceType = "i3.xlarge"
+	InstanceTypeI32xlarge       InstanceType = "i3.2xlarge"
+	InstanceTypeI34xlarge       InstanceType = "i3.4xlarge"
+	InstanceTypeI38xlarge       InstanceType = "i3.8xlarge"
+	InstanceTypeI316xlarge      InstanceType = "i3.16xlarge"
+	InstanceTypeI3Metal         InstanceType = "i3.metal"
+	InstanceTypeI3enLarge       InstanceType = "i3en.large"
+	InstanceTypeI3enXlarge      InstanceType = "i3en.xlarge"
+	InstanceTypeI3en2xlarge     InstanceType = "i3en.2xlarge"
+	InstanceTypeI3en3xlarge     InstanceType = "i3en.3xlarge"
+	InstanceTypeI3en6xlarge     InstanceType = "i3en.6xlarge"
+	InstanceTypeI3en12xlarge    InstanceType = "i3en.12xlarge"
+	InstanceTypeI3en24xlarge    InstanceType = "i3en.24xlarge"
+	InstanceTypeI3enMetal       InstanceType = "i3en.metal"
+	InstanceTypeIm4gnLarge      InstanceType = "im4gn.large"
+	InstanceTypeIm4gnXlarge     InstanceType = "im4gn.xlarge"
+	InstanceTypeIm4gn2xlarge    InstanceType = "im4gn.2xlarge"
+	InstanceTypeIm4gn4xlarge    InstanceType = "im4gn.4xlarge"
+	InstanceTypeIm4gn8xlarge    InstanceType = "im4gn.8xlarge"
+	InstanceTypeIm4gn16xlarge   InstanceType = "im4gn.16xlarge"
+	InstanceTypeInf1Xlarge      InstanceType = "inf1.xlarge"
+	InstanceTypeInf12xlarge     InstanceType = "inf1.2xlarge"
+	InstanceTypeInf16xlarge     InstanceType = "inf1.6xlarge"
+	InstanceTypeInf124xlarge    InstanceType = "inf1.24xlarge"
+	InstanceTypeIs4genMedium    InstanceType = "is4gen.medium"
+	InstanceTypeIs4genLarge     InstanceType = "is4gen.large"
+	InstanceTypeIs4genXlarge    InstanceType = "is4gen.xlarge"
+	InstanceTypeIs4gen2xlarge   InstanceType = "is4gen.2xlarge"
+	InstanceTypeIs4gen4xlarge   InstanceType = "is4gen.4xlarge"
+	InstanceTypeIs4gen8xlarge   InstanceType = "is4gen.8xlarge"
+	InstanceTypeM1Small         InstanceType = "m1.small"
+	InstanceTypeM1Medium        InstanceType = "m1.medium"
+	InstanceTypeM1Large         InstanceType = "m1.large"
+	InstanceTypeM1Xlarge        InstanceType = "m1.xlarge"
+	InstanceTypeM2Xlarge        InstanceType = "m2.xlarge"
+	InstanceTypeM22xlarge       InstanceType = "m2.2xlarge"
+	InstanceTypeM24xlarge       InstanceType = "m2.4xlarge"
+	InstanceTypeM3Medium        InstanceType = "m3.medium"
+	InstanceTypeM3Large         InstanceType = "m3.large"
+	InstanceTypeM3Xlarge        InstanceType = "m3.xlarge"
+	InstanceTypeM32xlarge       InstanceType = "m3.2xlarge"
+	InstanceTypeM4Large         InstanceType = "m4.large"
+	InstanceTypeM4Xlarge        InstanceType = "m4.xlarge"
+	InstanceTypeM42xlarge       InstanceType = "m4.2xlarge"
+	InstanceTypeM44xlarge       InstanceType = "m4.4xlarge"
+	InstanceTypeM410xlarge      InstanceType = "m4.10xlarge"
+	InstanceTypeM416xlarge      InstanceType = "m4.16xlarge"
 	InstanceTypeM5Large         InstanceType = "m5.large"
 	InstanceTypeM5Xlarge        InstanceType = "m5.xlarge"
 	InstanceTypeM52xlarge       InstanceType = "m5.2xlarge"
@@ -2435,6 +2795,14 @@ const (
 	InstanceTypeM5a12xlarge     InstanceType = "m5a.12xlarge"
 	InstanceTypeM5a16xlarge     InstanceType = "m5a.16xlarge"
 	InstanceTypeM5a24xlarge     InstanceType = "m5a.24xlarge"
+	InstanceTypeM5adLarge       InstanceType = "m5ad.large"
+	InstanceTypeM5adXlarge      InstanceType = "m5ad.xlarge"
+	InstanceTypeM5ad2xlarge     InstanceType = "m5ad.2xlarge"
+	InstanceTypeM5ad4xlarge     InstanceType = "m5ad.4xlarge"
+	InstanceTypeM5ad8xlarge     InstanceType = "m5ad.8xlarge"
+	InstanceTypeM5ad12xlarge    InstanceType = "m5ad.12xlarge"
+	InstanceTypeM5ad16xlarge    InstanceType = "m5ad.16xlarge"
+	InstanceTypeM5ad24xlarge    InstanceType = "m5ad.24xlarge"
 	InstanceTypeM5dLarge        InstanceType = "m5d.large"
 	InstanceTypeM5dXlarge       InstanceType = "m5d.xlarge"
 	InstanceTypeM5d2xlarge      InstanceType = "m5d.2xlarge"
@@ -2444,47 +2812,6 @@ const (
 	InstanceTypeM5d16xlarge     InstanceType = "m5d.16xlarge"
 	InstanceTypeM5d24xlarge     InstanceType = "m5d.24xlarge"
 	InstanceTypeM5dMetal        InstanceType = "m5d.metal"
-	InstanceTypeM5adLarge       InstanceType = "m5ad.large"
-	InstanceTypeM5adXlarge      InstanceType = "m5ad.xlarge"
-	InstanceTypeM5ad2xlarge     InstanceType = "m5ad.2xlarge"
-	InstanceTypeM5ad4xlarge     InstanceType = "m5ad.4xlarge"
-	InstanceTypeM5ad8xlarge     InstanceType = "m5ad.8xlarge"
-	InstanceTypeM5ad12xlarge    InstanceType = "m5ad.12xlarge"
-	InstanceTypeM5ad16xlarge    InstanceType = "m5ad.16xlarge"
-	InstanceTypeM5ad24xlarge    InstanceType = "m5ad.24xlarge"
-	InstanceTypeM5znLarge       InstanceType = "m5zn.large"
-	InstanceTypeM5znXlarge      InstanceType = "m5zn.xlarge"
-	InstanceTypeM5zn2xlarge     InstanceType = "m5zn.2xlarge"
-	InstanceTypeM5zn3xlarge     InstanceType = "m5zn.3xlarge"
-	InstanceTypeM5zn6xlarge     InstanceType = "m5zn.6xlarge"
-	InstanceTypeM5zn12xlarge    InstanceType = "m5zn.12xlarge"
-	InstanceTypeM5znMetal       InstanceType = "m5zn.metal"
-	InstanceTypeH12xlarge       InstanceType = "h1.2xlarge"
-	InstanceTypeH14xlarge       InstanceType = "h1.4xlarge"
-	InstanceTypeH18xlarge       InstanceType = "h1.8xlarge"
-	InstanceTypeH116xlarge      InstanceType = "h1.16xlarge"
-	InstanceTypeZ1dLarge        InstanceType = "z1d.large"
-	InstanceTypeZ1dXlarge       InstanceType = "z1d.xlarge"
-	InstanceTypeZ1d2xlarge      InstanceType = "z1d.2xlarge"
-	InstanceTypeZ1d3xlarge      InstanceType = "z1d.3xlarge"
-	InstanceTypeZ1d6xlarge      InstanceType = "z1d.6xlarge"
-	InstanceTypeZ1d12xlarge     InstanceType = "z1d.12xlarge"
-	InstanceTypeZ1dMetal        InstanceType = "z1d.metal"
-	InstanceTypeU6tb156xlarge   InstanceType = "u-6tb1.56xlarge"
-	InstanceTypeU6tb1112xlarge  InstanceType = "u-6tb1.112xlarge"
-	InstanceTypeU9tb1112xlarge  InstanceType = "u-9tb1.112xlarge"
-	InstanceTypeU12tb1112xlarge InstanceType = "u-12tb1.112xlarge"
-	InstanceTypeU6tb1Metal      InstanceType = "u-6tb1.metal"
-	InstanceTypeU9tb1Metal      InstanceType = "u-9tb1.metal"
-	InstanceTypeU12tb1Metal     InstanceType = "u-12tb1.metal"
-	InstanceTypeU18tb1Metal     InstanceType = "u-18tb1.metal"
-	InstanceTypeU24tb1Metal     InstanceType = "u-24tb1.metal"
-	InstanceTypeA1Medium        InstanceType = "a1.medium"
-	InstanceTypeA1Large         InstanceType = "a1.large"
-	InstanceTypeA1Xlarge        InstanceType = "a1.xlarge"
-	InstanceTypeA12xlarge       InstanceType = "a1.2xlarge"
-	InstanceTypeA14xlarge       InstanceType = "a1.4xlarge"
-	InstanceTypeA1Metal         InstanceType = "a1.metal"
 	InstanceTypeM5dnLarge       InstanceType = "m5dn.large"
 	InstanceTypeM5dnXlarge      InstanceType = "m5dn.xlarge"
 	InstanceTypeM5dn2xlarge     InstanceType = "m5dn.2xlarge"
@@ -2503,28 +2830,23 @@ const (
 	InstanceTypeM5n16xlarge     InstanceType = "m5n.16xlarge"
 	InstanceTypeM5n24xlarge     InstanceType = "m5n.24xlarge"
 	InstanceTypeM5nMetal        InstanceType = "m5n.metal"
-	InstanceTypeR5dnLarge       InstanceType = "r5dn.large"
-	InstanceTypeR5dnXlarge      InstanceType = "r5dn.xlarge"
-	InstanceTypeR5dn2xlarge     InstanceType = "r5dn.2xlarge"
-	InstanceTypeR5dn4xlarge     InstanceType = "r5dn.4xlarge"
-	InstanceTypeR5dn8xlarge     InstanceType = "r5dn.8xlarge"
-	InstanceTypeR5dn12xlarge    InstanceType = "r5dn.12xlarge"
-	InstanceTypeR5dn16xlarge    InstanceType = "r5dn.16xlarge"
-	InstanceTypeR5dn24xlarge    InstanceType = "r5dn.24xlarge"
-	InstanceTypeR5dnMetal       InstanceType = "r5dn.metal"
-	InstanceTypeR5nLarge        InstanceType = "r5n.large"
-	InstanceTypeR5nXlarge       InstanceType = "r5n.xlarge"
-	InstanceTypeR5n2xlarge      InstanceType = "r5n.2xlarge"
-	InstanceTypeR5n4xlarge      InstanceType = "r5n.4xlarge"
-	InstanceTypeR5n8xlarge      InstanceType = "r5n.8xlarge"
-	InstanceTypeR5n12xlarge     InstanceType = "r5n.12xlarge"
-	InstanceTypeR5n16xlarge     InstanceType = "r5n.16xlarge"
-	InstanceTypeR5n24xlarge     InstanceType = "r5n.24xlarge"
-	InstanceTypeR5nMetal        InstanceType = "r5n.metal"
-	InstanceTypeInf1Xlarge      InstanceType = "inf1.xlarge"
-	InstanceTypeInf12xlarge     InstanceType = "inf1.2xlarge"
-	InstanceTypeInf16xlarge     InstanceType = "inf1.6xlarge"
-	InstanceTypeInf124xlarge    InstanceType = "inf1.24xlarge"
+	InstanceTypeM5znLarge       InstanceType = "m5zn.large"
+	InstanceTypeM5znXlarge      InstanceType = "m5zn.xlarge"
+	InstanceTypeM5zn2xlarge     InstanceType = "m5zn.2xlarge"
+	InstanceTypeM5zn3xlarge     InstanceType = "m5zn.3xlarge"
+	InstanceTypeM5zn6xlarge     InstanceType = "m5zn.6xlarge"
+	InstanceTypeM5zn12xlarge    InstanceType = "m5zn.12xlarge"
+	InstanceTypeM5znMetal       InstanceType = "m5zn.metal"
+	InstanceTypeM6aLarge        InstanceType = "m6a.large"
+	InstanceTypeM6aXlarge       InstanceType = "m6a.xlarge"
+	InstanceTypeM6a2xlarge      InstanceType = "m6a.2xlarge"
+	InstanceTypeM6a4xlarge      InstanceType = "m6a.4xlarge"
+	InstanceTypeM6a8xlarge      InstanceType = "m6a.8xlarge"
+	InstanceTypeM6a12xlarge     InstanceType = "m6a.12xlarge"
+	InstanceTypeM6a16xlarge     InstanceType = "m6a.16xlarge"
+	InstanceTypeM6a24xlarge     InstanceType = "m6a.24xlarge"
+	InstanceTypeM6a32xlarge     InstanceType = "m6a.32xlarge"
+	InstanceTypeM6a48xlarge     InstanceType = "m6a.48xlarge"
 	InstanceTypeM6gMetal        InstanceType = "m6g.metal"
 	InstanceTypeM6gMedium       InstanceType = "m6g.medium"
 	InstanceTypeM6gLarge        InstanceType = "m6g.large"
@@ -2552,7 +2874,171 @@ const (
 	InstanceTypeM6i16xlarge     InstanceType = "m6i.16xlarge"
 	InstanceTypeM6i24xlarge     InstanceType = "m6i.24xlarge"
 	InstanceTypeM6i32xlarge     InstanceType = "m6i.32xlarge"
+	InstanceTypeM6iMetal        InstanceType = "m6i.metal"
 	InstanceTypeMac1Metal       InstanceType = "mac1.metal"
+	InstanceTypeP2Xlarge        InstanceType = "p2.xlarge"
+	InstanceTypeP28xlarge       InstanceType = "p2.8xlarge"
+	InstanceTypeP216xlarge      InstanceType = "p2.16xlarge"
+	InstanceTypeP32xlarge       InstanceType = "p3.2xlarge"
+	InstanceTypeP38xlarge       InstanceType = "p3.8xlarge"
+	InstanceTypeP316xlarge      InstanceType = "p3.16xlarge"
+	InstanceTypeP3dn24xlarge    InstanceType = "p3dn.24xlarge"
+	InstanceTypeP4d24xlarge     InstanceType = "p4d.24xlarge"
+	InstanceTypeR3Large         InstanceType = "r3.large"
+	InstanceTypeR3Xlarge        InstanceType = "r3.xlarge"
+	InstanceTypeR32xlarge       InstanceType = "r3.2xlarge"
+	InstanceTypeR34xlarge       InstanceType = "r3.4xlarge"
+	InstanceTypeR38xlarge       InstanceType = "r3.8xlarge"
+	InstanceTypeR4Large         InstanceType = "r4.large"
+	InstanceTypeR4Xlarge        InstanceType = "r4.xlarge"
+	InstanceTypeR42xlarge       InstanceType = "r4.2xlarge"
+	InstanceTypeR44xlarge       InstanceType = "r4.4xlarge"
+	InstanceTypeR48xlarge       InstanceType = "r4.8xlarge"
+	InstanceTypeR416xlarge      InstanceType = "r4.16xlarge"
+	InstanceTypeR5Large         InstanceType = "r5.large"
+	InstanceTypeR5Xlarge        InstanceType = "r5.xlarge"
+	InstanceTypeR52xlarge       InstanceType = "r5.2xlarge"
+	InstanceTypeR54xlarge       InstanceType = "r5.4xlarge"
+	InstanceTypeR58xlarge       InstanceType = "r5.8xlarge"
+	InstanceTypeR512xlarge      InstanceType = "r5.12xlarge"
+	InstanceTypeR516xlarge      InstanceType = "r5.16xlarge"
+	InstanceTypeR524xlarge      InstanceType = "r5.24xlarge"
+	InstanceTypeR5Metal         InstanceType = "r5.metal"
+	InstanceTypeR5aLarge        InstanceType = "r5a.large"
+	InstanceTypeR5aXlarge       InstanceType = "r5a.xlarge"
+	InstanceTypeR5a2xlarge      InstanceType = "r5a.2xlarge"
+	InstanceTypeR5a4xlarge      InstanceType = "r5a.4xlarge"
+	InstanceTypeR5a8xlarge      InstanceType = "r5a.8xlarge"
+	InstanceTypeR5a12xlarge     InstanceType = "r5a.12xlarge"
+	InstanceTypeR5a16xlarge     InstanceType = "r5a.16xlarge"
+	InstanceTypeR5a24xlarge     InstanceType = "r5a.24xlarge"
+	InstanceTypeR5adLarge       InstanceType = "r5ad.large"
+	InstanceTypeR5adXlarge      InstanceType = "r5ad.xlarge"
+	InstanceTypeR5ad2xlarge     InstanceType = "r5ad.2xlarge"
+	InstanceTypeR5ad4xlarge     InstanceType = "r5ad.4xlarge"
+	InstanceTypeR5ad8xlarge     InstanceType = "r5ad.8xlarge"
+	InstanceTypeR5ad12xlarge    InstanceType = "r5ad.12xlarge"
+	InstanceTypeR5ad16xlarge    InstanceType = "r5ad.16xlarge"
+	InstanceTypeR5ad24xlarge    InstanceType = "r5ad.24xlarge"
+	InstanceTypeR5bLarge        InstanceType = "r5b.large"
+	InstanceTypeR5bXlarge       InstanceType = "r5b.xlarge"
+	InstanceTypeR5b2xlarge      InstanceType = "r5b.2xlarge"
+	InstanceTypeR5b4xlarge      InstanceType = "r5b.4xlarge"
+	InstanceTypeR5b8xlarge      InstanceType = "r5b.8xlarge"
+	InstanceTypeR5b12xlarge     InstanceType = "r5b.12xlarge"
+	InstanceTypeR5b16xlarge     InstanceType = "r5b.16xlarge"
+	InstanceTypeR5b24xlarge     InstanceType = "r5b.24xlarge"
+	InstanceTypeR5bMetal        InstanceType = "r5b.metal"
+	InstanceTypeR5dLarge        InstanceType = "r5d.large"
+	InstanceTypeR5dXlarge       InstanceType = "r5d.xlarge"
+	InstanceTypeR5d2xlarge      InstanceType = "r5d.2xlarge"
+	InstanceTypeR5d4xlarge      InstanceType = "r5d.4xlarge"
+	InstanceTypeR5d8xlarge      InstanceType = "r5d.8xlarge"
+	InstanceTypeR5d12xlarge     InstanceType = "r5d.12xlarge"
+	InstanceTypeR5d16xlarge     InstanceType = "r5d.16xlarge"
+	InstanceTypeR5d24xlarge     InstanceType = "r5d.24xlarge"
+	InstanceTypeR5dMetal        InstanceType = "r5d.metal"
+	InstanceTypeR5dnLarge       InstanceType = "r5dn.large"
+	InstanceTypeR5dnXlarge      InstanceType = "r5dn.xlarge"
+	InstanceTypeR5dn2xlarge     InstanceType = "r5dn.2xlarge"
+	InstanceTypeR5dn4xlarge     InstanceType = "r5dn.4xlarge"
+	InstanceTypeR5dn8xlarge     InstanceType = "r5dn.8xlarge"
+	InstanceTypeR5dn12xlarge    InstanceType = "r5dn.12xlarge"
+	InstanceTypeR5dn16xlarge    InstanceType = "r5dn.16xlarge"
+	InstanceTypeR5dn24xlarge    InstanceType = "r5dn.24xlarge"
+	InstanceTypeR5dnMetal       InstanceType = "r5dn.metal"
+	InstanceTypeR5nLarge        InstanceType = "r5n.large"
+	InstanceTypeR5nXlarge       InstanceType = "r5n.xlarge"
+	InstanceTypeR5n2xlarge      InstanceType = "r5n.2xlarge"
+	InstanceTypeR5n4xlarge      InstanceType = "r5n.4xlarge"
+	InstanceTypeR5n8xlarge      InstanceType = "r5n.8xlarge"
+	InstanceTypeR5n12xlarge     InstanceType = "r5n.12xlarge"
+	InstanceTypeR5n16xlarge     InstanceType = "r5n.16xlarge"
+	InstanceTypeR5n24xlarge     InstanceType = "r5n.24xlarge"
+	InstanceTypeR5nMetal        InstanceType = "r5n.metal"
+	InstanceTypeR6gMedium       InstanceType = "r6g.medium"
+	InstanceTypeR6gLarge        InstanceType = "r6g.large"
+	InstanceTypeR6gXlarge       InstanceType = "r6g.xlarge"
+	InstanceTypeR6g2xlarge      InstanceType = "r6g.2xlarge"
+	InstanceTypeR6g4xlarge      InstanceType = "r6g.4xlarge"
+	InstanceTypeR6g8xlarge      InstanceType = "r6g.8xlarge"
+	InstanceTypeR6g12xlarge     InstanceType = "r6g.12xlarge"
+	InstanceTypeR6g16xlarge     InstanceType = "r6g.16xlarge"
+	InstanceTypeR6gMetal        InstanceType = "r6g.metal"
+	InstanceTypeR6gdMedium      InstanceType = "r6gd.medium"
+	InstanceTypeR6gdLarge       InstanceType = "r6gd.large"
+	InstanceTypeR6gdXlarge      InstanceType = "r6gd.xlarge"
+	InstanceTypeR6gd2xlarge     InstanceType = "r6gd.2xlarge"
+	InstanceTypeR6gd4xlarge     InstanceType = "r6gd.4xlarge"
+	InstanceTypeR6gd8xlarge     InstanceType = "r6gd.8xlarge"
+	InstanceTypeR6gd12xlarge    InstanceType = "r6gd.12xlarge"
+	InstanceTypeR6gd16xlarge    InstanceType = "r6gd.16xlarge"
+	InstanceTypeR6gdMetal       InstanceType = "r6gd.metal"
+	InstanceTypeR6iLarge        InstanceType = "r6i.large"
+	InstanceTypeR6iXlarge       InstanceType = "r6i.xlarge"
+	InstanceTypeR6i2xlarge      InstanceType = "r6i.2xlarge"
+	InstanceTypeR6i4xlarge      InstanceType = "r6i.4xlarge"
+	InstanceTypeR6i8xlarge      InstanceType = "r6i.8xlarge"
+	InstanceTypeR6i12xlarge     InstanceType = "r6i.12xlarge"
+	InstanceTypeR6i16xlarge     InstanceType = "r6i.16xlarge"
+	InstanceTypeR6i24xlarge     InstanceType = "r6i.24xlarge"
+	InstanceTypeR6i32xlarge     InstanceType = "r6i.32xlarge"
+	InstanceTypeR6iMetal        InstanceType = "r6i.metal"
+	InstanceTypeT1Micro         InstanceType = "t1.micro"
+	InstanceTypeT2Nano          InstanceType = "t2.nano"
+	InstanceTypeT2Micro         InstanceType = "t2.micro"
+	InstanceTypeT2Small         InstanceType = "t2.small"
+	InstanceTypeT2Medium        InstanceType = "t2.medium"
+	InstanceTypeT2Large         InstanceType = "t2.large"
+	InstanceTypeT2Xlarge        InstanceType = "t2.xlarge"
+	InstanceTypeT22xlarge       InstanceType = "t2.2xlarge"
+	InstanceTypeT3Nano          InstanceType = "t3.nano"
+	InstanceTypeT3Micro         InstanceType = "t3.micro"
+	InstanceTypeT3Small         InstanceType = "t3.small"
+	InstanceTypeT3Medium        InstanceType = "t3.medium"
+	InstanceTypeT3Large         InstanceType = "t3.large"
+	InstanceTypeT3Xlarge        InstanceType = "t3.xlarge"
+	InstanceTypeT32xlarge       InstanceType = "t3.2xlarge"
+	InstanceTypeT3aNano         InstanceType = "t3a.nano"
+	InstanceTypeT3aMicro        InstanceType = "t3a.micro"
+	InstanceTypeT3aSmall        InstanceType = "t3a.small"
+	InstanceTypeT3aMedium       InstanceType = "t3a.medium"
+	InstanceTypeT3aLarge        InstanceType = "t3a.large"
+	InstanceTypeT3aXlarge       InstanceType = "t3a.xlarge"
+	InstanceTypeT3a2xlarge      InstanceType = "t3a.2xlarge"
+	InstanceTypeT4gNano         InstanceType = "t4g.nano"
+	InstanceTypeT4gMicro        InstanceType = "t4g.micro"
+	InstanceTypeT4gSmall        InstanceType = "t4g.small"
+	InstanceTypeT4gMedium       InstanceType = "t4g.medium"
+	InstanceTypeT4gLarge        InstanceType = "t4g.large"
+	InstanceTypeT4gXlarge       InstanceType = "t4g.xlarge"
+	InstanceTypeT4g2xlarge      InstanceType = "t4g.2xlarge"
+	InstanceTypeU6tb156xlarge   InstanceType = "u-6tb1.56xlarge"
+	InstanceTypeU6tb1112xlarge  InstanceType = "u-6tb1.112xlarge"
+	InstanceTypeU9tb1112xlarge  InstanceType = "u-9tb1.112xlarge"
+	InstanceTypeU12tb1112xlarge InstanceType = "u-12tb1.112xlarge"
+	InstanceTypeU6tb1Metal      InstanceType = "u-6tb1.metal"
+	InstanceTypeU9tb1Metal      InstanceType = "u-9tb1.metal"
+	InstanceTypeU12tb1Metal     InstanceType = "u-12tb1.metal"
+	InstanceTypeU18tb1Metal     InstanceType = "u-18tb1.metal"
+	InstanceTypeU24tb1Metal     InstanceType = "u-24tb1.metal"
+	InstanceTypeVt13xlarge      InstanceType = "vt1.3xlarge"
+	InstanceTypeVt16xlarge      InstanceType = "vt1.6xlarge"
+	InstanceTypeVt124xlarge     InstanceType = "vt1.24xlarge"
+	InstanceTypeX116xlarge      InstanceType = "x1.16xlarge"
+	InstanceTypeX132xlarge      InstanceType = "x1.32xlarge"
+	InstanceTypeX1eXlarge       InstanceType = "x1e.xlarge"
+	InstanceTypeX1e2xlarge      InstanceType = "x1e.2xlarge"
+	InstanceTypeX1e4xlarge      InstanceType = "x1e.4xlarge"
+	InstanceTypeX1e8xlarge      InstanceType = "x1e.8xlarge"
+	InstanceTypeX1e16xlarge     InstanceType = "x1e.16xlarge"
+	InstanceTypeX1e32xlarge     InstanceType = "x1e.32xlarge"
+	InstanceTypeX2iezn2xlarge   InstanceType = "x2iezn.2xlarge"
+	InstanceTypeX2iezn4xlarge   InstanceType = "x2iezn.4xlarge"
+	InstanceTypeX2iezn6xlarge   InstanceType = "x2iezn.6xlarge"
+	InstanceTypeX2iezn8xlarge   InstanceType = "x2iezn.8xlarge"
+	InstanceTypeX2iezn12xlarge  InstanceType = "x2iezn.12xlarge"
+	InstanceTypeX2ieznMetal     InstanceType = "x2iezn.metal"
 	InstanceTypeX2gdMedium      InstanceType = "x2gd.medium"
 	InstanceTypeX2gdLarge       InstanceType = "x2gd.large"
 	InstanceTypeX2gdXlarge      InstanceType = "x2gd.xlarge"
@@ -2562,9 +3048,13 @@ const (
 	InstanceTypeX2gd12xlarge    InstanceType = "x2gd.12xlarge"
 	InstanceTypeX2gd16xlarge    InstanceType = "x2gd.16xlarge"
 	InstanceTypeX2gdMetal       InstanceType = "x2gd.metal"
-	InstanceTypeVt13xlarge      InstanceType = "vt1.3xlarge"
-	InstanceTypeVt16xlarge      InstanceType = "vt1.6xlarge"
-	InstanceTypeVt124xlarge     InstanceType = "vt1.24xlarge"
+	InstanceTypeZ1dLarge        InstanceType = "z1d.large"
+	InstanceTypeZ1dXlarge       InstanceType = "z1d.xlarge"
+	InstanceTypeZ1d2xlarge      InstanceType = "z1d.2xlarge"
+	InstanceTypeZ1d3xlarge      InstanceType = "z1d.3xlarge"
+	InstanceTypeZ1d6xlarge      InstanceType = "z1d.6xlarge"
+	InstanceTypeZ1d12xlarge     InstanceType = "z1d.12xlarge"
+	InstanceTypeZ1dMetal        InstanceType = "z1d.metal"
 )
 
 // Values returns all known values for InstanceType. Note that this can be expanded
@@ -2572,154 +3062,12 @@ const (
 // this slice is not guaranteed to be stable across updates.
 func (InstanceType) Values() []InstanceType {
 	return []InstanceType{
-		"t1.micro",
-		"t2.nano",
-		"t2.micro",
-		"t2.small",
-		"t2.medium",
-		"t2.large",
-		"t2.xlarge",
-		"t2.2xlarge",
-		"t3.nano",
-		"t3.micro",
-		"t3.small",
-		"t3.medium",
-		"t3.large",
-		"t3.xlarge",
-		"t3.2xlarge",
-		"t3a.nano",
-		"t3a.micro",
-		"t3a.small",
-		"t3a.medium",
-		"t3a.large",
-		"t3a.xlarge",
-		"t3a.2xlarge",
-		"t4g.nano",
-		"t4g.micro",
-		"t4g.small",
-		"t4g.medium",
-		"t4g.large",
-		"t4g.xlarge",
-		"t4g.2xlarge",
-		"m1.small",
-		"m1.medium",
-		"m1.large",
-		"m1.xlarge",
-		"m3.medium",
-		"m3.large",
-		"m3.xlarge",
-		"m3.2xlarge",
-		"m4.large",
-		"m4.xlarge",
-		"m4.2xlarge",
-		"m4.4xlarge",
-		"m4.10xlarge",
-		"m4.16xlarge",
-		"m2.xlarge",
-		"m2.2xlarge",
-		"m2.4xlarge",
-		"cr1.8xlarge",
-		"r3.large",
-		"r3.xlarge",
-		"r3.2xlarge",
-		"r3.4xlarge",
-		"r3.8xlarge",
-		"r4.large",
-		"r4.xlarge",
-		"r4.2xlarge",
-		"r4.4xlarge",
-		"r4.8xlarge",
-		"r4.16xlarge",
-		"r5.large",
-		"r5.xlarge",
-		"r5.2xlarge",
-		"r5.4xlarge",
-		"r5.8xlarge",
-		"r5.12xlarge",
-		"r5.16xlarge",
-		"r5.24xlarge",
-		"r5.metal",
-		"r5a.large",
-		"r5a.xlarge",
-		"r5a.2xlarge",
-		"r5a.4xlarge",
-		"r5a.8xlarge",
-		"r5a.12xlarge",
-		"r5a.16xlarge",
-		"r5a.24xlarge",
-		"r5b.large",
-		"r5b.xlarge",
-		"r5b.2xlarge",
-		"r5b.4xlarge",
-		"r5b.8xlarge",
-		"r5b.12xlarge",
-		"r5b.16xlarge",
-		"r5b.24xlarge",
-		"r5b.metal",
-		"r5d.large",
-		"r5d.xlarge",
-		"r5d.2xlarge",
-		"r5d.4xlarge",
-		"r5d.8xlarge",
-		"r5d.12xlarge",
-		"r5d.16xlarge",
-		"r5d.24xlarge",
-		"r5d.metal",
-		"r5ad.large",
-		"r5ad.xlarge",
-		"r5ad.2xlarge",
-		"r5ad.4xlarge",
-		"r5ad.8xlarge",
-		"r5ad.12xlarge",
-		"r5ad.16xlarge",
-		"r5ad.24xlarge",
-		"r6g.metal",
-		"r6g.medium",
-		"r6g.large",
-		"r6g.xlarge",
-		"r6g.2xlarge",
-		"r6g.4xlarge",
-		"r6g.8xlarge",
-		"r6g.12xlarge",
-		"r6g.16xlarge",
-		"r6gd.metal",
-		"r6gd.medium",
-		"r6gd.large",
-		"r6gd.xlarge",
-		"r6gd.2xlarge",
-		"r6gd.4xlarge",
-		"r6gd.8xlarge",
-		"r6gd.12xlarge",
-		"r6gd.16xlarge",
-		"x1.16xlarge",
-		"x1.32xlarge",
-		"x1e.xlarge",
-		"x1e.2xlarge",
-		"x1e.4xlarge",
-		"x1e.8xlarge",
-		"x1e.16xlarge",
-		"x1e.32xlarge",
-		"i2.xlarge",
-		"i2.2xlarge",
-		"i2.4xlarge",
-		"i2.8xlarge",
-		"i3.large",
-		"i3.xlarge",
-		"i3.2xlarge",
-		"i3.4xlarge",
-		"i3.8xlarge",
-		"i3.16xlarge",
-		"i3.metal",
-		"i3en.large",
-		"i3en.xlarge",
-		"i3en.2xlarge",
-		"i3en.3xlarge",
-		"i3en.6xlarge",
-		"i3en.12xlarge",
-		"i3en.24xlarge",
-		"i3en.metal",
-		"hi1.4xlarge",
-		"hs1.8xlarge",
+		"a1.medium",
+		"a1.large",
+		"a1.xlarge",
+		"a1.2xlarge",
+		"a1.4xlarge",
+		"a1.metal",
 		"c1.medium",
 		"c1.xlarge",
 		"c3.large",
@@ -2773,7 +3121,6 @@ func (InstanceType) Values() []InstanceType {
 		"c5n.9xlarge",
 		"c5n.18xlarge",
 		"c5n.metal",
-		"c6g.metal",
 		"c6g.medium",
 		"c6g.large",
 		"c6g.xlarge",
@@ -2782,7 +3129,7 @@ func (InstanceType) Values() []InstanceType {
 		"c6g.8xlarge",
 		"c6g.12xlarge",
 		"c6g.16xlarge",
-		"c6gd.metal",
+		"c6g.metal",
 		"c6gd.medium",
 		"c6gd.large",
 		"c6gd.xlarge",
@@ -2791,6 +3138,7 @@ func (InstanceType) Values() []InstanceType {
 		"c6gd.8xlarge",
 		"c6gd.12xlarge",
 		"c6gd.16xlarge",
+		"c6gd.metal",
 		"c6gn.medium",
 		"c6gn.large",
 		"c6gn.xlarge",
@@ -2799,8 +3147,38 @@ func (InstanceType) Values() []InstanceType {
 		"c6gn.8xlarge",
 		"c6gn.12xlarge",
 		"c6gn.16xlarge",
+		"c6i.large",
+		"c6i.xlarge",
+		"c6i.2xlarge",
+		"c6i.4xlarge",
+		"c6i.8xlarge",
+		"c6i.12xlarge",
+		"c6i.16xlarge",
+		"c6i.24xlarge",
+		"c6i.32xlarge",
+		"c6i.metal",
 		"cc1.4xlarge",
 		"cc2.8xlarge",
+		"cg1.4xlarge",
+		"cr1.8xlarge",
+		"d2.xlarge",
+		"d2.2xlarge",
+		"d2.4xlarge",
+		"d2.8xlarge",
+		"d3.xlarge",
+		"d3.2xlarge",
+		"d3.4xlarge",
+		"d3.8xlarge",
+		"d3en.xlarge",
+		"d3en.2xlarge",
+		"d3en.4xlarge",
+		"d3en.6xlarge",
+		"d3en.8xlarge",
+		"d3en.12xlarge",
+		"dl1.24xlarge",
+		"f1.2xlarge",
+		"f1.4xlarge",
+		"f1.16xlarge",
 		"g2.2xlarge",
 		"g2.8xlarge",
 		"g3.4xlarge",
@@ -2819,32 +3197,79 @@ func (InstanceType) Values() []InstanceType {
 		"g4dn.12xlarge",
 		"g4dn.16xlarge",
 		"g4dn.metal",
-		"cg1.4xlarge",
-		"p2.xlarge",
-		"p2.8xlarge",
-		"p2.16xlarge",
-		"p3.2xlarge",
-		"p3.8xlarge",
-		"p3.16xlarge",
-		"p3dn.24xlarge",
-		"p4d.24xlarge",
-		"d2.xlarge",
-		"d2.2xlarge",
-		"d2.4xlarge",
-		"d2.8xlarge",
-		"d3.xlarge",
-		"d3.2xlarge",
-		"d3.4xlarge",
-		"d3.8xlarge",
-		"d3en.xlarge",
-		"d3en.2xlarge",
-		"d3en.4xlarge",
-		"d3en.6xlarge",
-		"d3en.8xlarge",
-		"d3en.12xlarge",
-		"f1.2xlarge",
-		"f1.4xlarge",
-		"f1.16xlarge",
+		"g5.xlarge",
+		"g5.2xlarge",
+		"g5.4xlarge",
+		"g5.8xlarge",
+		"g5.12xlarge",
+		"g5.16xlarge",
+		"g5.24xlarge",
+		"g5.48xlarge",
+		"g5g.xlarge",
+		"g5g.2xlarge",
+		"g5g.4xlarge",
+		"g5g.8xlarge",
+		"g5g.16xlarge",
+		"g5g.metal",
+		"hi1.4xlarge",
+		"hpc6a.48xlarge",
+		"hs1.8xlarge",
+		"h1.2xlarge",
+		"h1.4xlarge",
+		"h1.8xlarge",
+		"h1.16xlarge",
+		"i2.xlarge",
+		"i2.2xlarge",
+		"i2.4xlarge",
+		"i2.8xlarge",
+		"i3.large",
+		"i3.xlarge",
+		"i3.2xlarge",
+		"i3.4xlarge",
+		"i3.8xlarge",
+		"i3.16xlarge",
+		"i3.metal",
+		"i3en.large",
+		"i3en.xlarge",
+		"i3en.2xlarge",
+		"i3en.3xlarge",
+		"i3en.6xlarge",
+		"i3en.12xlarge",
+		"i3en.24xlarge",
+		"i3en.metal",
+		"im4gn.large",
+		"im4gn.xlarge",
+		"im4gn.2xlarge",
+		"im4gn.4xlarge",
+		"im4gn.8xlarge",
+		"im4gn.16xlarge",
+		"inf1.xlarge",
+		"inf1.2xlarge",
+		"inf1.6xlarge",
+		"inf1.24xlarge",
+		"is4gen.medium",
+		"is4gen.large",
+		"is4gen.xlarge",
+		"is4gen.2xlarge",
+		"is4gen.4xlarge",
+		"is4gen.8xlarge",
+		"m1.small",
+		"m1.medium",
+		"m1.large",
+		"m1.xlarge",
+		"m2.xlarge",
+		"m2.2xlarge",
+		"m2.4xlarge",
+		"m3.medium",
+		"m3.large",
+		"m3.xlarge",
+		"m3.2xlarge",
+		"m4.large",
+		"m4.xlarge",
+		"m4.2xlarge",
+		"m4.4xlarge",
+		"m4.10xlarge",
+		"m4.16xlarge",
 		"m5.large",
 		"m5.xlarge",
 		"m5.2xlarge",
@@ -2862,6 +3287,14 @@ func (InstanceType) Values() []InstanceType {
 		"m5a.12xlarge",
 		"m5a.16xlarge",
 		"m5a.24xlarge",
+		"m5ad.large",
+		"m5ad.xlarge",
+		"m5ad.2xlarge",
+		"m5ad.4xlarge",
+		"m5ad.8xlarge",
+		"m5ad.12xlarge",
+		"m5ad.16xlarge",
+		"m5ad.24xlarge",
 		"m5d.large",
 		"m5d.xlarge",
 		"m5d.2xlarge",
@@ -2871,47 +3304,6 @@ func (InstanceType) Values() []InstanceType {
 		"m5d.16xlarge",
 		"m5d.24xlarge",
 		"m5d.metal",
-		"m5ad.large",
-		"m5ad.xlarge",
-		"m5ad.2xlarge",
-		"m5ad.4xlarge",
-		"m5ad.8xlarge",
-		"m5ad.12xlarge",
-		"m5ad.16xlarge",
-		"m5ad.24xlarge",
-		"m5zn.large",
-		"m5zn.xlarge",
-		"m5zn.2xlarge",
-		"m5zn.3xlarge",
-		"m5zn.6xlarge",
-		"m5zn.12xlarge",
-		"m5zn.metal",
-		"h1.2xlarge",
-		"h1.4xlarge",
-		"h1.8xlarge",
-		"h1.16xlarge",
-		"z1d.large",
-		"z1d.xlarge",
-		"z1d.2xlarge",
-		"z1d.3xlarge",
-		"z1d.6xlarge",
-		"z1d.12xlarge",
-		"z1d.metal",
-		"u-6tb1.56xlarge",
-		"u-6tb1.112xlarge",
-		"u-9tb1.112xlarge",
-		"u-12tb1.112xlarge",
-		"u-6tb1.metal",
-		"u-9tb1.metal",
-		"u-12tb1.metal",
-		"u-18tb1.metal",
-		"u-24tb1.metal",
-		"a1.medium",
-		"a1.large",
-		"a1.xlarge",
-		"a1.2xlarge",
-		"a1.4xlarge",
-		"a1.metal",
 		"m5dn.large",
 		"m5dn.xlarge",
 		"m5dn.2xlarge",
@@ -2930,28 +3322,23 @@ func (InstanceType) Values() []InstanceType {
 		"m5n.16xlarge",
 		"m5n.24xlarge",
 		"m5n.metal",
-		"r5dn.large",
-		"r5dn.xlarge",
-		"r5dn.2xlarge",
-		"r5dn.4xlarge",
-		"r5dn.8xlarge",
-		"r5dn.12xlarge",
-		"r5dn.16xlarge",
-		"r5dn.24xlarge",
-		"r5dn.metal",
-		"r5n.large",
-		"r5n.xlarge",
-		"r5n.2xlarge",
-		"r5n.4xlarge",
-		"r5n.8xlarge",
-		"r5n.12xlarge",
-		"r5n.16xlarge",
-		"r5n.24xlarge",
-		"r5n.metal",
-		"inf1.xlarge",
-		"inf1.2xlarge",
-		"inf1.6xlarge",
-		"inf1.24xlarge",
+		"m5zn.large",
+		"m5zn.xlarge",
+		"m5zn.2xlarge",
+		"m5zn.3xlarge",
+		"m5zn.6xlarge",
+		"m5zn.12xlarge",
+		"m5zn.metal",
+		"m6a.large",
+		"m6a.xlarge",
+		"m6a.2xlarge",
+		"m6a.4xlarge",
+		"m6a.8xlarge",
+		"m6a.12xlarge",
+		"m6a.16xlarge",
+		"m6a.24xlarge",
+		"m6a.32xlarge",
+		"m6a.48xlarge",
 		"m6g.metal",
 		"m6g.medium",
 		"m6g.large",
@@ -2979,7 +3366,171 @@ func (InstanceType) Values() []InstanceType {
 		"m6i.16xlarge",
 		"m6i.24xlarge",
 		"m6i.32xlarge",
+		"m6i.metal",
 		"mac1.metal",
+		"p2.xlarge",
+		"p2.8xlarge",
+		"p2.16xlarge",
+		"p3.2xlarge",
+		"p3.8xlarge",
+		"p3.16xlarge",
+		"p3dn.24xlarge",
+		"p4d.24xlarge",
+		"r3.large",
+		"r3.xlarge",
+		"r3.2xlarge",
+		"r3.4xlarge",
+		"r3.8xlarge",
+		"r4.large",
+		"r4.xlarge",
+		"r4.2xlarge",
+		"r4.4xlarge",
+		"r4.8xlarge",
+		"r4.16xlarge",
+		"r5.large",
+		"r5.xlarge",
+		"r5.2xlarge",
+		"r5.4xlarge",
+		"r5.8xlarge",
+		"r5.12xlarge",
+		"r5.16xlarge",
+		"r5.24xlarge",
+		"r5.metal",
+		"r5a.large",
+		"r5a.xlarge",
+		"r5a.2xlarge",
+		"r5a.4xlarge",
+		"r5a.8xlarge",
+		"r5a.12xlarge",
+		"r5a.16xlarge",
+		"r5a.24xlarge",
+		"r5ad.large",
+		"r5ad.xlarge",
+		"r5ad.2xlarge",
+		"r5ad.4xlarge",
+		"r5ad.8xlarge",
+		"r5ad.12xlarge",
+		"r5ad.16xlarge",
+		"r5ad.24xlarge",
+		"r5b.large",
+		"r5b.xlarge",
+		"r5b.2xlarge",
+		"r5b.4xlarge",
+		"r5b.8xlarge",
+		"r5b.12xlarge",
+		"r5b.16xlarge",
+		"r5b.24xlarge",
+		"r5b.metal",
+		"r5d.large",
+		"r5d.xlarge",
+		"r5d.2xlarge",
+		"r5d.4xlarge",
+		"r5d.8xlarge",
+		"r5d.12xlarge",
+		"r5d.16xlarge",
+		"r5d.24xlarge",
+		"r5d.metal",
+		"r5dn.large",
+		"r5dn.xlarge",
+		"r5dn.2xlarge",
+		"r5dn.4xlarge",
+		"r5dn.8xlarge",
+		"r5dn.12xlarge",
+		"r5dn.16xlarge",
+		"r5dn.24xlarge",
+		"r5dn.metal",
+		"r5n.large",
+		"r5n.xlarge",
+		"r5n.2xlarge",
+		"r5n.4xlarge",
+		"r5n.8xlarge",
+		"r5n.12xlarge",
+		"r5n.16xlarge",
+		"r5n.24xlarge",
+		"r5n.metal",
+		"r6g.medium",
+		"r6g.large",
+		"r6g.xlarge",
+		"r6g.2xlarge",
+		"r6g.4xlarge",
+		"r6g.8xlarge",
+		"r6g.12xlarge",
+		"r6g.16xlarge",
+		"r6g.metal",
+		"r6gd.medium",
+		"r6gd.large",
+		"r6gd.xlarge",
+		"r6gd.2xlarge",
+		"r6gd.4xlarge",
+		"r6gd.8xlarge",
+		"r6gd.12xlarge",
+		"r6gd.16xlarge",
+		"r6gd.metal",
+		"r6i.large",
+		"r6i.xlarge",
+		"r6i.2xlarge",
+		"r6i.4xlarge",
+		"r6i.8xlarge",
+		"r6i.12xlarge",
+		"r6i.16xlarge",
+		"r6i.24xlarge",
+		"r6i.32xlarge",
+		"r6i.metal",
+		"t1.micro",
+		"t2.nano",
+		"t2.micro",
+		"t2.small",
+		"t2.medium",
+		"t2.large",
+		"t2.xlarge",
+		"t2.2xlarge",
+		"t3.nano",
+		"t3.micro",
+		"t3.small",
+		"t3.medium",
+		"t3.large",
+		"t3.xlarge",
+		"t3.2xlarge",
+		"t3a.nano",
+		"t3a.micro",
+		"t3a.small",
+		"t3a.medium",
+		"t3a.large",
+		"t3a.xlarge",
+		"t3a.2xlarge",
+		"t4g.nano",
+		"t4g.micro",
+		"t4g.small",
+		"t4g.medium",
+		"t4g.large",
+		"t4g.xlarge",
+		"t4g.2xlarge",
+		"u-6tb1.56xlarge",
+		"u-6tb1.112xlarge",
+		"u-9tb1.112xlarge",
+		"u-12tb1.112xlarge",
+		"u-6tb1.metal",
+		"u-9tb1.metal",
+		"u-12tb1.metal",
+		"u-18tb1.metal",
+		"u-24tb1.metal",
+		"vt1.3xlarge",
+		"vt1.6xlarge",
+		"vt1.24xlarge",
+		"x1.16xlarge",
+		"x1.32xlarge",
+		"x1e.xlarge",
+		"x1e.2xlarge",
+		"x1e.4xlarge",
+		"x1e.8xlarge",
+		"x1e.16xlarge",
+		"x1e.32xlarge",
+		"x2iezn.2xlarge",
+		"x2iezn.4xlarge",
+		"x2iezn.6xlarge",
+		"x2iezn.8xlarge",
+		"x2iezn.12xlarge",
+		"x2iezn.metal",
 		"x2gd.medium",
 		"x2gd.large",
 		"x2gd.xlarge",
@@ -2989,9 +3540,13 @@ func (InstanceType) Values() []InstanceType {
 		"x2gd.12xlarge",
 		"x2gd.16xlarge",
 		"x2gd.metal",
-		"vt1.3xlarge",
-		"vt1.6xlarge",
-		"vt1.24xlarge",
+		"z1d.large",
+		"z1d.xlarge",
+		"z1d.2xlarge",
+		"z1d.3xlarge",
+		"z1d.6xlarge",
+		"z1d.12xlarge",
+		"z1d.metal",
 	}
 }
 
@@ -3049,6 +3604,316 @@ func (InterfaceProtocolType) Values() []InterfaceProtocolType {
 	}
 }
 
+type IpamAddressHistoryResourceType string
+
+// Enum values for IpamAddressHistoryResourceType
+const (
+	IpamAddressHistoryResourceTypeEip              IpamAddressHistoryResourceType = "eip"
+	IpamAddressHistoryResourceTypeVpc              IpamAddressHistoryResourceType = "vpc"
+	IpamAddressHistoryResourceTypeSubnet           IpamAddressHistoryResourceType = "subnet"
+	IpamAddressHistoryResourceTypeNetworkInterface IpamAddressHistoryResourceType = "network-interface"
+	IpamAddressHistoryResourceTypeInstance         IpamAddressHistoryResourceType = "instance"
+)
+
+// Values returns all known values for IpamAddressHistoryResourceType. Note that
+// this can be expanded in the future, and so it is only as up to date as the
+// client. The ordering of this slice is not guaranteed to be stable across
+// updates.
+func (IpamAddressHistoryResourceType) Values() []IpamAddressHistoryResourceType {
+	return []IpamAddressHistoryResourceType{
+		"eip",
+		"vpc",
+		"subnet",
+		"network-interface",
+		"instance",
+	}
+}
+
+type IpamComplianceStatus string
+
+// Enum values for IpamComplianceStatus
+const (
+	IpamComplianceStatusCompliant    IpamComplianceStatus = "compliant"
+	IpamComplianceStatusNoncompliant IpamComplianceStatus = "noncompliant"
+	IpamComplianceStatusUnmanaged    IpamComplianceStatus = "unmanaged"
+	IpamComplianceStatusIgnored      IpamComplianceStatus = "ignored"
+)
+
+// Values returns all known values for IpamComplianceStatus. Note that this can be
+// expanded in the future, and so it is only as up to date as the client. The
+// ordering of this slice is not guaranteed to be stable across updates.
+func (IpamComplianceStatus) Values() []IpamComplianceStatus {
+	return []IpamComplianceStatus{
+		"compliant",
+		"noncompliant",
+		"unmanaged",
+		"ignored",
+	}
+}
+
+type IpamManagementState string
+
+// Enum values for IpamManagementState
+const (
+	IpamManagementStateManaged   IpamManagementState = "managed"
+	IpamManagementStateUnmanaged IpamManagementState = "unmanaged"
+	IpamManagementStateIgnored   IpamManagementState = "ignored"
+)
+
+// Values returns all known values for IpamManagementState. Note that this can be
+// expanded in the future, and so it is only as up to date as the client. The
+// ordering of this slice is not guaranteed to be stable across updates.
+func (IpamManagementState) Values() []IpamManagementState {
+	return []IpamManagementState{
+		"managed",
+		"unmanaged",
+		"ignored",
+	}
+}
+
+type IpamOverlapStatus string
+
+// Enum values for IpamOverlapStatus
+const (
+	IpamOverlapStatusOverlapping    IpamOverlapStatus = "overlapping"
+	IpamOverlapStatusNonoverlapping IpamOverlapStatus = "nonoverlapping"
+	IpamOverlapStatusIgnored        IpamOverlapStatus = "ignored"
+)
+
+// Values returns all known values for IpamOverlapStatus. Note that this can be
+// expanded in the future, and so it is only as up to date as the client. The
+// ordering of this slice is not guaranteed to be stable across updates.
+func (IpamOverlapStatus) Values() []IpamOverlapStatus {
+	return []IpamOverlapStatus{
+		"overlapping",
+		"nonoverlapping",
+		"ignored",
+	}
+}
+
+type IpamPoolAllocationResourceType string
+
+// Enum values for IpamPoolAllocationResourceType
+const (
+	IpamPoolAllocationResourceTypeIpamPool          IpamPoolAllocationResourceType = "ipam-pool"
+	IpamPoolAllocationResourceTypeVpc               IpamPoolAllocationResourceType = "vpc"
+	IpamPoolAllocationResourceTypeEc2PublicIpv4Pool IpamPoolAllocationResourceType = "ec2-public-ipv4-pool"
+	IpamPoolAllocationResourceTypeCustom            IpamPoolAllocationResourceType = "custom"
+)
+
+// Values returns all known values for IpamPoolAllocationResourceType. Note that
+// this can be expanded in the future, and so it is only as up to date as the
+// client. The ordering of this slice is not guaranteed to be stable across
+// updates.
+func (IpamPoolAllocationResourceType) Values() []IpamPoolAllocationResourceType {
+	return []IpamPoolAllocationResourceType{
+		"ipam-pool",
+		"vpc",
+		"ec2-public-ipv4-pool",
+		"custom",
+	}
+}
+
+type IpamPoolAwsService string
+
+// Enum values for IpamPoolAwsService
+const (
+	IpamPoolAwsServiceEc2 IpamPoolAwsService = "ec2"
+)
+
+// Values returns all known values for IpamPoolAwsService. Note that this can be
+// expanded in the future, and so it is only as up to date as the client. The
+// ordering of this slice is not guaranteed to be stable across updates.
+func (IpamPoolAwsService) Values() []IpamPoolAwsService {
+	return []IpamPoolAwsService{
+		"ec2",
+	}
+}
+
+type IpamPoolCidrFailureCode string
+
+// Enum values for IpamPoolCidrFailureCode
+const (
+	IpamPoolCidrFailureCodeCidrNotAvailable IpamPoolCidrFailureCode = "cidr-not-available"
+)
+
+// Values returns all known values for IpamPoolCidrFailureCode. Note that this can
+// be expanded in the future, and so it is only as up to date as the client. The
+// ordering of this slice is not guaranteed to be stable across updates.
+func (IpamPoolCidrFailureCode) Values() []IpamPoolCidrFailureCode {
+	return []IpamPoolCidrFailureCode{
+		"cidr-not-available",
+	}
+}
+
+type IpamPoolCidrState string
+
+// Enum values for IpamPoolCidrState
+const (
+	IpamPoolCidrStatePendingProvision   IpamPoolCidrState = "pending-provision"
+	IpamPoolCidrStateProvisioned        IpamPoolCidrState = "provisioned"
+	IpamPoolCidrStateFailedProvision    IpamPoolCidrState = "failed-provision"
+	IpamPoolCidrStatePendingDeprovision IpamPoolCidrState = "pending-deprovision"
+	IpamPoolCidrStateDeprovisioned      IpamPoolCidrState = "deprovisioned"
+	IpamPoolCidrStateFailedDeprovision  IpamPoolCidrState = "failed-deprovision"
+	IpamPoolCidrStatePendingImport      IpamPoolCidrState = "pending-import"
+	IpamPoolCidrStateFailedImport       IpamPoolCidrState = "failed-import"
+)
+
+// Values returns all known values for IpamPoolCidrState. Note that this can be
+// expanded in the future, and so it is only as up to date as the client. The
+// ordering of this slice is not guaranteed to be stable across updates.
+func (IpamPoolCidrState) Values() []IpamPoolCidrState {
+	return []IpamPoolCidrState{
+		"pending-provision",
+		"provisioned",
+		"failed-provision",
+		"pending-deprovision",
+		"deprovisioned",
+		"failed-deprovision",
+		"pending-import",
+		"failed-import",
+	}
+}
+
+type IpamPoolState string
+
+// Enum values for IpamPoolState
+const (
+	IpamPoolStateCreateInProgress IpamPoolState = "create-in-progress"
+	IpamPoolStateCreateComplete   IpamPoolState = "create-complete"
+	IpamPoolStateCreateFailed     IpamPoolState = "create-failed"
+	IpamPoolStateModifyInProgress IpamPoolState = "modify-in-progress"
+	IpamPoolStateModifyComplete   IpamPoolState = "modify-complete"
+	IpamPoolStateModifyFailed     IpamPoolState = "modify-failed"
+	IpamPoolStateDeleteInProgress IpamPoolState = "delete-in-progress"
+	IpamPoolStateDeleteComplete   IpamPoolState = "delete-complete"
+	IpamPoolStateDeleteFailed     IpamPoolState = "delete-failed"
+)
+
+// Values returns all known values for IpamPoolState. Note that this can be
+// expanded in the future, and so it is only as up to date as the client. The
+// ordering of this slice is not guaranteed to be stable across updates.
+func (IpamPoolState) Values() []IpamPoolState {
+	return []IpamPoolState{
+		"create-in-progress",
+		"create-complete",
+		"create-failed",
+		"modify-in-progress",
+		"modify-complete",
+		"modify-failed",
+		"delete-in-progress",
+		"delete-complete",
+		"delete-failed",
+	}
+}
+
+type IpamResourceType string
+
+// Enum values for IpamResourceType
+const (
+	IpamResourceTypeVpc            IpamResourceType = "vpc"
+	IpamResourceTypeSubnet         IpamResourceType = "subnet"
+	IpamResourceTypeEip            IpamResourceType = "eip"
+	IpamResourceTypePublicIpv4Pool IpamResourceType = "public-ipv4-pool"
+	IpamResourceTypeIpv6Pool       IpamResourceType = "ipv6-pool"
+)
+
+// Values returns all known values for IpamResourceType. Note that this can be
+// expanded in the future, and so it is only as up to date as the client. The
+// ordering of this slice is not guaranteed to be stable across updates.
+func (IpamResourceType) Values() []IpamResourceType {
+	return []IpamResourceType{
+		"vpc",
+		"subnet",
+		"eip",
+		"public-ipv4-pool",
+		"ipv6-pool",
+	}
+}
+
+type IpamScopeState string
+
+// Enum values for IpamScopeState
+const (
+	IpamScopeStateCreateInProgress IpamScopeState = "create-in-progress"
+	IpamScopeStateCreateComplete   IpamScopeState = "create-complete"
+	IpamScopeStateCreateFailed     IpamScopeState = "create-failed"
+	IpamScopeStateModifyInProgress IpamScopeState = "modify-in-progress"
+	IpamScopeStateModifyComplete   IpamScopeState = "modify-complete"
+	IpamScopeStateModifyFailed     IpamScopeState = "modify-failed"
+	IpamScopeStateDeleteInProgress IpamScopeState = "delete-in-progress"
+	IpamScopeStateDeleteComplete   IpamScopeState = "delete-complete"
+	IpamScopeStateDeleteFailed     IpamScopeState = "delete-failed"
+)
+
+// Values returns all known values for IpamScopeState. Note that this can be
+// expanded in the future, and so it is only as up to date as the client. The
+// ordering of this slice is not guaranteed to be stable across updates.
+func (IpamScopeState) Values() []IpamScopeState {
+	return []IpamScopeState{
+		"create-in-progress",
+		"create-complete",
+		"create-failed",
+		"modify-in-progress",
+		"modify-complete",
+		"modify-failed",
+		"delete-in-progress",
+		"delete-complete",
+		"delete-failed",
+	}
+}
+
+type IpamScopeType string
+
+// Enum values for IpamScopeType
+const (
+	IpamScopeTypePublic  IpamScopeType = "public"
+	IpamScopeTypePrivate IpamScopeType = "private"
+)
+
+// Values returns all known values for IpamScopeType. Note that this can be
+// expanded in the future, and so it is only as up to date as the client. The
+// ordering of this slice is not guaranteed to be stable across updates.
+func (IpamScopeType) Values() []IpamScopeType {
+	return []IpamScopeType{
+		"public",
+		"private",
+	}
+}
+
+type IpamState string
+
+// Enum values for IpamState
+const (
+	IpamStateCreateInProgress IpamState = "create-in-progress"
+	IpamStateCreateComplete   IpamState = "create-complete"
+	IpamStateCreateFailed     IpamState = "create-failed"
+	IpamStateModifyInProgress IpamState = "modify-in-progress"
+	IpamStateModifyComplete   IpamState = "modify-complete"
+	IpamStateModifyFailed     IpamState = "modify-failed"
+	IpamStateDeleteInProgress IpamState = "delete-in-progress"
+	IpamStateDeleteComplete   IpamState = "delete-complete"
+	IpamStateDeleteFailed     IpamState = "delete-failed"
+)
+
+// Values returns all known values for IpamState. Note that this can be expanded in
+// the future, and so it is only as up to date as the client. The ordering of this
+// slice is not guaranteed to be stable across updates.
+func (IpamState) Values() []IpamState {
+	return []IpamState{
+		"create-in-progress",
+		"create-complete",
+		"create-failed",
+		"modify-in-progress",
+		"modify-complete",
+		"modify-failed",
+		"delete-in-progress",
+		"delete-complete",
+		"delete-failed",
+	}
+}
+
 type Ipv6SupportValue string
 
 // Enum values for Ipv6SupportValue
@@ -3082,6 +3947,25 @@ func (KeyType) Values() []KeyType {
 	return []KeyType{
 		"rsa",
 		"ed25519",
+	}
+}
+
+type LaunchTemplateAutoRecoveryState string
+
+// Enum values for LaunchTemplateAutoRecoveryState
+const (
+	LaunchTemplateAutoRecoveryStateDefault  LaunchTemplateAutoRecoveryState = "default"
+	LaunchTemplateAutoRecoveryStateDisabled LaunchTemplateAutoRecoveryState = "disabled"
+)
+
+// Values returns all known values for LaunchTemplateAutoRecoveryState. Note that
+// this can be expanded in the future, and so it is only as up to date as the
+// client. The ordering of this slice is not guaranteed to be stable across
+// updates.
+func (LaunchTemplateAutoRecoveryState) Values() []LaunchTemplateAutoRecoveryState {
+	return []LaunchTemplateAutoRecoveryState{
+		"default",
+		"disabled",
 	}
 }
 
@@ -3187,6 +4071,25 @@ func (LaunchTemplateInstanceMetadataProtocolIpv6) Values() []LaunchTemplateInsta
 	}
 }
 
+type LaunchTemplateInstanceMetadataTagsState string
+
+// Enum values for LaunchTemplateInstanceMetadataTagsState
+const (
+	LaunchTemplateInstanceMetadataTagsStateDisabled LaunchTemplateInstanceMetadataTagsState = "disabled"
+	LaunchTemplateInstanceMetadataTagsStateEnabled  LaunchTemplateInstanceMetadataTagsState = "enabled"
+)
+
+// Values returns all known values for LaunchTemplateInstanceMetadataTagsState.
+// Note that this can be expanded in the future, and so it is only as up to date as
+// the client. The ordering of this slice is not guaranteed to be stable across
+// updates.
+func (LaunchTemplateInstanceMetadataTagsState) Values() []LaunchTemplateInstanceMetadataTagsState {
+	return []LaunchTemplateInstanceMetadataTagsState{
+		"disabled",
+		"enabled",
+	}
+}
+
 type ListingState string
 
 // Enum values for ListingState
@@ -3270,6 +4173,44 @@ func (LocalGatewayRouteType) Values() []LocalGatewayRouteType {
 	return []LocalGatewayRouteType{
 		"static",
 		"propagated",
+	}
+}
+
+type LocalStorage string
+
+// Enum values for LocalStorage
+const (
+	LocalStorageIncluded LocalStorage = "included"
+	LocalStorageRequired LocalStorage = "required"
+	LocalStorageExcluded LocalStorage = "excluded"
+)
+
+// Values returns all known values for LocalStorage. Note that this can be expanded
+// in the future, and so it is only as up to date as the client. The ordering of
+// this slice is not guaranteed to be stable across updates.
+func (LocalStorage) Values() []LocalStorage {
+	return []LocalStorage{
+		"included",
+		"required",
+		"excluded",
+	}
+}
+
+type LocalStorageType string
+
+// Enum values for LocalStorageType
+const (
+	LocalStorageTypeHdd LocalStorageType = "hdd"
+	LocalStorageTypeSsd LocalStorageType = "ssd"
+)
+
+// Values returns all known values for LocalStorageType. Note that this can be
+// expanded in the future, and so it is only as up to date as the client. The
+// ordering of this slice is not guaranteed to be stable across updates.
+func (LocalStorageType) Values() []LocalStorageType {
+	return []LocalStorageType{
+		"hdd",
+		"ssd",
 	}
 }
 
@@ -3539,10 +4480,23 @@ type NetworkInterfaceType string
 
 // Enum values for NetworkInterfaceType
 const (
-	NetworkInterfaceTypeInterface  NetworkInterfaceType = "interface"
-	NetworkInterfaceTypeNatGateway NetworkInterfaceType = "natGateway"
-	NetworkInterfaceTypeEfa        NetworkInterfaceType = "efa"
-	NetworkInterfaceTypeTrunk      NetworkInterfaceType = "trunk"
+	NetworkInterfaceTypeInterface                     NetworkInterfaceType = "interface"
+	NetworkInterfaceTypeNatGateway                    NetworkInterfaceType = "natGateway"
+	NetworkInterfaceTypeEfa                           NetworkInterfaceType = "efa"
+	NetworkInterfaceTypeTrunk                         NetworkInterfaceType = "trunk"
+	NetworkInterfaceTypeLoadBalancer                  NetworkInterfaceType = "load_balancer"
+	NetworkInterfaceTypeNetworkLoadBalancer           NetworkInterfaceType = "network_load_balancer"
+	NetworkInterfaceTypeVpcEndpoint                   NetworkInterfaceType = "vpc_endpoint"
+	NetworkInterfaceTypeBranch                        NetworkInterfaceType = "branch"
+	NetworkInterfaceTypeTransitGateway                NetworkInterfaceType = "transit_gateway"
+	NetworkInterfaceTypeLambda                        NetworkInterfaceType = "lambda"
+	NetworkInterfaceTypeQuicksight                    NetworkInterfaceType = "quicksight"
+	NetworkInterfaceTypeGlobalAcceleratorManaged      NetworkInterfaceType = "global_accelerator_managed"
+	NetworkInterfaceTypeApiGatewayManaged             NetworkInterfaceType = "api_gateway_managed"
+	NetworkInterfaceTypeGatewayLoadBalancer           NetworkInterfaceType = "gateway_load_balancer"
+	NetworkInterfaceTypeGatewayLoadBalancerEndpoint   NetworkInterfaceType = "gateway_load_balancer_endpoint"
+	NetworkInterfaceTypeIotRulesManaged               NetworkInterfaceType = "iot_rules_managed"
+	NetworkInterfaceTypeAwsCodestarConnectionsManaged NetworkInterfaceType = "aws_codestar_connections_managed"
 )
 
 // Values returns all known values for NetworkInterfaceType. Note that this can be
@@ -3554,6 +4508,19 @@ func (NetworkInterfaceType) Values() []NetworkInterfaceType {
 		"natGateway",
 		"efa",
 		"trunk",
+		"load_balancer",
+		"network_load_balancer",
+		"vpc_endpoint",
+		"branch",
+		"transit_gateway",
+		"lambda",
+		"quicksight",
+		"global_accelerator_managed",
+		"api_gateway_managed",
+		"gateway_load_balancer",
+		"gateway_load_balancer_endpoint",
+		"iot_rules_managed",
+		"aws_codestar_connections_managed",
 	}
 }
 
@@ -3656,6 +4623,22 @@ func (PartitionLoadFrequency) Values() []PartitionLoadFrequency {
 		"daily",
 		"weekly",
 		"monthly",
+	}
+}
+
+type PayerResponsibility string
+
+// Enum values for PayerResponsibility
+const (
+	PayerResponsibilityServiceOwner PayerResponsibility = "ServiceOwner"
+)
+
+// Values returns all known values for PayerResponsibility. Note that this can be
+// expanded in the future, and so it is only as up to date as the client. The
+// ordering of this slice is not guaranteed to be stable across updates.
+func (PayerResponsibility) Values() []PayerResponsibility {
+	return []PayerResponsibility{
+		"ServiceOwner",
 	}
 }
 
@@ -3909,7 +4892,8 @@ type ReplacementStrategy string
 
 // Enum values for ReplacementStrategy
 const (
-	ReplacementStrategyLaunch ReplacementStrategy = "launch"
+	ReplacementStrategyLaunch                ReplacementStrategy = "launch"
+	ReplacementStrategyLaunchBeforeTerminate ReplacementStrategy = "launch-before-terminate"
 )
 
 // Values returns all known values for ReplacementStrategy. Note that this can be
@@ -3918,6 +4902,7 @@ const (
 func (ReplacementStrategy) Values() []ReplacementStrategy {
 	return []ReplacementStrategy{
 		"launch",
+		"launch-before-terminate",
 	}
 }
 
@@ -4101,6 +5086,9 @@ const (
 	ResourceTypeInstance                                               ResourceType = "instance"
 	ResourceTypeInstanceEventWindow                                    ResourceType = "instance-event-window"
 	ResourceTypeInternetGateway                                        ResourceType = "internet-gateway"
+	ResourceTypeIpam                                                   ResourceType = "ipam"
+	ResourceTypeIpamPool                                               ResourceType = "ipam-pool"
+	ResourceTypeIpamScope                                              ResourceType = "ipam-scope"
 	ResourceTypeIpv4poolEc2                                            ResourceType = "ipv4pool-ec2"
 	ResourceTypeIpv6poolEc2                                            ResourceType = "ipv6pool-ec2"
 	ResourceTypeKeyPair                                                ResourceType = "key-pair"
@@ -4116,6 +5104,8 @@ const (
 	ResourceTypeNetworkInterface                                       ResourceType = "network-interface"
 	ResourceTypeNetworkInsightsAnalysis                                ResourceType = "network-insights-analysis"
 	ResourceTypeNetworkInsightsPath                                    ResourceType = "network-insights-path"
+	ResourceTypeNetworkInsightsAccessScope                             ResourceType = "network-insights-access-scope"
+	ResourceTypeNetworkInsightsAccessScopeAnalysis                     ResourceType = "network-insights-access-scope-analysis"
 	ResourceTypePlacementGroup                                         ResourceType = "placement-group"
 	ResourceTypePrefixList                                             ResourceType = "prefix-list"
 	ResourceTypeReplaceRootVolumeTask                                  ResourceType = "replace-root-volume-task"
@@ -4127,6 +5117,7 @@ const (
 	ResourceTypeSpotFleetRequest                                       ResourceType = "spot-fleet-request"
 	ResourceTypeSpotInstancesRequest                                   ResourceType = "spot-instances-request"
 	ResourceTypeSubnet                                                 ResourceType = "subnet"
+	ResourceTypeSubnetCidrReservation                                  ResourceType = "subnet-cidr-reservation"
 	ResourceTypeTrafficMirrorFilter                                    ResourceType = "traffic-mirror-filter"
 	ResourceTypeTrafficMirrorSession                                   ResourceType = "traffic-mirror-session"
 	ResourceTypeTrafficMirrorTarget                                    ResourceType = "traffic-mirror-target"
@@ -4170,6 +5161,9 @@ func (ResourceType) Values() []ResourceType {
 		"instance",
 		"instance-event-window",
 		"internet-gateway",
+		"ipam",
+		"ipam-pool",
+		"ipam-scope",
 		"ipv4pool-ec2",
 		"ipv6pool-ec2",
 		"key-pair",
@@ -4185,6 +5179,8 @@ func (ResourceType) Values() []ResourceType {
 		"network-interface",
 		"network-insights-analysis",
 		"network-insights-path",
+		"network-insights-access-scope",
+		"network-insights-access-scope-analysis",
 		"placement-group",
 		"prefix-list",
 		"replace-root-volume-task",
@@ -4196,6 +5192,7 @@ func (ResourceType) Values() []ResourceType {
 		"spot-fleet-request",
 		"spot-instances-request",
 		"subnet",
+		"subnet-cidr-reservation",
 		"traffic-mirror-filter",
 		"traffic-mirror-session",
 		"traffic-mirror-target",
@@ -4448,9 +5445,11 @@ type SnapshotState string
 
 // Enum values for SnapshotState
 const (
-	SnapshotStatePending   SnapshotState = "pending"
-	SnapshotStateCompleted SnapshotState = "completed"
-	SnapshotStateError     SnapshotState = "error"
+	SnapshotStatePending     SnapshotState = "pending"
+	SnapshotStateCompleted   SnapshotState = "completed"
+	SnapshotStateError       SnapshotState = "error"
+	SnapshotStateRecoverable SnapshotState = "recoverable"
+	SnapshotStateRecovering  SnapshotState = "recovering"
 )
 
 // Values returns all known values for SnapshotState. Note that this can be
@@ -4461,6 +5460,8 @@ func (SnapshotState) Values() []SnapshotState {
 		"pending",
 		"completed",
 		"error",
+		"recoverable",
+		"recovering",
 	}
 }
 
@@ -4655,6 +5656,24 @@ func (StatusType) Values() []StatusType {
 	}
 }
 
+type StorageTier string
+
+// Enum values for StorageTier
+const (
+	StorageTierArchive  StorageTier = "archive"
+	StorageTierStandard StorageTier = "standard"
+)
+
+// Values returns all known values for StorageTier. Note that this can be expanded
+// in the future, and so it is only as up to date as the client. The ordering of
+// this slice is not guaranteed to be stable across updates.
+func (StorageTier) Values() []StorageTier {
+	return []StorageTier{
+		"archive",
+		"standard",
+	}
+}
+
 type SubnetCidrBlockStateCode string
 
 // Enum values for SubnetCidrBlockStateCode
@@ -4741,6 +5760,42 @@ func (SummaryStatus) Values() []SummaryStatus {
 	}
 }
 
+type TargetCapacityUnitType string
+
+// Enum values for TargetCapacityUnitType
+const (
+	TargetCapacityUnitTypeVcpu      TargetCapacityUnitType = "vcpu"
+	TargetCapacityUnitTypeMemoryMib TargetCapacityUnitType = "memory-mib"
+	TargetCapacityUnitTypeUnits     TargetCapacityUnitType = "units"
+)
+
+// Values returns all known values for TargetCapacityUnitType. Note that this can
+// be expanded in the future, and so it is only as up to date as the client. The
+// ordering of this slice is not guaranteed to be stable across updates.
+func (TargetCapacityUnitType) Values() []TargetCapacityUnitType {
+	return []TargetCapacityUnitType{
+		"vcpu",
+		"memory-mib",
+		"units",
+	}
+}
+
+type TargetStorageTier string
+
+// Enum values for TargetStorageTier
+const (
+	TargetStorageTierArchive TargetStorageTier = "archive"
+)
+
+// Values returns all known values for TargetStorageTier. Note that this can be
+// expanded in the future, and so it is only as up to date as the client. The
+// ordering of this slice is not guaranteed to be stable across updates.
+func (TargetStorageTier) Values() []TargetStorageTier {
+	return []TargetStorageTier{
+		"archive",
+	}
+}
+
 type TelemetryStatus string
 
 // Enum values for TelemetryStatus
@@ -4776,6 +5831,38 @@ func (Tenancy) Values() []Tenancy {
 		"default",
 		"dedicated",
 		"host",
+	}
+}
+
+type TieringOperationStatus string
+
+// Enum values for TieringOperationStatus
+const (
+	TieringOperationStatusArchivalInProgress         TieringOperationStatus = "archival-in-progress"
+	TieringOperationStatusArchivalCompleted          TieringOperationStatus = "archival-completed"
+	TieringOperationStatusArchivalFailed             TieringOperationStatus = "archival-failed"
+	TieringOperationStatusTemporaryRestoreInProgress TieringOperationStatus = "temporary-restore-in-progress"
+	TieringOperationStatusTemporaryRestoreCompleted  TieringOperationStatus = "temporary-restore-completed"
+	TieringOperationStatusTemporaryRestoreFailed     TieringOperationStatus = "temporary-restore-failed"
+	TieringOperationStatusPermanentRestoreInProgress TieringOperationStatus = "permanent-restore-in-progress"
+	TieringOperationStatusPermanentRestoreCompleted  TieringOperationStatus = "permanent-restore-completed"
+	TieringOperationStatusPermanentRestoreFailed     TieringOperationStatus = "permanent-restore-failed"
+)
+
+// Values returns all known values for TieringOperationStatus. Note that this can
+// be expanded in the future, and so it is only as up to date as the client. The
+// ordering of this slice is not guaranteed to be stable across updates.
+func (TieringOperationStatus) Values() []TieringOperationStatus {
+	return []TieringOperationStatus{
+		"archival-in-progress",
+		"archival-completed",
+		"archival-failed",
+		"temporary-restore-in-progress",
+		"temporary-restore-completed",
+		"temporary-restore-failed",
+		"permanent-restore-in-progress",
+		"permanent-restore-completed",
+		"permanent-restore-failed",
 	}
 }
 

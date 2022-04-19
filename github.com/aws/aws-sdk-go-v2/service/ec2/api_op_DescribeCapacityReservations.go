@@ -49,14 +49,11 @@ type DescribeCapacityReservationsInput struct {
 	// * owner-id - The ID of the Amazon Web
 	// Services account that owns the Capacity Reservation.
 	//
-	// * availability-zone-id -
-	// The Availability Zone ID of the Capacity Reservation.
-	//
 	// * instance-platform - The
 	// type of operating system for which the Capacity Reservation reserves
 	// capacity.
 	//
-	// * availability-zone - The Availability Zone ID of the Capacity
+	// * availability-zone - The Availability Zone of the Capacity
 	// Reservation.
 	//
 	// * tenancy - Indicates the tenancy of the Capacity Reservation. A
@@ -128,6 +125,9 @@ type DescribeCapacityReservationsInput struct {
 	// have matching attributes (instance type, platform, and Availability Zone), and
 	// explicitly target the Capacity Reservation. This ensures that only permitted
 	// instances can use the reserved capacity.
+	//
+	// * placement-group-arn - The ARN of the
+	// cluster placement group in which the Capacity Reservation was created.
 	Filters []types.Filter
 
 	// The maximum number of results to return for the request in a single page. The
@@ -270,12 +270,13 @@ func NewDescribeCapacityReservationsPaginator(client DescribeCapacityReservation
 		client:    client,
 		params:    params,
 		firstPage: true,
+		nextToken: params.NextToken,
 	}
 }
 
 // HasMorePages returns a boolean indicating whether more pages are available
 func (p *DescribeCapacityReservationsPaginator) HasMorePages() bool {
-	return p.firstPage || p.nextToken != nil
+	return p.firstPage || (p.nextToken != nil && len(*p.nextToken) != 0)
 }
 
 // NextPage retrieves the next DescribeCapacityReservations page.
@@ -302,7 +303,10 @@ func (p *DescribeCapacityReservationsPaginator) NextPage(ctx context.Context, op
 	prevToken := p.nextToken
 	p.nextToken = result.NextToken
 
-	if p.options.StopOnDuplicateToken && prevToken != nil && p.nextToken != nil && *prevToken == *p.nextToken {
+	if p.options.StopOnDuplicateToken &&
+		prevToken != nil &&
+		p.nextToken != nil &&
+		*prevToken == *p.nextToken {
 		p.nextToken = nil
 	}
 

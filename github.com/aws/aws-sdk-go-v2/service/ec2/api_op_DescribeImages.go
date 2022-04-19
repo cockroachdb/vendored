@@ -51,7 +51,20 @@ type DescribeImagesInput struct {
 	DryRun *bool
 
 	// Scopes the images by users with explicit launch permissions. Specify an Amazon
-	// Web Services account ID, self (the sender of the request), or all (public AMIs).
+	// Web Services account ID, self (the sender of the request), or all (public
+	// AMIs).
+	//
+	// * If you specify an Amazon Web Services account ID that is not your own,
+	// only AMIs shared with that specific Amazon Web Services account ID are returned.
+	// However, AMIs that are shared with the account’s organization or organizational
+	// unit (OU) are not returned.
+	//
+	// * If you specify self or your own Amazon Web
+	// Services account ID, AMIs shared with your account are returned. In addition,
+	// AMIs that are shared with the organization or OU of which you are member are
+	// also returned.
+	//
+	// * If you specify all, all public AMIs are returned.
 	ExecutableUsers []string
 
 	// The filters.
@@ -314,8 +327,17 @@ func NewImageAvailableWaiter(client DescribeImagesAPIClient, optFns ...func(*Ima
 // maximum wait duration the waiter will wait. The maxWaitDur is required and must
 // be greater than zero.
 func (w *ImageAvailableWaiter) Wait(ctx context.Context, params *DescribeImagesInput, maxWaitDur time.Duration, optFns ...func(*ImageAvailableWaiterOptions)) error {
+	_, err := w.WaitForOutput(ctx, params, maxWaitDur, optFns...)
+	return err
+}
+
+// WaitForOutput calls the waiter function for ImageAvailable waiter and returns
+// the output of the successful operation. The maxWaitDur is the maximum wait
+// duration the waiter will wait. The maxWaitDur is required and must be greater
+// than zero.
+func (w *ImageAvailableWaiter) WaitForOutput(ctx context.Context, params *DescribeImagesInput, maxWaitDur time.Duration, optFns ...func(*ImageAvailableWaiterOptions)) (*DescribeImagesOutput, error) {
 	if maxWaitDur <= 0 {
-		return fmt.Errorf("maximum wait time for waiter must be greater than zero")
+		return nil, fmt.Errorf("maximum wait time for waiter must be greater than zero")
 	}
 
 	options := w.options
@@ -328,7 +350,7 @@ func (w *ImageAvailableWaiter) Wait(ctx context.Context, params *DescribeImagesI
 	}
 
 	if options.MinDelay > options.MaxDelay {
-		return fmt.Errorf("minimum waiter delay %v must be lesser than or equal to maximum waiter delay of %v.", options.MinDelay, options.MaxDelay)
+		return nil, fmt.Errorf("minimum waiter delay %v must be lesser than or equal to maximum waiter delay of %v.", options.MinDelay, options.MaxDelay)
 	}
 
 	ctx, cancelFn := context.WithTimeout(ctx, maxWaitDur)
@@ -356,10 +378,10 @@ func (w *ImageAvailableWaiter) Wait(ctx context.Context, params *DescribeImagesI
 
 		retryable, err := options.Retryable(ctx, params, out, err)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if !retryable {
-			return nil
+			return out, nil
 		}
 
 		remainingTime -= time.Since(start)
@@ -372,16 +394,16 @@ func (w *ImageAvailableWaiter) Wait(ctx context.Context, params *DescribeImagesI
 			attempt, options.MinDelay, options.MaxDelay, remainingTime,
 		)
 		if err != nil {
-			return fmt.Errorf("error computing waiter delay, %w", err)
+			return nil, fmt.Errorf("error computing waiter delay, %w", err)
 		}
 
 		remainingTime -= delay
 		// sleep for the delay amount before invoking a request
 		if err := smithytime.SleepWithContext(ctx, delay); err != nil {
-			return fmt.Errorf("request cancelled while waiting, %w", err)
+			return nil, fmt.Errorf("request cancelled while waiting, %w", err)
 		}
 	}
-	return fmt.Errorf("exceeded max wait time for ImageAvailable waiter")
+	return nil, fmt.Errorf("exceeded max wait time for ImageAvailable waiter")
 }
 
 func imageAvailableStateRetryable(ctx context.Context, input *DescribeImagesInput, output *DescribeImagesOutput, err error) (bool, error) {
@@ -504,8 +526,16 @@ func NewImageExistsWaiter(client DescribeImagesAPIClient, optFns ...func(*ImageE
 // maximum wait duration the waiter will wait. The maxWaitDur is required and must
 // be greater than zero.
 func (w *ImageExistsWaiter) Wait(ctx context.Context, params *DescribeImagesInput, maxWaitDur time.Duration, optFns ...func(*ImageExistsWaiterOptions)) error {
+	_, err := w.WaitForOutput(ctx, params, maxWaitDur, optFns...)
+	return err
+}
+
+// WaitForOutput calls the waiter function for ImageExists waiter and returns the
+// output of the successful operation. The maxWaitDur is the maximum wait duration
+// the waiter will wait. The maxWaitDur is required and must be greater than zero.
+func (w *ImageExistsWaiter) WaitForOutput(ctx context.Context, params *DescribeImagesInput, maxWaitDur time.Duration, optFns ...func(*ImageExistsWaiterOptions)) (*DescribeImagesOutput, error) {
 	if maxWaitDur <= 0 {
-		return fmt.Errorf("maximum wait time for waiter must be greater than zero")
+		return nil, fmt.Errorf("maximum wait time for waiter must be greater than zero")
 	}
 
 	options := w.options
@@ -518,7 +548,7 @@ func (w *ImageExistsWaiter) Wait(ctx context.Context, params *DescribeImagesInpu
 	}
 
 	if options.MinDelay > options.MaxDelay {
-		return fmt.Errorf("minimum waiter delay %v must be lesser than or equal to maximum waiter delay of %v.", options.MinDelay, options.MaxDelay)
+		return nil, fmt.Errorf("minimum waiter delay %v must be lesser than or equal to maximum waiter delay of %v.", options.MinDelay, options.MaxDelay)
 	}
 
 	ctx, cancelFn := context.WithTimeout(ctx, maxWaitDur)
@@ -546,10 +576,10 @@ func (w *ImageExistsWaiter) Wait(ctx context.Context, params *DescribeImagesInpu
 
 		retryable, err := options.Retryable(ctx, params, out, err)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if !retryable {
-			return nil
+			return out, nil
 		}
 
 		remainingTime -= time.Since(start)
@@ -562,16 +592,16 @@ func (w *ImageExistsWaiter) Wait(ctx context.Context, params *DescribeImagesInpu
 			attempt, options.MinDelay, options.MaxDelay, remainingTime,
 		)
 		if err != nil {
-			return fmt.Errorf("error computing waiter delay, %w", err)
+			return nil, fmt.Errorf("error computing waiter delay, %w", err)
 		}
 
 		remainingTime -= delay
 		// sleep for the delay amount before invoking a request
 		if err := smithytime.SleepWithContext(ctx, delay); err != nil {
-			return fmt.Errorf("request cancelled while waiting, %w", err)
+			return nil, fmt.Errorf("request cancelled while waiting, %w", err)
 		}
 	}
-	return fmt.Errorf("exceeded max wait time for ImageExists waiter")
+	return nil, fmt.Errorf("exceeded max wait time for ImageExists waiter")
 }
 
 func imageExistsStateRetryable(ctx context.Context, input *DescribeImagesInput, output *DescribeImagesOutput, err error) (bool, error) {

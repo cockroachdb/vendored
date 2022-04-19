@@ -42,14 +42,14 @@ type DescribeVpcEndpointConnectionsInput struct {
 	// * service-id - The ID of the service.
 	//
 	// *
-	// vpc-endpoint-owner - The AWS account number of the owner of the endpoint.
+	// vpc-endpoint-owner - The ID of the Amazon Web Services account ID that owns the
+	// endpoint.
+	//
+	// * vpc-endpoint-state - The state of the endpoint (pendingAcceptance |
+	// pending | available | deleting | deleted | rejected | failed).
 	//
 	// *
-	// vpc-endpoint-state - The state of the endpoint (pendingAcceptance | pending |
-	// available | deleting | deleted | rejected | failed).
-	//
-	// * vpc-endpoint-id - The ID
-	// of the endpoint.
+	// vpc-endpoint-id - The ID of the endpoint.
 	Filters []types.Filter
 
 	// The maximum number of results to return for the request in a single page. The
@@ -192,12 +192,13 @@ func NewDescribeVpcEndpointConnectionsPaginator(client DescribeVpcEndpointConnec
 		client:    client,
 		params:    params,
 		firstPage: true,
+		nextToken: params.NextToken,
 	}
 }
 
 // HasMorePages returns a boolean indicating whether more pages are available
 func (p *DescribeVpcEndpointConnectionsPaginator) HasMorePages() bool {
-	return p.firstPage || p.nextToken != nil
+	return p.firstPage || (p.nextToken != nil && len(*p.nextToken) != 0)
 }
 
 // NextPage retrieves the next DescribeVpcEndpointConnections page.
@@ -224,7 +225,10 @@ func (p *DescribeVpcEndpointConnectionsPaginator) NextPage(ctx context.Context, 
 	prevToken := p.nextToken
 	p.nextToken = result.NextToken
 
-	if p.options.StopOnDuplicateToken && prevToken != nil && p.nextToken != nil && *prevToken == *p.nextToken {
+	if p.options.StopOnDuplicateToken &&
+		prevToken != nil &&
+		p.nextToken != nil &&
+		*prevToken == *p.nextToken {
 		p.nextToken = nil
 	}
 
