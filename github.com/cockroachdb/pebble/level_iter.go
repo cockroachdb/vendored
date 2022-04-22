@@ -21,9 +21,6 @@ type tableNewIters func(
 	file *manifest.FileMetadata, opts *IterOptions, bytesIterated *uint64,
 ) (internalIterator, keyspan.FragmentIterator, error)
 
-// tableNewRangeKeyIter creates a new range key iterator for the given file.
-type tableNewRangeKeyIter func(file *manifest.FileMetadata, opts *IterOptions) (keyspan.FragmentIterator, error)
-
 // levelIter provides a merged view of the sstables in a level.
 //
 // levelIter is used during compaction and as part of the Iterator
@@ -245,7 +242,7 @@ func (l *levelIter) findFileLT(key []byte) *fileMetadata {
 
 // Init the iteration bounds for the current table. Returns -1 if the table
 // lies fully before the lower bound, +1 if the table lies fully after the
-// upper bound, and 0 if the table overlaps the the iteration bounds.
+// upper bound, and 0 if the table overlaps the iteration bounds.
 func (l *levelIter) initTableBounds(f *fileMetadata) int {
 	l.tableOpts.LowerBound = l.lower
 	if l.tableOpts.LowerBound != nil {
