@@ -117,9 +117,6 @@ github.com/PuerkitoBio/urlesc
 # github.com/Shopify/sarama v1.29.0
 ## explicit; go 1.13
 github.com/Shopify/sarama
-# github.com/Shopify/toxiproxy v2.1.4+incompatible
-## explicit
-github.com/Shopify/toxiproxy/client
 # github.com/VividCortex/ewma v1.1.1
 ## explicit
 github.com/VividCortex/ewma
