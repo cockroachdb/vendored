@@ -41,7 +41,9 @@ type Config struct {
 	BuildFrontend  BuildFrontendFunc
 	RuntimeParams  map[string]string // Run-time parameters to set on connection as session default values (e.g. search_path or application_name)
 
-	Fallbacks []*FallbackConfig
+	KerberosSrvName string
+	KerberosSpn     string
+	Fallbacks       []*FallbackConfig
 
 	// ValidateConnect is called during a connection attempt after a successful authentication with the PostgreSQL server.
 	// It can be used to validate that the server is acceptable. If this returns an error the connection is closed and the next
@@ -176,8 +178,6 @@ func NetworkAddress(host string, port uint16) (network, address string) {
 //
 // Other known differences with libpq:
 //
-// If a host name resolves into multiple addresses, libpq will try all addresses. pgconn will only try the first.
-//
 // When multiple hosts are specified, libpq allows them to have different passwords set via the .pgpass file. pgconn
 // does not.
 //
@@ -248,21 +248,31 @@ func ParseConfig(connString string) (*Config, error) {
 	config.LookupFunc = makeDefaultResolver().LookupHost
 
 	notRuntimeParams := map[string]struct{}{
-		"host":                 struct{}{},
-		"port":                 struct{}{},
-		"database":             struct{}{},
-		"user":                 struct{}{},
-		"password":             struct{}{},
-		"passfile":             struct{}{},
-		"connect_timeout":      struct{}{},
-		"sslmode":              struct{}{},
-		"sslkey":               struct{}{},
-		"sslcert":              struct{}{},
-		"sslrootcert":          struct{}{},
-		"target_session_attrs": struct{}{},
-		"min_read_buffer_size": struct{}{},
-		"service":              struct{}{},
-		"servicefile":          struct{}{},
+		"host":                 {},
+		"port":                 {},
+		"database":             {},
+		"user":                 {},
+		"password":             {},
+		"passfile":             {},
+		"connect_timeout":      {},
+		"sslmode":              {},
+		"sslkey":               {},
+		"sslcert":              {},
+		"sslrootcert":          {},
+		"krbspn":               {},
+		"krbsrvname":           {},
+		"target_session_attrs": {},
+		"min_read_buffer_size": {},
+		"service":              {},
+		"servicefile":          {},
+	}
+
+	// Adding kerberos configuration
+	if _, present := settings["krbsrvname"]; present {
+		config.KerberosSrvName = settings["krbsrvname"]
+	}
+	if _, present := settings["krbspn"]; present {
+		config.KerberosSpn = settings["krbspn"]
 	}
 
 	for k, v := range settings {
@@ -329,10 +339,19 @@ func ParseConfig(connString string) (*Config, error) {
 		}
 	}
 
-	if settings["target_session_attrs"] == "read-write" {
+	switch tsa := settings["target_session_attrs"]; tsa {
+	case "read-write":
 		config.ValidateConnect = ValidateConnectTargetSessionAttrsReadWrite
-	} else if settings["target_session_attrs"] != "any" {
-		return nil, &parseConfigError{connString: connString, msg: fmt.Sprintf("unknown target_session_attrs value: %v", settings["target_session_attrs"])}
+	case "read-only":
+		config.ValidateConnect = ValidateConnectTargetSessionAttrsReadOnly
+	case "primary":
+		config.ValidateConnect = ValidateConnectTargetSessionAttrsPrimary
+	case "standby":
+		config.ValidateConnect = ValidateConnectTargetSessionAttrsStandby
+	case "any", "prefer-standby":
+		// do nothing
+	default:
+		return nil, &parseConfigError{connString: connString, msg: fmt.Sprintf("unknown target_session_attrs value: %v", tsa)}
 	}
 
 	return config, nil
@@ -723,6 +742,51 @@ func ValidateConnectTargetSessionAttrsReadWrite(ctx context.Context, pgConn *PgC
 
 	if string(result.Rows[0][0]) == "on" {
 		return errors.New("read only connection")
+	}
+
+	return nil
+}
+
+// ValidateConnectTargetSessionAttrsReadOnly is an ValidateConnectFunc that implements libpq compatible
+// target_session_attrs=read-only.
+func ValidateConnectTargetSessionAttrsReadOnly(ctx context.Context, pgConn *PgConn) error {
+	result := pgConn.ExecParams(ctx, "show transaction_read_only", nil, nil, nil, nil).Read()
+	if result.Err != nil {
+		return result.Err
+	}
+
+	if string(result.Rows[0][0]) != "on" {
+		return errors.New("connection is not read only")
+	}
+
+	return nil
+}
+
+// ValidateConnectTargetSessionAttrsStandby is an ValidateConnectFunc that implements libpq compatible
+// target_session_attrs=standby.
+func ValidateConnectTargetSessionAttrsStandby(ctx context.Context, pgConn *PgConn) error {
+	result := pgConn.ExecParams(ctx, "select pg_is_in_recovery()", nil, nil, nil, nil).Read()
+	if result.Err != nil {
+		return result.Err
+	}
+
+	if string(result.Rows[0][0]) != "t" {
+		return errors.New("server is not in hot standby mode")
+	}
+
+	return nil
+}
+
+// ValidateConnectTargetSessionAttrsPrimary is an ValidateConnectFunc that implements libpq compatible
+// target_session_attrs=primary.
+func ValidateConnectTargetSessionAttrsPrimary(ctx context.Context, pgConn *PgConn) error {
+	result := pgConn.ExecParams(ctx, "select pg_is_in_recovery()", nil, nil, nil, nil).Read()
+	if result.Err != nil {
+		return result.Err
+	}
+
+	if string(result.Rows[0][0]) == "t" {
+		return errors.New("server is in standby mode")
 	}
 
 	return nil
