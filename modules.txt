@@ -1208,7 +1208,7 @@ github.com/magiconair/properties
 github.com/mailru/easyjson/buffer
 github.com/mailru/easyjson/jlexer
 github.com/mailru/easyjson/jwriter
-# github.com/maruel/panicparse/v2 v2.2.0 => github.com/cockroachdb/panicparse/v2 v2.0.0-20211103220158-604c82a44f1e
+# github.com/maruel/panicparse/v2 v2.2.1
 ## explicit; go 1.11
 github.com/maruel/panicparse/v2/stack
 # github.com/marusama/semaphore v0.0.0-20190110074507-6952cef993b2
@@ -2052,4 +2052,3 @@ vitess.io/vitess/go/vt/vtgate/evalengine
 # github.com/knz/go-libedit => github.com/otan-cockroach/go-libedit v1.10.2-0.20201030151939-7cced08450e7
 # go.etcd.io/etcd/pkg/v3 => go.etcd.io/etcd/pkg/v3 v3.0.0-20201109164711-01844fd28560
 # github.com/docker/docker => github.com/moby/moby v20.10.6+incompatible
-# github.com/maruel/panicparse/v2 => github.com/cockroachdb/panicparse/v2 v2.0.0-20211103220158-604c82a44f1e
