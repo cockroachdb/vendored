@@ -262,7 +262,7 @@ type DB struct {
 
 	tableCache           *tableCacheContainer
 	newIters             tableNewIters
-	tableNewRangeKeyIter keyspan.TableNewRangeKeyIter
+	tableNewRangeKeyIter keyspan.TableNewSpanIter
 
 	commit *commitPipeline
 
@@ -930,9 +930,7 @@ func (d *DB) newIterInternal(batch *Batch, s *Snapshot, o *IterOptions) *Iterato
 		batch:               batch,
 		newIters:            d.newIters,
 		seqNum:              seqNum,
-		newRangeKeyIter: func(it *iteratorRangeKeyState) keyspan.FragmentIterator {
-			return d.newRangeKeyIter(it, seqNum, batch, readState, &dbi.opts)
-		},
+		db:                  d,
 	}
 	if o != nil {
 		dbi.opts = *o
@@ -955,11 +953,24 @@ func finishInitializingIter(buf *iterAlloc) *Iterator {
 		// We only need to read from memtables which contain sequence numbers older
 		// than seqNum. Trim off newer memtables.
 		for i := len(memtables) - 1; i >= 0; i-- {
-			if logSeqNum := memtables[i].logSeqNum; logSeqNum >= dbi.seqNum {
-				continue
+			if logSeqNum := memtables[i].logSeqNum; logSeqNum < dbi.seqNum {
+				break
 			}
-			memtables = memtables[:i+1]
-			break
+			memtables = memtables[:i]
+		}
+	}
+
+	// If the iterator includes an indexed batch, the new iterator state will
+	// reflect the state of the batch only at this moment.
+	if dbi.batch != nil && dbi.batch.nextSeqNum() != dbi.batchSeqNum {
+		dbi.batchSeqNum = dbi.batch.nextSeqNum()
+		// These closures are only non-nil when reinitializing an existing
+		// Iterator, eg, during a call to SetOptions.
+		if dbi.batchRefreshPointKeys != nil {
+			dbi.batchRefreshPointKeys()
+		}
+		if dbi.batchRefreshRangeKeys != nil {
+			dbi.batchRefreshRangeKeys()
 		}
 	}
 
@@ -975,7 +986,7 @@ func finishInitializingIter(buf *iterAlloc) *Iterator {
 		if dbi.rangeKey == nil {
 			dbi.rangeKey = iterRangeKeyStateAllocPool.Get().(*iteratorRangeKeyState)
 			dbi.rangeKey.keys.cmp = dbi.cmp
-			dbi.rangeKey.rangeKeyIter = dbi.newRangeKeyIter(dbi.rangeKey)
+			dbi.rangeKey.rangeKeyIter = dbi.db.newRangeKeyIter(dbi, dbi.seqNum, dbi.batch, dbi.readState)
 		}
 
 		// Wrap the point iterator (currently dbi.iter) with an interleaving
@@ -1044,10 +1055,16 @@ func constructPointIter(
 
 	// Top-level is the batch, if any.
 	if batch != nil {
+		pointIter, refreshPoints := batch.newInternalIter(&dbi.opts)
+		rangeDelIter, refreshRangeDels := batch.newRangeDelIter(&dbi.opts)
 		mlevels = append(mlevels, mergingIterLevel{
-			iter:         base.WrapIterWithStats(batch.newInternalIter(&dbi.opts)),
-			rangeDelIter: batch.newRangeDelIter(&dbi.opts),
+			iter:         base.WrapIterWithStats(pointIter),
+			rangeDelIter: rangeDelIter,
 		})
+		dbi.batchRefreshPointKeys = func() {
+			refreshPoints()
+			refreshRangeDels()
+		}
 	}
 
 	// Next are the memtables.
@@ -1244,6 +1261,11 @@ func (d *DB) Close() error {
 	d.deleters.Wait()
 	d.compactionSchedulers.Wait()
 	d.mu.Lock()
+
+	// If the options include a closer to 'close' the filesystem, close it.
+	if d.opts.private.fsCloser != nil {
+		d.opts.private.fsCloser.Close()
+	}
 	return err
 }
 

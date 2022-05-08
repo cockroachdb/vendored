@@ -58,15 +58,15 @@ type FragmentIterator interface {
 	Close() error
 }
 
-// TableNewRangeKeyIter creates a new range key iterator for the given file.
-type TableNewRangeKeyIter func(file *manifest.FileMetadata, iterOptions *RangeIterOptions) (FragmentIterator, error)
+// TableNewSpanIter creates a new iterator for spans for the given file.
+type TableNewSpanIter func(file *manifest.FileMetadata, iterOptions *SpanIterOptions) (FragmentIterator, error)
 
-// RangeIterOptions is a subset of IterOptions that are necessary to instantiate
-// per-sstable range key iterators.
-type RangeIterOptions struct {
-	// Filters can be used to avoid scanning tables and blocks in tables
+// SpanIterOptions is a subset of IterOptions that are necessary to instantiate
+// per-sstable span iterators.
+type SpanIterOptions struct {
+	// RangeKeyFilters can be used to avoid scanning tables and blocks in tables
 	// when iterating over range keys.
-	Filters []base.BlockPropertyFilter
+	RangeKeyFilters []base.BlockPropertyFilter
 }
 
 // Iter is an iterator over a set of fragmented spans.
@@ -81,7 +81,14 @@ var _ FragmentIterator = (*Iter)(nil)
 
 // NewIter returns a new iterator over a set of fragmented spans.
 func NewIter(cmp base.Compare, spans []Span) *Iter {
-	return &Iter{
+	i := &Iter{}
+	i.Init(cmp, spans)
+	return i
+}
+
+// Init initializes an Iter with the provided spans.
+func (i *Iter) Init(cmp base.Compare, spans []Span) {
+	*i = Iter{
 		cmp:   cmp,
 		spans: spans,
 		index: -1,
