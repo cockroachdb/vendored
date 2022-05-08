@@ -568,13 +568,14 @@ github.com/cockroachdb/gostdlib/x/tools/internal/span
 # github.com/cockroachdb/logtags v0.0.0-20211118104740-dabe8e521a4f
 ## explicit; go 1.16
 github.com/cockroachdb/logtags
-# github.com/cockroachdb/pebble v0.0.0-20220426173801-b33d6e173cae
+# github.com/cockroachdb/pebble v0.0.0-20220426173801-b33d6e173cae => github.com/erikgrinaker/pebble v0.0.0-20220508180414-890ae9d01890
 ## explicit; go 1.13
 github.com/cockroachdb/pebble
 github.com/cockroachdb/pebble/bloom
 github.com/cockroachdb/pebble/internal/arenaskl
 github.com/cockroachdb/pebble/internal/base
 github.com/cockroachdb/pebble/internal/batchskl
+github.com/cockroachdb/pebble/internal/bytealloc
 github.com/cockroachdb/pebble/internal/cache
 github.com/cockroachdb/pebble/internal/crc
 github.com/cockroachdb/pebble/internal/fastrand
@@ -2053,3 +2054,4 @@ vitess.io/vitess/go/vt/vtgate/evalengine
 # go.etcd.io/etcd/pkg/v3 => go.etcd.io/etcd/pkg/v3 v3.0.0-20201109164711-01844fd28560
 # github.com/docker/docker => github.com/moby/moby v20.10.6+incompatible
 # github.com/maruel/panicparse/v2 => github.com/cockroachdb/panicparse/v2 v2.0.0-20211103220158-604c82a44f1e
+# github.com/cockroachdb/pebble => github.com/erikgrinaker/pebble v0.0.0-20220508180414-890ae9d01890

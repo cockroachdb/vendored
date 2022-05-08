@@ -120,7 +120,7 @@ func (c *tableCacheContainer) newIters(
 }
 
 func (c *tableCacheContainer) newRangeKeyIter(
-	file *manifest.FileMetadata, opts *keyspan.RangeIterOptions,
+	file *manifest.FileMetadata, opts *keyspan.SpanIterOptions,
 ) (keyspan.FragmentIterator, error) {
 	return c.tableCache.getShard(file.FileNum).newRangeKeyIter(file, opts, &c.dbOpts)
 }
@@ -364,11 +364,15 @@ func (c *tableCacheShard) newIters(
 	}
 
 	var iter sstable.Iterator
+	useFilter := true
+	if opts != nil {
+		useFilter = manifest.LevelToInt(opts.level) != 6 || opts.UseL6Filters
+	}
 	if bytesIterated != nil {
 		iter, err = v.reader.NewCompactionIter(bytesIterated)
 	} else {
 		iter, err = v.reader.NewIterWithBlockPropertyFilters(
-			opts.GetLowerBound(), opts.GetUpperBound(), filterer)
+			opts.GetLowerBound(), opts.GetUpperBound(), filterer, useFilter)
 	}
 	if err != nil {
 		c.unrefValue(v)
@@ -402,7 +406,7 @@ func (c *tableCacheShard) newIters(
 }
 
 func (c *tableCacheShard) newRangeKeyIter(
-	file *manifest.FileMetadata, opts *keyspan.RangeIterOptions, dbOpts *tableCacheOpts,
+	file *manifest.FileMetadata, opts *keyspan.SpanIterOptions, dbOpts *tableCacheOpts,
 ) (keyspan.FragmentIterator, error) {
 	// Calling findNode gives us the responsibility of decrementing v's
 	// refCount. If opening the underlying table resulted in error, then we
@@ -418,7 +422,7 @@ func (c *tableCacheShard) newRangeKeyIter(
 	ok := true
 	var err error
 	if opts != nil {
-		ok, _, err = c.checkAndIntersectFilters(v, nil, opts.Filters)
+		ok, _, err = c.checkAndIntersectFilters(v, nil, opts.RangeKeyFilters)
 	}
 	if err != nil {
 		c.unrefValue(v)
