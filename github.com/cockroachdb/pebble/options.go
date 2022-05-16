@@ -7,6 +7,7 @@ package pebble
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"runtime"
 	"strconv"
 	"strings"
@@ -16,6 +17,7 @@ import (
 	"github.com/cockroachdb/pebble/internal/base"
 	"github.com/cockroachdb/pebble/internal/cache"
 	"github.com/cockroachdb/pebble/internal/humanize"
+	"github.com/cockroachdb/pebble/internal/manifest"
 	"github.com/cockroachdb/pebble/sstable"
 	"github.com/cockroachdb/pebble/vfs"
 )
@@ -72,6 +74,20 @@ const (
 	// keys and range keys simultaneously.
 	IterKeyTypePointsAndRanges
 )
+
+// String implements fmt.Stringer.
+func (t IterKeyType) String() string {
+	switch t {
+	case IterKeyTypePointsOnly:
+		return "points-only"
+	case IterKeyTypeRangesOnly:
+		return "ranges-only"
+	case IterKeyTypePointsAndRanges:
+		return "points-and-ranges"
+	default:
+		panic(fmt.Sprintf("unknown key type %d", t))
+	}
+}
 
 // IterOptions hold the optional per-query parameters for NewIter.
 //
@@ -139,8 +155,19 @@ type IterOptions struct {
 	// weight than creating an iterator, so we have opted to support this
 	// iterator option.
 	OnlyReadGuaranteedDurable bool
+	// UseL6Filters allows the caller to opt into reading filter blocks for L6
+	// sstables. Helpful if a lot of SeekPrefixGEs are expected in quick
+	// succession, that are also likely to not yield a single key. Filter blocks in
+	// L6 can be relatively large, often larger than data blocks, so the benefit of
+	// loading them in the cache is minimized if the probability of the key
+	// existing is not low or if we just expect a one-time Seek (where loading the
+	// data block directly is better).
+	UseL6Filters bool
 	// Internal options.
 	logger Logger
+	// Level corresponding to this file. Only passed in if constructed by a
+	// levelIter.
+	level manifest.Level
 
 	// NB: If adding new Options, you must account for them in iterator
 	// construction and Iterator.SetOptions.
@@ -689,6 +716,16 @@ type Options struct {
 		// default is 1 MB/s. Currently disabled as this option has no effect while
 		// private.enablePacing is false.
 		minFlushRate int
+
+		// fsCloser holds a closer that should be invoked after a DB using these
+		// Options is closed. This is used to automatically stop the
+		// long-running goroutine associated with the disk-health-checking FS.
+		// See the initialization of FS in EnsureDefaults. Note that care has
+		// been taken to ensure that it is still safe to continue using the FS
+		// after this closer has been invoked. However, if write operations
+		// against the FS are made after the DB is closed, the FS may leak a
+		// goroutine indefinitely.
+		fsCloser io.Closer
 	}
 }
 
@@ -812,7 +849,7 @@ func (o *Options) EnsureDefaults() *Options {
 	}
 
 	if o.FS == nil {
-		o.FS = vfs.WithDiskHealthChecks(vfs.Default, 5*time.Second,
+		o.FS, o.private.fsCloser = vfs.WithDiskHealthChecks(vfs.Default, 5*time.Second,
 			func(name string, duration time.Duration) {
 				o.EventListener.DiskSlow(DiskSlowInfo{
 					Path:     name,
