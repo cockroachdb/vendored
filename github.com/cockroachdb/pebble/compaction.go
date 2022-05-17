@@ -384,11 +384,9 @@ type compaction struct {
 	// L0Sublevels. If nil, flushes aren't split.
 	l0Limits [][]byte
 
-	// l0ManualCompactionFiles is used for L0 manual compactions. Each sublevel is
-	// treated as a level in the merging iter. It is crucial that this slice
-	// is non-nil iff we have picked a compaction which includes every single
-	// file in L0.
-	l0ManualCompactionFiles []manifest.LevelSlice
+	// L0 sublevel info is used for compactions out of L0. It is nil for all
+	// other compactions.
+	l0SublevelInfo []sublevelInfo
 
 	// List of disjoint inuse key ranges the compaction overlaps with in
 	// grandparent and lower levels. See setupInuseKeyRanges() for the
@@ -439,20 +437,20 @@ func (c *compaction) makeInfo(jobID int) CompactionInfo {
 
 func newCompaction(pc *pickedCompaction, opts *Options, bytesCompacted *uint64) *compaction {
 	c := &compaction{
-		kind:                    compactionKindDefault,
-		cmp:                     pc.cmp,
-		equal:                   opts.equal(),
-		formatKey:               opts.Comparer.FormatKey,
-		score:                   pc.score,
-		inputs:                  pc.inputs,
-		smallest:                pc.smallest,
-		largest:                 pc.largest,
-		logger:                  opts.Logger,
-		version:                 pc.version,
-		maxOutputFileSize:       pc.maxOutputFileSize,
-		maxOverlapBytes:         pc.maxOverlapBytes,
-		atomicBytesIterated:     bytesCompacted,
-		l0ManualCompactionFiles: pc.l0ManualCompactionFiles,
+		kind:                compactionKindDefault,
+		cmp:                 pc.cmp,
+		equal:               opts.equal(),
+		formatKey:           opts.Comparer.FormatKey,
+		score:               pc.score,
+		inputs:              pc.inputs,
+		smallest:            pc.smallest,
+		largest:             pc.largest,
+		logger:              opts.Logger,
+		version:             pc.version,
+		maxOutputFileSize:   pc.maxOutputFileSize,
+		maxOverlapBytes:     pc.maxOverlapBytes,
+		atomicBytesIterated: bytesCompacted,
+		l0SublevelInfo:      pc.l0SublevelInfo,
 	}
 	c.startLevel = &c.inputs[0]
 	c.outputLevel = &c.inputs[1]
@@ -929,22 +927,6 @@ func (c *compaction) newInputIter(newIters tableNewIters) (_ internalIterator, r
 		return newMergingIter(c.logger, c.cmp, nil, iters...), nil
 	}
 
-	// Check that the LSM ordering invariants are ok in order to prevent
-	// generating corrupted sstables due to a violation of those invariants.
-	if c.l0ManualCompactionFiles != nil {
-		// We may be using L0 sublevels for compaction.
-		//
-		// TODO(bananabrick): Get rid of this special casing when we switch
-		// to always using sublevels for compactions out of L0.
-		for i, s := range c.l0ManualCompactionFiles {
-			err := manifest.CheckOrdering(c.cmp, c.formatKey,
-				manifest.L0Sublevel(i), s.Iter())
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-
 	if c.startLevel.level >= 0 {
 		err := manifest.CheckOrdering(c.cmp, c.formatKey,
 			manifest.Level(c.startLevel.level), c.startLevel.files.Iter())
@@ -956,6 +938,20 @@ func (c *compaction) newInputIter(newIters tableNewIters) (_ internalIterator, r
 		manifest.Level(c.outputLevel.level), c.outputLevel.files.Iter())
 	if err != nil {
 		return nil, err
+	}
+
+	if c.startLevel.level == 0 {
+		if c.l0SublevelInfo == nil {
+			panic("l0SublevelInfo not created for compaction out of L0")
+		}
+
+		for _, info := range c.l0SublevelInfo {
+			err := manifest.CheckOrdering(c.cmp, c.formatKey,
+				info.sublevel, info.Iter())
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	iters := make([]internalIterator, 0, 2*c.startLevel.files.Len()+1)
@@ -984,9 +980,9 @@ func (c *compaction) newInputIter(newIters tableNewIters) (_ internalIterator, r
 	// internal iterator interface). The resulting merged rangedel iterator is
 	// then included with the point levels in a single mergingIter.
 	newRangeDelIter := func(
-		f manifest.LevelFile, _ *IterOptions, bytesIterated *uint64,
+		f *manifest.FileMetadata, slice manifest.LevelSlice, _ *IterOptions, bytesIterated *uint64,
 	) (keyspan.FragmentIterator, error) {
-		iter, rangeDelIter, err := newIters(f.FileMetadata, nil /* iter options */, &c.bytesIterated)
+		iter, rangeDelIter, err := newIters(f, nil /* iter options */, &c.bytesIterated)
 		if err == nil {
 			// TODO(peter): It is mildly wasteful to open the point iterator only to
 			// immediately close it. One way to solve this would be to add new
@@ -1015,7 +1011,7 @@ func (c *compaction) newInputIter(newIters tableNewIters) (_ internalIterator, r
 			//
 			// The current Pebble compaction logic DOES truncate tombstones to
 			// atomic unit boundaries at compaction time too.
-			atomicUnit, _ := expandToAtomicUnit(c.cmp, f.Slice(), true /* disableIsCompacting */)
+			atomicUnit, _ := expandToAtomicUnit(c.cmp, slice, true /* disableIsCompacting */)
 			lowerBound, upperBound := manifest.KeyRange(c.cmp, atomicUnit.Iter())
 			// Range deletion tombstones are often written to sstables
 			// untruncated on the end key side. However, they are still only
@@ -1038,46 +1034,17 @@ func (c *compaction) newInputIter(newIters tableNewIters) (_ internalIterator, r
 	addItersForLevel := func(level *compactionLevel, l manifest.Level) error {
 		iters = append(iters, newLevelIter(iterOpts, c.cmp, nil /* split */, newIters,
 			level.files.Iter(), l, &c.bytesIterated))
-		// Add the range deletion iterator for each file as an independent level
-		// in mergingIter, as opposed to making a levelIter out of those. This
-		// is safer as levelIter expects all keys coming from underlying
-		// iterators to be in order. Due to compaction / tombstone writing
-		// logic in finishOutput(), it is possible for range tombstones to not
-		// be strictly ordered across all files in one level.
-		//
-		// Consider this example from the metamorphic tests (also repeated in
-		// finishOutput()), consisting of three L3 files with their bounds
-		// specified in square brackets next to the file name:
-		//
-		// ./000240.sst   [tmgc#391,MERGE-tmgc#391,MERGE]
-		// tmgc#391,MERGE [786e627a]
-		// tmgc-udkatvs#331,RANGEDEL
-		//
-		// ./000241.sst   [tmgc#384,MERGE-tmgc#384,MERGE]
-		// tmgc#384,MERGE [666c7070]
-		// tmgc-tvsalezade#383,RANGEDEL
-		// tmgc-tvsalezade#331,RANGEDEL
-		//
-		// ./000242.sst   [tmgc#383,RANGEDEL-tvsalezade#72057594037927935,RANGEDEL]
-		// tmgc-tvsalezade#383,RANGEDEL
-		// tmgc#375,SET [72646c78766965616c72776865676e79]
-		// tmgc-tvsalezade#356,RANGEDEL
-		//
-		// Here, the range tombstone in 000240.sst falls "after" one in
-		// 000241.sst, despite 000240.sst being ordered "before" 000241.sst for
-		// levelIter's purposes. While each file is still consistent before its
-		// bounds, it's safer to have all rangedel iterators be visible to
-		// mergingIter.
-		iter := level.files.Iter()
-		for f := iter.First(); f != nil; f = iter.Next() {
-			rangeDelIter, err := newRangeDelIter(iter.Take(), nil, &c.bytesIterated)
-			if err != nil {
-				return errors.Wrapf(err, "pebble: could not open table %s", errors.Safe(f.FileNum))
-			}
-			if rangeDelIter != emptyKeyspanIter {
-				rangeDelIters = append(rangeDelIters, rangeDelIter)
-			}
+		// Create a wrapping closure to turn newRangeDelIter into a
+		// keyspan.TableNewSpanIter, and return a LevelIter that lazily creates
+		// rangedel iterators. This is safe now that range deletions are truncated
+		// at file bounds; the merging iterator no longer needs to see all range
+		// deletes for correctness.
+		wrapper := func(file *manifest.FileMetadata, iterOptions *keyspan.SpanIterOptions) (keyspan.FragmentIterator, error) {
+			return newRangeDelIter(file, level.files, nil, &c.bytesIterated)
 		}
+		li := &keyspan.LevelIter{}
+		li.Init(keyspan.SpanIterOptions{}, c.cmp, wrapper, level.files.Iter(), l, c.logger, manifest.KeyTypePoint)
+		rangeDelIters = append(rangeDelIters, li)
 		return nil
 	}
 
@@ -1085,25 +1052,11 @@ func (c *compaction) newInputIter(newIters tableNewIters) (_ internalIterator, r
 		if err = addItersForLevel(c.startLevel, manifest.Level(c.startLevel.level)); err != nil {
 			return nil, err
 		}
-	} else if c.l0ManualCompactionFiles != nil {
-		// This condition should only get triggered during a non concurrent
-		// compaction of the entire L0.
-		for i, s := range c.l0ManualCompactionFiles {
-			if err = addItersForLevel(&compactionLevel{0, s}, manifest.L0Sublevel(i)); err != nil {
-				return nil, err
-			}
-		}
 	} else {
-		iter := c.startLevel.files.Iter()
-		for f := iter.First(); f != nil; f = iter.Next() {
-			iter, rangeDelIter, err := newIters(iter.Current(), nil /* iter options */, &c.bytesIterated)
-			if err != nil {
-				return nil, errors.Wrapf(err, "pebble: could not open table %s", errors.Safe(f.FileNum))
-			}
-			iters = append(iters, iter)
-			if rangeDelIter != nil {
-				c.closers = append(c.closers, rangeDelIter)
-				rangeDelIters = append(rangeDelIters, noCloseIter{rangeDelIter})
+		for _, info := range c.l0SublevelInfo {
+			if err = addItersForLevel(
+				&compactionLevel{0, info.LevelSlice}, info.sublevel); err != nil {
+				return nil, err
 			}
 		}
 	}
@@ -2422,15 +2375,30 @@ func (d *DB) runCompaction(
 				// these bounds. Some fragmenting is performed ahead of time by
 				// keyspan.MergingIter.
 				if s := c.rangeDelIter.Span(); !s.Empty() {
-					// Clone the s.Keys slice. It's owned by the the range
-					// deletion iterator stack, and it may be overwritten when
-					// we advance.
+					// The memory management here is subtle. Range deletions
+					// blocks do NOT use prefix compression, which ensures that
+					// range deletion spans' memory is available as long we keep
+					// the iterator open. However, the keyspan.MergingIter that
+					// merges spans across levels only guarantees the lifetime
+					// of the [start, end) bounds until the next positioning
+					// method is called.
 					//
-					// We only need to perform a shallow clone, because the user
-					// keys and values point directly into the range deletion
-					// block which does NOT use prefix compression. This
-					// provides key stability.
-					c.rangeDelFrag.Add(s.ShallowClone())
+					// Additionally, the Span.Keys slice is owned by the the
+					// range deletion iterator stack, and it may be overwritten
+					// when we advance.
+					//
+					// Clone the Keys slice and the start and end keys.
+					//
+					// TODO(jackson): Avoid the clone by removing c.rangeDelFrag
+					// and performing explicit truncation of the pending
+					// rangedel span as necessary.
+					clone := keyspan.Span{
+						Start: iter.cloneKey(s.Start),
+						End:   iter.cloneKey(s.End),
+						Keys:  make([]keyspan.Key, len(s.Keys)),
+					}
+					copy(clone.Keys, s.Keys)
+					c.rangeDelFrag.Add(clone)
 				}
 				continue
 			}

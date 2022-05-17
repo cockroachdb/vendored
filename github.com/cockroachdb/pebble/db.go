@@ -262,7 +262,7 @@ type DB struct {
 
 	tableCache           *tableCacheContainer
 	newIters             tableNewIters
-	tableNewRangeKeyIter keyspan.TableNewRangeKeyIter
+	tableNewRangeKeyIter keyspan.TableNewSpanIter
 
 	commit *commitPipeline
 
@@ -861,6 +861,7 @@ func (d *DB) commitWrite(b *Batch, syncWG *sync.WaitGroup, syncErr *error) (*mem
 type iterAlloc struct {
 	dbi                 Iterator
 	keyBuf              []byte
+	boundsBuf           [2][]byte
 	prefixOrFullSeekKey []byte
 	merging             mergingIter
 	mlevels             [3 + numLevels]mergingIterLevel
@@ -927,15 +928,15 @@ func (d *DB) newIterInternal(batch *Batch, s *Snapshot, o *IterOptions) *Iterato
 		readState:           readState,
 		keyBuf:              buf.keyBuf,
 		prefixOrFullSeekKey: buf.prefixOrFullSeekKey,
+		boundsBuf:           buf.boundsBuf,
 		batch:               batch,
 		newIters:            d.newIters,
 		seqNum:              seqNum,
-		newRangeKeyIter: func(it *iteratorRangeKeyState) keyspan.FragmentIterator {
-			return d.newRangeKeyIter(it, seqNum, batch, readState, &dbi.opts)
-		},
+		db:                  d,
 	}
 	if o != nil {
 		dbi.opts = *o
+		dbi.saveBounds(o.LowerBound, o.UpperBound)
 	}
 	dbi.opts.logger = d.opts.Logger
 	return finishInitializingIter(buf)
@@ -955,11 +956,10 @@ func finishInitializingIter(buf *iterAlloc) *Iterator {
 		// We only need to read from memtables which contain sequence numbers older
 		// than seqNum. Trim off newer memtables.
 		for i := len(memtables) - 1; i >= 0; i-- {
-			if logSeqNum := memtables[i].logSeqNum; logSeqNum >= dbi.seqNum {
-				continue
+			if logSeqNum := memtables[i].logSeqNum; logSeqNum < dbi.seqNum {
+				break
 			}
-			memtables = memtables[:i+1]
-			break
+			memtables = memtables[:i]
 		}
 	}
 
@@ -975,7 +975,7 @@ func finishInitializingIter(buf *iterAlloc) *Iterator {
 		if dbi.rangeKey == nil {
 			dbi.rangeKey = iterRangeKeyStateAllocPool.Get().(*iteratorRangeKeyState)
 			dbi.rangeKey.keys.cmp = dbi.cmp
-			dbi.rangeKey.rangeKeyIter = dbi.newRangeKeyIter(dbi.rangeKey)
+			dbi.rangeKey.rangeKeyIter = dbi.db.newRangeKeyIter(dbi.rangeKey, dbi.seqNum, dbi.batch, dbi.readState, &dbi.opts)
 		}
 
 		// Wrap the point iterator (currently dbi.iter) with an interleaving
@@ -988,10 +988,8 @@ func finishInitializingIter(buf *iterAlloc) *Iterator {
 		dbi.rangeKey.iter.Init(dbi.cmp, dbi.iter, dbi.rangeKey.rangeKeyIter, keyspan.Hooks{
 			SpanChanged: dbi.rangeKeySpanChanged,
 			SkipPoint:   dbi.rangeKeySkipPoint,
-		})
+		}, dbi.opts.LowerBound, dbi.opts.UpperBound)
 		dbi.iter = &dbi.rangeKey.iter
-		dbi.iter.SetBounds(dbi.opts.LowerBound, dbi.opts.UpperBound)
-		dbi.rangeKey.activeMaskSuffix = dbi.rangeKey.activeMaskSuffix[:0]
 	}
 	return dbi
 }
@@ -1003,10 +1001,6 @@ func constructPointIter(
 		return emptyIter
 	}
 	if dbi.pointIter != nil {
-		// The point iterator has already been constructed. This may be the case
-		// when an Iterator is being re-initialized during a call to SetOptions.
-		// Set the current bounds.
-		dbi.pointIter.SetBounds(dbi.opts.LowerBound, dbi.opts.UpperBound)
 		return dbi.pointIter
 	}
 
@@ -1244,6 +1238,11 @@ func (d *DB) Close() error {
 	d.deleters.Wait()
 	d.compactionSchedulers.Wait()
 	d.mu.Lock()
+
+	// If the options include a closer to 'close' the filesystem, close it.
+	if d.opts.private.fsCloser != nil {
+		d.opts.private.fsCloser.Close()
+	}
 	return err
 }
 
@@ -1316,20 +1315,8 @@ func (d *DB) Compact(start, end []byte, parallelize bool) error {
 	}
 
 	for level := 0; level < maxLevelWithFiles; {
-		par := parallelize
-		if level == 0 {
-			// TODO(bananabrick): Get rid of this special casing once
-			// we start to always add sublevels to the merging iter for
-			// L0 -> Lbase compactions.
-			//
-			// Avoid trying to parallelize l0 manual compactions because in
-			// practice it's difficult to split l0 into non-overlapping key
-			// ranges, and not splitting l0 allows us to add level iters
-			// instead of file iters into the merging iter, which results
-			// in a faster compaction.
-			par = false
-		}
-		if err := d.manualCompact(iStart.UserKey, iEnd.UserKey, level, par); err != nil {
+		if err := d.manualCompact(
+			iStart.UserKey, iEnd.UserKey, level, parallelize); err != nil {
 			return err
 		}
 		level++
