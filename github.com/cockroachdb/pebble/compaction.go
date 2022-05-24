@@ -464,6 +464,12 @@ type compaction struct {
 	// L0Sublevels. If nil, flushes aren't split.
 	l0Limits [][]byte
 
+	// l0ManualCompactionFiles is used for L0 manual compactions. Each sublevel is
+	// treated as a level in the merging iter. It is crucial that this slice
+	// is non-nil iff we have picked a compaction which includes every single
+	// file in L0.
+	l0ManualCompactionFiles []manifest.LevelSlice
+
 	// List of disjoint inuse key ranges the compaction overlaps with in
 	// grandparent and lower levels. See setupInuseKeyRanges() for the
 	// construction. Used by elideTombstone() and elideRangeTombstone() to
@@ -513,18 +519,19 @@ func (c *compaction) makeInfo(jobID int) CompactionInfo {
 
 func newCompaction(pc *pickedCompaction, opts *Options, bytesCompacted *uint64) *compaction {
 	c := &compaction{
-		kind:                compactionKindDefault,
-		cmp:                 pc.cmp,
-		formatKey:           opts.Comparer.FormatKey,
-		score:               pc.score,
-		inputs:              pc.inputs,
-		smallest:            pc.smallest,
-		largest:             pc.largest,
-		logger:              opts.Logger,
-		version:             pc.version,
-		maxOutputFileSize:   pc.maxOutputFileSize,
-		maxOverlapBytes:     pc.maxOverlapBytes,
-		atomicBytesIterated: bytesCompacted,
+		kind:                    compactionKindDefault,
+		cmp:                     pc.cmp,
+		formatKey:               opts.Comparer.FormatKey,
+		score:                   pc.score,
+		inputs:                  pc.inputs,
+		smallest:                pc.smallest,
+		largest:                 pc.largest,
+		logger:                  opts.Logger,
+		version:                 pc.version,
+		maxOutputFileSize:       pc.maxOutputFileSize,
+		maxOverlapBytes:         pc.maxOverlapBytes,
+		atomicBytesIterated:     bytesCompacted,
+		l0ManualCompactionFiles: pc.l0ManualCompactionFiles,
 	}
 	c.startLevel = &c.inputs[0]
 	c.outputLevel = &c.inputs[1]
@@ -995,6 +1002,20 @@ func (c *compaction) newInputIter(newIters tableNewIters) (_ internalIterator, r
 
 	// Check that the LSM ordering invariants are ok in order to prevent
 	// generating corrupted sstables due to a violation of those invariants.
+	if c.l0ManualCompactionFiles != nil {
+		// We may be using L0 sublevels for compaction.
+		//
+		// TODO(bananabrick): Get rid of this special casing when we switch
+		// to always using sublevels for compactions out of L0.
+		for i, s := range c.l0ManualCompactionFiles {
+			err := manifest.CheckOrdering(c.cmp, c.formatKey,
+				manifest.L0Sublevel(i), s.Iter())
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	if c.startLevel.level >= 0 {
 		err := manifest.CheckOrdering(c.cmp, c.formatKey,
 			manifest.Level(c.startLevel.level), c.startLevel.files.Iter())
@@ -1074,9 +1095,9 @@ func (c *compaction) newInputIter(newIters tableNewIters) (_ internalIterator, r
 	}
 
 	iterOpts := IterOptions{logger: c.logger}
-	addItersForLevel := func(iters []internalIterator, level *compactionLevel) ([]internalIterator, error) {
+	addItersForLevel := func(iters []internalIterator, level *compactionLevel, l manifest.Level) ([]internalIterator, error) {
 		iters = append(iters, newLevelIter(iterOpts, c.cmp, nil /* split */, newIters,
-			level.files.Iter(), manifest.Level(level.level), &c.bytesIterated))
+			level.files.Iter(), l, &c.bytesIterated))
 		// Add the range deletion iterator for each file as an independent level
 		// in mergingIter, as opposed to making a levelIter out of those. This
 		// is safer as levelIter expects all keys coming from underlying
@@ -1121,9 +1142,17 @@ func (c *compaction) newInputIter(newIters tableNewIters) (_ internalIterator, r
 	}
 
 	if c.startLevel.level != 0 {
-		iters, err = addItersForLevel(iters, c.startLevel)
+		iters, err = addItersForLevel(iters, c.startLevel, manifest.Level(c.startLevel.level))
 		if err != nil {
 			return nil, err
+		}
+	} else if c.l0ManualCompactionFiles != nil {
+		// This condition should only get triggered during a non concurrent
+		// compaction of the entire L0.
+		for i, s := range c.l0ManualCompactionFiles {
+			if iters, err = addItersForLevel(iters, &compactionLevel{0, s}, manifest.L0Sublevel(i)); err != nil {
+				return nil, err
+			}
 		}
 	} else {
 		iter := c.startLevel.files.Iter()
@@ -1139,7 +1168,7 @@ func (c *compaction) newInputIter(newIters tableNewIters) (_ internalIterator, r
 		}
 	}
 
-	iters, err = addItersForLevel(iters, c.outputLevel)
+	iters, err = addItersForLevel(iters, c.outputLevel, manifest.Level(c.outputLevel.level))
 	if err != nil {
 		return nil, err
 	}
