@@ -7,6 +7,7 @@ package pebble
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"runtime"
 	"strconv"
 	"strings"
@@ -681,6 +682,16 @@ type Options struct {
 		// default is 1 MB/s. Currently disabled as this option has no effect while
 		// private.enablePacing is false.
 		minFlushRate int
+
+		// fsCloser holds a closer that should be invoked after a DB using these
+		// Options is closed. This is used to automatically stop the
+		// long-running goroutine associated with the disk-health-checking FS.
+		// See the initialization of FS in EnsureDefaults. Note that care has
+		// been taken to ensure that it is still safe to continue using the FS
+		// after this closer has been invoked. However, if write operations
+		// against the FS are made after the DB is closed, the FS may leak a
+		// goroutine indefinitely.
+		fsCloser io.Closer
 	}
 }
 
@@ -804,7 +815,7 @@ func (o *Options) EnsureDefaults() *Options {
 	}
 
 	if o.FS == nil {
-		o.FS = vfs.WithDiskHealthChecks(vfs.Default, 5*time.Second,
+		o.FS, o.private.fsCloser = vfs.WithDiskHealthChecks(vfs.Default, 5*time.Second,
 			func(name string, duration time.Duration) {
 				o.EventListener.DiskSlow(DiskSlowInfo{
 					Path:     name,
@@ -1006,7 +1017,7 @@ type ParseHooks struct {
 	NewComparer     func(name string) (*Comparer, error)
 	NewFilterPolicy func(name string) (FilterPolicy, error)
 	NewMerger       func(name string) (*Merger, error)
-	SkipUnknown     func(name string) bool
+	SkipUnknown     func(name, value string) bool
 }
 
 // Parse parses the options from the specified string. Note that certain
@@ -1024,7 +1035,7 @@ func (o *Options) Parse(s string, hooks *ParseHooks) error {
 			switch key {
 			case "pebble_version":
 			default:
-				if hooks != nil && hooks.SkipUnknown != nil && hooks.SkipUnknown(section+"."+key) {
+				if hooks != nil && hooks.SkipUnknown != nil && hooks.SkipUnknown(section+"."+key, value) {
 					return nil
 				}
 				return errors.Errorf("pebble: unknown option: %s.%s",
@@ -1152,7 +1163,7 @@ func (o *Options) Parse(s string, hooks *ParseHooks) error {
 			case "wal_bytes_per_sync":
 				o.WALBytesPerSync, err = strconv.Atoi(value)
 			default:
-				if hooks != nil && hooks.SkipUnknown != nil && hooks.SkipUnknown(section+"."+key) {
+				if hooks != nil && hooks.SkipUnknown != nil && hooks.SkipUnknown(section+"."+key, value) {
 					return nil
 				}
 				return errors.Errorf("pebble: unknown option: %s.%s",
@@ -1165,7 +1176,7 @@ func (o *Options) Parse(s string, hooks *ParseHooks) error {
 			if n, err := fmt.Sscanf(section, `Level "%d"`, &index); err != nil {
 				return err
 			} else if n != 1 {
-				if hooks != nil && hooks.SkipUnknown != nil && hooks.SkipUnknown(section) {
+				if hooks != nil && hooks.SkipUnknown != nil && hooks.SkipUnknown(section, value) {
 					return nil
 				}
 				return errors.Errorf("pebble: unknown section: %q", errors.Safe(section))
@@ -1213,14 +1224,14 @@ func (o *Options) Parse(s string, hooks *ParseHooks) error {
 			case "target_file_size":
 				l.TargetFileSize, err = strconv.ParseInt(value, 10, 64)
 			default:
-				if hooks != nil && hooks.SkipUnknown != nil && hooks.SkipUnknown(section+"."+key) {
+				if hooks != nil && hooks.SkipUnknown != nil && hooks.SkipUnknown(section+"."+key, value) {
 					return nil
 				}
 				return errors.Errorf("pebble: unknown option: %s.%s", errors.Safe(section), errors.Safe(key))
 			}
 			return err
 		}
-		if hooks != nil && hooks.SkipUnknown != nil && hooks.SkipUnknown(section+"."+key) {
+		if hooks != nil && hooks.SkipUnknown != nil && hooks.SkipUnknown(section+"."+key, value) {
 			return nil
 		}
 		return errors.Errorf("pebble: unknown section: %q", errors.Safe(section))
