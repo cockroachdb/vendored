@@ -233,13 +233,21 @@ type Batch struct {
 
 	// Fragmented range deletion tombstones. Cached the first time a range
 	// deletion iterator is requested. The cache is invalidated whenever a new
-	// range deletion is added to the batch.
-	tombstones []keyspan.Span
+	// range deletion is added to the batch. This cache can only be used when
+	// opening an iterator to read at a batch sequence number >=
+	// tombstonesSeqNum. This is the case for all new iterators created over a
+	// batch but it's not the case for all cloned iterators.
+	tombstones       []keyspan.Span
+	tombstonesSeqNum uint64
 
 	// Fragmented range key spans. Cached the first time a range key iterator is
 	// requested. The cache is invalidated whenever a new range key
-	// (RangeKey{Set,Unset,Del}) is added to the batch.
-	rangeKeys []keyspan.Span
+	// (RangeKey{Set,Unset,Del}) is added to the batch. This cache can only be
+	// used when opening an iterator to read at a batch sequence number >=
+	// tombstonesSeqNum. This is the case for all new iterators created over a
+	// batch but it's not the case for all cloned iterators.
+	rangeKeys       []keyspan.Span
+	rangeKeysSeqNum uint64
 
 	// The flushableBatch wrapper if the batch is too large to fit in the
 	// memtable.
@@ -285,6 +293,16 @@ func newIndexedBatch(db *DB, comparer *Comparer) *Batch {
 	i.batch.index = &i.index
 	i.batch.index.Init(&i.batch.data, i.batch.cmp, i.batch.abbreviatedKey)
 	return &i.batch
+}
+
+// nextSeqNum returns the batch "sequence number" that will be given to the next
+// key written to the batch. During iteration keys within an indexed batch are
+// given a sequence number consisting of their offset within the batch combined
+// with the base.InternalKeySeqNumBatch bit. These sequence numbers are only
+// used during iteration, and the keys are assigned ordinary sequence numbers
+// when the batch is committed.
+func (b *Batch) nextSeqNum() uint64 {
+	return uint64(len(b.data)) | base.InternalKeySeqNumBatch
 }
 
 func (b *Batch) release() {
@@ -378,12 +396,14 @@ func (b *Batch) Apply(batch *Batch, _ *WriteOptions) error {
 				switch kind {
 				case InternalKeyKindRangeDelete:
 					b.tombstones = nil
+					b.tombstonesSeqNum = 0
 					if b.rangeDelIndex == nil {
 						b.rangeDelIndex = batchskl.NewSkiplist(&b.data, b.cmp, b.abbreviatedKey)
 					}
 					err = b.rangeDelIndex.Add(uint32(offset))
 				case InternalKeyKindRangeKeySet, InternalKeyKindRangeKeyUnset, InternalKeyKindRangeKeyDelete:
 					b.rangeKeys = nil
+					b.rangeKeysSeqNum = 0
 					if b.rangeKeyIndex == nil {
 						b.rangeKeyIndex = batchskl.NewSkiplist(&b.data, b.cmp, b.abbreviatedKey)
 					}
@@ -638,6 +658,7 @@ func (b *Batch) DeleteRangeDeferred(startLen, endLen int) *DeferredBatchOp {
 	b.countRangeDels++
 	if b.index != nil {
 		b.tombstones = nil
+		b.tombstonesSeqNum = 0
 		// Range deletions are rare, so we lazily allocate the index for them.
 		if b.rangeDelIndex == nil {
 			b.rangeDelIndex = batchskl.NewSkiplist(&b.data, b.cmp, b.abbreviatedKey)
@@ -687,6 +708,7 @@ func (b *Batch) incrementRangeKeysCount() {
 	b.countRangeKeys++
 	if b.index != nil {
 		b.rangeKeys = nil
+		b.rangeKeysSeqNum = 0
 		// Range keys are rare, so we lazily allocate the index for them.
 		if b.rangeKeyIndex == nil {
 			b.rangeKeyIndex = batchskl.NewSkiplist(&b.data, b.cmp, b.abbreviatedKey)
@@ -799,6 +821,10 @@ func (b *Batch) SetRepr(data []byte) error {
 // NewIter returns an iterator that is unpositioned (Iterator.Valid() will
 // return false). The iterator can be positioned via a call to SeekGE,
 // SeekPrefixGE, SeekLT, First or Last. Only indexed batches support iterators.
+//
+// The returned Iterator observes all of the Batch's existing mutations, but no
+// later mutations. Its view can be refreshed via RefreshBatchSnapshot or
+// SetOptions().
 func (b *Batch) NewIter(o *IterOptions) *Iterator {
 	if b.index == nil {
 		return &Iterator{err: ErrNotIndexed}
@@ -808,45 +834,73 @@ func (b *Batch) NewIter(o *IterOptions) *Iterator {
 
 // newInternalIter creates a new internalIterator that iterates over the
 // contents of the batch.
-func (b *Batch) newInternalIter(o *IterOptions) internalIterator {
-	if b.index == nil {
-		return newErrorIter(ErrNotIndexed)
-	}
-	return &batchIter{
-		cmp:   b.cmp,
-		batch: b,
-		iter:  b.index.NewIter(o.GetLowerBound(), o.GetUpperBound()),
+func (b *Batch) newInternalIter(o *IterOptions) *batchIter {
+	iter := &batchIter{}
+	b.initInternalIter(o, iter, b.nextSeqNum())
+	return iter
+}
+
+func (b *Batch) initInternalIter(o *IterOptions, iter *batchIter, batchSnapshot uint64) {
+	*iter = batchIter{
+		cmp:      b.cmp,
+		batch:    b,
+		iter:     b.index.NewIter(o.GetLowerBound(), o.GetUpperBound()),
+		snapshot: batchSnapshot,
 	}
 }
 
-func (b *Batch) newRangeDelIter(_ *IterOptions) keyspan.FragmentIterator {
-	if b.index == nil {
-		return newErrorKeyspanIter(ErrNotIndexed)
-	}
+func (b *Batch) newRangeDelIter(o *IterOptions, batchSnapshot uint64) *keyspan.Iter {
+	// Construct an iterator even if rangeDelIndex is nil, because it is allowed
+	// to refresh later, so we need the container to exist.
+	iter := new(keyspan.Iter)
+	b.initRangeDelIter(o, iter, batchSnapshot)
+	return iter
+}
+
+func (b *Batch) initRangeDelIter(_ *IterOptions, iter *keyspan.Iter, batchSnapshot uint64) {
 	if b.rangeDelIndex == nil {
-		return nil
+		iter.Init(b.cmp, nil)
+		return
 	}
 
 	// Fragment the range tombstones the first time a range deletion iterator is
-	// requested. The cached tombstones are invalidated if another range deletion
-	// tombstone is added to the batch.
-	if b.tombstones == nil {
-		frag := &keyspan.Fragmenter{
-			Cmp:    b.cmp,
-			Format: b.formatKey,
-			Emit: func(s keyspan.Span) {
-				b.tombstones = append(b.tombstones, s)
-			},
-		}
-		it := &batchIter{
-			cmp:   b.cmp,
-			batch: b,
-			iter:  b.rangeDelIndex.NewIter(nil, nil),
-		}
-		fragmentRangeDels(frag, it, int(b.countRangeDels))
+	// requested. The cached tombstones are invalidated if another range
+	// deletion tombstone is added to the batch. This cache is only guaranteed
+	// to be correct if we're opening an iterator to read at a batch sequence
+	// number at least as high as tombstonesSeqNum. The cache is guaranteed to
+	// include all tombstones up to tombstonesSeqNum, and if any additional
+	// tombstones were added after that sequence number the cache would've been
+	// cleared.
+	nextSeqNum := b.nextSeqNum()
+	if b.tombstones != nil && b.tombstonesSeqNum <= batchSnapshot {
+		iter.Init(b.cmp, b.tombstones)
+		return
 	}
 
-	return keyspan.NewIter(b.cmp, b.tombstones)
+	tombstones := make([]keyspan.Span, 0, b.countRangeDels)
+	frag := &keyspan.Fragmenter{
+		Cmp:    b.cmp,
+		Format: b.formatKey,
+		Emit: func(s keyspan.Span) {
+			tombstones = append(tombstones, s)
+		},
+	}
+	it := &batchIter{
+		cmp:      b.cmp,
+		batch:    b,
+		iter:     b.rangeDelIndex.NewIter(nil, nil),
+		snapshot: batchSnapshot,
+	}
+	fragmentRangeDels(frag, it, int(b.countRangeDels))
+	iter.Init(b.cmp, tombstones)
+
+	// If we just read all the tombstones in the batch (eg, batchSnapshot was
+	// set to b.nextSeqNum()), then cache the tombstones so that a subsequent
+	// call to initRangeDelIter may use them without refragmenting.
+	if nextSeqNum == batchSnapshot {
+		b.tombstones = tombstones
+		b.tombstonesSeqNum = nextSeqNum
+	}
 }
 
 func fragmentRangeDels(frag *keyspan.Fragmenter, it internalIterator, count int) {
@@ -871,34 +925,57 @@ func fragmentRangeDels(frag *keyspan.Fragmenter, it internalIterator, count int)
 	frag.Finish()
 }
 
-func (b *Batch) newRangeKeyIter(_ *IterOptions) keyspan.FragmentIterator {
-	if b.index == nil {
-		return newErrorKeyspanIter(ErrNotIndexed)
-	}
+func (b *Batch) newRangeKeyIter(o *IterOptions, batchSnapshot uint64) *keyspan.Iter {
+	// Construct an iterator even if rangeKeyIndex is nil, because it is allowed
+	// to refresh later, so we need the container to exist.
+	iter := new(keyspan.Iter)
+	b.initRangeKeyIter(o, iter, batchSnapshot)
+	return iter
+}
+
+func (b *Batch) initRangeKeyIter(_ *IterOptions, iter *keyspan.Iter, batchSnapshot uint64) {
 	if b.rangeKeyIndex == nil {
-		return nil
+		iter.Init(b.cmp, nil)
+		return
 	}
 
 	// Fragment the range keys the first time a range key iterator is requested.
-	// The cached range keys are invalidated if another range key is added to
-	// the batch.
-	if b.rangeKeys == nil {
-		frag := &keyspan.Fragmenter{
-			Cmp:    b.cmp,
-			Format: b.formatKey,
-			Emit: func(s keyspan.Span) {
-				b.rangeKeys = append(b.rangeKeys, s)
-			},
-		}
-		it := &batchIter{
-			cmp:   b.cmp,
-			batch: b,
-			iter:  b.rangeKeyIndex.NewIter(nil, nil),
-		}
-		fragmentRangeKeys(frag, it, int(b.countRangeKeys))
+	// The cached spans are invalidated if another range key is added to the
+	// batch. This cache is only guaranteed to be correct if we're opening an
+	// iterator to read at a batch sequence number at least as high as
+	// rangeKeysSeqNum. The cache is guaranteed to include all range keys up to
+	// rangeKeysSeqNum, and if any additional range keys were added after that
+	// sequence number the cache would've been cleared.
+	nextSeqNum := b.nextSeqNum()
+	if b.rangeKeys != nil && b.rangeKeysSeqNum <= batchSnapshot {
+		iter.Init(b.cmp, b.rangeKeys)
+		return
 	}
 
-	return keyspan.NewIter(b.cmp, b.rangeKeys)
+	rangeKeys := make([]keyspan.Span, 0, b.countRangeKeys)
+	frag := &keyspan.Fragmenter{
+		Cmp:    b.cmp,
+		Format: b.formatKey,
+		Emit: func(s keyspan.Span) {
+			rangeKeys = append(rangeKeys, s)
+		},
+	}
+	it := &batchIter{
+		cmp:      b.cmp,
+		batch:    b,
+		iter:     b.rangeKeyIndex.NewIter(nil, nil),
+		snapshot: batchSnapshot,
+	}
+	fragmentRangeKeys(frag, it, int(b.countRangeKeys))
+	iter.Init(b.cmp, rangeKeys)
+
+	// If we just read all the range keys in the batch (eg, batchSnapshot was
+	// set to b.nextSeqNum()), then cache the range keys so that a subsequent
+	// call to initRangeKeyIter may use them without refragmenting.
+	if nextSeqNum == batchSnapshot {
+		b.rangeKeys = rangeKeys
+		b.rangeKeysSeqNum = nextSeqNum
+	}
 }
 
 func fragmentRangeKeys(frag *keyspan.Fragmenter, it internalIterator, count int) error {
@@ -967,7 +1044,9 @@ func (b *Batch) Reset() {
 	b.memTableSize = 0
 	b.deferredOp = DeferredBatchOp{}
 	b.tombstones = nil
+	b.tombstonesSeqNum = 0
 	b.rangeKeys = nil
+	b.rangeKeysSeqNum = 0
 	b.flushable = nil
 	b.commit = sync.WaitGroup{}
 	b.commitErr = nil
@@ -1132,6 +1211,11 @@ type batchIter struct {
 	batch *Batch
 	iter  batchskl.Iterator
 	err   error
+	// snapshot holds a batch "sequence number" at which the batch is being
+	// read. This sequence number has the InternalKeySeqNumBatch bit set, so it
+	// encodes an offset within the batch. Only batch entries earlier than the
+	// offset are visible during iteration.
+	snapshot uint64
 }
 
 // batchIter implements the base.InternalIterator interface.
@@ -1146,6 +1230,9 @@ func (i *batchIter) SeekGE(key []byte, trySeekUsingNext bool) (*InternalKey, []b
 	// would be incorrect.
 	i.err = nil // clear cached iteration error
 	ikey := i.iter.SeekGE(key)
+	for ikey != nil && ikey.SeqNum() >= i.snapshot {
+		ikey = i.iter.Next()
+	}
 	if ikey == nil {
 		return nil, nil
 	}
@@ -1162,6 +1249,9 @@ func (i *batchIter) SeekPrefixGE(
 func (i *batchIter) SeekLT(key []byte) (*InternalKey, []byte) {
 	i.err = nil // clear cached iteration error
 	ikey := i.iter.SeekLT(key)
+	for ikey != nil && ikey.SeqNum() >= i.snapshot {
+		ikey = i.iter.Prev()
+	}
 	if ikey == nil {
 		return nil, nil
 	}
@@ -1171,6 +1261,9 @@ func (i *batchIter) SeekLT(key []byte) (*InternalKey, []byte) {
 func (i *batchIter) First() (*InternalKey, []byte) {
 	i.err = nil // clear cached iteration error
 	ikey := i.iter.First()
+	for ikey != nil && ikey.SeqNum() >= i.snapshot {
+		ikey = i.iter.Next()
+	}
 	if ikey == nil {
 		return nil, nil
 	}
@@ -1180,6 +1273,9 @@ func (i *batchIter) First() (*InternalKey, []byte) {
 func (i *batchIter) Last() (*InternalKey, []byte) {
 	i.err = nil // clear cached iteration error
 	ikey := i.iter.Last()
+	for ikey != nil && ikey.SeqNum() >= i.snapshot {
+		ikey = i.iter.Prev()
+	}
 	if ikey == nil {
 		return nil, nil
 	}
@@ -1188,6 +1284,9 @@ func (i *batchIter) Last() (*InternalKey, []byte) {
 
 func (i *batchIter) Next() (*InternalKey, []byte) {
 	ikey := i.iter.Next()
+	for ikey != nil && ikey.SeqNum() >= i.snapshot {
+		ikey = i.iter.Next()
+	}
 	if ikey == nil {
 		return nil, nil
 	}
@@ -1196,6 +1295,9 @@ func (i *batchIter) Next() (*InternalKey, []byte) {
 
 func (i *batchIter) Prev() (*InternalKey, []byte) {
 	ikey := i.iter.Prev()
+	for ikey != nil && ikey.SeqNum() >= i.snapshot {
+		ikey = i.iter.Prev()
+	}
 	if ikey == nil {
 		return nil, nil
 	}
@@ -1780,7 +1882,10 @@ func batchSort(
 ) {
 	b := i.(*Batch)
 	if b.Indexed() {
-		return b.newInternalIter(nil), b.newRangeDelIter(nil), b.newRangeKeyIter(nil)
+		pointIter := b.newInternalIter(nil)
+		rangeDelIter := b.newRangeDelIter(nil, math.MaxUint64)
+		rangeKeyIter := b.newRangeKeyIter(nil, math.MaxUint64)
+		return pointIter, rangeDelIter, rangeKeyIter
 	}
 	f := newFlushableBatch(b, b.db.opts.Comparer)
 	return f.newIter(nil), f.newRangeDelIter(nil), f.newRangeKeyIter(nil)

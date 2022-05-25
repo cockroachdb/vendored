@@ -545,7 +545,9 @@ func (s windowSummary) String() string {
 				s.flushedTime.Truncate(time.Second))
 		}
 
+		count := s.flushedCount
 		sum := s.flushedBytes
+		totalTime := s.flushedTime
 		for l := 0; l < len(s.ingestedBytes); l++ {
 			if s.ingestedCount[l] == 0 {
 				continue
@@ -553,16 +555,19 @@ func (s windowSummary) String() string {
 			maybeWriteHeader()
 			fmt.Fprintf(&sb, "%-7s         %7s                                   %7d %7s\n",
 				"ingest", fmt.Sprintf("L%d", l), s.ingestedCount[l], humanize.Uint64(s.ingestedBytes[l]))
+			count += s.ingestedCount[l]
 			sum += s.ingestedBytes[l]
 		}
 		if headerWritten {
-			fmt.Fprintf(&sb, "total                                                           %9s\n", humanize.Uint64(sum))
+			fmt.Fprintf(&sb, "total                                                     %7d %7s %9s\n",
+				count, humanize.Uint64(sum), totalTime.Truncate(time.Second),
+			)
 		}
 	}
 
 	// Print compactions statistics.
 	if len(s.compactionCounts) > 0 {
-		sb.WriteString("_kind______from______to___default____move___elide__delete___total___bytes______time\n")
+		sb.WriteString("_kind______from______to___default____move___elide__delete___count___bytes______time\n")
 		var totalDef, totalMove, totalElision, totalDel int
 		var totalBytes uint64
 		var totalTime time.Duration
@@ -587,7 +592,7 @@ func (s windowSummary) String() string {
 		}
 		sb.WriteString(fmt.Sprintf("total         %19d %7d %7d %7d %7d %7s %9s\n",
 			totalDef, totalMove, totalElision, totalDel, s.eventCount,
-			humanize.Uint64(totalBytes), totalTime.Truncate(time.Minute)))
+			humanize.Uint64(totalBytes), totalTime.Truncate(time.Second)))
 	}
 
 	// (Optional) Long running events.
@@ -608,6 +613,28 @@ func (s windowSummary) String() string {
 	}
 
 	return sb.String()
+}
+
+// windowSummarySlice is a slice of windowSummary that sorts in order of start
+// time, node, then store.
+type windowsSummarySlice []windowSummary
+
+func (s windowsSummarySlice) Len() int {
+	return len(s)
+}
+
+func (s windowsSummarySlice) Less(i, j int) bool {
+	if !s[i].tStart.Equal(s[j].tStart) {
+		return s[i].tStart.Before(s[j].tStart)
+	}
+	if s[i].nodeID != s[j].nodeID {
+		return s[i].nodeID < s[j].nodeID
+	}
+	return s[i].storeID < s[j].storeID
+}
+
+func (s windowsSummarySlice) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
 }
 
 // eventSlice is a slice of events that sorts in order of node, store,
@@ -809,6 +836,10 @@ func (a *aggregator) aggregate() []windowSummary {
 			curWindow.longRunning = append(curWindow.longRunning, e)
 		}
 	}
+
+	// Windows are added in order of (node, store, time). Re-sort the windows by
+	// (time, node, store) for better presentation.
+	sort.Sort(windowsSummarySlice(windows))
 
 	return windows
 }
