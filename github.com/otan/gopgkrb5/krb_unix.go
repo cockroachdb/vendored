@@ -5,29 +5,49 @@ package gopgkrb5
 
 import (
 	"fmt"
-	"os"
-	"os/user"
-	"strings"
-
 	"github.com/jcmturner/gokrb5/v8/client"
 	"github.com/jcmturner/gokrb5/v8/config"
 	"github.com/jcmturner/gokrb5/v8/credentials"
+	"github.com/jcmturner/gokrb5/v8/keytab"
 	"github.com/jcmturner/gokrb5/v8/spnego"
+	"os"
+	"os/user"
+	"strings"
 )
 
 /*
  * UNIX Kerberos support, using jcmturner's pure-go
  * implementation
+ *
+ * Keytab support is available only on unix systems
  */
 
-// GSS implements the pq.GSS interface.
+// GSS implements the pq.GSS interface and the pgconn.GSS interface.
 type GSS struct {
-	cli *client.Client
+	cli    *client.Client
+	ktPath string
+	realm  string
+	spn    string
 }
 
 // NewGSS creates a new GSS provider.
 func NewGSS() (*GSS, error) {
 	g := &GSS{}
+	err := g.init()
+
+	if err != nil {
+		return nil, err
+	}
+
+	return g, nil
+}
+
+func NewGSSWithKeytab(spn string, realm string, ktPath string) (*GSS, error) {
+	g := &GSS{}
+	g.ktPath = ktPath
+	g.spn = spn
+	g.realm = realm
+
 	err := g.init()
 
 	if err != nil {
@@ -53,21 +73,34 @@ func (g *GSS) init() error {
 		return err
 	}
 
-	ccpath := "/tmp/krb5cc_" + u.Uid
+	var cl *client.Client
 
-	ccname := os.Getenv("KRB5CCNAME")
-	if strings.HasPrefix(ccname, "FILE:") {
-		ccpath = strings.SplitN(ccname, ":", 2)[1]
-	}
+	// If we have keytab path set, we create client from keytab
+	// Otherwise, we use ccache file
+	if g.ktPath != "" {
+		kt, err := keytab.Load(g.ktPath)
+		if err != nil {
+			panic(err)
+		}
 
-	ccache, err := credentials.LoadCCache(ccpath)
-	if err != nil {
-		return err
-	}
+		cl = client.NewWithKeytab(g.spn, g.realm, kt, cfg)
+	} else {
+		ccpath := "/tmp/krb5cc_" + u.Uid
 
-	cl, err := client.NewFromCCache(ccache, cfg, client.DisablePAFXFAST(true))
-	if err != nil {
-		return err
+		ccname := os.Getenv("KRB5CCNAME")
+		if strings.HasPrefix(ccname, "FILE:") {
+			ccpath = strings.SplitN(ccname, ":", 2)[1]
+		}
+
+		ccache, err := credentials.LoadCCache(ccpath)
+		if err != nil {
+			return err
+		}
+
+		cl, err = client.NewFromCCache(ccache, cfg, client.DisablePAFXFAST(true))
+		if err != nil {
+			return err
+		}
 	}
 
 	cl.Login()
@@ -94,7 +127,7 @@ func (g *GSS) GetInitToken(host string, service string) ([]byte, error) {
 	return g.GetInitTokenFromSPN(spn)
 }
 
-// GetInitTokenFromSpn implements the GSS interface.
+// GetInitTokenFromSPN implements the GSS interface.
 func (g *GSS) GetInitTokenFromSPN(spn string) ([]byte, error) {
 	s := spnego.SPNEGOClient(g.cli, spn)
 
@@ -109,6 +142,11 @@ func (g *GSS) GetInitTokenFromSPN(spn string) ([]byte, error) {
 	}
 
 	return b, nil
+}
+
+// GetInitTokenFromSpn implements the GSS interface.
+func (g *GSS) GetInitTokenFromSpn(spn string) ([]byte, error) {
+	return g.GetInitTokenFromSPN(spn)
 }
 
 // Continue implements the GSS interface.

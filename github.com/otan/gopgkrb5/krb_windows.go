@@ -8,7 +8,7 @@ import (
 	"github.com/alexbrainman/sspi/negotiate"
 )
 
-// GSS implements the pq.GSS interface.
+// GSS implements the pq.GSS interface and the pgconn.GSS interface.
 type GSS struct {
 	creds *sspi.Credentials
 	ctx   *negotiate.ClientContext
@@ -49,8 +49,8 @@ func (g *GSS) GetInitToken(host string, service string) ([]byte, error) {
 	return g.GetInitTokenFromSpn(spn)
 }
 
-// GetInitTokenFromSpn implements the GSS interface.
-func (g *GSS) GetInitTokenFromSpn(spn string) ([]byte, error) {
+// GetInitTokenFromSPN implements the GSS interface.
+func (g *GSS) GetInitTokenFromSPN(spn string) ([]byte, error) {
 	ctx, token, err := negotiate.NewClientContext(g.creds, spn)
 	if err != nil {
 		return nil, err
@@ -59,6 +59,11 @@ func (g *GSS) GetInitTokenFromSpn(spn string) ([]byte, error) {
 	g.ctx = ctx
 
 	return token, nil
+}
+
+// GetInitTokenFromSpn implements the GSS interface.
+func (g *GSS) GetInitTokenFromSpn(spn string) ([]byte, error) {
+	return g.GetInitTokenFromSPN(spn)
 }
 
 // Continue implements the GSS interface.

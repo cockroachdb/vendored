@@ -21,9 +21,9 @@ import (
 )
 
 func init() {
-  pgconn.RegisterGSSProvider(func() (pgconn.GSS, error) { return krb.NewGSS() })
+  pgconn.RegisterGSSProvider(func() (pgconn.GSS, error) { return gopgkrb5.NewGSS() })
 }
 ```
 
-All dependencies of `pgconn`, e.g. `pgx` will now be able to authenticate with
+All dependencies of [`jackc/pgconn`](https://github.com/jackc/pgconn), e.g. [`jackc/pgx`](https://github.com/jackc/pgx) will now be able to authenticate with
 GSSAPI/krb5.
