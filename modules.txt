@@ -1167,7 +1167,7 @@ github.com/kylelemons/godebug/diff
 ## explicit
 github.com/leanovate/gopter
 github.com/leanovate/gopter/prop
-# github.com/lib/pq v1.10.6-0.20220412200556-b3b833258663
+# github.com/lib/pq v1.10.6
 ## explicit; go 1.13
 github.com/lib/pq
 github.com/lib/pq/oid
