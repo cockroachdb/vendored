@@ -187,6 +187,7 @@ func (c *STS) AssumeRoleRequest(input *AssumeRoleInput) (req *request.Request, o
 //
 // See also, https://docs.aws.amazon.com/goto/WebAPI/sts-2011-06-15/AssumeRole
 func (c *STS) AssumeRole(input *AssumeRoleInput) (*AssumeRoleOutput, error) {
+	fmt.Println("@@@ sending assume role request for", *(input.RoleArn))
 	req, out := c.AssumeRoleRequest(input)
 	return out, req.Send()
 }
@@ -201,6 +202,7 @@ func (c *STS) AssumeRole(input *AssumeRoleInput) (*AssumeRoleOutput, error) {
 // sub-contexts for http.Requests. See https://golang.org/pkg/context/
 // for more information on using Contexts.
 func (c *STS) AssumeRoleWithContext(ctx aws.Context, input *AssumeRoleInput, opts ...request.Option) (*AssumeRoleOutput, error) {
+	fmt.Println("@@@ sending assume role request for", *(input.RoleArn))
 	req, out := c.AssumeRoleRequest(input)
 	req.SetContext(ctx)
 	req.ApplyOptions(opts...)

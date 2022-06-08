@@ -355,6 +355,7 @@ func (p *AssumeRoleProvider) RetrieveWithContext(ctx credentials.Context) (crede
 		return credentials.Value{ProviderName: ProviderName}, err
 	}
 
+	fmt.Println("@@@ creds expire", roleOutput.Credentials.Expiration.Sub(time.Now()))
 	// We will proactively generate new credentials before they expire.
 	p.SetExpiration(*roleOutput.Credentials.Expiration, p.ExpiryWindow)
 

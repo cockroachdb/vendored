@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -23,6 +24,9 @@ func SendRequest(ctx context.Context, client *http.Client, req *http.Request) (*
 	// done by the default http.Transport. See https://github.com/google/google-api-go-client/issues/219.
 	if _, ok := req.Header["Accept-Encoding"]; ok {
 		return nil, errors.New("google api: custom Accept-Encoding headers not allowed")
+	}
+	if req != nil {
+		fmt.Println("@@@ req", *req)
 	}
 	if ctx == nil {
 		return client.Do(req)

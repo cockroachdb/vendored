@@ -12,6 +12,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"time"
 	"net/http"
 	"net/url"
 	"strings"
@@ -299,6 +301,7 @@ func (s *reuseTokenSource) Token() (*Token, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.t.Valid() {
+		fmt.Println("@@@ reusing")
 		return s.t, nil
 	}
 	t, err := s.new.Token()
@@ -306,6 +309,7 @@ func (s *reuseTokenSource) Token() (*Token, error) {
 		return nil, err
 	}
 	s.t = t
+	fmt.Println("@@@ got new token", t, "expiration", t.Expiry.Format(time.RFC3339))
 	return t, nil
 }
 

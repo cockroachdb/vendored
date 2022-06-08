@@ -9253,6 +9253,7 @@ func (c *ObjectsGetCall) doRequest(alt string) (*http.Response, error) {
 		return nil, err
 	}
 	req.Header = reqHeaders
+	fmt.Println("@@@ req", *req)
 	googleapi.Expand(req.URL, map[string]string{
 		"bucket": c.bucket,
 		"object": c.object,

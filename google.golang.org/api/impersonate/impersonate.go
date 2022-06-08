@@ -145,6 +145,7 @@ func (i impersonatedTokenSource) Token() (*oauth2.Token, error) {
 		Lifetime:  i.lifetime,
 		Scope:     i.scopes,
 	}
+	fmt.Println("@@@ here retrieving token")
 	b, err := json.Marshal(reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("impersonate: unable to marshal request: %v", err)

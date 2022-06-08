@@ -235,6 +235,7 @@ func NewCredentials(provider Provider) *Credentials {
 //
 // Passed in Context is equivalent to aws.Context, and context.Context.
 func (c *Credentials) GetWithContext(ctx Context) (Value, error) {
+	fmt.Println("@@@ getting creds")
 	// Check if credentials are cached, and not expired.
 	select {
 	case curCreds, ok := <-c.asyncIsExpired():
