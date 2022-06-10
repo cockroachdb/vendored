@@ -42,7 +42,7 @@ func (d *DB) applyFlushedRangeKeys(flushable []*flushableEntry) error {
 		}
 		d.maybeInitializeRangeKeys()
 
-		for s := iter.First(); s.Valid(); s = iter.Next() {
+		for s := iter.First(); s != nil; s = iter.Next() {
 			// flushable.newRangeKeyIter provides a FragmentIterator, which
 			// iterates over parsed keyspan.Spans.
 			//
@@ -102,18 +102,21 @@ func (d *DB) newRangeKeyIter(
 	it *Iterator, seqNum, batchSeqNum uint64, batch *Batch, readState *readState,
 ) keyspan.FragmentIterator {
 	d.maybeInitializeRangeKeys()
-
-	// TODO(jackson): Preallocate iters, mergingIter, rangeKeyIter in a
-	// structure analogous to iterAlloc.
-	var iters []keyspan.FragmentIterator
+	it.rangeKey.rangeKeyIter = it.rangeKey.iterConfig.Init(d.cmp, seqNum)
 
 	// If there's an indexed batch with range keys, include it.
 	if batch != nil {
 		if batch.index == nil {
-			iters = append(iters, newErrorKeyspanIter(ErrNotIndexed))
+			it.rangeKey.iterConfig.AddLevel(newErrorKeyspanIter(ErrNotIndexed))
 		} else {
 			batch.initRangeKeyIter(&it.opts, &it.batchRangeKeyIter, batchSeqNum)
-			iters = append(iters, &it.batchRangeKeyIter)
+			// Only include the batch's range key iterator if it has any keys.
+			// NB: This can force reconstruction of the rangekey iterator stack
+			// in SetOptions if subsequently range keys are added. See
+			// SetOptions.
+			if it.batchRangeKeyIter.Count() > 0 {
+				it.rangeKey.iterConfig.AddLevel(&it.batchRangeKeyIter)
+			}
 		}
 	}
 
@@ -126,7 +129,7 @@ func (d *DB) newRangeKeyIter(
 			continue
 		}
 		if rki := mem.newRangeKeyIter(&it.opts); rki != nil {
-			iters = append(iters, rki)
+			it.rangeKey.iterConfig.AddLevel(rki)
 		}
 	}
 
@@ -134,8 +137,8 @@ func (d *DB) newRangeKeyIter(
 	// keys ever written to the DB are persisted in the d.rangeKeys arena.
 	frags := d.rangeKeys.fragCache.get()
 	if len(frags) > 0 {
-		iters = append(iters, keyspan.NewIter(d.cmp, frags))
+		it.rangeKey.iterConfig.AddLevel(keyspan.NewIter(d.cmp, frags))
 	}
-	it.rangeKey.rangeKeyIter = it.rangeKey.alloc.Init(d.cmp, seqNum, iters...)
+
 	return it.rangeKey.rangeKeyIter
 }
