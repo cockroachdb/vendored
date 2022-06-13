@@ -93,14 +93,6 @@ type Iterator interface {
 	SetCloseHook(fn func(i Iterator) error)
 }
 
-// FragmentIterator is a version of Iterator that wraps keyspan.FragmentIterator
-// instead of InternalIterator, and adds SetCloseHook.
-type FragmentIterator interface {
-	keyspan.FragmentIterator
-
-	SetCloseHook(fn func(i keyspan.FragmentIterator) error)
-}
-
 // singleLevelIterator iterates over an entire table of data. To seek for a given
 // key, it first looks in the index for the block that contains that key, and then
 // looks inside that block.
@@ -209,6 +201,11 @@ type singleLevelIterator struct {
 	// neither. It is used for invariant checking.
 	exhaustedBounds int8
 
+	// useFilter specifies whether the filter block in this sstable, if present,
+	// should be used for prefix seeks or not. In some cases it is beneficial
+	// to skip a filter block even if it exists (eg. if probability of a match
+	// is high).
+	useFilter              bool
 	lastBloomFilterMatched bool
 }
 
@@ -261,7 +258,7 @@ func checkTwoLevelIterator(obj interface{}) {
 // synonmous with Reader.NewIter, but allows for reusing of the iterator
 // between different Readers.
 func (i *singleLevelIterator) init(
-	r *Reader, lower, upper []byte, filterer *BlockPropertiesFilterer,
+	r *Reader, lower, upper []byte, filterer *BlockPropertiesFilterer, useFilter bool,
 ) error {
 	if r.err != nil {
 		return r.err
@@ -274,6 +271,7 @@ func (i *singleLevelIterator) init(
 	i.lower = lower
 	i.upper = upper
 	i.bpfs = filterer
+	i.useFilter = useFilter
 	i.reader = r
 	i.cmp = r.Compare
 	err = i.index.initHandle(i.cmp, indexH, r.Properties.GlobalSeqNum)
@@ -615,7 +613,7 @@ func (i *singleLevelIterator) seekGEHelper(
 func (i *singleLevelIterator) SeekPrefixGE(
 	prefix, key []byte, trySeekUsingNext bool,
 ) (*base.InternalKey, []byte) {
-	k, v := i.seekPrefixGE(prefix, key, trySeekUsingNext, true /* checkFilter */)
+	k, v := i.seekPrefixGE(prefix, key, trySeekUsingNext, i.useFilter)
 	return k, v
 }
 
@@ -1223,7 +1221,7 @@ func (i *twoLevelIterator) loadIndex() loadBlockResult {
 }
 
 func (i *twoLevelIterator) init(
-	r *Reader, lower, upper []byte, filterer *BlockPropertiesFilterer,
+	r *Reader, lower, upper []byte, filterer *BlockPropertiesFilterer, useFilter bool,
 ) error {
 	if r.err != nil {
 		return r.err
@@ -1236,6 +1234,7 @@ func (i *twoLevelIterator) init(
 	i.lower = lower
 	i.upper = upper
 	i.bpfs = filterer
+	i.useFilter = useFilter
 	i.reader = r
 	i.cmp = r.Compare
 	err = i.topLevelIndex.initHandle(i.cmp, topLevelIndexH, r.Properties.GlobalSeqNum)
@@ -1324,7 +1323,7 @@ func (i *twoLevelIterator) SeekPrefixGE(
 	i.err = nil // clear cached iteration error
 
 	// Check prefix bloom filter.
-	if i.reader.tableFilter != nil {
+	if i.reader.tableFilter != nil && i.useFilter {
 		if !i.lastBloomFilterMatched {
 			// Iterator is not positioned based on last seek.
 			trySeekUsingNext = false
@@ -2134,14 +2133,14 @@ func (r *Reader) Close() error {
 // table. If an error occurs, NewIterWithBlockPropertyFilters cleans up after
 // itself and returns a nil iterator.
 func (r *Reader) NewIterWithBlockPropertyFilters(
-	lower, upper []byte, filterer *BlockPropertiesFilterer,
+	lower, upper []byte, filterer *BlockPropertiesFilterer, useFilterBlock bool,
 ) (Iterator, error) {
 	// NB: pebble.tableCache wraps the returned iterator with one which performs
 	// reference counting on the Reader, preventing the Reader from being closed
 	// until the final iterator closes.
 	if r.Properties.IndexType == twoLevelIndex {
 		i := twoLevelIterPool.Get().(*twoLevelIterator)
-		err := i.init(r, lower, upper, filterer)
+		err := i.init(r, lower, upper, filterer, useFilterBlock)
 		if err != nil {
 			return nil, err
 		}
@@ -2149,7 +2148,7 @@ func (r *Reader) NewIterWithBlockPropertyFilters(
 	}
 
 	i := singleLevelIterPool.Get().(*singleLevelIterator)
-	err := i.init(r, lower, upper, filterer)
+	err := i.init(r, lower, upper, filterer, useFilterBlock)
 	if err != nil {
 		return nil, err
 	}
@@ -2159,7 +2158,7 @@ func (r *Reader) NewIterWithBlockPropertyFilters(
 // NewIter returns an iterator for the contents of the table. If an error
 // occurs, NewIter cleans up after itself and returns a nil iterator.
 func (r *Reader) NewIter(lower, upper []byte) (Iterator, error) {
-	return r.NewIterWithBlockPropertyFilters(lower, upper, nil)
+	return r.NewIterWithBlockPropertyFilters(lower, upper, nil, true /* useFilterBlock */)
 }
 
 // NewCompactionIter returns an iterator similar to NewIter but it also increments
@@ -2168,7 +2167,7 @@ func (r *Reader) NewIter(lower, upper []byte) (Iterator, error) {
 func (r *Reader) NewCompactionIter(bytesIterated *uint64) (Iterator, error) {
 	if r.Properties.IndexType == twoLevelIndex {
 		i := twoLevelIterPool.Get().(*twoLevelIterator)
-		err := i.init(r, nil /* lower */, nil /* upper */, nil)
+		err := i.init(r, nil /* lower */, nil /* upper */, nil, false /* useFilter */)
 		if err != nil {
 			return nil, err
 		}
@@ -2179,7 +2178,7 @@ func (r *Reader) NewCompactionIter(bytesIterated *uint64) (Iterator, error) {
 		}, nil
 	}
 	i := singleLevelIterPool.Get().(*singleLevelIterator)
-	err := i.init(r, nil /* lower */, nil /* upper */, nil)
+	err := i.init(r, nil /* lower */, nil /* upper */, nil, false /* useFilter */)
 	if err != nil {
 		return nil, err
 	}
@@ -2211,7 +2210,7 @@ func (r *Reader) NewRawRangeDelIter() (keyspan.FragmentIterator, error) {
 // NewRawRangeKeyIter returns an internal iterator for the contents of the
 // range-key block for the table. Returns nil if the table does not contain any
 // range keys.
-func (r *Reader) NewRawRangeKeyIter() (FragmentIterator, error) {
+func (r *Reader) NewRawRangeKeyIter() (keyspan.FragmentIterator, error) {
 	if r.rangeKeyBH.Length == 0 {
 		return nil, nil
 	}
