@@ -45,6 +45,12 @@ func (ui *UserIteratorConfig) Init(
 	return &ui.diter
 }
 
+// AddLevel adds a new level to the bottom of the iterator stack. AddLevel
+// must be called after Init and before any other method on the iterator.
+func (ui *UserIteratorConfig) AddLevel(iter keyspan.FragmentIterator) {
+	ui.miter.AddLevel(iter)
+}
+
 // Transform implements the keyspan.Transformer interface for use with a
 // keyspan.MergingIter. It transforms spans by resolving range keys at the
 // provided snapshot sequence number. Shadowing of keys is resolved (eg, removal
@@ -54,7 +60,9 @@ func (ui *UserIteratorConfig) Init(
 // sequence number.
 func (ui *UserIteratorConfig) Transform(cmp base.Compare, s keyspan.Span, dst *keyspan.Span) error {
 	// Apply shadowing of keys.
-	if err := Coalesce(cmp, s.Visible(ui.snapshot), dst); err != nil {
+	dst.Start = s.Start
+	dst.End = s.End
+	if err := Coalesce(cmp, s.Visible(ui.snapshot).Keys, &dst.Keys); err != nil {
 		return err
 	}
 
@@ -91,7 +99,7 @@ func (ui *UserIteratorConfig) Transform(cmp base.Compare, s keyspan.Span, dst *k
 //
 // This implementation is stateful, and must not be used on multiple
 // DefragmentingIters concurrently.
-func (ui *UserIteratorConfig) ShouldDefragment(cmp base.Compare, a, b keyspan.Span) bool {
+func (ui *UserIteratorConfig) ShouldDefragment(cmp base.Compare, a, b *keyspan.Span) bool {
 	// This implementation must only be used on spans that have transformed by
 	// ui.Transform. The transform applies shadowing and removes all keys
 	// besides the resulting Sets. Since shadowing has been applied, each Set
@@ -163,18 +171,18 @@ func (ui *UserIteratorConfig) ShouldDefragment(cmp base.Compare, a, b keyspan.Sp
 // keys do not affect one another. Ingested sstables are expected to be
 // consistent with respect to the set/unset suffixes: A given suffix should be
 // set or unset but not both.
-func Coalesce(cmp base.Compare, span keyspan.Span, dst *keyspan.Span) error {
+func Coalesce(cmp base.Compare, keys []keyspan.Key, dst *[]keyspan.Key) error {
 	// TODO(jackson): Currently, Coalesce doesn't actually perform the sequence
 	// number promotion described in the comment above.
 
 	keysBySuffix := keysBySuffix{
 		cmp:  cmp,
-		keys: dst.Keys[:0],
+		keys: (*dst)[:0],
 	}
 	var deleted bool
-	for i := 0; i < len(span.Keys) && !deleted; i++ {
-		k := span.Keys[i]
-		if invariants.Enabled && i > 0 && k.Trailer > span.Keys[i-1].Trailer {
+	for i := 0; i < len(keys) && !deleted; i++ {
+		k := keys[i]
+		if invariants.Enabled && i > 0 && k.Trailer > keys[i-1].Trailer {
 			panic("pebble: invariant violation: span keys unordered")
 		}
 
@@ -218,12 +226,8 @@ func Coalesce(cmp base.Compare, span keyspan.Span, dst *keyspan.Span) error {
 
 	// Update the span with the (potentially reduced) keys slice, and re-sort it
 	// by Trailer.
-	*dst = keyspan.Span{
-		Start: span.Start,
-		End:   span.End,
-		Keys:  keysBySuffix.keys,
-	}
-	keyspan.SortKeys(dst.Keys)
+	*dst = keysBySuffix.keys
+	keyspan.SortKeys(*dst)
 	return nil
 }
 

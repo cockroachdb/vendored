@@ -16,7 +16,7 @@ type Hooks interface {
 	// SpanChanged is invoked by interleaving iterator whenever the Span
 	// returned by InterleavaingIterator.Span changes. As the iterator passes
 	// into or out of a Span, it invokes SpanChanged, passing the new Span.
-	SpanChanged(Span)
+	SpanChanged(*Span)
 	// SkipPoint is invoked by the interleaving iterator whenever the iterator
 	// encounters a point key covered by a Span. If SkipPoint returns true, the
 	// interleaving iterator skips the point key without returning it. This is
@@ -96,11 +96,20 @@ type InterleavingIter struct {
 	keyBuf   []byte
 	pointKey *base.InternalKey
 	pointVal []byte
-	// span describes the current span state.
-	span Span
+	// span holds the span at the keyspanIter's current position. If the span is
+	// wholly contained within the iterator bounds, this span is directly
+	// returned to the iterator consumer through Span(). If either bound needed
+	// to be truncated to the iterator bounds, then truncated is set to true and
+	// Span() must return a pointer to truncatedSpan.
+	span *Span
 	// spanMarker holds the synthetic key that is returned when the iterator
 	// passes over a key span's start bound.
 	spanMarker base.InternalKey
+	// truncated indicates whether or not the span at the current position
+	// needed to be truncated. If it did, truncatedSpan holds the truncated
+	// span that should be returned.
+	truncatedSpan Span
+	truncated     bool
 
 	// Keeping all of the bools together reduces the sizeof the struct.
 
@@ -211,7 +220,9 @@ func (i *InterleavingIter) SeekLT(key []byte) (*base.InternalKey, []byte) {
 func (i *InterleavingIter) First() (*base.InternalKey, []byte) {
 	i.pointKey, i.pointVal = i.pointIter.First()
 	i.pointKeyInterleaved = false
-	i.saveKeyspan(i.checkForwardBound(i.keyspanIter.First()))
+	i.span = i.keyspanIter.First()
+	i.checkForwardBound()
+	i.savedKeyspan()
 	i.dir = +1
 	return i.interleaveForward(i.lower)
 }
@@ -220,7 +231,9 @@ func (i *InterleavingIter) First() (*base.InternalKey, []byte) {
 func (i *InterleavingIter) Last() (*base.InternalKey, []byte) {
 	i.pointKey, i.pointVal = i.pointIter.Last()
 	i.pointKeyInterleaved = false
-	i.saveKeyspan(i.checkBackwardBound(i.keyspanIter.Last()))
+	i.span = i.keyspanIter.Last()
+	i.checkBackwardBound()
+	i.savedKeyspan()
 	i.dir = -1
 	return i.interleaveBackward()
 }
@@ -249,11 +262,12 @@ func (i *InterleavingIter) Next() (*base.InternalKey, []byte) {
 		}
 		i.pointKeyInterleaved = false
 
-		if !i.span.Valid() {
+		if i.span == nil {
 			// There was no span in the reverse direction, but there may be
 			// a span in the forward direction.
-			i.saveKeyspan(i.checkForwardBound(i.keyspanIter.Next()))
-			i.keyspanInterleaved = false
+			i.span = i.keyspanIter.Next()
+			i.checkForwardBound()
+			i.savedKeyspan()
 		} else {
 			// Regardless of the current iterator state, we mark any existing
 			// span as interleaved when switching to forward iteration,
@@ -287,9 +301,11 @@ func (i *InterleavingIter) Next() (*base.InternalKey, []byte) {
 	}
 	// If we already interleaved the current span start key, and the point key
 	// is ≥ the span's end key, move to the next span.
-	if i.keyspanInterleaved && i.pointKey != nil && i.span.Valid() &&
+	if i.keyspanInterleaved && i.pointKey != nil && i.span != nil &&
 		i.cmp(i.pointKey.UserKey, i.span.End) >= 0 {
-		i.saveKeyspan(i.checkForwardBound(i.keyspanIter.Next()))
+		i.span = i.keyspanIter.Next()
+		i.checkForwardBound()
+		i.savedKeyspan()
 	}
 	return i.interleaveForward(i.lower)
 }
@@ -328,11 +344,13 @@ func (i *InterleavingIter) Prev() (*base.InternalKey, []byte) {
 				// The last returned key was a point key, OR a truncated span
 				// marker key. Don't move, but re-save the span because it
 				// should no longer be considered truncated or interleaved.
-				i.saveKeyspan(i.span)
+				i.savedKeyspan()
 			} else {
 				// The last returned key is this key's start boundary, so Prev
 				// past it so we don't return it again.
-				i.saveKeyspan(i.checkBackwardBound(i.keyspanIter.Prev()))
+				i.span = i.keyspanIter.Prev()
+				i.checkBackwardBound()
+				i.savedKeyspan()
 			}
 		} else {
 			// If the current span's start key has not been interleaved, then
@@ -342,7 +360,9 @@ func (i *InterleavingIter) Prev() (*base.InternalKey, []byte) {
 			// span:
 			//  points:    (x*)
 			//    span:          [y-z)*
-			i.saveKeyspan(i.checkBackwardBound(i.keyspanIter.Prev()))
+			i.span = i.keyspanIter.Prev()
+			i.checkBackwardBound()
+			i.savedKeyspan()
 		}
 
 		// The existing point key (denoted below with *) is either the last
@@ -371,7 +391,9 @@ func (i *InterleavingIter) Prev() (*base.InternalKey, []byte) {
 	}
 	// Refresh the span if we just returned the span's start boundary key.
 	if i.keyspanInterleaved {
-		i.saveKeyspan(i.checkBackwardBound(i.keyspanIter.Prev()))
+		i.span = i.keyspanIter.Prev()
+		i.checkBackwardBound()
+		i.savedKeyspan()
 	}
 	return i.interleaveBackward()
 }
@@ -392,7 +414,7 @@ func (i *InterleavingIter) interleaveForward(lowerBound []byte) (*base.InternalK
 				panic("pebble: invariant violation: point key interleaved")
 			}
 			switch {
-			case !i.span.Valid():
+			case i.span == nil:
 			case i.pointKey == nil:
 			default:
 				// INVARIANT: !keyspanInterleaved || pointKey < span.End
@@ -409,7 +431,7 @@ func (i *InterleavingIter) interleaveForward(lowerBound []byte) (*base.InternalK
 
 		// Interleave.
 		switch {
-		case !i.span.Valid():
+		case i.span == nil:
 			// If we're out of spans, just return the point key.
 			return i.yieldPointKey(false /* covered */)
 		case i.pointKey == nil:
@@ -421,8 +443,10 @@ func (i *InterleavingIter) interleaveForward(lowerBound []byte) (*base.InternalK
 			// there are no more point keys, we don't need to worry about
 			// advancing past the current point key.
 			if i.keyspanInterleaved {
-				i.saveKeyspan(i.checkForwardBound(i.keyspanIter.Next()))
-				if !i.span.Valid() {
+				i.span = i.keyspanIter.Next()
+				i.checkForwardBound()
+				i.savedKeyspan()
+				if i.span == nil {
 					return i.yieldNil()
 				}
 			}
@@ -432,7 +456,7 @@ func (i *InterleavingIter) interleaveForward(lowerBound []byte) (*base.InternalK
 			}
 			return i.yieldSyntheticSpanMarker(lowerBound)
 		default:
-			if i.cmp(i.pointKey.UserKey, i.span.Start) >= 0 {
+			if i.cmp(i.pointKey.UserKey, i.startKey()) >= 0 {
 				// The span start key lies before the point key. If we haven't
 				// interleaved it, we should.
 				if !i.keyspanInterleaved {
@@ -441,7 +465,9 @@ func (i *InterleavingIter) interleaveForward(lowerBound []byte) (*base.InternalK
 							// Advance the keyspan iterator, as just flipping
 							// keyspanInterleaved would likely trip up the invariant check
 							// above.
-							i.saveKeyspan(i.checkForwardBound(i.keyspanIter.Next()))
+							i.span = i.keyspanIter.Next()
+							i.checkForwardBound()
+							i.savedKeyspan()
 						} else {
 							i.keyspanInterleaved = true
 						}
@@ -474,7 +500,9 @@ func (i *InterleavingIter) interleaveForward(lowerBound []byte) (*base.InternalK
 					// ensures the span's End is > the point key, so
 					// reestablish it before the next iteration.
 					if i.pointKey != nil && i.cmp(i.pointKey.UserKey, i.span.End) >= 0 {
-						i.saveKeyspan(i.checkForwardBound(i.keyspanIter.Next()))
+						i.span = i.keyspanIter.Next()
+						i.checkForwardBound()
+						i.savedKeyspan()
 					}
 					continue
 				}
@@ -506,22 +534,26 @@ func (i *InterleavingIter) interleaveBackward() (*base.InternalKey, []byte) {
 
 		// Interleave.
 		switch {
-		case !i.span.Valid():
+		case i.span == nil:
 			// If we're out of spans, just return the point key.
 			return i.yieldPointKey(false /* covered */)
 		case i.pointKey == nil:
 			// If we're out of point keys, we need to return a span marker.
 			if i.span.Empty() {
-				i.saveKeyspan(i.checkBackwardBound(i.keyspanIter.Prev()))
+				i.span = i.keyspanIter.Prev()
+				i.checkBackwardBound()
+				i.savedKeyspan()
 				continue
 			}
 			return i.yieldSyntheticSpanMarker(i.lower)
 		default:
 			// If the span's start key is greater than the point key, return a
 			// marker for the span.
-			if i.cmp(i.span.Start, i.pointKey.UserKey) > 0 {
+			if i.cmp(i.startKey(), i.pointKey.UserKey) > 0 {
 				if i.span.Empty() {
-					i.saveKeyspan(i.checkBackwardBound(i.keyspanIter.Prev()))
+					i.span = i.keyspanIter.Prev()
+					i.checkBackwardBound()
+					i.savedKeyspan()
 					continue
 				}
 				return i.yieldSyntheticSpanMarker(i.lower)
@@ -554,22 +586,24 @@ func (i *InterleavingIter) interleaveBackward() (*base.InternalKey, []byte) {
 func (i *InterleavingIter) keyspanSeekGE(key []byte) {
 	// Seek using SeekLT to look for a span that starts before key, with an end
 	// boundary extending beyond key.
-	s := i.keyspanIter.SeekLT(key)
-	if !s.Valid() || i.cmp(s.End, key) <= 0 {
+	i.span = i.keyspanIter.SeekLT(key)
+	if i.span == nil || i.cmp(i.span.End, key) <= 0 {
 		// The iterator is exhausted in the reverse direction, or the span we
 		// found ends before key. Next to the first key with a start ≥ key.
-		s = i.keyspanIter.Next()
+		i.span = i.keyspanIter.Next()
 	}
-	i.saveKeyspan(i.checkForwardBound(s))
+	i.checkForwardBound()
+	i.savedKeyspan()
 }
 
 // keyspanSeekLT seeks the keyspan iterator to the last span covering k < key.
 // Note that this differs from the FragmentIterator.SeekLT semantics, which
 // seek to the last span with a start key < key.
 func (i *InterleavingIter) keyspanSeekLT(key []byte) {
-	s := i.checkBackwardBound(i.keyspanIter.SeekLT(key))
-	// s.Start is not guaranteed to be less than key, because of the bounds
-	// enforcement. Consider the following example:
+	i.span = i.keyspanIter.SeekLT(key)
+	i.checkBackwardBound()
+	// The current span's start key is not guaranteed to be less than key,
+	// because of the bounds enforcement. Consider the following example:
 	//
 	// Bounds are set to [d,e). The user performs a SeekLT(d). The
 	// FragmentIterator.SeekLT lands on a span [b,f). This span has a start key
@@ -579,16 +613,22 @@ func (i *InterleavingIter) keyspanSeekLT(key []byte) {
 	//
 	// This problem is a consequence of the SeekLT's exclusive search key and
 	// the fact that we don't perform bounds truncation at every leaf iterator.
-	if i.cmp(s.Start, key) >= 0 {
-		s = Span{}
+	if i.span != nil && i.truncated && i.cmp(i.truncatedSpan.Start, key) >= 0 {
+		i.span = nil
 	}
-	i.saveKeyspan(s)
+	i.savedKeyspan()
 }
 
-func (i *InterleavingIter) checkForwardBound(s Span) Span {
+func (i *InterleavingIter) checkForwardBound() {
+	i.truncated = false
+	i.truncatedSpan = Span{}
+	if i.span == nil {
+		return
+	}
 	// Check the upper bound if we have one.
-	if s.Valid() && i.upper != nil && i.cmp(s.Start, i.upper) >= 0 {
-		return Span{}
+	if i.upper != nil && i.cmp(i.span.Start, i.upper) >= 0 {
+		i.span = nil
+		return
 	}
 
 	// TODO(jackson): The key comparisons below truncate bounds whenever the
@@ -599,22 +639,33 @@ func (i *InterleavingIter) checkForwardBound(s Span) Span {
 
 	// NB: These truncations don't require setting `keyspanMarkerTruncated`:
 	// That flag only applies to truncated span marker keys.
-	if i.lower != nil && i.cmp(s.Start, i.lower) < 0 {
-		s.Start = i.lower
+	if i.lower != nil && i.cmp(i.span.Start, i.lower) < 0 {
+		i.truncated = true
+		i.truncatedSpan = *i.span
+		i.truncatedSpan.Start = i.lower
 	}
-	if i.upper != nil && i.cmp(i.upper, s.End) < 0 {
-		s.End = i.upper
+	if i.upper != nil && i.cmp(i.upper, i.span.End) < 0 {
+		if !i.truncated {
+			i.truncated = true
+			i.truncatedSpan = *i.span
+		}
+		i.truncatedSpan.End = i.upper
 	}
-	if i.cmp(s.Start, s.End) == 0 {
-		return Span{}
+	if i.truncated && i.cmp(i.truncatedSpan.Start, i.truncatedSpan.End) == 0 {
+		i.span = nil
 	}
-	return s
 }
 
-func (i *InterleavingIter) checkBackwardBound(s Span) Span {
+func (i *InterleavingIter) checkBackwardBound() {
+	i.truncated = false
+	i.truncatedSpan = Span{}
+	if i.span == nil {
+		return
+	}
 	// Check the lower bound if we have one.
-	if s.Valid() && i.lower != nil && i.cmp(s.End, i.lower) <= 0 {
-		return Span{}
+	if i.lower != nil && i.cmp(i.span.End, i.lower) <= 0 {
+		i.span = nil
+		return
 	}
 
 	// TODO(jackson): The key comparisons below truncate bounds whenever the
@@ -625,16 +676,21 @@ func (i *InterleavingIter) checkBackwardBound(s Span) Span {
 
 	// NB: These truncations don't require setting `keyspanMarkerTruncated`:
 	// That flag only applies to truncated span marker keys.
-	if i.lower != nil && i.cmp(s.Start, i.lower) < 0 {
-		s.Start = i.lower
+	if i.lower != nil && i.cmp(i.span.Start, i.lower) < 0 {
+		i.truncated = true
+		i.truncatedSpan = *i.span
+		i.truncatedSpan.Start = i.lower
 	}
-	if i.upper != nil && i.cmp(i.upper, s.End) < 0 {
-		s.End = i.upper
+	if i.upper != nil && i.cmp(i.upper, i.span.End) < 0 {
+		if !i.truncated {
+			i.truncated = true
+			i.truncatedSpan = *i.span
+		}
+		i.truncatedSpan.End = i.upper
 	}
-	if i.cmp(s.Start, s.End) == 0 {
-		return Span{}
+	if i.truncated && i.cmp(i.truncatedSpan.Start, i.truncatedSpan.End) == 0 {
+		i.span = nil
 	}
-	return s
 }
 
 func (i *InterleavingIter) yieldNil() (*base.InternalKey, []byte) {
@@ -649,7 +705,7 @@ func (i *InterleavingIter) yieldPointKey(covered bool) (*base.InternalKey, []byt
 }
 
 func (i *InterleavingIter) yieldSyntheticSpanMarker(lowerBound []byte) (*base.InternalKey, []byte) {
-	i.spanMarker.UserKey = i.span.Start
+	i.spanMarker.UserKey = i.startKey()
 	i.spanMarker.Trailer = base.MakeTrailer(base.InternalKeySeqNumMax, i.span.Keys[0].Kind())
 	i.keyspanInterleaved = true
 	i.spanCoversKey = true
@@ -658,7 +714,7 @@ func (i *InterleavingIter) yieldSyntheticSpanMarker(lowerBound []byte) (*base.In
 	// we use the lowerBound function parameter, not i.lower. The lowerBound
 	// argument is guaranteed to be ≥ i.lower. It may be equal to the SetBounds
 	// lower bound, or it could come from a SeekGE or SeekPrefixGE search key.
-	if lowerBound != nil && i.cmp(lowerBound, i.span.Start) > 0 {
+	if lowerBound != nil && i.cmp(lowerBound, i.startKey()) > 0 {
 		// Truncating to the lower bound may violate the upper bound if
 		// lowerBound == i.upper. For example, a SeekGE(k) uses k as a lower
 		// bound for truncating a span. The span a-z will be truncated to [k,
@@ -709,7 +765,7 @@ func (i *InterleavingIter) verify(k *base.InternalKey, v []byte) (*base.Internal
 			panic("pebble: invariant violation: key < lower bound")
 		case k != nil && i.upper != nil && i.cmp(k.UserKey, i.upper) >= 0:
 			panic("pebble: invariant violation: key ≥ upper bound")
-		case i.span.Valid() && k != nil && i.hooks != nil && i.pointKeyInterleaved &&
+		case i.span != nil && k != nil && i.hooks != nil && i.pointKeyInterleaved &&
 			i.cmp(k.UserKey, i.span.Start) >= 0 && i.cmp(k.UserKey, i.span.End) < 0 && i.hooks.SkipPoint(k.UserKey):
 			panic("pebble: invariant violation: point key eligible for skipping returned")
 		}
@@ -717,19 +773,19 @@ func (i *InterleavingIter) verify(k *base.InternalKey, v []byte) (*base.Internal
 	return k, v
 }
 
-func (i *InterleavingIter) saveKeyspan(s Span) {
+func (i *InterleavingIter) savedKeyspan() {
 	i.keyspanInterleaved = false
 	i.spanMarkerTruncated = false
-	i.span = s
-	if !s.Valid() {
-		if i.hooks != nil {
-			i.hooks.SpanChanged(s)
-		}
-		return
-	}
 	if i.hooks != nil {
-		i.hooks.SpanChanged(s)
+		i.hooks.SpanChanged(i.span)
 	}
+}
+
+func (i *InterleavingIter) startKey() []byte {
+	if i.truncated {
+		return i.truncatedSpan.Start
+	}
+	return i.span.Start
 }
 
 // Span returns the span covering the last key returned, if any. A span key is
@@ -741,8 +797,11 @@ func (i *InterleavingIter) saveKeyspan(s Span) {
 func (i *InterleavingIter) Span() *Span {
 	if !i.spanCoversKey || i.span.Empty() {
 		return nil
+	} else if i.truncated {
+		return &i.truncatedSpan
+	} else {
+		return i.span
 	}
-	return &i.span
 }
 
 // SetBounds implements (base.InternalIterator).SetBounds.

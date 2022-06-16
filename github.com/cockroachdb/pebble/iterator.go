@@ -20,6 +20,7 @@ import (
 	"github.com/cockroachdb/pebble/internal/keyspan"
 	"github.com/cockroachdb/pebble/internal/manifest"
 	"github.com/cockroachdb/pebble/internal/rangekey"
+	"github.com/cockroachdb/pebble/sstable"
 	"github.com/cockroachdb/redact"
 )
 
@@ -184,7 +185,7 @@ type Iterator struct {
 	prefixOrFullSeekKey []byte
 	readSampling        readSampling
 	stats               IteratorStats
-	closeHook           func()
+	externalReaders     []*sstable.Reader
 
 	// Following fields used when constructing an iterator stack, eg, in Clone
 	// and SetOptions or when re-fragmenting a batch's range keys/range dels.
@@ -265,11 +266,18 @@ type iteratorRangeKeyState struct {
 	// Start and end boundaries, suffixes and values are all copied into buf.
 	buf []byte
 
-	// alloc holds fields that are used for the construction of the
-	// iterator stack, but do not need to be directly accessed during
-	// iteration. These fields are bundled within the
-	// iteratorRangeKeyState struct to reduce allocations.
-	alloc rangekey.UserIteratorConfig
+	// iterConfig holds fields that are used for the construction of the
+	// iterator stack, but do not need to be directly accessed during iteration.
+	// This struct is bundled within the iteratorRangeKeyState struct to reduce
+	// allocations.
+	iterConfig rangekey.UserIteratorConfig
+}
+
+func (i *iteratorRangeKeyState) init(cmp base.Compare, split base.Split, opts *IterOptions) {
+	i.cmp = cmp
+	i.keys.cmp = cmp
+	i.split = split
+	i.opts = opts
 }
 
 var iterRangeKeyStateAllocPool = sync.Pool{
@@ -613,10 +621,10 @@ func (i *Iterator) sampleRead() {
 					var containsKey bool
 					if i.pos == iterPosNext || i.pos == iterPosCurForward ||
 						i.pos == iterPosCurForwardPaused {
-						containsKey = i.cmp(file.Smallest.UserKey, i.key) <= 0
+						containsKey = i.cmp(file.SmallestPointKey.UserKey, i.key) <= 0
 					} else if i.pos == iterPosPrev || i.pos == iterPosCurReverse ||
 						i.pos == iterPosCurReversePaused {
-						containsKey = i.cmp(file.Largest.UserKey, i.key) >= 0
+						containsKey = i.cmp(file.LargestPointKey.UserKey, i.key) >= 0
 					}
 					// Do nothing if the current key is not contained in file's
 					// bounds. We could seek the LevelIterator at this level
@@ -653,8 +661,8 @@ func (i *Iterator) sampleRead() {
 			atomic.AddInt64(&topFile.Atomic.AllowedSeeks, topFile.InitAllowedSeeks)
 
 			read := readCompaction{
-				start:   topFile.Smallest.UserKey,
-				end:     topFile.Largest.UserKey,
+				start:   topFile.SmallestPointKey.UserKey,
+				end:     topFile.LargestPointKey.UserKey,
 				level:   topLevel,
 				fileNum: topFile.FileNum,
 			}
@@ -1484,12 +1492,12 @@ func (i *Iterator) rangeKeyWithinLimit(limit []byte) bool {
 	return true
 }
 
-func (i *iteratorRangeKeyState) SpanChanged(s keyspan.Span) {
+func (i *iteratorRangeKeyState) SpanChanged(s *keyspan.Span) {
 	i.activeMaskSuffix = i.activeMaskSuffix[:0]
 
 	// Find the smallest suffix of a range key contained within the Span,
 	// excluding suffixes less than i.opts.RangeKeyMasking.Suffix.
-	if i.opts.RangeKeyMasking.Suffix == nil || s.Empty() {
+	if s == nil || i.opts.RangeKeyMasking.Suffix == nil || s.Empty() {
 		return
 	}
 	for j := range s.Keys {
@@ -1728,7 +1736,7 @@ func (i *Iterator) Close() error {
 		if i.pointIter != nil {
 			i.err = firstError(i.err, i.pointIter.Close())
 		}
-		if i.rangeKey != nil {
+		if i.rangeKey != nil && i.rangeKey.rangeKeyIter != nil {
 			i.err = firstError(i.err, i.rangeKey.rangeKeyIter.Close())
 		}
 	}
@@ -1756,8 +1764,8 @@ func (i *Iterator) Close() error {
 		i.readState = nil
 	}
 
-	if i.closeHook != nil {
-		i.closeHook()
+	for _, r := range i.externalReaders {
+		err = firstError(err, r.Close())
 	}
 
 	// Close the closer for the current value if one was open.
@@ -1889,6 +1897,12 @@ func (i *Iterator) saveBounds(lower, upper []byte) {
 //
 // If only lower and upper bounds need to be modified, prefer SetBounds.
 func (i *Iterator) SetOptions(o *IterOptions) {
+	if i.externalReaders != nil {
+		if err := validateExternalIterOpts(o); err != nil {
+			panic(err)
+		}
+	}
+
 	// Ensure that the Iterator appears exhausted, regardless of whether we
 	// actually have to invalidate the internal iterator. Optimizations that
 	// avoid exhaustion are an internal implementation detail that shouldn't
@@ -1931,13 +1945,56 @@ func (i *Iterator) SetOptions(o *IterOptions) {
 		if nextBatchSeqNum != i.batchSeqNum {
 			i.batchSeqNum = nextBatchSeqNum
 			if i.pointIter != nil {
-				i.batchPointIter.snapshot = nextBatchSeqNum
-				i.batch.initRangeDelIter(&i.opts, &i.batchRangeDelIter, nextBatchSeqNum)
-				i.invalidate()
+				if i.batch.countRangeDels == 0 {
+					// No range deletions exist in the batch. We only need to
+					// update the batchIter's snapshot.
+					i.batchPointIter.snapshot = nextBatchSeqNum
+					i.invalidate()
+				} else if i.batchRangeDelIter.Count() == 0 {
+					// When we constructed this iterator, there were no
+					// rangedels in the batch. Iterator construction will have
+					// excluded the batch rangedel iterator from the point
+					// iterator stack. We need to reconstruct the point iterator
+					// to add i.batchRangeDelIter into the iterator stack.
+					i.err = firstError(i.err, i.pointIter.Close())
+					i.pointIter = nil
+				} else {
+					// There are range deletions in the batch and we already
+					// have a batch rangedel iterator. We can update the batch
+					// rangedel iterator in place.
+					//
+					// NB: There may or may not be new range deletions. We can't
+					// tell based on i.batchRangeDelIter.Count(), which is the
+					// count of fragmented range deletions, NOT the number of
+					// range deletions written to the batch
+					// [i.batch.countRangeDels].
+					i.batchPointIter.snapshot = nextBatchSeqNum
+					i.batch.initRangeDelIter(&i.opts, &i.batchRangeDelIter, nextBatchSeqNum)
+					i.invalidate()
+				}
 			}
-			if i.rangeKey != nil {
-				i.batch.initRangeKeyIter(&i.opts, &i.batchRangeKeyIter, nextBatchSeqNum)
-				i.invalidate()
+			if i.rangeKey != nil && i.batch.countRangeKeys > 0 {
+				if i.batchRangeKeyIter.Count() == 0 {
+					// When we constructed this iterator, there were no range
+					// keys in the batch. Iterator construction will have
+					// excluded the batch rangekey iterator from the range key
+					// iterator stack. We need to reconstruct the range key
+					// iterator to add i.batchRangeKeyIter into the iterator
+					// stack.
+					i.err = firstError(i.err, i.rangeKey.rangeKeyIter.Close())
+					i.rangeKey = nil
+				} else {
+					// There are range keys in the batch and we already
+					// have a batch rangekey iterator. We can update the batch
+					// rangekey iterator in place.
+					//
+					// NB: There may or may not be new range keys. We can't
+					// tell based on i.batchRangeKeyIter.Count(), which is the
+					// count of fragmented range keys, NOT the number of
+					// range keys written to the batch [i.batch.countRangeKeys].
+					i.batch.initRangeKeyIter(&i.opts, &i.batchRangeKeyIter, nextBatchSeqNum)
+					i.invalidate()
+				}
 			}
 		}
 	}
@@ -1981,6 +2038,13 @@ func (i *Iterator) SetOptions(o *IterOptions) {
 	// Even though this is not a positioning operation, the invalidation of the
 	// iterator stack means we cannot optimize Seeks by using Next.
 	i.invalidate()
+
+	// Iterators created through NewExternalIter have a different iterator
+	// initialization process.
+	if i.externalReaders != nil {
+		finishInitializingExternal(i)
+		return
+	}
 	finishInitializingIter(i.alloc)
 }
 

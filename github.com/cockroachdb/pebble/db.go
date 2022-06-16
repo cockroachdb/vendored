@@ -473,11 +473,6 @@ type DB struct {
 		}
 	}
 
-	// rangeKeys is a temporary field so that Pebble can provide a non-durable
-	// implementation of range keys in advance of the real implementation.
-	// TODO(jackson): Remove this.
-	rangeKeys *RangeKeysArena
-
 	// Normally equal to time.Now() but may be overridden in tests.
 	timeNow func() time.Time
 }
@@ -747,9 +742,6 @@ func (d *DB) Apply(batch *Batch, opts *WriteOptions) error {
 		if d.split == nil {
 			return errNoSplit
 		}
-		if d.opts.Experimental.RangeKeys == nil {
-			panic("pebble: range keys require the Experimental.RangeKeys option")
-		}
 		if d.FormatMajorVersion() < FormatRangeKeys {
 			panic(fmt.Sprintf(
 				"pebble: range keys require at least format major version %d (current: %d)",
@@ -893,9 +885,6 @@ func (d *DB) newIterInternal(batch *Batch, s *Snapshot, o *IterOptions) *Iterato
 		panic(err)
 	}
 	if o.rangeKeys() {
-		if d.opts.Experimental.RangeKeys == nil {
-			panic("pebble: range keys require the Experimental.RangeKeys option")
-		}
 		if d.FormatMajorVersion() < FormatRangeKeys {
 			panic(fmt.Sprintf(
 				"pebble: range keys require at least format major version %d (current: %d)",
@@ -989,10 +978,7 @@ func finishInitializingIter(buf *iterAlloc) *Iterator {
 	if dbi.opts.rangeKeys() {
 		if dbi.rangeKey == nil {
 			dbi.rangeKey = iterRangeKeyStateAllocPool.Get().(*iteratorRangeKeyState)
-			dbi.rangeKey.cmp = dbi.cmp
-			dbi.rangeKey.keys.cmp = dbi.cmp
-			dbi.rangeKey.split = dbi.split
-			dbi.rangeKey.opts = &dbi.opts
+			dbi.rangeKey.init(dbi.cmp, dbi.split, &dbi.opts)
 			dbi.rangeKey.rangeKeyIter = dbi.db.newRangeKeyIter(dbi, dbi.seqNum, dbi.batchSeqNum, dbi.batch, dbi.readState)
 		}
 
@@ -1064,9 +1050,18 @@ func constructPointIter(
 		} else {
 			batch.initInternalIter(&dbi.opts, &dbi.batchPointIter, dbi.batchSeqNum)
 			batch.initRangeDelIter(&dbi.opts, &dbi.batchRangeDelIter, dbi.batchSeqNum)
+			// Only include the batch's rangedel iterator if it's non-empty.
+			// This requires some subtle logic in the case a rangedel is later
+			// written to the batch and the view of the batch is refreshed
+			// during a call to SetOptions—in this case, we need to reconstruct
+			// the point iterator to add the batch rangedel iterator.
+			var rangeDelIter keyspan.FragmentIterator
+			if dbi.batchRangeDelIter.Count() > 0 {
+				rangeDelIter = &dbi.batchRangeDelIter
+			}
 			mlevels = append(mlevels, mergingIterLevel{
 				iter:         base.WrapIterWithStats(&dbi.batchPointIter),
-				rangeDelIter: &dbi.batchRangeDelIter,
+				rangeDelIter: rangeDelIter,
 			})
 		}
 	}
@@ -1974,7 +1969,7 @@ func (d *DB) makeRoomForWrite(b *Batch) error {
 		var entry *flushableEntry
 		d.mu.mem.mutable, entry = d.newMemTable(newLogNum, logSeqNum)
 		d.mu.mem.queue = append(d.mu.mem.queue, entry)
-		d.updateReadStateLocked(nil, nil)
+		d.updateReadStateLocked(nil)
 		if immMem.writerUnref() {
 			d.maybeScheduleFlush()
 		}

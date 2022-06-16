@@ -446,12 +446,6 @@ type Options struct {
 		// deletion pacing, which is also the default.
 		MinDeletionRate int
 
-		// RangeKeys enables the experimental use of range keys, stored in an
-		// in-memory nondurable arena. This option is only intended to be
-		// temporary, to allow the Pebble metamorphic tests to reuse the
-		// range-key arena across DB restarts.
-		RangeKeys *RangeKeysArena
-
 		// ReadCompactionRate controls the frequency of read triggered
 		// compactions by adjusting `AllowedSeeks` in manifest.FileMetadata:
 		//
@@ -510,6 +504,11 @@ type Options struct {
 		//
 		// By default, this value is false.
 		ValidateOnIngest bool
+
+		// MultiLevelCompaction allows the compaction of SSTs from more than two
+		// levels iff a conventional two level compaction will quickly trigger a
+		// compaction in the output level.
+		MultiLevelCompaction bool
 
 		// MaxWriterConcurrency is used to indicate the maximum number of
 		// compression workers the compression queue is allowed to use. If

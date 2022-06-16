@@ -378,10 +378,9 @@ func (c *tableCacheShard) newIters(
 		c.unrefValue(v)
 		return nil, nil, err
 	}
-	// NB: v.closeHook takes responsibility for calling unrefValue(v) here.
-	iter.SetCloseHook(func(i sstable.Iterator) error {
-		return v.closeHook(i)
-	})
+	// NB: v.closeHook takes responsibility for calling unrefValue(v) here. Take
+	// care to avoid introduceingan allocation here by adding a closure.
+	iter.SetCloseHook(v.closeHook)
 
 	atomic.AddInt32(&c.atomic.iterCount, 1)
 	atomic.AddInt32(dbOpts.atomic.iterCount, 1)
@@ -435,27 +434,14 @@ func (c *tableCacheShard) newRangeKeyIter(
 		return emptyKeyspanIter, err
 	}
 
-	var iter sstable.FragmentIterator
-	// TODO(bilal): We are currently passing through the raw blockIter for range
-	// keys. This iter does not support bounds (eg. SetBounds will panic).
-	// Any future users of the iter returned by this function need to make any
-	// bounds-specific optimizations themselves.
+	var iter keyspan.FragmentIterator
 	iter, err = v.reader.NewRawRangeKeyIter()
-	if err != nil || iter == nil {
-		c.unrefValue(v)
-		return nil, err
-	}
-	// NB: v.closeHook takes responsibility for calling unrefValue(v) here.
-	iter.SetCloseHook(func(i keyspan.FragmentIterator) error {
-		return v.closeHook(i)
-	})
+	// iter is a block iter that holds the entire value of the block in memory.
+	// No need to hold onto a ref of the cache value.
+	c.unrefValue(v)
 
-	atomic.AddInt32(&c.atomic.iterCount, 1)
-	atomic.AddInt32(dbOpts.atomic.iterCount, 1)
-	if invariants.RaceEnabled {
-		c.mu.Lock()
-		c.mu.iters[iter] = debug.Stack()
-		c.mu.Unlock()
+	if err != nil || iter == nil {
+		return nil, err
 	}
 
 	return iter, nil
@@ -607,7 +593,7 @@ func (c *tableCacheShard) findNode(meta *fileMetadata, dbOpts *tableCacheOpts) *
 	}
 	// Cache the closure invoked when an iterator is closed. This avoids an
 	// allocation on every call to newIters.
-	v.closeHook = func(i io.Closer) error {
+	v.closeHook = func(i sstable.Iterator) error {
 		if invariants.RaceEnabled {
 			c.mu.Lock()
 			delete(c.mu.iters, i)
@@ -837,7 +823,7 @@ func (c *tableCacheShard) Close() error {
 }
 
 type tableCacheValue struct {
-	closeHook func(i io.Closer) error
+	closeHook func(i sstable.Iterator) error
 	reader    *sstable.Reader
 	filename  string
 	err       error
