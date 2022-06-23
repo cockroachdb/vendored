@@ -884,8 +884,8 @@ github.com/golang/geo/r2
 github.com/golang/geo/r3
 github.com/golang/geo/s1
 github.com/golang/geo/s2
-# github.com/golang/glog v0.0.0-20210429001901-424d2337a529
-## explicit
+# github.com/golang/glog v1.0.0
+## explicit; go 1.11
 github.com/golang/glog
 # github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da
 ## explicit
@@ -994,6 +994,11 @@ github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway/httprule
 github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway/internal/gengateway
 github.com/grpc-ecosystem/grpc-gateway/runtime
 github.com/grpc-ecosystem/grpc-gateway/utilities
+# github.com/grpc-ecosystem/grpc-gateway/v2 v2.7.0
+## explicit; go 1.14
+github.com/grpc-ecosystem/grpc-gateway/v2/internal/httprule
+github.com/grpc-ecosystem/grpc-gateway/v2/runtime
+github.com/grpc-ecosystem/grpc-gateway/v2/utilities
 # github.com/hashicorp/go-uuid v1.0.3
 ## explicit
 github.com/hashicorp/go-uuid
@@ -1631,7 +1636,7 @@ go.opentelemetry.io/otel/sdk/trace/tracetest
 # go.opentelemetry.io/otel/trace v1.0.0-RC3
 ## explicit; go 1.15
 go.opentelemetry.io/otel/trace
-# go.opentelemetry.io/proto/otlp v0.9.0
+# go.opentelemetry.io/proto/otlp v0.18.0
 ## explicit; go 1.14
 go.opentelemetry.io/proto/otlp/collector/trace/v1
 go.opentelemetry.io/proto/otlp/common/v1
