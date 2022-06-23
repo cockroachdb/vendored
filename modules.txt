@@ -515,10 +515,12 @@ github.com/cockroachdb/circuitbreaker
 # github.com/cockroachdb/cmux v0.0.0-20170110192607-30d10be49292
 ## explicit
 github.com/cockroachdb/cmux
-# github.com/cockroachdb/cockroach-go/v2 v2.2.6
+# github.com/cockroachdb/cockroach-go/v2 v2.2.14
 ## explicit; go 1.13
 github.com/cockroachdb/cockroach-go/v2/crdb
 github.com/cockroachdb/cockroach-go/v2/crdb/crdbpgx
+github.com/cockroachdb/cockroach-go/v2/testserver
+github.com/cockroachdb/cockroach-go/v2/testserver/version
 # github.com/cockroachdb/crlfmt v0.0.0-20210128092314-b3eff0b87c79
 ## explicit; go 1.13
 github.com/cockroachdb/crlfmt
@@ -1047,7 +1049,7 @@ github.com/jackc/pgservicefile
 # github.com/jackc/pgtype v1.11.0
 ## explicit; go 1.13
 github.com/jackc/pgtype
-# github.com/jackc/pgx/v4 v4.16.0
+# github.com/jackc/pgx/v4 v4.16.1
 ## explicit; go 1.13
 github.com/jackc/pgx/v4
 github.com/jackc/pgx/v4/internal/sanitize
@@ -1716,7 +1718,7 @@ golang.org/x/perf/storage/benchfmt
 golang.org/x/sync/errgroup
 golang.org/x/sync/semaphore
 golang.org/x/sync/syncmap
-# golang.org/x/sys v0.0.0-20220520151302-bc2c85ada10a
+# golang.org/x/sys v0.0.0-20220622161953-175b2fd9d664
 ## explicit; go 1.17
 golang.org/x/sys/cpu
 golang.org/x/sys/execabs
