@@ -419,12 +419,6 @@ type compaction struct {
 	bytesIterated uint64
 	// bytesWritten contains the number of bytes that have been written to outputs.
 	bytesWritten int64
-	// atomicBytesIterated points to the variable to increment during iteration.
-	// atomicBytesIterated must be read/written atomically. Flushing will increment
-	// the shared variable which compaction will read. This allows for the
-	// compaction routine to know how many bytes have been flushed before the flush
-	// is applied.
-	atomicBytesIterated *uint64
 
 	// The boundaries of the input data.
 	smallest InternalKey
@@ -512,22 +506,21 @@ func (c *compaction) makeInfo(jobID int) CompactionInfo {
 	return info
 }
 
-func newCompaction(pc *pickedCompaction, opts *Options, bytesCompacted *uint64) *compaction {
+func newCompaction(pc *pickedCompaction, opts *Options) *compaction {
 	c := &compaction{
-		kind:                compactionKindDefault,
-		cmp:                 pc.cmp,
-		equal:               opts.equal(),
-		formatKey:           opts.Comparer.FormatKey,
-		score:               pc.score,
-		inputs:              pc.inputs,
-		smallest:            pc.smallest,
-		largest:             pc.largest,
-		logger:              opts.Logger,
-		version:             pc.version,
-		maxOutputFileSize:   pc.maxOutputFileSize,
-		maxOverlapBytes:     pc.maxOverlapBytes,
-		atomicBytesIterated: bytesCompacted,
-		l0SublevelInfo:      pc.l0SublevelInfo,
+		kind:              compactionKindDefault,
+		cmp:               pc.cmp,
+		equal:             opts.equal(),
+		formatKey:         opts.Comparer.FormatKey,
+		score:             pc.score,
+		inputs:            pc.inputs,
+		smallest:          pc.smallest,
+		largest:           pc.largest,
+		logger:            opts.Logger,
+		version:           pc.version,
+		maxOutputFileSize: pc.maxOutputFileSize,
+		maxOverlapBytes:   pc.maxOverlapBytes,
+		l0SublevelInfo:    pc.l0SublevelInfo,
 	}
 	c.startLevel = &c.inputs[0]
 	c.outputLevel = &c.inputs[1]
@@ -643,21 +636,18 @@ func adjustGrandparentOverlapBytesForFlush(c *compaction, flushingBytes uint64) 
 	}
 }
 
-func newFlush(
-	opts *Options, cur *version, baseLevel int, flushing flushableList, bytesFlushed *uint64,
-) *compaction {
+func newFlush(opts *Options, cur *version, baseLevel int, flushing flushableList) *compaction {
 	c := &compaction{
-		kind:                compactionKindFlush,
-		cmp:                 opts.Comparer.Compare,
-		equal:               opts.equal(),
-		formatKey:           opts.Comparer.FormatKey,
-		logger:              opts.Logger,
-		version:             cur,
-		inputs:              []compactionLevel{{level: -1}, {level: 0}},
-		maxOutputFileSize:   math.MaxUint64,
-		maxOverlapBytes:     math.MaxUint64,
-		flushing:            flushing,
-		atomicBytesIterated: bytesFlushed,
+		kind:              compactionKindFlush,
+		cmp:               opts.Comparer.Compare,
+		equal:             opts.equal(),
+		formatKey:         opts.Comparer.FormatKey,
+		logger:            opts.Logger,
+		version:           cur,
+		inputs:            []compactionLevel{{level: -1}, {level: 0}},
+		maxOutputFileSize: math.MaxUint64,
+		maxOverlapBytes:   math.MaxUint64,
+		flushing:          flushing,
 	}
 	c.startLevel = &c.inputs[0]
 	c.outputLevel = &c.inputs[1]
@@ -1388,33 +1378,6 @@ func (d *DB) removeInProgressCompaction(c *compaction) {
 	d.mu.versions.currentVersion().L0Sublevels.InitCompactingFileInfo(l0InProgress)
 }
 
-func (d *DB) getCompactionPacerInfo() compactionPacerInfo {
-	bytesFlushed := atomic.LoadUint64(&d.atomic.bytesFlushed)
-
-	d.mu.Lock()
-	estimatedMaxWAmp := d.mu.versions.picker.getEstimatedMaxWAmp()
-	pacerInfo := compactionPacerInfo{
-		slowdownThreshold:   uint64(estimatedMaxWAmp * float64(d.opts.MemTableSize)),
-		totalCompactionDebt: d.mu.versions.picker.estimatedCompactionDebt(bytesFlushed),
-	}
-	for _, m := range d.mu.mem.queue {
-		pacerInfo.totalDirtyBytes += m.inuseBytes()
-	}
-	d.mu.Unlock()
-
-	return pacerInfo
-}
-
-func (d *DB) getFlushPacerInfo() flushPacerInfo {
-	var pacerInfo flushPacerInfo
-	d.mu.Lock()
-	for _, m := range d.mu.mem.queue {
-		pacerInfo.inuseBytes += m.inuseBytes()
-	}
-	d.mu.Unlock()
-	return pacerInfo
-}
-
 func (d *DB) calculateDiskAvailableBytes() uint64 {
 	if space, err := d.opts.FS.GetDiskUsage(d.dirname); err == nil {
 		atomic.StoreUint64(&d.atomic.diskAvailBytes, space.AvailBytes)
@@ -1595,7 +1558,7 @@ func (d *DB) flush1() (bytesFlushed uint64, err error) {
 	}
 
 	c := newFlush(d.opts, d.mu.versions.currentVersion(),
-		d.mu.versions.picker.getBaseLevel(), d.mu.mem.queue[:n], &d.atomic.bytesFlushed)
+		d.mu.versions.picker.getBaseLevel(), d.mu.mem.queue[:n])
 	d.addInProgressCompaction(c)
 
 	jobID := d.mu.nextJobID
@@ -1606,17 +1569,7 @@ func (d *DB) flush1() (bytesFlushed uint64, err error) {
 	})
 	startTime := d.timeNow()
 
-	flushPacer := (pacer)(nilPacer)
-	if d.opts.private.enablePacing {
-		// TODO(peter): Flush pacing is disabled until we figure out why it impacts
-		// throughput.
-		flushPacer = newFlushPacer(flushPacerEnv{
-			limiter:      d.flushLimiter,
-			memTableSize: uint64(d.opts.MemTableSize),
-			getInfo:      d.getFlushPacerInfo,
-		})
-	}
-	ve, pendingOutputs, err := d.runCompaction(jobID, c, flushPacer)
+	ve, pendingOutputs, err := d.runCompaction(jobID, c)
 
 	info := FlushInfo{
 		JobID:    jobID,
@@ -1654,14 +1607,11 @@ func (d *DB) flush1() (bytesFlushed uint64, err error) {
 		}
 	}
 
+	bytesFlushed = c.bytesIterated
 	d.maybeUpdateDeleteCompactionHints(c)
 	d.removeInProgressCompaction(c)
 	d.mu.versions.incrementCompactions(c.kind, c.extraLevels)
 	d.mu.versions.incrementCompactionBytes(-c.bytesWritten)
-
-	// Refresh bytes flushed count.
-	bytesFlushed = atomic.LoadUint64(&d.atomic.bytesFlushed)
-	atomic.StoreUint64(&d.atomic.bytesFlushed, 0)
 
 	var flushed flushableList
 	if err == nil {
@@ -1755,7 +1705,6 @@ func (d *DB) maybeScheduleCompactionPicker(
 	}
 
 	env := compactionEnv{
-		bytesCompacted:          &d.atomic.bytesCompacted,
 		earliestSnapshotSeqNum:  d.mu.snapshots.earliest(),
 		earliestUnflushedSeqNum: d.getEarliestUnflushedSeqNumLocked(),
 	}
@@ -1783,7 +1732,7 @@ func (d *DB) maybeScheduleCompactionPicker(
 		env.inProgressCompactions = d.getInProgressCompactionInfoLocked(nil)
 		pc, retryLater := d.mu.versions.picker.pickManual(env, manual)
 		if pc != nil {
-			c := newCompaction(pc, d.opts, env.bytesCompacted)
+			c := newCompaction(pc, d.opts)
 			d.mu.compact.manual = d.mu.compact.manual[1:]
 			d.mu.compact.compactingCount++
 			d.addInProgressCompaction(c)
@@ -1810,7 +1759,7 @@ func (d *DB) maybeScheduleCompactionPicker(
 		if pc == nil {
 			break
 		}
-		c := newCompaction(pc, d.opts, env.bytesCompacted)
+		c := newCompaction(pc, d.opts)
 		d.mu.compact.compactingCount++
 		d.addInProgressCompaction(c)
 		go d.compact(c, nil)
@@ -2124,17 +2073,7 @@ func (d *DB) compact1(c *compaction, errChannel chan error) (err error) {
 	d.opts.EventListener.CompactionBegin(info)
 	startTime := d.timeNow()
 
-	compactionPacer := (pacer)(nilPacer)
-	if d.opts.private.enablePacing {
-		// TODO(peter): Compaction pacing is disabled until we figure out why it
-		// impacts throughput.
-		compactionPacer = newCompactionPacer(compactionPacerEnv{
-			limiter:      d.compactionLimiter,
-			memTableSize: uint64(d.opts.MemTableSize),
-			getInfo:      d.getCompactionPacerInfo,
-		})
-	}
-	ve, pendingOutputs, err := d.runCompaction(jobID, c, compactionPacer)
+	ve, pendingOutputs, err := d.runCompaction(jobID, c)
 
 	info.Duration = d.timeNow().Sub(startTime)
 	if err == nil {
@@ -2185,7 +2124,7 @@ func (d *DB) compact1(c *compaction, errChannel chan error) (err error) {
 // d.mu must be held when calling this, but the mutex may be dropped and
 // re-acquired during the course of this method.
 func (d *DB) runCompaction(
-	jobID int, c *compaction, pacer pacer,
+	jobID int, c *compaction,
 ) (ve *versionEdit, pendingOutputs []*fileMetadata, retErr error) {
 	// As a sanity check, confirm that the smallest / largest keys for new and
 	// deleted files in the new versionEdit pass a validation function before
@@ -2632,14 +2571,6 @@ func (d *DB) runCompaction(
 	}
 	splitter := &splitterGroup{cmp: c.cmp, splitters: outputSplitters}
 
-	// NB: we avoid calling maybeThrottle on a nilPacer because the cost of
-	// dynamic dispatch in the hot loop below is pronounced in CPU profiles (see
-	// #1030). Additionally, even the cost of this interface comparison is
-	// pronounced in CPU profiles, so we hoist the entire thing out of the hot
-	// loop. This allows the branch predictor to do its job and make the pacer
-	// interactions ~free when a nilPacer is used.
-	isNilPacer := pacer == nilPacer
-
 	// Each outer loop iteration produces one output file. An iteration that
 	// produces a file containing point keys (and optionally range tombstones)
 	// guarantees that the input iterator advanced. An iteration that produces
@@ -2657,12 +2588,6 @@ func (d *DB) runCompaction(
 				break
 			}
 
-			atomic.StoreUint64(c.atomicBytesIterated, c.bytesIterated)
-			if !isNilPacer {
-				if err := pacer.maybeThrottle(c.bytesIterated); err != nil {
-					return nil, pendingOutputs, err
-				}
-			}
 			switch key.Kind() {
 			case InternalKeyKindRangeDelete:
 				// Range tombstones are handled specially. They are fragmented,
