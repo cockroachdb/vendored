@@ -1675,11 +1675,14 @@ golang.org/x/crypto/scrypt
 # golang.org/x/exp v0.0.0-20220104160115-025e73f80486
 ## explicit; go 1.18
 golang.org/x/exp/rand
+# golang.org/x/exp/typeparams v0.0.0-20220713135740-79cabaa25d75
+## explicit; go 1.18
+golang.org/x/exp/typeparams
 # golang.org/x/lint v0.0.0-20210508222113-6edffad5e616
 ## explicit; go 1.11
 golang.org/x/lint
 golang.org/x/lint/golint
-# golang.org/x/mod v0.6.0-dev.0.20211013180041-c96bc1413d57
+# golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4
 ## explicit; go 1.17
 golang.org/x/mod/internal/lazyregexp
 golang.org/x/mod/modfile
@@ -1753,7 +1756,7 @@ golang.org/x/text/width
 # golang.org/x/time v0.0.0-20210723032227-1f47c861a9ac
 ## explicit
 golang.org/x/time/rate
-# golang.org/x/tools v0.1.9
+# golang.org/x/tools v0.1.11
 ## explicit; go 1.17
 golang.org/x/tools/cmd/goyacc
 golang.org/x/tools/container/intsets
@@ -1790,6 +1793,7 @@ golang.org/x/tools/go/analysis/passes/unmarshal
 golang.org/x/tools/go/analysis/passes/unreachable
 golang.org/x/tools/go/analysis/passes/unsafeptr
 golang.org/x/tools/go/analysis/passes/unusedresult
+golang.org/x/tools/go/analysis/passes/usesgenerics
 golang.org/x/tools/go/analysis/singlechecker
 golang.org/x/tools/go/analysis/unitchecker
 golang.org/x/tools/go/ast/astutil
@@ -1815,6 +1819,7 @@ golang.org/x/tools/internal/fastwalk
 golang.org/x/tools/internal/gocommand
 golang.org/x/tools/internal/gopathwalk
 golang.org/x/tools/internal/imports
+golang.org/x/tools/internal/lsp/bug
 golang.org/x/tools/internal/lsp/diff
 golang.org/x/tools/internal/lsp/diff/myers
 golang.org/x/tools/internal/lsp/fuzzy
@@ -1822,6 +1827,7 @@ golang.org/x/tools/internal/packagesinternal
 golang.org/x/tools/internal/span
 golang.org/x/tools/internal/testenv
 golang.org/x/tools/internal/typeparams
+golang.org/x/tools/internal/typeparams/genericfeatures
 golang.org/x/tools/internal/typesinternal
 golang.org/x/tools/txtar
 # golang.org/x/xerrors v0.0.0-20220517211312-f3a8303e98df
@@ -2006,24 +2012,27 @@ gopkg.in/yaml.v2
 # gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
 ## explicit
 gopkg.in/yaml.v3
-# honnef.co/go/tools v0.2.1
-## explicit; go 1.14
+# honnef.co/go/tools v0.3.2
+## explicit; go 1.17
 honnef.co/go/tools/analysis/code
 honnef.co/go/tools/analysis/edit
-honnef.co/go/tools/analysis/facts
+honnef.co/go/tools/analysis/facts/deprecated
+honnef.co/go/tools/analysis/facts/directives
+honnef.co/go/tools/analysis/facts/generated
 honnef.co/go/tools/analysis/facts/nilness
+honnef.co/go/tools/analysis/facts/purity
+honnef.co/go/tools/analysis/facts/tokenfile
 honnef.co/go/tools/analysis/facts/typedness
 honnef.co/go/tools/analysis/lint
 honnef.co/go/tools/analysis/report
 honnef.co/go/tools/cmd/staticcheck
 honnef.co/go/tools/config
 honnef.co/go/tools/go/ast/astutil
+honnef.co/go/tools/go/buildid
 honnef.co/go/tools/go/ir
 honnef.co/go/tools/go/ir/irutil
 honnef.co/go/tools/go/loader
 honnef.co/go/tools/go/types/typeutil
-honnef.co/go/tools/internal/cache
-honnef.co/go/tools/internal/go/gcimporter
 honnef.co/go/tools/internal/passes/buildir
 honnef.co/go/tools/internal/renameio
 honnef.co/go/tools/internal/robustio
@@ -2031,6 +2040,7 @@ honnef.co/go/tools/internal/sharedcheck
 honnef.co/go/tools/internal/sync
 honnef.co/go/tools/knowledge
 honnef.co/go/tools/lintcmd
+honnef.co/go/tools/lintcmd/cache
 honnef.co/go/tools/lintcmd/runner
 honnef.co/go/tools/lintcmd/version
 honnef.co/go/tools/pattern
@@ -2039,9 +2049,11 @@ honnef.co/go/tools/quickfix
 honnef.co/go/tools/sarif
 honnef.co/go/tools/simple
 honnef.co/go/tools/staticcheck
+honnef.co/go/tools/staticcheck/fakejson
+honnef.co/go/tools/staticcheck/fakereflect
+honnef.co/go/tools/staticcheck/fakexml
 honnef.co/go/tools/stylecheck
 honnef.co/go/tools/unused
-honnef.co/go/tools/unused/typemap
 # vitess.io/vitess v0.0.0-00010101000000-000000000000 => github.com/cockroachdb/vitess v0.0.0-20210218160543-54524729cc82
 ## explicit; go 1.13
 vitess.io/vitess/go/bytes2
