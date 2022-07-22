@@ -1244,7 +1244,7 @@ func (i *batchIter) String() string {
 	return "batch"
 }
 
-func (i *batchIter) SeekGE(key []byte, trySeekUsingNext bool) (*InternalKey, []byte) {
+func (i *batchIter) SeekGE(key []byte, flags base.SeekGEFlags) (*InternalKey, []byte) {
 	// Ignore trySeekUsingNext since the batch may have changed, so using Next
 	// would be incorrect.
 	i.err = nil // clear cached iteration error
@@ -1259,13 +1259,13 @@ func (i *batchIter) SeekGE(key []byte, trySeekUsingNext bool) (*InternalKey, []b
 }
 
 func (i *batchIter) SeekPrefixGE(
-	prefix, key []byte, trySeekUsingNext bool,
+	prefix, key []byte, flags base.SeekGEFlags,
 ) (*base.InternalKey, []byte) {
 	i.err = nil // clear cached iteration error
-	return i.SeekGE(key, trySeekUsingNext)
+	return i.SeekGE(key, flags)
 }
 
-func (i *batchIter) SeekLT(key []byte) (*InternalKey, []byte) {
+func (i *batchIter) SeekLT(key []byte, flags base.SeekLTFlags) (*InternalKey, []byte) {
 	i.err = nil // clear cached iteration error
 	ikey := i.iter.SeekLT(key)
 	for ikey != nil && ikey.SeqNum() >= i.snapshot {
@@ -1595,6 +1595,8 @@ func (b *flushableBatch) newRangeKeyIter(o *IterOptions) keyspan.FragmentIterato
 	return keyspan.NewIter(b.cmp, b.rangeKeys)
 }
 
+func (b *flushableBatch) containsRangeKeys() bool { return len(b.rangeKeys) > 0 }
+
 func (b *flushableBatch) inuseBytes() uint64 {
 	return uint64(len(b.data) - batchHeaderLen)
 }
@@ -1638,9 +1640,9 @@ func (i *flushableBatchIter) String() string {
 }
 
 // SeekGE implements internalIterator.SeekGE, as documented in the pebble
-// package. Ignore trySeekUsingNext since we don't expect this optimization
-// to provide much benefit here at the moment.
-func (i *flushableBatchIter) SeekGE(key []byte, trySeekUsingNext bool) (*InternalKey, []byte) {
+// package. Ignore flags.TrySeekUsingNext() since we don't expect this
+// optimization to provide much benefit here at the moment.
+func (i *flushableBatchIter) SeekGE(key []byte, flags base.SeekGEFlags) (*InternalKey, []byte) {
 	i.err = nil // clear cached iteration error
 	ikey := base.MakeSearchKey(key)
 	i.index = sort.Search(len(i.offsets), func(j int) bool {
@@ -1660,14 +1662,14 @@ func (i *flushableBatchIter) SeekGE(key []byte, trySeekUsingNext bool) (*Interna
 // SeekPrefixGE implements internalIterator.SeekPrefixGE, as documented in the
 // pebble package.
 func (i *flushableBatchIter) SeekPrefixGE(
-	prefix, key []byte, trySeekUsingNext bool,
+	prefix, key []byte, flags base.SeekGEFlags,
 ) (*base.InternalKey, []byte) {
-	return i.SeekGE(key, trySeekUsingNext)
+	return i.SeekGE(key, flags)
 }
 
 // SeekLT implements internalIterator.SeekLT, as documented in the pebble
 // package.
-func (i *flushableBatchIter) SeekLT(key []byte) (*InternalKey, []byte) {
+func (i *flushableBatchIter) SeekLT(key []byte, flags base.SeekLTFlags) (*InternalKey, []byte) {
 	i.err = nil // clear cached iteration error
 	ikey := base.MakeSearchKey(key)
 	i.index = sort.Search(len(i.offsets), func(j int) bool {
@@ -1819,17 +1821,21 @@ func (i *flushFlushableBatchIter) String() string {
 	return "flushable-batch"
 }
 
-func (i *flushFlushableBatchIter) SeekGE(key []byte, trySeekUsingNext bool) (*InternalKey, []byte) {
+func (i *flushFlushableBatchIter) SeekGE(
+	key []byte, flags base.SeekGEFlags,
+) (*InternalKey, []byte) {
 	panic("pebble: SeekGE unimplemented")
 }
 
 func (i *flushFlushableBatchIter) SeekPrefixGE(
-	prefix, key []byte, trySeekUsingNext bool,
+	prefix, key []byte, flags base.SeekGEFlags,
 ) (*base.InternalKey, []byte) {
 	panic("pebble: SeekPrefixGE unimplemented")
 }
 
-func (i *flushFlushableBatchIter) SeekLT(key []byte) (*InternalKey, []byte) {
+func (i *flushFlushableBatchIter) SeekLT(
+	key []byte, flags base.SeekLTFlags,
+) (*InternalKey, []byte) {
 	panic("pebble: SeekLT unimplemented")
 }
 

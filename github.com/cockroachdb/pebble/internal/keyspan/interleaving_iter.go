@@ -169,6 +169,49 @@ func (i *InterleavingIter) Init(
 	}
 }
 
+// InitSeekGE may be called after Init but before any positioning method.
+// InitSeekGE initializes the current position of the point iterator and then
+// performs a SeekGE on the keyspan iterator using the provided key. InitSeekGE
+// returns whichever point or keyspan key is smaller. After InitSeekGE, the
+// iterator is positioned and may be repositioned using relative positioning
+// methods.
+//
+// This method is used specifically for lazily constructing combined iterators.
+// It allows for seeding the iterator with the current position of the point
+// iterator.
+func (i *InterleavingIter) InitSeekGE(
+	key []byte, pointKey *base.InternalKey, pointValue []byte,
+) (*base.InternalKey, []byte) {
+	i.dir = +1
+	i.pointKey, i.pointVal = pointKey, pointValue
+	i.pointKeyInterleaved = false
+	// NB: This keyspanSeekGE call will truncate the span to the seek key if
+	// necessary. This truncation is important for cases where a switch to
+	// combined iteration is made during a user-initiated SeekGE.
+	i.keyspanSeekGE(key)
+	return i.interleaveForward(key)
+}
+
+// InitSeekLT may be called after Init but before any positioning method.
+// InitSeekLT initializes the current position of the point iterator and then
+// performs a SeekLT on the keyspan iterator using the provided key. InitSeekLT
+// returns whichever point or keyspan key is larger. After InitSeekLT, the
+// iterator is positioned and may be repositioned using relative positioning
+// methods.
+//
+// This method is used specifically for lazily constructing combined iterators.
+// It allows for seeding the iterator with the current position of the point
+// iterator.
+func (i *InterleavingIter) InitSeekLT(
+	key []byte, pointKey *base.InternalKey, pointValue []byte,
+) (*base.InternalKey, []byte) {
+	i.dir = -1
+	i.pointKey, i.pointVal = pointKey, pointValue
+	i.pointKeyInterleaved = false
+	i.keyspanSeekLT(key)
+	return i.interleaveBackward()
+}
+
 // SeekGE implements (base.InternalIterator).SeekGE.
 //
 // If there exists a span with a start key ≤ the first matching point key,
@@ -179,8 +222,8 @@ func (i *InterleavingIter) Init(
 //
 // NB: In accordance with the base.InternalIterator contract:
 //   i.lower ≤ key
-func (i *InterleavingIter) SeekGE(key []byte, trySeekUsingNext bool) (*base.InternalKey, []byte) {
-	i.pointKey, i.pointVal = i.pointIter.SeekGE(key, trySeekUsingNext)
+func (i *InterleavingIter) SeekGE(key []byte, flags base.SeekGEFlags) (*base.InternalKey, []byte) {
+	i.pointKey, i.pointVal = i.pointIter.SeekGE(key, flags)
 	i.pointKeyInterleaved = false
 	i.keyspanSeekGE(key)
 	i.dir = +1
@@ -198,9 +241,9 @@ func (i *InterleavingIter) SeekGE(key []byte, trySeekUsingNext bool) (*base.Inte
 // NB: In accordance with the base.InternalIterator contract:
 //   i.lower ≤ key
 func (i *InterleavingIter) SeekPrefixGE(
-	prefix, key []byte, trySeekUsingNext bool,
+	prefix, key []byte, flags base.SeekGEFlags,
 ) (*base.InternalKey, []byte) {
-	i.pointKey, i.pointVal = i.pointIter.SeekPrefixGE(prefix, key, trySeekUsingNext)
+	i.pointKey, i.pointVal = i.pointIter.SeekPrefixGE(prefix, key, flags)
 	i.pointKeyInterleaved = false
 	i.keyspanSeekGE(key)
 	i.dir = +1
@@ -208,8 +251,8 @@ func (i *InterleavingIter) SeekPrefixGE(
 }
 
 // SeekLT implements (base.InternalIterator).SeekLT.
-func (i *InterleavingIter) SeekLT(key []byte) (*base.InternalKey, []byte) {
-	i.pointKey, i.pointVal = i.pointIter.SeekLT(key)
+func (i *InterleavingIter) SeekLT(key []byte, flags base.SeekLTFlags) (*base.InternalKey, []byte) {
+	i.pointKey, i.pointVal = i.pointIter.SeekLT(key, flags)
 	i.pointKeyInterleaved = false
 	i.keyspanSeekLT(key)
 	i.dir = -1
@@ -256,7 +299,7 @@ func (i *InterleavingIter) Next() (*base.InternalKey, []byte) {
 		case i.pointKey == nil && i.lower == nil:
 			i.pointKey, i.pointVal = i.pointIter.First()
 		case i.pointKey == nil && i.lower != nil:
-			i.pointKey, i.pointVal = i.pointIter.SeekGE(i.lower, false)
+			i.pointKey, i.pointVal = i.pointIter.SeekGE(i.lower, base.SeekGEFlagsNone)
 		default:
 			i.pointKey, i.pointVal = i.pointIter.Next()
 		}
@@ -377,7 +420,7 @@ func (i *InterleavingIter) Prev() (*base.InternalKey, []byte) {
 		case i.pointKey == nil && i.upper == nil:
 			i.pointKey, i.pointVal = i.pointIter.Last()
 		case i.pointKey == nil && i.upper != nil:
-			i.pointKey, i.pointVal = i.pointIter.SeekLT(i.upper)
+			i.pointKey, i.pointVal = i.pointIter.SeekLT(i.upper, base.SeekLTFlagsNone)
 		default:
 			i.pointKey, i.pointVal = i.pointIter.Prev()
 		}
