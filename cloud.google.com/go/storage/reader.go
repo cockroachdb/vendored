@@ -212,6 +212,7 @@ func (o *ObjectHandle) NewRangeReader(ctx context.Context, offset, length int64)
 			return nil
 		}, o.retry, true)
 		if err != nil {
+			fmt.Println("NewRangeReader reopen err =", err, "retry=", o.retry)
 			return nil, err
 		}
 		return res, nil
@@ -219,6 +220,7 @@ func (o *ObjectHandle) NewRangeReader(ctx context.Context, offset, length int64)
 
 	res, err := reopen(0)
 	if err != nil {
+		fmt.Println("NewRangeReader reopen(0) err =", err, "retry=", o.retry)
 		return nil, err
 	}
 	var (
@@ -559,6 +561,9 @@ func (r *Reader) readWithRetry(p []byte) (int, error) {
 		m, err := r.body.Read(p[n:])
 		n += m
 		r.seen += int64(m)
+		if err != nil {
+			fmt.Println("readWithRetry err =", err)
+		}
 		if err == nil || err == io.EOF {
 			return n, err
 		}
@@ -568,6 +573,7 @@ func (r *Reader) readWithRetry(p []byte) (int, error) {
 		res, err := r.reopen(r.seen)
 		if err != nil {
 			// reopen already retries
+			fmt.Println("readWithRetry reopen err =", err)
 			return n, err
 		}
 		r.body.Close()
