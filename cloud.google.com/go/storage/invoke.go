@@ -17,6 +17,7 @@ package storage
 import (
 	"context"
 	"io"
+	"fmt"
 	"net"
 	"net/url"
 	"strings"
@@ -65,27 +66,32 @@ func shouldRetry(err error) bool {
 		return true
 	}
 
+	fmt.Printf("shouldRetry err=%v\n", err)
 	switch e := err.(type) {
 	case *net.OpError:
 		if strings.Contains(e.Error(), "use of closed network connection") {
 			// TODO: check against net.ErrClosed (go 1.16+) instead of string
+			fmt.Printf("shouldRetry ret=%v\n", "opErr")
 			return true
 		}
 	case *googleapi.Error:
 		// Retry on 408, 429, and 5xx, according to
 		// https://cloud.google.com/storage/docs/exponential-backoff.
+		fmt.Printf("shouldRetry ret=%v code=%d\n", "googleErr", e.Code)
 		return e.Code == 408 || e.Code == 429 || (e.Code >= 500 && e.Code < 600)
 	case *url.Error:
 		// Retry socket-level errors ECONNREFUSED and ECONNRESET (from syscall).
 		// Unfortunately the error type is unexported, so we resort to string
 		// matching.
 		retriable := []string{"connection refused", "connection reset"}
+		fmt.Printf("shouldRetry ret=%v", "urlErr")
 		for _, s := range retriable {
 			if strings.Contains(e.Error(), s) {
 				return true
 			}
 		}
 	case interface{ Temporary() bool }:
+		fmt.Printf("shouldRetry ret=%v tmp=%v", "temporaryErr", e.Temporary())
 		if e.Temporary() {
 			return true
 		}
@@ -95,11 +101,15 @@ func shouldRetry(err error) bool {
 	//
 	// This is only necessary for the experimental gRPC-based media operations.
 	if st, ok := status.FromError(err); ok && st.Code() == codes.Unavailable {
+		fmt.Printf("shouldRetry ret=%v ", "unavailable")
 		return true
 	}
 	// Unwrap is only supported in go1.13.x+
 	if e, ok := err.(interface{ Unwrap() error }); ok {
+		fmt.Printf("shouldRetry ret=%v ", "unwrap")
 		return shouldRetry(e.Unwrap())
 	}
+
+	fmt.Printf("shouldRetry ret=%v ", "no retry")
 	return false
 }
