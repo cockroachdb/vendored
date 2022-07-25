@@ -142,6 +142,7 @@ func (o *ObjectHandle) NewRangeReader(ctx context.Context, offset, length int64)
 		// If the context has already expired, return immediately without making a
 		// call.
 		if err := ctx.Err(); err != nil {
+			fmt.Println("@@@ context err", err)
 			return nil, err
 		}
 		start := offset + seen
@@ -155,6 +156,7 @@ func (o *ObjectHandle) NewRangeReader(ctx context.Context, offset, length int64)
 		}
 		// We wait to assign conditions here because the generation number can change in between reopen() runs.
 		if err := setConditionsHeaders(req.Header, o.conds); err != nil {
+			fmt.Println("@@@ setConditionsHeaders err", err)
 			return nil, err
 		}
 		// If an object generation is specified, include generation as query string parameters.
@@ -166,15 +168,18 @@ func (o *ObjectHandle) NewRangeReader(ctx context.Context, offset, length int64)
 		err = run(ctx, func() error {
 			res, err = o.c.hc.Do(req)
 			if err != nil {
+				fmt.Println("@@@ o.c.hc.Do err", err)
 				return err
 			}
 			if res.StatusCode == http.StatusNotFound {
 				res.Body.Close()
+				fmt.Println("@@@ StatusNotFound err", err)
 				return ErrObjectNotExist
 			}
 			if res.StatusCode < 200 || res.StatusCode > 299 {
 				body, _ := ioutil.ReadAll(res.Body)
 				res.Body.Close()
+				fmt.Println("@@@ res.StatusCode < 200 || res.StatusCode > 299 err", err)
 				return &googleapi.Error{
 					Code:   res.StatusCode,
 					Header: res.Header,
@@ -189,6 +194,7 @@ func (o *ObjectHandle) NewRangeReader(ctx context.Context, offset, length int64)
 
 			if partialContentNotSatisfied {
 				res.Body.Close()
+				fmt.Println("@@@ partialContentNotSatisfied err", err)
 				return errors.New("storage: partial request not satisfied")
 			}
 
@@ -205,6 +211,7 @@ func (o *ObjectHandle) NewRangeReader(ctx context.Context, offset, length int64)
 			if gen < 0 && res.Header.Get("X-Goog-Generation") != "" {
 				gen64, err := strconv.ParseInt(res.Header.Get("X-Goog-Generation"), 10, 64)
 				if err != nil {
+					fmt.Println("@@@ ParseInt err", err)
 					return err
 				}
 				gen = gen64
