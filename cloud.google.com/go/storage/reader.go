@@ -98,6 +98,7 @@ func (o *ObjectHandle) NewRangeReader(ctx context.Context, offset, length int64)
 	if o.c.gc != nil {
 		return o.newRangeReaderWithGRPC(ctx, offset, length)
 	}
+	fmt.Println("@@@ newRangeReader normal")
 
 	if err := o.validate(); err != nil {
 		return nil, err
@@ -434,6 +435,7 @@ func (r *Reader) Read(p []byte) (int, error) {
 //
 // This is an experimental API and not intended for public use.
 func (o *ObjectHandle) newRangeReaderWithGRPC(ctx context.Context, offset, length int64) (r *Reader, err error) {
+	fmt.Println("@@@ newRangeReaderWithGRPC")
 	ctx = trace.StartSpan(ctx, "cloud.google.com/go/storage.Object.newRangeReaderWithGRPC")
 	defer func() { trace.EndSpan(ctx, err) }()
 
@@ -514,6 +516,7 @@ func (o *ObjectHandle) newRangeReaderWithGRPC(ctx context.Context, offset, lengt
 
 	res, cancel, err := reopen(0)
 	if err != nil {
+		fmt.Println("NewRangeReaderGRPC reopen(0) err =", err, "retry=", o.retry)
 		return nil, err
 	}
 

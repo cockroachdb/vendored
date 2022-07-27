@@ -84,14 +84,14 @@ func shouldRetry(err error) bool {
 		// Unfortunately the error type is unexported, so we resort to string
 		// matching.
 		retriable := []string{"connection refused", "connection reset"}
-		fmt.Printf("shouldRetry ret=%v", "urlErr")
+		fmt.Printf("shouldRetry ret=%v\n", "urlErr")
 		for _, s := range retriable {
 			if strings.Contains(e.Error(), s) {
 				return true
 			}
 		}
 	case interface{ Temporary() bool }:
-		fmt.Printf("shouldRetry ret=%v tmp=%v", "temporaryErr", e.Temporary())
+		fmt.Printf("shouldRetry ret=%v tmp=%v\n", "temporaryErr", e.Temporary())
 		if e.Temporary() {
 			return true
 		}
@@ -101,15 +101,15 @@ func shouldRetry(err error) bool {
 	//
 	// This is only necessary for the experimental gRPC-based media operations.
 	if st, ok := status.FromError(err); ok && st.Code() == codes.Unavailable {
-		fmt.Printf("shouldRetry ret=%v ", "unavailable")
+		fmt.Printf("shouldRetry ret=%v\n", "unavailable")
 		return true
 	}
 	// Unwrap is only supported in go1.13.x+
 	if e, ok := err.(interface{ Unwrap() error }); ok {
-		fmt.Printf("shouldRetry ret=%v ", "unwrap")
+		fmt.Printf("shouldRetry ret=%v\n", "unwrap")
 		return shouldRetry(e.Unwrap())
 	}
 
-	fmt.Printf("shouldRetry ret=%v ", "no retry")
+	fmt.Printf("shouldRetry ret=%v\n", "no retry")
 	return false
 }
