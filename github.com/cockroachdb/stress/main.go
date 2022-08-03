@@ -213,7 +213,7 @@ func run() error {
 						panic(err)
 					}
 					if cmdErr != nil && (failureRe == nil || failureRe.Match(result.output)) && (ignoreRe == nil || !ignoreRe.Match(result.output)) {
-						result.output = append(result.output, fmt.Sprintf("\n\nERROR: %v\n", err)...)
+						result.output = append(result.output, fmt.Sprintf("\n\nERROR: %v\n", cmdErr)...)
 					} else {
 						result.success = true
 					}
