@@ -47,7 +47,7 @@ func expandedCompactionByteSizeLimit(opts *Options, level int, availBytes uint64
 	// compactions to half of available disk space. Note that this will not
 	// prevent compaction picking from pursuing compactions that are larger
 	// than this threshold before expansion.
-	diskMax := (availBytes / 2) / uint64(opts.MaxConcurrentCompactions)
+	diskMax := (availBytes / 2) / uint64(opts.MaxConcurrentCompactions())
 	if v > diskMax {
 		v = diskMax
 	}
@@ -462,7 +462,11 @@ type compaction struct {
 	// grandparent and lower levels. See setupInuseKeyRanges() for the
 	// construction. Used by elideTombstone() and elideRangeTombstone() to
 	// determine if keys affected by a tombstone possibly exist at a lower level.
-	inuseKeyRanges      []manifest.UserKeyRange
+	inuseKeyRanges []manifest.UserKeyRange
+	// inuseEntireRange is set if the above inuse key ranges wholly contain the
+	// compaction's key range. This allows compactions in higher levels to often
+	// elide key comparisons.
+	inuseEntireRange    bool
 	elideTombstoneIndex int
 
 	// allowedZeroSeqNum is true if seqnums can be zeroed if there are no
@@ -736,9 +740,19 @@ func (c *compaction) setupInuseKeyRanges() {
 	if c.outputLevel.level == 0 {
 		level = 0
 	}
+	// calculateInuseKeyRanges will return a series of sorted spans. Overlapping
+	// or abutting spans have already been merged.
 	c.inuseKeyRanges = calculateInuseKeyRanges(
 		c.version, c.cmp, level, numLevels-1, c.smallest.UserKey, c.largest.UserKey,
 	)
+	// Check if there's a single in-use span that encompasses the entire key
+	// range of the compaction. This is an optimization to avoid key comparisons
+	// against inuseKeyRanges during the compaction when every key within the
+	// compaction overlaps with an in-use span.
+	if len(c.inuseKeyRanges) > 0 {
+		c.inuseEntireRange = c.cmp(c.inuseKeyRanges[0].Start, c.smallest.UserKey) <= 0 &&
+			c.cmp(c.inuseKeyRanges[0].End, c.largest.UserKey) >= 0
+	}
 }
 
 func calculateInuseKeyRanges(
@@ -935,7 +949,7 @@ func (c *compaction) allowZeroSeqNum() bool {
 // key. The keys in multiple invocations to elideTombstone must be supplied in
 // order.
 func (c *compaction) elideTombstone(key []byte) bool {
-	if len(c.flushing) != 0 {
+	if c.inuseEntireRange || len(c.flushing) != 0 {
 		return false
 	}
 
@@ -1684,7 +1698,8 @@ func (d *DB) maybeScheduleCompactionPicker(
 	if d.closed.Load() != nil || d.opts.ReadOnly {
 		return
 	}
-	if d.mu.compact.compactingCount >= d.opts.MaxConcurrentCompactions {
+	maxConcurrentCompactions := d.opts.MaxConcurrentCompactions()
+	if d.mu.compact.compactingCount >= maxConcurrentCompactions {
 		if len(d.mu.compact.manual) > 0 {
 			// Inability to run head blocks later manual compactions.
 			d.mu.compact.manual[0].retries++
@@ -1713,7 +1728,7 @@ func (d *DB) maybeScheduleCompactionPicker(
 	// Check for delete-only compactions first, because they're expected to be
 	// cheap and reduce future compaction work.
 	if len(d.mu.compact.deletionHints) > 0 &&
-		d.mu.compact.compactingCount < d.opts.MaxConcurrentCompactions &&
+		d.mu.compact.compactingCount < maxConcurrentCompactions &&
 		!d.opts.DisableAutomaticCompactions {
 		v := d.mu.versions.currentVersion()
 		snapshots := d.mu.snapshots.toSlice()
@@ -1728,7 +1743,7 @@ func (d *DB) maybeScheduleCompactionPicker(
 		}
 	}
 
-	for len(d.mu.compact.manual) > 0 && d.mu.compact.compactingCount < d.opts.MaxConcurrentCompactions {
+	for len(d.mu.compact.manual) > 0 && d.mu.compact.compactingCount < maxConcurrentCompactions {
 		manual := d.mu.compact.manual[0]
 		env.inProgressCompactions = d.getInProgressCompactionInfoLocked(nil)
 		pc, retryLater := d.mu.versions.picker.pickManual(env, manual)
@@ -1749,7 +1764,7 @@ func (d *DB) maybeScheduleCompactionPicker(
 		}
 	}
 
-	for !d.opts.DisableAutomaticCompactions && d.mu.compact.compactingCount < d.opts.MaxConcurrentCompactions {
+	for !d.opts.DisableAutomaticCompactions && d.mu.compact.compactingCount < maxConcurrentCompactions {
 		env.inProgressCompactions = d.getInProgressCompactionInfoLocked(nil)
 		env.readCompactionEnv = readCompactionEnv{
 			readCompactions:          &d.mu.compact.readCompactions,
