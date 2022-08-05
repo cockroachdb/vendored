@@ -1172,7 +1172,7 @@ github.com/leanovate/gopter/prop
 github.com/lib/pq
 github.com/lib/pq/oid
 github.com/lib/pq/scram
-# github.com/lib/pq/auth/kerberos v0.0.0-20200720160335-984a6aa1ca46
+# github.com/lib/pq/auth/kerberos v0.0.0-20220516182748-8c6de565f76f
 ## explicit; go 1.13
 github.com/lib/pq/auth/kerberos
 # github.com/linkedin/goavro/v2 v2.10.0
