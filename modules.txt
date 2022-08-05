@@ -1303,6 +1303,9 @@ github.com/mostynb/go-grpc-compression/zstd
 # github.com/mwitkow/go-proto-validators v0.0.0-20180403085117-0950a7990007
 ## explicit
 github.com/mwitkow/go-proto-validators
+# github.com/nightlyone/lockfile v1.0.0
+## explicit; go 1.11
+github.com/nightlyone/lockfile
 # github.com/oklog/ulid v1.3.1
 ## explicit
 github.com/oklog/ulid
