@@ -532,6 +532,7 @@ func (d *DB) getInternal(key []byte, b *Batch, s *Snapshot) ([]byte, io.Closer, 
 		pointIter:    pointIter,
 		merge:        d.merge,
 		split:        d.split,
+		comparer:     d.opts.Comparer,
 		readState:    readState,
 		keyBuf:       buf.keyBuf,
 	}
@@ -906,6 +907,7 @@ func (d *DB) newIterInternal(batch *Batch, s *Snapshot, o *IterOptions) *Iterato
 		equal:               d.equal,
 		merge:               d.merge,
 		split:               d.split,
+		comparer:            d.opts.Comparer,
 		readState:           readState,
 		keyBuf:              buf.keyBuf,
 		prefixOrFullSeekKey: buf.prefixOrFullSeekKey,
@@ -1013,7 +1015,7 @@ func finishInitializingIter(buf *iterAlloc) *Iterator {
 			// NB: The interleaving iterator is always reinitialized, even if
 			// dbi already had an initialized range key iterator, in case the point
 			// iterator changed or the range key masking suffix changed.
-			dbi.rangeKey.iiter.Init(dbi.cmp, dbi.iter, dbi.rangeKey.rangeKeyIter,
+			dbi.rangeKey.iiter.Init(dbi.comparer, dbi.iter, dbi.rangeKey.rangeKeyIter,
 				&dbi.rangeKeyMasking, dbi.opts.LowerBound, dbi.opts.UpperBound)
 			dbi.iter = &dbi.rangeKey.iiter
 		}
@@ -1501,11 +1503,12 @@ func (d *DB) Metrics() *Metrics {
 	recycledLogsCount, recycledLogSize := d.logRecycler.stats()
 
 	d.mu.Lock()
+	vers := d.mu.versions.currentVersion()
 	*metrics = d.mu.versions.metrics
 	metrics.Compact.EstimatedDebt = d.mu.versions.picker.estimatedCompactionDebt(0)
 	metrics.Compact.InProgressBytes = atomic.LoadInt64(&d.mu.versions.atomic.atomicInProgressBytes)
 	metrics.Compact.NumInProgress = int64(d.mu.compact.compactingCount)
-	metrics.Compact.MarkedFiles = d.mu.versions.currentVersion().Stats.MarkedForCompaction
+	metrics.Compact.MarkedFiles = vers.Stats.MarkedForCompaction
 	for _, m := range d.mu.mem.queue {
 		metrics.MemTable.Size += m.totalBytes()
 	}
@@ -1548,6 +1551,8 @@ func (d *DB) Metrics() *Metrics {
 		metrics.Table.ZombieSize += size
 	}
 	metrics.private.optionsFileSize = d.optionsFileSize
+
+	metrics.Keys.RangeKeySetsCount = countRangeKeySetFragments(vers)
 
 	d.mu.versions.logLock()
 	metrics.private.manifestFileSize = uint64(d.mu.versions.manifest.Size())
