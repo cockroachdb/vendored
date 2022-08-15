@@ -1351,10 +1351,20 @@ func (i *Iterator) Next() bool {
 // keyspace up to limit.
 func (i *Iterator) NextWithLimit(limit []byte) IterValidityState {
 	i.stats.ForwardStepCount[InterfaceCall]++
-	if limit != nil && i.hasPrefix {
-		i.err = errors.New("cannot use limit with prefix iteration")
-		i.iterValidityState = IterExhausted
-		return i.iterValidityState
+	if i.hasPrefix {
+		if limit != nil {
+			i.err = errors.New("cannot use limit with prefix iteration")
+			i.iterValidityState = IterExhausted
+			return i.iterValidityState
+		} else if i.iterValidityState == IterExhausted {
+			// No-op, already exhasuted. We avoid executing the Next because it
+			// can break invariants: Specifically, a file that fails the bloom
+			// filter test may result in its level being removed from the
+			// merging iterator. The level's removal can cause a lazy combined
+			// iterator to miss range keys and trigger a switch to combined
+			// iteration at a larger key, breaking keyspan invariants.
+			return i.iterValidityState
+		}
 	}
 	if i.err != nil {
 		return i.iterValidityState
@@ -1928,9 +1938,16 @@ func (i *Iterator) SetOptions(o *IterOptions) {
 		i.err = firstError(i.err, i.pointIter.Close())
 		i.pointIter = nil
 	}
-	if i.rangeKey != nil && (closeBoth || len(o.RangeKeyFilters) > 0 || len(i.opts.RangeKeyFilters) > 0) {
-		i.err = firstError(i.err, i.rangeKey.rangeKeyIter.Close())
-		i.rangeKey = nil
+	if i.rangeKey != nil {
+		if closeBoth || len(o.RangeKeyFilters) > 0 || len(i.opts.RangeKeyFilters) > 0 {
+			i.err = firstError(i.err, i.rangeKey.rangeKeyIter.Close())
+			i.rangeKey = nil
+		} else {
+			// If there's still a range key iterator stack, wipe its state so
+			// that a seek that finds the same range key returns
+			// RangeKeyChanged()=true.
+			i.clearSavedRangeKey()
+		}
 	}
 
 	// If the iterator is backed by a batch that's been mutated, refresh its
@@ -2084,8 +2101,15 @@ func (i *Iterator) invalidate() {
 	}
 	i.iterValidityState = IterExhausted
 	if i.rangeKey != nil {
+		i.clearSavedRangeKey()
 		i.rangeKey.iiter.Invalidate()
 	}
+}
+
+func (i *Iterator) clearSavedRangeKey() {
+	i.rangeKey.prevPosHadRangeKey = false
+	i.rangeKey.start = nil
+	i.rangeKey.end = nil
 }
 
 // Metrics returns per-iterator metrics.
