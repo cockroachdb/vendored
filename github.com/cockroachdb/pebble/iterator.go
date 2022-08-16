@@ -1183,7 +1183,6 @@ func (i *Iterator) SeekPrefixGE(key []byte) bool {
 		}
 		key = upperBound
 	}
-
 	i.iterKey, i.iterValue = i.iter.SeekPrefixGE(i.prefixOrFullSeekKey, key, flags)
 	i.stats.ForwardSeekCount[InternalIterCall]++
 	i.findNextEntry(nil)
@@ -1943,10 +1942,11 @@ func (i *Iterator) SetOptions(o *IterOptions) {
 			i.err = firstError(i.err, i.rangeKey.rangeKeyIter.Close())
 			i.rangeKey = nil
 		} else {
-			// If there's still a range key iterator stack, wipe its state so
-			// that a seek that finds the same range key returns
-			// RangeKeyChanged()=true.
-			i.clearSavedRangeKey()
+			// If there's still a range key iterator stack, invalidate the
+			// iterator. This ensures RangeKeyChanged() returns true if a
+			// subsequent positioning operation discovers a range key. It also
+			// prevents seek no-op optimizations.
+			i.invalidate()
 		}
 	}
 
@@ -2101,15 +2101,8 @@ func (i *Iterator) invalidate() {
 	}
 	i.iterValidityState = IterExhausted
 	if i.rangeKey != nil {
-		i.clearSavedRangeKey()
 		i.rangeKey.iiter.Invalidate()
 	}
-}
-
-func (i *Iterator) clearSavedRangeKey() {
-	i.rangeKey.prevPosHadRangeKey = false
-	i.rangeKey.start = nil
-	i.rangeKey.end = nil
 }
 
 // Metrics returns per-iterator metrics.
