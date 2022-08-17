@@ -770,9 +770,18 @@ func (d *DB) commitApply(b *Batch, mem *memTable) error {
 	// If the batch contains range tombstones and the database is configured
 	// to flush range deletions, schedule a delayed flush so that disk space
 	// may be reclaimed without additional writes or an explicit flush.
-	if b.countRangeDels > 0 && d.opts.Experimental.DeleteRangeFlushDelay > 0 {
+	if b.countRangeDels > 0 && d.opts.FlushDelayDeleteRange > 0 {
 		d.mu.Lock()
-		d.maybeScheduleDelayedFlush(mem)
+		d.maybeScheduleDelayedFlush(mem, d.opts.FlushDelayDeleteRange)
+		d.mu.Unlock()
+	}
+
+	// If the batch contains range keys and the database is configured to flush
+	// range keys, schedule a delayed flush so that the range keys are cleared
+	// from the memtable.
+	if b.countRangeKeys > 0 && d.opts.FlushDelayRangeKey > 0 {
+		d.mu.Lock()
+		d.maybeScheduleDelayedFlush(mem, d.opts.FlushDelayRangeKey)
 		d.mu.Unlock()
 	}
 
@@ -1202,6 +1211,18 @@ func (d *DB) NewSnapshot() *Snapshot {
 // or to call Close concurrently with any other DB method. It is not valid
 // to call any of a DB's methods after the DB has been closed.
 func (d *DB) Close() error {
+	// Lock the commit pipeline for the duration of Close. This prevents a race
+	// with makeRoomForWrite. Rotating the WAL in makeRoomForWrite requires
+	// dropping d.mu several times for I/O. If Close only holds d.mu, an
+	// in-progress WAL rotation may re-acquire d.mu only once the database is
+	// closed.
+	//
+	// Additionally, locking the commit pipeline makes it more likely that
+	// (illegal) concurrent writes will observe d.closed.Load() != nil, creating
+	// more understable panics if the database is improperly used concurrently
+	// during Close.
+	d.commit.mu.Lock()
+	defer d.commit.mu.Unlock()
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if err := d.closed.Load(); err != nil {

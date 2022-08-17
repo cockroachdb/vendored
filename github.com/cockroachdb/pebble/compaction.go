@@ -1487,7 +1487,7 @@ func (d *DB) passedFlushThreshold() bool {
 	return size >= minFlushSize
 }
 
-func (d *DB) maybeScheduleDelayedFlush(tbl *memTable) {
+func (d *DB) maybeScheduleDelayedFlush(tbl *memTable, dur time.Duration) {
 	var mem *flushableEntry
 	for _, m := range d.mu.mem.queue {
 		if m.flushable == tbl {
@@ -1495,12 +1495,17 @@ func (d *DB) maybeScheduleDelayedFlush(tbl *memTable) {
 			break
 		}
 	}
-	if mem == nil || mem.flushForced || mem.delayedFlushForced {
+	if mem == nil || mem.flushForced {
 		return
 	}
-	mem.delayedFlushForced = true
+	deadline := d.timeNow().Add(dur)
+	if !mem.delayedFlushForcedAt.IsZero() && deadline.After(mem.delayedFlushForcedAt) {
+		// Already scheduled to flush sooner than within `dur`.
+		return
+	}
+	mem.delayedFlushForcedAt = deadline
 	go func() {
-		timer := time.NewTimer(d.opts.Experimental.DeleteRangeFlushDelay)
+		timer := time.NewTimer(dur)
 		defer timer.Stop()
 
 		select {
@@ -1515,11 +1520,11 @@ func (d *DB) maybeScheduleDelayedFlush(tbl *memTable) {
 			defer d.mu.Unlock()
 
 			// NB: The timer may fire concurrently with a call to Close.  If a
-			// Close call beat us to acquiring d.mu, d.closed is 1, and it's
-			// too late to flush anything. Otherwise, the Close call will
-			// block on locking d.mu until we've finished scheduling the flush
-			// and set `d.mu.compact.flushing` to true. Close will wait for
-			// the current flush to complete.
+			// Close call beat us to acquiring d.mu, d.closed holds ErrClosed,
+			// and it's too late to flush anything. Otherwise, the Close call
+			// will block on locking d.mu until we've finished scheduling the
+			// flush and set `d.mu.compact.flushing` to true. Close will wait
+			// for the current flush to complete.
 			if d.closed.Load() != nil {
 				return
 			}
