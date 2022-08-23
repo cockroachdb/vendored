@@ -94,7 +94,7 @@ type SpanMask interface {
 type InterleavingIter struct {
 	cmp         base.Compare
 	comparer    *base.Comparer
-	pointIter   base.InternalIteratorWithStats
+	pointIter   base.InternalIterator
 	keyspanIter FragmentIterator
 	mask        SpanMask
 
@@ -178,7 +178,7 @@ var _ base.InternalIterator = &InterleavingIter{}
 // propagate the bounds down the iterator stack.
 func (i *InterleavingIter) Init(
 	comparer *base.Comparer,
-	pointIter base.InternalIteratorWithStats,
+	pointIter base.InternalIterator,
 	keyspanIter FragmentIterator,
 	mask SpanMask,
 	lowerBound, upperBound []byte,
@@ -861,7 +861,7 @@ func (i *InterleavingIter) checkForwardBound(prefix []byte) {
 		}
 	}
 
-	if i.truncated && i.cmp(i.truncatedSpan.Start, i.truncatedSpan.End) == 0 {
+	if i.truncated && i.comparer.Equal(i.truncatedSpan.Start, i.truncatedSpan.End) {
 		i.span = nil
 	}
 }
@@ -898,7 +898,7 @@ func (i *InterleavingIter) checkBackwardBound() {
 		}
 		i.truncatedSpan.End = i.upper
 	}
-	if i.truncated && i.cmp(i.truncatedSpan.Start, i.truncatedSpan.End) == 0 {
+	if i.truncated && i.comparer.Equal(i.truncatedSpan.Start, i.truncatedSpan.End) {
 		i.span = nil
 	}
 }
@@ -932,7 +932,7 @@ func (i *InterleavingIter) yieldSyntheticSpanMarker(lowerBound []byte) (*base.In
 		// bound for truncating a span. The span a-z will be truncated to [k,
 		// z). If i.upper == k, we'd mistakenly try to return a span [k, k), an
 		// invariant violation.
-		if i.cmp(lowerBound, i.upper) == 0 {
+		if i.comparer.Equal(lowerBound, i.upper) {
 			return i.yieldNil()
 		}
 
@@ -1081,18 +1081,6 @@ func (i *InterleavingIter) Close() error {
 // String implements (base.InternalIterator).String.
 func (i *InterleavingIter) String() string {
 	return fmt.Sprintf("keyspan-interleaving(%q)", i.pointIter.String())
-}
-
-var _ base.InternalIteratorWithStats = &InterleavingIter{}
-
-// Stats implements InternalIteratorWithStats.
-func (i *InterleavingIter) Stats() base.InternalIteratorStats {
-	return i.pointIter.Stats()
-}
-
-// ResetStats implements InternalIteratorWithStats.
-func (i *InterleavingIter) ResetStats() {
-	i.pointIter.ResetStats()
 }
 
 func firstError(err0, err1 error) error {

@@ -523,16 +523,13 @@ func (d *DB) getInternal(key []byte, b *Batch, s *Snapshot) ([]byte, io.Closer, 
 	}
 
 	i := &buf.dbi
-	pointIter := base.WrapIterWithStats(get)
+	pointIter := get
 	*i = Iterator{
 		getIterAlloc: buf,
-		cmp:          d.cmp,
-		equal:        d.equal,
 		iter:         pointIter,
 		pointIter:    pointIter,
 		merge:        d.merge,
-		split:        d.split,
-		comparer:     d.opts.Comparer,
+		comparer:     *d.opts.Comparer,
 		readState:    readState,
 		keyBuf:       buf.keyBuf,
 	}
@@ -912,11 +909,8 @@ func (d *DB) newIterInternal(batch *Batch, s *Snapshot, o *IterOptions) *Iterato
 	dbi := &buf.dbi
 	*dbi = Iterator{
 		alloc:               buf,
-		cmp:                 d.cmp,
-		equal:               d.equal,
 		merge:               d.merge,
-		split:               d.split,
-		comparer:            d.opts.Comparer,
+		comparer:            *d.opts.Comparer,
 		readState:           readState,
 		keyBuf:              buf.keyBuf,
 		prefixOrFullSeekKey: buf.prefixOrFullSeekKey,
@@ -970,7 +964,7 @@ func finishInitializingIter(buf *iterAlloc) *Iterator {
 	}
 
 	if dbi.opts.rangeKeys() {
-		dbi.rangeKeyMasking.init(dbi, dbi.cmp, dbi.split)
+		dbi.rangeKeyMasking.init(dbi, dbi.comparer.Compare, dbi.comparer.Split)
 
 		// When iterating over both point and range keys, don't create the
 		// range-key iterator stack immediately if we can avoid it. This
@@ -1011,7 +1005,7 @@ func finishInitializingIter(buf *iterAlloc) *Iterator {
 			}
 			if dbi.rangeKey == nil {
 				dbi.rangeKey = iterRangeKeyStateAllocPool.Get().(*iteratorRangeKeyState)
-				dbi.rangeKey.init(dbi.cmp, dbi.split, &dbi.opts)
+				dbi.rangeKey.init(dbi.comparer.Compare, dbi.comparer.Split, &dbi.opts)
 				dbi.constructRangeKeyIter()
 			} else {
 				dbi.rangeKey.iterConfig.SetBounds(dbi.opts.LowerBound, dbi.opts.UpperBound)
@@ -1024,7 +1018,7 @@ func finishInitializingIter(buf *iterAlloc) *Iterator {
 			// NB: The interleaving iterator is always reinitialized, even if
 			// dbi already had an initialized range key iterator, in case the point
 			// iterator changed or the range key masking suffix changed.
-			dbi.rangeKey.iiter.Init(dbi.comparer, dbi.iter, dbi.rangeKey.rangeKeyIter,
+			dbi.rangeKey.iiter.Init(&dbi.comparer, dbi.iter, dbi.rangeKey.rangeKeyIter,
 				&dbi.rangeKeyMasking, dbi.opts.LowerBound, dbi.opts.UpperBound)
 			dbi.iter = &dbi.rangeKey.iiter
 		}
@@ -1042,6 +1036,10 @@ func (i *Iterator) constructPointIter(memtables flushableList, buf *iterAlloc) {
 	if i.pointIter != nil {
 		// Already have one.
 		return
+	}
+	internalOpts := internalIterOpts{stats: &i.stats.InternalStats}
+	if i.opts.RangeKeyMasking.Filter != nil {
+		internalOpts.boundLimitedFilter = &i.rangeKeyMasking
 	}
 
 	// Merging levels and levels from iterAlloc.
@@ -1098,7 +1096,7 @@ func (i *Iterator) constructPointIter(memtables flushableList, buf *iterAlloc) {
 				rangeDelIter = &i.batchRangeDelIter
 			}
 			mlevels = append(mlevels, mergingIterLevel{
-				iter:         base.WrapIterWithStats(&i.batchPointIter),
+				iter:         &i.batchPointIter,
 				rangeDelIter: rangeDelIter,
 			})
 		}
@@ -1108,7 +1106,7 @@ func (i *Iterator) constructPointIter(memtables flushableList, buf *iterAlloc) {
 	for j := len(memtables) - 1; j >= 0; j-- {
 		mem := memtables[j]
 		mlevels = append(mlevels, mergingIterLevel{
-			iter:         base.WrapIterWithStats(mem.newIter(&i.opts)),
+			iter:         mem.newIter(&i.opts),
 			rangeDelIter: mem.newRangeDelIter(&i.opts),
 		})
 	}
@@ -1118,14 +1116,10 @@ func (i *Iterator) constructPointIter(memtables flushableList, buf *iterAlloc) {
 	levelsIndex := len(levels)
 	mlevels = mlevels[:numMergingLevels]
 	levels = levels[:numLevelIters]
-	var internalOpts internalIterOpts
-	if i.opts.RangeKeyMasking.Filter != nil {
-		internalOpts.boundLimitedFilter = &i.rangeKeyMasking
-	}
 	addLevelIterForFiles := func(files manifest.LevelIterator, level manifest.Level) {
 		li := &levels[levelsIndex]
 
-		li.init(i.opts, i.cmp, i.split, i.newIters, files, level, internalOpts)
+		li.init(i.opts, i.comparer.Compare, i.comparer.Split, i.newIters, files, level, internalOpts)
 		li.initRangeDel(&mlevels[mlevelsIndex].rangeDelIter)
 		li.initBoundaryContext(&mlevels[mlevelsIndex].levelIterBoundaryContext)
 		li.initCombinedIterState(&i.lazyCombinedIter.combinedIterState)
@@ -1148,7 +1142,7 @@ func (i *Iterator) constructPointIter(memtables flushableList, buf *iterAlloc) {
 		}
 		addLevelIterForFiles(current.Levels[level].Iter(), manifest.Level(level))
 	}
-	buf.merging.init(&i.opts, i.cmp, i.split, mlevels...)
+	buf.merging.init(&i.opts, &i.stats.InternalStats, i.comparer.Compare, i.comparer.Split, mlevels...)
 	buf.merging.snapshot = i.seqNum
 	buf.merging.elideRangeTombstones = true
 	buf.merging.combinedIterState = &i.lazyCombinedIter.combinedIterState
