@@ -71,6 +71,7 @@ func newLogWithSize(storage Storage, logger Logger, maxNextEntsSize uint64) *raf
 		panic(err) // TODO(bdarnell)
 	}
 	log.unstable.offset = lastIndex + 1
+	log.unstable.inProgressOffset = log.unstable.offset
 	log.unstable.logger = logger
 	// Initialize our committed and applied pointers to the time of the last compaction.
 	log.committed = firstIndex - 1
@@ -168,10 +169,7 @@ func (l *raftLog) findConflictByTerm(index uint64, term uint64) uint64 {
 }
 
 func (l *raftLog) unstableEntries() []pb.Entry {
-	if len(l.unstable.entries) == 0 {
-		return nil
-	}
-	return l.unstable.entries
+	return l.unstable.notAlreadyInProgress()
 }
 
 // nextEnts returns all the available entries for execution.
@@ -250,7 +248,9 @@ func (l *raftLog) appliedTo(i uint64) {
 	l.applied = i
 }
 
-func (l *raftLog) stableTo(i, t uint64) { l.unstable.stableTo(i, t) }
+func (l *raftLog) inProgressTo(i, t uint64) { l.unstable.inProgressTo(i, t) }
+
+func (l *raftLog) stableTo(i, t uint64) bool { return l.unstable.stableTo(i, t) }
 
 func (l *raftLog) stableSnapTo(i uint64) { l.unstable.stableSnapTo(i) }
 

@@ -66,8 +66,7 @@ type Ready struct {
 	// The returned is only valid for the request that requested to read.
 	ReadStates []ReadState
 
-	// Entries specifies entries to be saved to stable storage BEFORE
-	// Messages are sent.
+	// Entries specifies entries to be saved to stable storage.
 	Entries []pb.Entry
 
 	// Snapshot specifies the snapshot to be saved to stable storage.
@@ -78,14 +77,13 @@ type Ready struct {
 	// store.
 	CommittedEntries []pb.Entry
 
-	// Messages specifies outbound messages to be sent AFTER Entries are
-	// committed to stable storage.
+	// Messages specifies outbound messages to be sent.
 	// If it contains a MsgSnap message, the application MUST report back to raft
 	// when the snapshot has been received or has failed by calling ReportSnapshot.
 	Messages []pb.Message
 
-	// MustSync indicates whether the HardState and Entries must be synchronously
-	// written to disk or if an asynchronous write is permissible.
+	// MustSync indicates whether the HardState must be synchronously written to
+	// disk or if an asynchronous write is permissible.
 	MustSync bool
 }
 
@@ -584,5 +582,5 @@ func MustSync(st, prevst pb.HardState, entsnum int) bool {
 	// currentTerm
 	// votedFor
 	// log entries[]
-	return entsnum != 0 || st.Vote != prevst.Vote || st.Term != prevst.Term
+	return st.Vote != prevst.Vote || st.Term != prevst.Term
 }

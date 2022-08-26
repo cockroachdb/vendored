@@ -24,8 +24,9 @@ type unstable struct {
 	// the incoming unstable snapshot, if any.
 	snapshot *pb.Snapshot
 	// all entries that have not yet been written to storage.
-	entries []pb.Entry
-	offset  uint64
+	entries          []pb.Entry
+	offset           uint64
+	inProgressOffset uint64
 
 	logger Logger
 }
@@ -72,7 +73,7 @@ func (u *unstable) maybeTerm(i uint64) (uint64, bool) {
 	return u.entries[i-u.offset].Term, true
 }
 
-func (u *unstable) stableTo(i, t uint64) {
+func (u *unstable) inProgressTo(i, t uint64) {
 	gt, ok := u.maybeTerm(i)
 	if !ok {
 		return
@@ -80,11 +81,35 @@ func (u *unstable) stableTo(i, t uint64) {
 	// if i < offset, term is matched with the snapshot
 	// only update the unstable entries if term is matched with
 	// an unstable entry.
+	if gt == t && i >= u.inProgressOffset {
+		u.inProgressOffset = i + 1
+	}
+}
+
+func (u *unstable) notAlreadyInProgress() []pb.Entry {
+	diff := int(u.inProgressOffset) - int(u.offset)
+	ents := u.entries[diff:]
+	if len(ents) == 0 {
+		return nil
+	}
+	return ents
+}
+
+func (u *unstable) stableTo(i, t uint64) bool {
+	gt, ok := u.maybeTerm(i)
+	if !ok {
+		return false
+	}
+	// if i < offset, term is matched with the snapshot
+	// only update the unstable entries if term is matched with
+	// an unstable entry.
 	if gt == t && i >= u.offset {
 		u.entries = u.entries[i+1-u.offset:]
 		u.offset = i + 1
+		u.inProgressOffset = max(u.inProgressOffset, u.offset)
 		u.shrinkEntriesArray()
 	}
+	return gt == t
 }
 
 // shrinkEntriesArray discards the underlying array used by the entries slice
@@ -114,6 +139,7 @@ func (u *unstable) stableSnapTo(i uint64) {
 
 func (u *unstable) restore(s pb.Snapshot) {
 	u.offset = s.Metadata.Index + 1
+	u.inProgressOffset = u.offset
 	u.entries = nil
 	u.snapshot = &s
 }
@@ -130,11 +156,13 @@ func (u *unstable) truncateAndAppend(ents []pb.Entry) {
 		// The log is being truncated to before our current offset
 		// portion, so set the offset and replace the entries
 		u.offset = after
+		u.inProgressOffset = u.offset
 		u.entries = ents
 	default:
 		// truncate to after and copy to u.entries
 		// then append
 		u.logger.Infof("truncate the unstable entries before index %d", after)
+		u.inProgressOffset = u.offset
 		u.entries = append([]pb.Entry{}, u.slice(u.offset, after)...)
 		u.entries = append(u.entries, ents...)
 	}

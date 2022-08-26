@@ -1556,7 +1556,7 @@ github.com/yusufpapurcu/wmi
 # github.com/zabawaba99/go-gitignore v0.0.0-20200117185801-39e6bddfb292
 ## explicit
 github.com/zabawaba99/go-gitignore
-# go.etcd.io/etcd/raft/v3 v3.0.0-20210320072418-e51c697ec6e8
+# go.etcd.io/etcd/raft/v3 v3.5.4 => github.com/nvanbenschoten/etcd/raft/v3 v3.0.0-20220826205122-68e4f4f51143
 ## explicit; go 1.15
 go.etcd.io/etcd/raft/v3
 go.etcd.io/etcd/raft/v3/confchange
@@ -2072,5 +2072,6 @@ vitess.io/vitess/go/vt/vtgate/evalengine
 # vitess.io/vitess => github.com/cockroachdb/vitess v0.0.0-20210218160543-54524729cc82
 # gopkg.in/yaml.v2 => github.com/cockroachdb/yaml v0.0.0-20210825132133-2d6955c8edbc
 # github.com/knz/go-libedit => github.com/otan-cockroach/go-libedit v1.10.2-0.20201030151939-7cced08450e7
+# go.etcd.io/etcd/raft/v3 => github.com/nvanbenschoten/etcd/raft/v3 v3.0.0-20220826205122-68e4f4f51143
 # go.etcd.io/etcd/pkg/v3 => go.etcd.io/etcd/pkg/v3 v3.0.0-20201109164711-01844fd28560
 # github.com/docker/docker => github.com/moby/moby v20.10.6+incompatible

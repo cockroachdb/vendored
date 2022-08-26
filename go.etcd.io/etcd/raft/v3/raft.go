@@ -263,6 +263,8 @@ type raft struct {
 
 	msgs []pb.Message
 
+	msgAppCurTerm bool
+
 	// the leader id
 	lead uint64
 	// leadTransferee is id of the leader transfer target when its value is not zero.
@@ -566,10 +568,23 @@ func (r *raft) advance(rd Ready) {
 
 	if len(rd.Entries) > 0 {
 		e := rd.Entries[len(rd.Entries)-1]
-		r.raftLog.stableTo(e.Index, e.Term)
+		r.raftLog.inProgressTo(e.Index, e.Term)
 	}
 	if !IsEmptySnap(rd.Snapshot) {
 		r.raftLog.stableSnapTo(rd.Snapshot.Metadata.Index)
+	}
+}
+
+func (r *raft) stableTo(e pb.Entry) {
+	if r.raftLog.stableTo(e.Index, e.Term) {
+		if r.lead == r.id {
+			r.prs.Progress[r.id].MaybeUpdate(e.Index)
+			if r.maybeCommit() {
+				r.bcastAppend()
+			}
+		} else if r.lead != None && r.msgAppCurTerm {
+			r.send(pb.Message{To: r.lead, Type: pb.MsgAppResp, Index: e.Index})
+		}
 	}
 }
 
@@ -587,6 +602,7 @@ func (r *raft) reset(term uint64) {
 		r.Vote = None
 	}
 	r.lead = None
+	r.msgAppCurTerm = false
 
 	r.electionElapsed = 0
 	r.heartbeatElapsed = 0
@@ -628,10 +644,7 @@ func (r *raft) appendEntry(es ...pb.Entry) (accepted bool) {
 		return false
 	}
 	// use latest "last" index after truncate/append
-	li = r.raftLog.append(es...)
-	r.prs.Progress[r.id].MaybeUpdate(li)
-	// Regardless of maybeCommit's return, our caller will call bcastAppend.
-	r.maybeCommit()
+	r.raftLog.append(es...)
 	return true
 }
 
@@ -1475,7 +1488,11 @@ func (r *raft) handleAppendEntries(m pb.Message) {
 	}
 
 	if mlastIndex, ok := r.raftLog.maybeAppend(m.Index, m.LogTerm, m.Commit, m.Entries...); ok {
-		r.send(pb.Message{To: m.From, Type: pb.MsgAppResp, Index: mlastIndex})
+		r.msgAppCurTerm = true
+		if len(r.raftLog.unstable.entries) == 0 {
+			// Already stable.
+			r.send(pb.Message{To: m.From, Type: pb.MsgAppResp, Index: mlastIndex})
+		}
 	} else {
 		r.logger.Debugf("%x [logterm: %d, index: %d] rejected MsgApp [logterm: %d, index: %d] from %x",
 			r.id, r.raftLog.zeroTermOnErrCompacted(r.raftLog.term(m.Index)), m.Index, m.LogTerm, m.Index, m.From)
