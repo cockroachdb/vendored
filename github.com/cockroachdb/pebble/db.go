@@ -925,6 +925,9 @@ func (d *DB) newIterInternal(batch *Batch, s *Snapshot, o *IterOptions) *Iterato
 		dbi.saveBounds(o.LowerBound, o.UpperBound)
 	}
 	dbi.opts.logger = d.opts.Logger
+	if d.opts.private.disableLazyCombinedIteration {
+		dbi.opts.disableLazyCombinedIteration = true
+	}
 	if batch != nil {
 		dbi.batchSeqNum = dbi.batch.nextSeqNum()
 	}
@@ -976,7 +979,8 @@ func finishInitializingIter(buf *iterAlloc) *Iterator {
 		// contains any range keys.
 		useLazyCombinedIteration := dbi.rangeKey == nil &&
 			dbi.opts.KeyTypes == IterKeyTypePointsAndRanges &&
-			(dbi.batch == nil || dbi.batch.countRangeKeys == 0)
+			(dbi.batch == nil || dbi.batch.countRangeKeys == 0) &&
+			!dbi.opts.disableLazyCombinedIteration
 		if useLazyCombinedIteration {
 			// The user requested combined iteration, and there's no indexed
 			// batch currently containing range keys that would prevent lazy
@@ -1084,7 +1088,7 @@ func (i *Iterator) constructPointIter(memtables flushableList, buf *iterAlloc) {
 				rangeDelIter: newErrorKeyspanIter(ErrNotIndexed),
 			})
 		} else {
-			i.batch.initInternalIter(&i.opts, &i.batchPointIter, i.batchSeqNum)
+			i.batch.initInternalIter(&i.opts, &i.batchPointIter)
 			i.batch.initRangeDelIter(&i.opts, &i.batchRangeDelIter, i.batchSeqNum)
 			// Only include the batch's rangedel iterator if it's non-empty.
 			// This requires some subtle logic in the case a rangedel is later
@@ -1144,9 +1148,11 @@ func (i *Iterator) constructPointIter(memtables flushableList, buf *iterAlloc) {
 	}
 	buf.merging.init(&i.opts, &i.stats.InternalStats, i.comparer.Compare, i.comparer.Split, mlevels...)
 	buf.merging.snapshot = i.seqNum
+	buf.merging.batchSnapshot = i.batchSeqNum
 	buf.merging.elideRangeTombstones = true
 	buf.merging.combinedIterState = &i.lazyCombinedIter.combinedIterState
 	i.pointIter = &buf.merging
+	i.merging = &buf.merging
 }
 
 // NewBatch returns a new empty write-only batch. Any reads on the batch will
