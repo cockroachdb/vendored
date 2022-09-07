@@ -57,7 +57,11 @@ func (root *assetTree) funcOrNil() string {
 
 func (root *assetTree) writeGoMap(buf *bytes.Buffer, nident int) {
 	buf.Grow(35) // at least this size
-	fmt.Fprintf(buf, "&bintree{%s, map[string]*bintree{", root.funcOrNil())
+	if nident == 0 {
+		// at the top level we need to declare the map type
+		buf.WriteString("&bintree")
+	}
+	fmt.Fprintf(buf, "{%s, map[string]*bintree{", root.funcOrNil())
 
 	if len(root.Children) > 0 {
 		buf.WriteByte('\n')
@@ -100,11 +104,7 @@ var _bintree = `))
 	}
 	buf := new(bytes.Buffer)
 	root.writeGoMap(buf, 0)
-	fmted, err := format.Source(buf.Bytes())
-	if err != nil {
-		return err
-	}
-	_, writeErr := w.Write(fmted)
+	_, writeErr := w.Write(buf.Bytes())
 	return writeErr
 }
 
@@ -160,17 +160,27 @@ func AssetDir(name string) ([]string, error) {
 func writeTOC(buf *bytes.Buffer, toc []Asset) error {
 	writeTOCHeader(buf)
 
+	// Need an innerBuf so we can call gofmt and get map keys formatted at the
+	// appropriate indentation.
+	innerBuf := new(strings.Builder)
+	if err := writeTOCMapHeader(innerBuf); err != nil {
+		return err
+	}
+
 	for i := range toc {
-		if i != 0 {
-			// Newlines between elements make gofmt happy.
-			buf.WriteByte('\n')
-		}
-		if err := writeTOCAsset(buf, &toc[i]); err != nil {
+		if err := writeTOCAsset(innerBuf, &toc[i]); err != nil {
 			return err
 		}
 	}
 
-	writeTOCFooter(buf)
+	writeTOCFooter(innerBuf)
+	fmted, err := format.Source([]byte(innerBuf.String()))
+	if err != nil {
+		return err
+	}
+	if _, err := buf.Write(fmted); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -264,10 +274,15 @@ func AssetNames() []string {
 	}
 	return names
 }
+`)
+}
 
+func writeTOCMapHeader(w io.StringWriter) error {
+	_, err := w.WriteString(`
 // _bindata is a table, holding each asset generator, mapped to its name.
 var _bindata = map[string]func() (*asset, error){
 `)
+	return err
 }
 
 // writeTOCAsset writes a TOC entry for the given asset.
@@ -277,8 +292,8 @@ func writeTOCAsset(w io.Writer, asset *Asset) error {
 }
 
 // writeTOCFooter writes the table of contents file footer.
-func writeTOCFooter(buf *bytes.Buffer) {
-	buf.WriteString(`}
+func writeTOCFooter(w io.StringWriter) {
+	w.WriteString(`}
 
 `)
 }

@@ -15,9 +15,8 @@ import (
 	"unicode"
 )
 
-// Translate reads assets from an input directory, converts them
-// to Go code and writes new files to the output specified
-// in the given configuration.
+// Translate reads assets from an input directory, converts them to Go code and
+// writes new files to the output specified in the given configuration.
 func Translate(c *Config) error {
 	var toc []Asset
 
@@ -26,8 +25,8 @@ func Translate(c *Config) error {
 		return err
 	}
 
-	var knownFuncs = make(map[string]int)
-	var visitedPaths = make(map[string]bool)
+	knownFuncs := make(map[string]int)
+	visitedPaths := make(map[string]bool)
 	// Locate all the assets.
 	for _, input := range c.Input {
 		if err := findFiles(input.Path, c.Prefix, input.Recursive, &toc, c.Ignore, knownFuncs, visitedPaths); err != nil {
@@ -55,6 +54,8 @@ func Translate(c *Config) error {
 		if err != nil {
 			return err
 		}
+		relative = strings.TrimPrefix(relative, c.Prefix)
+		relative = strings.TrimPrefix(relative, "/")
 		if _, err = fmt.Fprintf(buf, "// %s (%s)\n", filepath.ToSlash(relative), bits(asset.Size)*byte_); err != nil {
 			return err
 		}
@@ -85,9 +86,9 @@ func Translate(c *Config) error {
 				toc[i].Path = strings.Replace(toc[i].Path, wd, "/test", 1)
 			}
 		}
-		err = writeDebug(buf, c, toc)
+		err = writeDebugFunctions(buf, c, toc)
 	} else {
-		err = writeRelease(buf, c, toc)
+		err = writeReleaseFunctions(buf, c, toc)
 	}
 	if err != nil {
 		return err
@@ -95,6 +96,13 @@ func Translate(c *Config) error {
 
 	// Write table of contents
 	if err := writeTOC(buf, toc); err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(buf, `// AssetDebug is true if the assets were built with the debug flag enabled.
+const AssetDebug = %t
+
+`, c.Debug)
+	if err != nil {
 		return err
 	}
 	// Write hierarchical tree of assets
@@ -107,45 +115,48 @@ func Translate(c *Config) error {
 		return err
 	}
 
-	return safefileWriteFile(c.Output, buf.Bytes(), 0666)
+	return diffAndWrite(c.Output, buf.Bytes(), 0666)
 }
-
-// Implement sort.Interface for []os.FileInfo based on Name()
-type byName []os.FileInfo
-
-func (v byName) Len() int           { return len(v) }
-func (v byName) Swap(i, j int)      { v[i], v[j] = v[j], v[i] }
-func (v byName) Less(i, j int) bool { return v[i].Name() < v[j].Name() }
 
 // findFiles recursively finds all the file paths in the given directory tree.
 // They are added to the given map as keys. Values will be safe function names
 // for each file, which will be used when generating the output code.
-func findFiles(dir, prefix string, recursive bool, toc *[]Asset, ignore []*regexp.Regexp, knownFuncs map[string]int, visitedPaths map[string]bool) error {
-	dirpath := dir
+func findFiles(dirOrFile, prefix string, recursive bool, toc *[]Asset, ignore []*regexp.Regexp, knownFuncs map[string]int, visitedPaths map[string]bool) error {
+	dirOrFile = filepath.Clean(dirOrFile)
+	// confusingly, if a prefix exists this is the absolute path; if a prefix
+	// doesn't exist it may be an absolute path, or it may be a relative path.
+	var dirOrFilePath string
 	if len(prefix) > 0 {
-		dirpath, _ = filepath.Abs(dirpath)
-		prefix, _ = filepath.Abs(prefix)
+		var err error
+		dirOrFilePath, err = filepath.Abs(dirOrFile)
+		if err != nil {
+			return err
+		}
+		prefix, err = filepath.Abs(prefix)
+		if err != nil {
+			return err
+		}
 		prefix = filepath.ToSlash(prefix)
+	} else {
+		dirOrFilePath = dirOrFile
 	}
 
-	fi, err := os.Stat(dirpath)
+	dirOrFileFI, err := os.Stat(dirOrFilePath)
 	if err != nil {
 		return err
 	}
 
 	var list []os.FileInfo
-
-	if !fi.IsDir() {
-		dirpath = filepath.Dir(dirpath)
-		list = []os.FileInfo{fi}
-	} else {
+	// if prefix is non-empty this is the absolute path, otherwise it may be
+	// a relative path.
+	var dirpath string
+	if dirOrFileFI.IsDir() {
+		dirpath = dirOrFilePath
 		visitedPaths[dirpath] = true
 		fd, err := os.Open(dirpath)
 		if err != nil {
 			return err
 		}
-
-		defer fd.Close()
 
 		list, err = fd.Readdir(0)
 		if err != nil {
@@ -153,33 +164,39 @@ func findFiles(dir, prefix string, recursive bool, toc *[]Asset, ignore []*regex
 		}
 
 		// Sort to make output stable between invocations
-		sort.Sort(byName(list))
+		sort.Slice(list, func(i, j int) bool {
+			return list[i].Name() < list[j].Name()
+		})
+		fd.Close()
+	} else {
+		dirpath = filepath.Dir(dirOrFilePath)
+		list = []os.FileInfo{dirOrFileFI}
 	}
 
-	for _, file := range list {
+	for _, entry := range list {
 		var asset Asset
-		asset.Path = filepath.Join(dirpath, file.Name())
-		asset.Name = filepath.ToSlash(asset.Path)
+		asset.Path = filepath.Join(dirpath, entry.Name())
+		pathWithSlashes := filepath.ToSlash(asset.Path)
 
-		ignoring := false
+		shouldIgnore := false
 		for _, re := range ignore {
 			if re.MatchString(asset.Path) {
-				ignoring = true
+				shouldIgnore = true
 				break
 			}
 		}
-		if ignoring {
+		if shouldIgnore {
 			continue
 		}
 
-		if file.IsDir() {
+		if entry.IsDir() {
 			if recursive {
-				recursivePath := filepath.Join(dir, file.Name())
+				recursivePath := filepath.Join(dirOrFile, entry.Name())
 				visitedPaths[asset.Path] = true
 				findFiles(recursivePath, prefix, recursive, toc, ignore, knownFuncs, visitedPaths)
 			}
 			continue
-		} else if file.Mode()&os.ModeSymlink == os.ModeSymlink {
+		} else if entry.Mode()&os.ModeSymlink == os.ModeSymlink {
 			var linkPath string
 			if linkPath, err = os.Readlink(asset.Path); err != nil {
 				return err
@@ -196,20 +213,23 @@ func findFiles(dir, prefix string, recursive bool, toc *[]Asset, ignore []*regex
 			continue
 		}
 
-		if strings.HasPrefix(asset.Name, prefix) {
-			asset.Name = asset.Name[len(prefix):]
+		if strings.HasPrefix(pathWithSlashes, prefix) {
+			asset.Name = strings.TrimPrefix(pathWithSlashes, prefix)
 		} else {
-			asset.Name = filepath.Join(dir, file.Name())
+			// File or directory isn't inside of the prefix list
+			if dirOrFileFI.IsDir() {
+				asset.Name = filepath.Join(dirOrFile, entry.Name())
+			} else {
+				asset.Name = dirOrFile
+			}
 		}
 
 		// If we have a leading slash, get rid of it.
-		if len(asset.Name) > 0 && asset.Name[0] == '/' {
-			asset.Name = asset.Name[1:]
-		}
+		asset.Name = strings.TrimPrefix(asset.Name, "/")
 
 		// This shouldn't happen.
 		if len(asset.Name) == 0 {
-			return fmt.Errorf("Invalid file: %v", asset.Path)
+			return fmt.Errorf("invalid file: %v", asset.Path)
 		}
 
 		asset.Func = safeFunctionName(asset.Name, knownFuncs)
@@ -217,7 +237,7 @@ func findFiles(dir, prefix string, recursive bool, toc *[]Asset, ignore []*regex
 		if err != nil {
 			return err
 		}
-		asset.Size = file.Size()
+		asset.Size = entry.Size()
 		*toc = append(*toc, asset)
 	}
 
@@ -226,10 +246,9 @@ func findFiles(dir, prefix string, recursive bool, toc *[]Asset, ignore []*regex
 
 var regFuncName = regexp.MustCompile(`[^a-zA-Z0-9_]`)
 
-// safeFunctionName converts the given name into a name
-// which qualifies as a valid function identifier. It
-// also compares against a known list of functions to
-// prevent conflict based on name translation.
+// safeFunctionName converts the given name into a name which qualifies as a
+// valid function identifier. It also compares against a known list of functions
+// (if one is provided) to prevent conflict based on name translation.
 func safeFunctionName(name string, knownFuncs map[string]int) string {
 	var inBytes, outBytes []byte
 	var toUpper bool
@@ -258,7 +277,7 @@ func safeFunctionName(name string, knownFuncs map[string]int) string {
 	if num, ok := knownFuncs[name]; ok {
 		knownFuncs[name] = num + 1
 		name = fmt.Sprintf("%s%d", name, num)
-	} else {
+	} else if knownFuncs != nil {
 		knownFuncs[name] = 2
 	}
 

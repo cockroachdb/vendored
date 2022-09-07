@@ -1139,7 +1139,7 @@ github.com/josharian/intern
 # github.com/json-iterator/go v1.1.12
 ## explicit; go 1.12
 github.com/json-iterator/go
-# github.com/kevinburke/go-bindata v3.13.0+incompatible
+# github.com/kevinburke/go-bindata v3.13.0+incompatible => github.com/cockroachdb/go-bindata v3.23.1-0.20220907092823-1f62073fa839+incompatible
 ## explicit
 github.com/kevinburke/go-bindata
 github.com/kevinburke/go-bindata/go-bindata
@@ -2074,3 +2074,4 @@ vitess.io/vitess/go/vt/vtgate/evalengine
 # github.com/knz/go-libedit => github.com/otan-cockroach/go-libedit v1.10.2-0.20201030151939-7cced08450e7
 # go.etcd.io/etcd/pkg/v3 => go.etcd.io/etcd/pkg/v3 v3.0.0-20201109164711-01844fd28560
 # github.com/docker/docker => github.com/moby/moby v20.10.6+incompatible
+# github.com/kevinburke/go-bindata => github.com/cockroachdb/go-bindata v3.23.1-0.20220907092823-1f62073fa839+incompatible

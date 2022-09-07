@@ -4,7 +4,9 @@ Anand Gaitonde and Michael Maximilien <agaitonde@pivotallabs.com>
 Andrew Bates <abates@omeganetserv.com>
 Beyang Liu <beyang@sourcegraph.com>
 Brandon Mulcahy <brandon@jangler.info>
+Chris McBride <chris@vistarmedia.com>
 Craig Landry <craigtlandry@gmail.com>
+David Chase <drchase@google.com>
 Dimitri Sokolyuk <demon@dim13.org>
 Dmitri Shuralyov <shurcooL@gmail.com>
 Elazar Leibovich <elazarl@gmail.com>
@@ -14,12 +16,13 @@ Ian Kent <email@iankent.co.uk>
 Jens Breitbart <jbreitbart@gmail.com>
 Jessica Forrester <jforrest@redhat.com>
 Jim Teeuwen <jimteeuwen@gmail.com>
+Johan Brandhorst <johan.brandhorst@gmail.com>
 Jordan Liggitt <jordan@liggitt.net>
 Joseph Hager <ajhager@gmail.com>
 Keegan Carruthers-Smith <keegan.csmith@gmail.com>
 Keiji Yoshida <yoshida.keiji.84@gmail.com>
 Kenta Oda <oda@headjapan.com>
-Kevin Burke <kev@inburke.com>
+Kevin Burke <kevin@burke.dev>
 Matt Dee <mdee@hioscar.com>
 Maxim Ignatenko <imax@cesanta.com>
 MinJae Kwon <mingrammer@gmail.com>
@@ -36,5 +39,6 @@ Tamir Duberstein <tamird@gmail.com>
 Tobias Schmidt <ts@soundcloud.com>
 Tobias Schottdorf <tobias.schottdorf@gmail.com>
 Yasuhiro Matsumoto <mattn.jp@gmail.com>
+chenrui <rui@meetup.com>
 ikawaha <ikawaha@users.noreply.github.com>
 opennota <opennota@gmail.com>
