@@ -549,6 +549,10 @@ github.com/cockroachdb/errors/stdstrings
 github.com/cockroachdb/errors/telemetrykeys
 github.com/cockroachdb/errors/testutils
 github.com/cockroachdb/errors/withstack
+# github.com/cockroachdb/go-bindata v0.0.0-20220907094433-aa69f7239e7a
+## explicit; go 1.18
+github.com/cockroachdb/go-bindata
+github.com/cockroachdb/go-bindata/go-bindata
 # github.com/cockroachdb/go-test-teamcity v0.0.0-20191211140407-cff980ad0a55
 ## explicit
 github.com/cockroachdb/go-test-teamcity
@@ -1139,10 +1143,8 @@ github.com/josharian/intern
 # github.com/json-iterator/go v1.1.12
 ## explicit; go 1.12
 github.com/json-iterator/go
-# github.com/kevinburke/go-bindata v3.13.0+incompatible => github.com/cockroachdb/go-bindata v3.23.1-0.20220907092823-1f62073fa839+incompatible
+# github.com/kevinburke/go-bindata v3.13.0+incompatible
 ## explicit
-github.com/kevinburke/go-bindata
-github.com/kevinburke/go-bindata/go-bindata
 # github.com/kisielk/errcheck v1.6.1-0.20210625163953-8ddee489636a
 ## explicit; go 1.14
 github.com/kisielk/errcheck
@@ -2074,4 +2076,3 @@ vitess.io/vitess/go/vt/vtgate/evalengine
 # github.com/knz/go-libedit => github.com/otan-cockroach/go-libedit v1.10.2-0.20201030151939-7cced08450e7
 # go.etcd.io/etcd/pkg/v3 => go.etcd.io/etcd/pkg/v3 v3.0.0-20201109164711-01844fd28560
 # github.com/docker/docker => github.com/moby/moby v20.10.6+incompatible
-# github.com/kevinburke/go-bindata => github.com/cockroachdb/go-bindata v3.23.1-0.20220907092823-1f62073fa839+incompatible
