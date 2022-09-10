@@ -197,13 +197,15 @@ func writeMetrics(w io.Writer, mfs []*dto.MetricFamily, useTags bool, prefix str
 
 	buf := bufio.NewWriter(w)
 	for _, s := range vec {
-		for _, c := range prefix {
-			if _, err := buf.WriteRune(c); err != nil {
+		if prefix != "" {
+			for _, c := range prefix {
+				if _, err := buf.WriteRune(c); err != nil {
+					return err
+				}
+			}
+			if err := buf.WriteByte('.'); err != nil {
 				return err
 			}
-		}
-		if err := buf.WriteByte('.'); err != nil {
-			return err
 		}
 		if err := writeMetric(buf, s.Metric, useTags); err != nil {
 			return err
@@ -238,9 +240,8 @@ func writeMetric(buf *bufio.Writer, m model.Metric, useTags bool) error {
 		}
 		if useTags {
 			return writeTags(buf, m)
-		} else {
-			return writeLabels(buf, m, numLabels)
 		}
+		return writeLabels(buf, m, numLabels)
 	}
 	return nil
 }
