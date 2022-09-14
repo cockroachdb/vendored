@@ -1009,7 +1009,13 @@ func (i *Iterator) SeekGE(key []byte) bool {
 // guarantees it will surface any range keys with bounds overlapping the
 // keyspace [key, limit).
 func (i *Iterator) SeekGEWithLimit(key []byte, limit []byte) IterValidityState {
+	if i.rangeKey != nil {
+		// NB: Check Valid() before clearing requiresReposition.
+		i.rangeKey.updated = false
+		i.rangeKey.prevPosHadRangeKey = i.rangeKey.hasRangeKey && i.Valid()
+	}
 	lastPositioningOp := i.lastPositioningOp
+	requiresReposition := i.requiresReposition
 	// Set it to unknown, since this operation may not succeed, in which case
 	// the SeekGE following this should not make any assumption about iterator
 	// position.
@@ -1022,10 +1028,6 @@ func (i *Iterator) SeekGEWithLimit(key []byte, limit []byte) IterValidityState {
 		key = lowerBound
 	} else if upperBound := i.opts.GetUpperBound(); upperBound != nil && i.cmp(key, upperBound) > 0 {
 		key = upperBound
-	}
-	if i.rangeKey != nil {
-		i.rangeKey.updated = false
-		i.rangeKey.prevPosHadRangeKey = i.rangeKey.hasRangeKey && i.Valid()
 	}
 	seekInternalIter := true
 	var flags base.SeekGEFlags
@@ -1045,6 +1047,19 @@ func (i *Iterator) SeekGEWithLimit(key []byte, limit []byte) IterValidityState {
 				// Noop
 				if !invariants.Enabled || !disableSeekOpt(key, uintptr(unsafe.Pointer(i))) || i.forceEnableSeekOpt {
 					i.lastPositioningOp = seekGELastPositioningOp
+
+					// If there's a range key iterator stack, we need to update
+					// whether or not the current current key has changed since
+					// the previous iterator position. This is surfaced in the
+					// public interface through Iterator.RangeKeyChanged(). In
+					// most cases, we're reusing the iterator position so if
+					// there's any range key, it hasn't changed. But if
+					// requiresReposition=true, the previous iterator position
+					// was a no-op SetOptions/SetBounds, and RangeKeyChanged()
+					// must return true if there is a range key at the position.
+					if i.rangeKey != nil {
+						i.rangeKey.updated = i.rangeKey.hasRangeKey && requiresReposition
+					}
 					return i.iterValidityState
 				}
 			}
@@ -1138,6 +1153,11 @@ func (i *Iterator) SeekGEWithLimit(key []byte, limit []byte) IterValidityState {
 // ImmediateSuccessor method. For example, a SeekPrefixGE("a@9") call with the
 // prefix "a" will truncate range key bounds to [a,ImmediateSuccessor(a)].
 func (i *Iterator) SeekPrefixGE(key []byte) bool {
+	if i.rangeKey != nil {
+		// NB: Check Valid() before clearing requiresReposition.
+		i.rangeKey.updated = false
+		i.rangeKey.prevPosHadRangeKey = i.rangeKey.hasRangeKey && i.Valid()
+	}
 	lastPositioningOp := i.lastPositioningOp
 	// Set it to unknown, since this operation may not succeed, in which case
 	// the SeekPrefixGE following this should not make any assumption about
@@ -1146,10 +1166,6 @@ func (i *Iterator) SeekPrefixGE(key []byte) bool {
 	i.requiresReposition = false
 	i.err = nil // clear cached iteration error
 	i.stats.ForwardSeekCount[InterfaceCall]++
-	if i.rangeKey != nil {
-		i.rangeKey.updated = false
-		i.rangeKey.prevPosHadRangeKey = i.rangeKey.hasRangeKey && i.Valid()
-	}
 	if i.comparer.Split == nil {
 		panic("pebble: split must be provided for SeekPrefixGE")
 	}
@@ -1252,7 +1268,13 @@ func (i *Iterator) SeekLT(key []byte) bool {
 // guarantees it will surface any range keys with bounds overlapping the
 // keyspace up to limit.
 func (i *Iterator) SeekLTWithLimit(key []byte, limit []byte) IterValidityState {
+	if i.rangeKey != nil {
+		// NB: Check Valid() before clearing requiresReposition.
+		i.rangeKey.updated = false
+		i.rangeKey.prevPosHadRangeKey = i.rangeKey.hasRangeKey && i.Valid()
+	}
 	lastPositioningOp := i.lastPositioningOp
+	requiresReposition := i.requiresReposition
 	// Set it to unknown, since this operation may not succeed, in which case
 	// the SeekLT following this should not make any assumption about iterator
 	// position.
@@ -1264,10 +1286,6 @@ func (i *Iterator) SeekLTWithLimit(key []byte, limit []byte) IterValidityState {
 		key = upperBound
 	} else if lowerBound := i.opts.GetLowerBound(); lowerBound != nil && i.cmp(key, lowerBound) < 0 {
 		key = lowerBound
-	}
-	if i.rangeKey != nil {
-		i.rangeKey.updated = false
-		i.rangeKey.prevPosHadRangeKey = i.rangeKey.hasRangeKey && i.Valid()
 	}
 	i.hasPrefix = false
 	seekInternalIter := true
@@ -1289,6 +1307,19 @@ func (i *Iterator) SeekLTWithLimit(key []byte, limit []byte) IterValidityState {
 					(limit == nil || i.cmp(limit, i.key) <= 0)) {
 				if !invariants.Enabled || !disableSeekOpt(key, uintptr(unsafe.Pointer(i))) {
 					i.lastPositioningOp = seekLTLastPositioningOp
+
+					// If there's a range key iterator stack, we need to update
+					// whether or not the current current key has changed since
+					// the previous iterator position. This is surfaced in the
+					// public interface through Iterator.RangeKeyChanged(). In
+					// most cases, we're reusing the iterator position so if
+					// there's any range key, it hasn't changed. But if
+					// requiresReposition=true, the previous iterator position
+					// was a no-op SetOptions/SetBounds, and RangeKeyChanged()
+					// must return true if there is a range key at the position.
+					if i.rangeKey != nil {
+						i.rangeKey.updated = i.rangeKey.hasRangeKey && requiresReposition
+					}
 					return i.iterValidityState
 				}
 			}
@@ -1316,15 +1347,16 @@ func (i *Iterator) SeekLTWithLimit(key []byte, limit []byte) IterValidityState {
 // First moves the iterator the the first key/value pair. Returns true if the
 // iterator is pointing at a valid entry and false otherwise.
 func (i *Iterator) First() bool {
+	if i.rangeKey != nil {
+		// NB: Check Valid() before clearing requiresReposition.
+		i.rangeKey.updated = false
+		i.rangeKey.prevPosHadRangeKey = i.rangeKey.hasRangeKey && i.Valid()
+	}
 	i.err = nil // clear cached iteration error
 	i.hasPrefix = false
 	i.lastPositioningOp = unknownLastPositionOp
 	i.requiresReposition = false
 	i.stats.ForwardSeekCount[InterfaceCall]++
-	if i.rangeKey != nil {
-		i.rangeKey.updated = false
-		i.rangeKey.prevPosHadRangeKey = i.rangeKey.hasRangeKey && i.Valid()
-	}
 
 	if lowerBound := i.opts.GetLowerBound(); lowerBound != nil {
 		i.iterKey, i.iterValue = i.iter.SeekGE(lowerBound, base.SeekGEFlagsNone)
@@ -1341,15 +1373,16 @@ func (i *Iterator) First() bool {
 // Last moves the iterator the the last key/value pair. Returns true if the
 // iterator is pointing at a valid entry and false otherwise.
 func (i *Iterator) Last() bool {
+	if i.rangeKey != nil {
+		// NB: Check Valid() before clearing requiresReposition.
+		i.rangeKey.updated = false
+		i.rangeKey.prevPosHadRangeKey = i.rangeKey.hasRangeKey && i.Valid()
+	}
 	i.err = nil // clear cached iteration error
 	i.hasPrefix = false
 	i.lastPositioningOp = unknownLastPositionOp
 	i.requiresReposition = false
 	i.stats.ReverseSeekCount[InterfaceCall]++
-	if i.rangeKey != nil {
-		i.rangeKey.updated = false
-		i.rangeKey.prevPosHadRangeKey = i.rangeKey.hasRangeKey && i.Valid()
-	}
 
 	if upperBound := i.opts.GetUpperBound(); upperBound != nil {
 		i.iterKey, i.iterValue = i.iter.SeekLT(upperBound, base.SeekLTFlagsNone)
@@ -1399,12 +1432,13 @@ func (i *Iterator) NextWithLimit(limit []byte) IterValidityState {
 	if i.err != nil {
 		return i.iterValidityState
 	}
-	i.lastPositioningOp = unknownLastPositionOp
-	i.requiresReposition = false
 	if i.rangeKey != nil {
+		// NB: Check Valid() before clearing requiresReposition.
 		i.rangeKey.updated = false
 		i.rangeKey.prevPosHadRangeKey = i.rangeKey.hasRangeKey && i.Valid()
 	}
+	i.lastPositioningOp = unknownLastPositionOp
+	i.requiresReposition = false
 	switch i.pos {
 	case iterPosCurForward:
 		i.nextUserKey()
@@ -1487,12 +1521,13 @@ func (i *Iterator) PrevWithLimit(limit []byte) IterValidityState {
 	if i.err != nil {
 		return i.iterValidityState
 	}
-	i.lastPositioningOp = unknownLastPositionOp
-	i.requiresReposition = false
 	if i.rangeKey != nil {
+		// NB: Check Valid() before clearing requiresReposition.
 		i.rangeKey.updated = false
 		i.rangeKey.prevPosHadRangeKey = i.rangeKey.hasRangeKey && i.Valid()
 	}
+	i.lastPositioningOp = unknownLastPositionOp
+	i.requiresReposition = false
 	if i.hasPrefix {
 		i.err = errReversePrefixIteration
 		i.iterValidityState = IterExhausted
@@ -1686,6 +1721,9 @@ func (i *Iterator) HasPointAndRange() (hasPoint, hasRange bool) {
 // range key covering the current iterator position. RangeBounds returns nil
 // bounds if there is no range key covering the current iterator position, or
 // the iterator is not configured to surface range keys.
+//
+// If valid, the returned start bound is less than or equal to Key() and the
+// returned end bound is greater than Key().
 func (i *Iterator) RangeBounds() (start, end []byte) {
 	if i.rangeKey == nil || !i.opts.rangeKeys() || !i.rangeKey.hasRangeKey {
 		return nil, nil
@@ -1696,6 +1734,10 @@ func (i *Iterator) RangeBounds() (start, end []byte) {
 // Key returns the key of the current key/value pair, or nil if done. The
 // caller should not modify the contents of the returned slice, and its
 // contents may change on the next call to Next.
+//
+// If positioned at an iterator position that only holds a range key, Key()
+// always returns the start bound of the range key. Otherwise, it returns the
+// point key's key.
 func (i *Iterator) Key() []byte {
 	return i.key
 }
@@ -2137,6 +2179,7 @@ func (i *Iterator) invalidate() {
 	i.iterValidityState = IterExhausted
 	if i.rangeKey != nil {
 		i.rangeKey.iiter.Invalidate()
+		i.rangeKey.prevPosHadRangeKey = false
 	}
 }
 
