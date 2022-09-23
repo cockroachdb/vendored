@@ -1011,11 +1011,22 @@ func (i *Iterator) SeekGE(key []byte) bool {
 func (i *Iterator) SeekGEWithLimit(key []byte, limit []byte) IterValidityState {
 	if i.rangeKey != nil {
 		// NB: Check Valid() before clearing requiresReposition.
-		i.rangeKey.updated = false
 		i.rangeKey.prevPosHadRangeKey = i.rangeKey.hasRangeKey && i.Valid()
+		// If we have a range key but did not expose it at the previous iterator
+		// position (because the iterator was not at a valid position), updated
+		// must be true. This ensures that after an iterator op sequence like:
+		//   - Next()             → (IterValid, RangeBounds() = [a,b))
+		//   - NextWithLimit(...) → (IterAtLimit, RangeBounds() = -)
+		//   - SeekGE(...)        → (IterValid, RangeBounds() = [a,b))
+		// the iterator returns RangeKeyChanged()=true.
+		//
+		// The remainder of this function will only update i.rangeKey.updated if
+		// the iterator moves into a new range key, or out of the current range
+		// key.
+		i.rangeKey.updated = i.rangeKey.hasRangeKey && !i.Valid()
 	}
 	lastPositioningOp := i.lastPositioningOp
-	requiresReposition := i.requiresReposition
+	hasPrefix := i.hasPrefix
 	// Set it to unknown, since this operation may not succeed, in which case
 	// the SeekGE following this should not make any assumption about iterator
 	// position.
@@ -1047,19 +1058,6 @@ func (i *Iterator) SeekGEWithLimit(key []byte, limit []byte) IterValidityState {
 				// Noop
 				if !invariants.Enabled || !disableSeekOpt(key, uintptr(unsafe.Pointer(i))) || i.forceEnableSeekOpt {
 					i.lastPositioningOp = seekGELastPositioningOp
-
-					// If there's a range key iterator stack, we need to update
-					// whether or not the current current key has changed since
-					// the previous iterator position. This is surfaced in the
-					// public interface through Iterator.RangeKeyChanged(). In
-					// most cases, we're reusing the iterator position so if
-					// there's any range key, it hasn't changed. But if
-					// requiresReposition=true, the previous iterator position
-					// was a no-op SetOptions/SetBounds, and RangeKeyChanged()
-					// must return true if there is a range key at the position.
-					if i.rangeKey != nil {
-						i.rangeKey.updated = i.rangeKey.hasRangeKey && requiresReposition
-					}
 					return i.iterValidityState
 				}
 			}
@@ -1087,6 +1085,24 @@ func (i *Iterator) SeekGEWithLimit(key []byte, limit []byte) IterValidityState {
 				// start doing findNextEntry from i.iterKey.
 				seekInternalIter = false
 			}
+		}
+	}
+	// Check for another TrySeekUsingNext optimization opportunity, currently
+	// specifically tailored to external iterators. This case is intended to
+	// trigger in instances of Seek-ing with monotonically increasing keys with
+	// Nexts interspersed. At the time of writing, this is the case for
+	// CockroachDB scans. This optimization is important for external iterators
+	// to avoid re-seeking within an already-exhausted sstable. It is not always
+	// a performance win more generally, so we restrict it to external iterators
+	// that are configured to only use forward positioning operations.
+	//
+	// TODO(jackson): This optimization should be obsolete once we introduce and
+	// use the NextPrefix iterator positioning operation.
+	if seekInternalIter && i.forwardOnly && i.pos == iterPosCurForward && !hasPrefix &&
+		i.iterValidityState == IterValid && i.cmp(key, i.iterKey.UserKey) > 0 {
+		flags = flags.EnableTrySeekUsingNext()
+		if invariants.Enabled && flags.TrySeekUsingNext() && !i.forceEnableSeekOpt && disableSeekOpt(key, uintptr(unsafe.Pointer(i))) {
+			flags = flags.DisableTrySeekUsingNext()
 		}
 	}
 	if seekInternalIter {
@@ -1155,8 +1171,19 @@ func (i *Iterator) SeekGEWithLimit(key []byte, limit []byte) IterValidityState {
 func (i *Iterator) SeekPrefixGE(key []byte) bool {
 	if i.rangeKey != nil {
 		// NB: Check Valid() before clearing requiresReposition.
-		i.rangeKey.updated = false
 		i.rangeKey.prevPosHadRangeKey = i.rangeKey.hasRangeKey && i.Valid()
+		// If we have a range key but did not expose it at the previous iterator
+		// position (because the iterator was not at a valid position), updated
+		// must be true. This ensures that after an iterator op sequence like:
+		//   - Next()             → (IterValid, RangeBounds() = [a,b))
+		//   - NextWithLimit(...) → (IterAtLimit, RangeBounds() = -)
+		//   - SeekPrefixGE(...)  → (IterValid, RangeBounds() = [a,b))
+		// the iterator returns RangeKeyChanged()=true.
+		//
+		// The remainder of this function will only update i.rangeKey.updated if
+		// the iterator moves into a new range key, or out of the current range
+		// key.
+		i.rangeKey.updated = i.rangeKey.hasRangeKey && !i.Valid()
 	}
 	lastPositioningOp := i.lastPositioningOp
 	// Set it to unknown, since this operation may not succeed, in which case
@@ -1270,11 +1297,21 @@ func (i *Iterator) SeekLT(key []byte) bool {
 func (i *Iterator) SeekLTWithLimit(key []byte, limit []byte) IterValidityState {
 	if i.rangeKey != nil {
 		// NB: Check Valid() before clearing requiresReposition.
-		i.rangeKey.updated = false
 		i.rangeKey.prevPosHadRangeKey = i.rangeKey.hasRangeKey && i.Valid()
+		// If we have a range key but did not expose it at the previous iterator
+		// position (because the iterator was not at a valid position), updated
+		// must be true. This ensures that after an iterator op sequence like:
+		//   - Next()               → (IterValid, RangeBounds() = [a,b))
+		//   - NextWithLimit(...)   → (IterAtLimit, RangeBounds() = -)
+		//   - SeekLTWithLimit(...) → (IterValid, RangeBounds() = [a,b))
+		// the iterator returns RangeKeyChanged()=true.
+		//
+		// The remainder of this function will only update i.rangeKey.updated if
+		// the iterator moves into a new range key, or out of the current range
+		// key.
+		i.rangeKey.updated = i.rangeKey.hasRangeKey && !i.Valid()
 	}
 	lastPositioningOp := i.lastPositioningOp
-	requiresReposition := i.requiresReposition
 	// Set it to unknown, since this operation may not succeed, in which case
 	// the SeekLT following this should not make any assumption about iterator
 	// position.
@@ -1307,19 +1344,6 @@ func (i *Iterator) SeekLTWithLimit(key []byte, limit []byte) IterValidityState {
 					(limit == nil || i.cmp(limit, i.key) <= 0)) {
 				if !invariants.Enabled || !disableSeekOpt(key, uintptr(unsafe.Pointer(i))) {
 					i.lastPositioningOp = seekLTLastPositioningOp
-
-					// If there's a range key iterator stack, we need to update
-					// whether or not the current current key has changed since
-					// the previous iterator position. This is surfaced in the
-					// public interface through Iterator.RangeKeyChanged(). In
-					// most cases, we're reusing the iterator position so if
-					// there's any range key, it hasn't changed. But if
-					// requiresReposition=true, the previous iterator position
-					// was a no-op SetOptions/SetBounds, and RangeKeyChanged()
-					// must return true if there is a range key at the position.
-					if i.rangeKey != nil {
-						i.rangeKey.updated = i.rangeKey.hasRangeKey && requiresReposition
-					}
 					return i.iterValidityState
 				}
 			}
@@ -1349,8 +1373,19 @@ func (i *Iterator) SeekLTWithLimit(key []byte, limit []byte) IterValidityState {
 func (i *Iterator) First() bool {
 	if i.rangeKey != nil {
 		// NB: Check Valid() before clearing requiresReposition.
-		i.rangeKey.updated = false
 		i.rangeKey.prevPosHadRangeKey = i.rangeKey.hasRangeKey && i.Valid()
+		// If we have a range key but did not expose it at the previous iterator
+		// position (because the iterator was not at a valid position), updated
+		// must be true. This ensures that after an iterator op sequence like:
+		//   - Next()             → (IterValid, RangeBounds() = [a,b))
+		//   - NextWithLimit(...) → (IterAtLimit, RangeBounds() = -)
+		//   - First(...)         → (IterValid, RangeBounds() = [a,b))
+		// the iterator returns RangeKeyChanged()=true.
+		//
+		// The remainder of this function will only update i.rangeKey.updated if
+		// the iterator moves into a new range key, or out of the current range
+		// key.
+		i.rangeKey.updated = i.rangeKey.hasRangeKey && !i.Valid()
 	}
 	i.err = nil // clear cached iteration error
 	i.hasPrefix = false
@@ -1375,8 +1410,19 @@ func (i *Iterator) First() bool {
 func (i *Iterator) Last() bool {
 	if i.rangeKey != nil {
 		// NB: Check Valid() before clearing requiresReposition.
-		i.rangeKey.updated = false
 		i.rangeKey.prevPosHadRangeKey = i.rangeKey.hasRangeKey && i.Valid()
+		// If we have a range key but did not expose it at the previous iterator
+		// position (because the iterator was not at a valid position), updated
+		// must be true. This ensures that after an iterator op sequence like:
+		//   - Next()             → (IterValid, RangeBounds() = [a,b))
+		//   - NextWithLimit(...) → (IterAtLimit, RangeBounds() = -)
+		//   - Last(...)          → (IterValid, RangeBounds() = [a,b))
+		// the iterator returns RangeKeyChanged()=true.
+		//
+		// The remainder of this function will only update i.rangeKey.updated if
+		// the iterator moves into a new range key, or out of the current range
+		// key.
+		i.rangeKey.updated = i.rangeKey.hasRangeKey && !i.Valid()
 	}
 	i.err = nil // clear cached iteration error
 	i.hasPrefix = false
@@ -1434,8 +1480,19 @@ func (i *Iterator) NextWithLimit(limit []byte) IterValidityState {
 	}
 	if i.rangeKey != nil {
 		// NB: Check Valid() before clearing requiresReposition.
-		i.rangeKey.updated = false
 		i.rangeKey.prevPosHadRangeKey = i.rangeKey.hasRangeKey && i.Valid()
+		// If we have a range key but did not expose it at the previous iterator
+		// position (because the iterator was not at a valid position), updated
+		// must be true. This ensures that after an iterator op sequence like:
+		//   - Next()             → (IterValid, RangeBounds() = [a,b))
+		//   - NextWithLimit(...) → (IterAtLimit, RangeBounds() = -)
+		//   - NextWithLimit(...) → (IterValid, RangeBounds() = [a,b))
+		// the iterator returns RangeKeyChanged()=true.
+		//
+		// The remainder of this function will only update i.rangeKey.updated if
+		// the iterator moves into a new range key, or out of the current range
+		// key.
+		i.rangeKey.updated = i.rangeKey.hasRangeKey && !i.Valid()
 	}
 	i.lastPositioningOp = unknownLastPositionOp
 	i.requiresReposition = false
@@ -1523,8 +1580,19 @@ func (i *Iterator) PrevWithLimit(limit []byte) IterValidityState {
 	}
 	if i.rangeKey != nil {
 		// NB: Check Valid() before clearing requiresReposition.
-		i.rangeKey.updated = false
 		i.rangeKey.prevPosHadRangeKey = i.rangeKey.hasRangeKey && i.Valid()
+		// If we have a range key but did not expose it at the previous iterator
+		// position (because the iterator was not at a valid position), updated
+		// must be true. This ensures that after an iterator op sequence like:
+		//   - Next()             → (IterValid, RangeBounds() = [a,b))
+		//   - NextWithLimit(...) → (IterAtLimit, RangeBounds() = -)
+		//   - PrevWithLimit(...) → (IterValid, RangeBounds() = [a,b))
+		// the iterator returns RangeKeyChanged()=true.
+		//
+		// The remainder of this function will only update i.rangeKey.updated if
+		// the iterator moves into a new range key, or out of the current range
+		// key.
+		i.rangeKey.updated = i.rangeKey.hasRangeKey && !i.Valid()
 	}
 	i.lastPositioningOp = unknownLastPositionOp
 	i.requiresReposition = false
