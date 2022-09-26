@@ -21,6 +21,7 @@ package transport
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -52,10 +53,10 @@ import (
 var (
 	// ErrIllegalHeaderWrite indicates that setting header is illegal because of
 	// the stream's state.
-	ErrIllegalHeaderWrite = status.Error(codes.Internal, "transport: SendHeader called multiple times")
+	ErrIllegalHeaderWrite = errors.New("transport: the stream is done or WriteHeader was already called")
 	// ErrHeaderListSizeLimitViolation indicates that the header list size is larger
 	// than the limit set by peer.
-	ErrHeaderListSizeLimitViolation = status.Error(codes.Internal, "transport: trying to send header list size larger than the limit set by peer")
+	ErrHeaderListSizeLimitViolation = errors.New("transport: trying to send header list size larger than the limit set by peer")
 )
 
 // serverConnectionCounter counts the number of connections a server has seen
@@ -448,7 +449,6 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			streamID:       streamID,
 			contentSubtype: s.contentSubtype,
 			status:         status.New(codes.Internal, errMsg),
-			rst:            !frame.StreamEnded(),
 		})
 		return false
 	}
@@ -522,16 +522,14 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	}
 	if httpMethod != http.MethodPost {
 		t.mu.Unlock()
-		errMsg := fmt.Sprintf("http2Server.operateHeaders parsed a :method field: %v which should be POST", httpMethod)
 		if logger.V(logLevel) {
-			logger.Infof("transport: %v", errMsg)
+			logger.Infof("transport: http2Server.operateHeaders parsed a :method field: %v which should be POST", httpMethod)
 		}
-		t.controlBuf.put(&earlyAbortStream{
-			httpStatus:     405,
-			streamID:       streamID,
-			contentSubtype: s.contentSubtype,
-			status:         status.New(codes.Internal, errMsg),
-			rst:            !frame.StreamEnded(),
+		t.controlBuf.put(&cleanupStream{
+			streamID: streamID,
+			rst:      true,
+			rstCode:  http2.ErrCodeProtocol,
+			onWrite:  func() {},
 		})
 		s.cancel()
 		return false
@@ -552,7 +550,6 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 				streamID:       s.id,
 				contentSubtype: s.contentSubtype,
 				status:         stat,
-				rst:            !frame.StreamEnded(),
 			})
 			return false
 		}
@@ -934,25 +931,11 @@ func (t *http2Server) checkForHeaderListSize(it interface{}) bool {
 	return true
 }
 
-func (t *http2Server) streamContextErr(s *Stream) error {
-	select {
-	case <-t.done:
-		return ErrConnClosing
-	default:
-	}
-	return ContextErr(s.ctx.Err())
-}
-
 // WriteHeader sends the header metadata md back to the client.
 func (t *http2Server) WriteHeader(s *Stream, md metadata.MD) error {
-	if s.updateHeaderSent() {
+	if s.updateHeaderSent() || s.getState() == streamDone {
 		return ErrIllegalHeaderWrite
 	}
-
-	if s.getState() == streamDone {
-		return t.streamContextErr(s)
-	}
-
 	s.hdrMu.Lock()
 	if md.Len() > 0 {
 		if s.header.Len() > 0 {
@@ -963,7 +946,7 @@ func (t *http2Server) WriteHeader(s *Stream, md metadata.MD) error {
 	}
 	if err := t.writeHeaderLocked(s); err != nil {
 		s.hdrMu.Unlock()
-		return status.Convert(err).Err()
+		return err
 	}
 	s.hdrMu.Unlock()
 	return nil
@@ -1079,12 +1062,23 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) error {
 	if !s.isHeaderSent() { // Headers haven't been written yet.
 		if err := t.WriteHeader(s, nil); err != nil {
-			return err
+			if _, ok := err.(ConnectionError); ok {
+				return err
+			}
+			// TODO(mmukhi, dfawley): Make sure this is the right code to return.
+			return status.Errorf(codes.Internal, "transport: %v", err)
 		}
 	} else {
 		// Writing headers checks for this condition.
 		if s.getState() == streamDone {
-			return t.streamContextErr(s)
+			// TODO(mmukhi, dfawley): Should the server write also return io.EOF?
+			s.cancel()
+			select {
+			case <-t.done:
+				return ErrConnClosing
+			default:
+			}
+			return ContextErr(s.ctx.Err())
 		}
 	}
 	df := &dataFrame{
@@ -1094,7 +1088,12 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 		onEachWrite: t.setResetPingStrikes,
 	}
 	if err := s.wq.get(int32(len(hdr) + len(data))); err != nil {
-		return t.streamContextErr(s)
+		select {
+		case <-t.done:
+			return ErrConnClosing
+		default:
+		}
+		return ContextErr(s.ctx.Err())
 	}
 	return t.controlBuf.put(df)
 }
@@ -1230,6 +1229,10 @@ func (t *http2Server) Close() {
 
 // deleteStream deletes the stream s from transport's active streams.
 func (t *http2Server) deleteStream(s *Stream, eosReceived bool) {
+	// In case stream sending and receiving are invoked in separate
+	// goroutines (e.g., bi-directional streaming), cancel needs to be
+	// called to interrupt the potential blocking on other goroutines.
+	s.cancel()
 
 	t.mu.Lock()
 	if _, ok := t.activeStreams[s.id]; ok {
@@ -1251,11 +1254,6 @@ func (t *http2Server) deleteStream(s *Stream, eosReceived bool) {
 
 // finishStream closes the stream and puts the trailing headerFrame into controlbuf.
 func (t *http2Server) finishStream(s *Stream, rst bool, rstCode http2.ErrCode, hdr *headerFrame, eosReceived bool) {
-	// In case stream sending and receiving are invoked in separate
-	// goroutines (e.g., bi-directional streaming), cancel needs to be
-	// called to interrupt the potential blocking on other goroutines.
-	s.cancel()
-
 	oldState := s.swapState(streamDone)
 	if oldState == streamDone {
 		// If the stream was already done, return.
@@ -1275,11 +1273,6 @@ func (t *http2Server) finishStream(s *Stream, rst bool, rstCode http2.ErrCode, h
 
 // closeStream clears the footprint of a stream when the stream is not needed any more.
 func (t *http2Server) closeStream(s *Stream, rst bool, rstCode http2.ErrCode, eosReceived bool) {
-	// In case stream sending and receiving are invoked in separate
-	// goroutines (e.g., bi-directional streaming), cancel needs to be
-	// called to interrupt the potential blocking on other goroutines.
-	s.cancel()
-
 	s.swapState(streamDone)
 	t.deleteStream(s, eosReceived)
 
