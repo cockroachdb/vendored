@@ -183,6 +183,8 @@ type Node interface {
 	// Read state has a read index. Once the application advances further than the read
 	// index, any linearizable read requests issued before the read request can be
 	// processed safely. The read state will have the same rctx attached.
+	// Note that request can be lost without notice, therefore it is user's job
+	// to ensure read index retries.
 	ReadIndex(ctx context.Context, rctx []byte) error
 
 	// Status returns the current status of the raft state machine.
@@ -209,11 +211,7 @@ type Peer struct {
 	Context []byte
 }
 
-// StartNode returns a new Node given configuration and a list of raft peers.
-// It appends a ConfChangeAddNode entry for each given peer to the initial log.
-//
-// Peers must not be zero length; call RestartNode in that case.
-func StartNode(c *Config, peers []Peer) Node {
+func setupNode(c *Config, peers []Peer) *node {
 	if len(peers) == 0 {
 		panic("no peers given; use RestartNode instead")
 	}
@@ -221,12 +219,23 @@ func StartNode(c *Config, peers []Peer) Node {
 	if err != nil {
 		panic(err)
 	}
-	rn.Bootstrap(peers)
+	err = rn.Bootstrap(peers)
+	if err != nil {
+		c.Logger.Warningf("error occurred during starting a new node: %v", err)
+	}
 
 	n := newNode(rn)
-
-	go n.run()
 	return &n
+}
+
+// StartNode returns a new Node given configuration and a list of raft peers.
+// It appends a ConfChangeAddNode entry for each given peer to the initial log.
+//
+// Peers must not be zero length; call RestartNode in that case.
+func StartNode(c *Config, peers []Peer) Node {
+	n := setupNode(c, peers)
+	go n.run()
+	return n
 }
 
 // RestartNode is similar to StartNode but does not take a list of peers.
@@ -367,13 +376,15 @@ func (n *node) run() {
 			// very sound and likely has bugs.
 			if _, okAfter := r.prs.Progress[r.id]; okBefore && !okAfter {
 				var found bool
-			outer:
 				for _, sl := range [][]uint64{cs.Voters, cs.VotersOutgoing} {
 					for _, id := range sl {
 						if id == r.id {
 							found = true
-							break outer
+							break
 						}
+					}
+					if found {
+						break
 					}
 				}
 				if !found {
