@@ -109,7 +109,7 @@ var stmap = [...]string{
 }
 
 func (st StateType) String() string {
-	return stmap[uint64(st)]
+	return stmap[st]
 }
 
 // Config contains the parameters to start a raft.
@@ -307,6 +307,12 @@ type raft struct {
 	step stepFunc
 
 	logger Logger
+
+	// pendingReadIndexMessages is used to store messages of type MsgReadIndex
+	// that can't be answered as new leader didn't committed any log in
+	// current term. Those will be handled as fast as first log is committed in
+	// current term.
+	pendingReadIndexMessages []pb.Message
 }
 
 func newRaft(c *Config) *raft {
@@ -559,6 +565,7 @@ func (r *raft) advance(rd Ready) {
 			if !r.appendEntry(ent) {
 				panic("refused un-refusable auto-leaving ConfChangeV2")
 			}
+			r.bcastAppend()
 			r.pendingConfIndex = r.raftLog.lastIndex()
 			r.logger.Infof("initiating automatic transition out of joint configuration %s", r.prs.Config)
 		}
@@ -566,6 +573,19 @@ func (r *raft) advance(rd Ready) {
 
 	if len(rd.Entries) > 0 {
 		e := rd.Entries[len(rd.Entries)-1]
+		if r.id == r.lead {
+			// The leader needs to self-ack the entries just appended (since it doesn't
+			// send an MsgApp to itself). This is roughly equivalent to:
+			//
+			//  r.prs.Progress[r.id].MaybeUpdate(e.Index)
+			//  if r.maybeCommit() {
+			//  	r.bcastAppend()
+			//  }
+			_ = r.Step(pb.Message{From: r.id, Type: pb.MsgAppResp, Index: e.Index})
+		}
+		// NB: it's important for performance that this call happens after
+		// r.Step above on the leader. This is because r.Step can then use
+		// a fast-path for `r.raftLog.term()`.
 		r.raftLog.stableTo(e.Index, e.Term)
 	}
 	if !IsEmptySnap(rd.Snapshot) {
@@ -628,10 +648,7 @@ func (r *raft) appendEntry(es ...pb.Entry) (accepted bool) {
 		return false
 	}
 	// use latest "last" index after truncate/append
-	li = r.raftLog.append(es...)
-	r.prs.Progress[r.id].MaybeUpdate(li)
-	// Regardless of maybeCommit's return, our caller will call bcastAppend.
-	r.maybeCommit()
+	r.raftLog.append(es...)
 	return true
 }
 
@@ -641,7 +658,9 @@ func (r *raft) tickElection() {
 
 	if r.promotable() && r.pastElectionTimeout() {
 		r.electionElapsed = 0
-		r.Step(pb.Message{From: r.id, Type: pb.MsgHup})
+		if err := r.Step(pb.Message{From: r.id, Type: pb.MsgHup}); err != nil {
+			r.logger.Debugf("error occurred during election: %v", err)
+		}
 	}
 }
 
@@ -653,7 +672,9 @@ func (r *raft) tickHeartbeat() {
 	if r.electionElapsed >= r.electionTimeout {
 		r.electionElapsed = 0
 		if r.checkQuorum {
-			r.Step(pb.Message{From: r.id, Type: pb.MsgCheckQuorum})
+			if err := r.Step(pb.Message{From: r.id, Type: pb.MsgCheckQuorum}); err != nil {
+				r.logger.Debugf("error occurred during checking sending heartbeat: %v", err)
+			}
 		}
 		// If current leader cannot transfer leadership in electionTimeout, it becomes leader again.
 		if r.state == StateLeader && r.leadTransferee != None {
@@ -667,7 +688,9 @@ func (r *raft) tickHeartbeat() {
 
 	if r.heartbeatElapsed >= r.heartbeatTimeout {
 		r.heartbeatElapsed = 0
-		r.Step(pb.Message{From: r.id, Type: pb.MsgBeat})
+		if err := r.Step(pb.Message{From: r.id, Type: pb.MsgBeat}); err != nil {
+			r.logger.Debugf("error occurred during checking sending heartbeat: %v", err)
+		}
 	}
 }
 
@@ -723,7 +746,11 @@ func (r *raft) becomeLeader() {
 	// (perhaps after having received a snapshot as a result). The leader is
 	// trivially in this state. Note that r.reset() has initialized this
 	// progress with the last index already.
-	r.prs.Progress[r.id].BecomeReplicate()
+	pr := r.prs.Progress[r.id]
+	pr.BecomeReplicate()
+	// The leader always has RecentActive == true; MsgCheckQuorum makes sure to
+	// preserve this.
+	pr.RecentActive = true
 
 	// Conservatively set the pendingConfIndex to the last index in the
 	// log. There may or may not be a pending config change, but it's
@@ -983,15 +1010,6 @@ func stepLeader(r *raft, m pb.Message) error {
 		r.bcastHeartbeat()
 		return nil
 	case pb.MsgCheckQuorum:
-		// The leader should always see itself as active. As a precaution, handle
-		// the case in which the leader isn't in the configuration any more (for
-		// example if it just removed itself).
-		//
-		// TODO(tbg): I added a TODO in removeNode, it doesn't seem that the
-		// leader steps down when removing itself. I might be missing something.
-		if pr := r.prs.Progress[r.id]; pr != nil {
-			pr.RecentActive = true
-		}
 		if !r.prs.QuorumActive() {
 			r.logger.Warningf("%x stepped down to follower since quorum is not active", r.id)
 			r.becomeFollower(r.Term, None)
@@ -1072,26 +1090,15 @@ func stepLeader(r *raft, m pb.Message) error {
 			return nil
 		}
 
-		// Reject read only request when this leader has not committed any log entry at its term.
+		// Postpone read only request when this leader has not committed
+		// any log entry at its term.
 		if !r.committedEntryInCurrentTerm() {
+			r.pendingReadIndexMessages = append(r.pendingReadIndexMessages, m)
 			return nil
 		}
 
-		// thinking: use an interally defined context instead of the user given context.
-		// We can express this in terms of the term and index instead of a user-supplied value.
-		// This would allow multiple reads to piggyback on the same message.
-		switch r.readOnly.option {
-		// If more than the local vote is needed, go through a full broadcast.
-		case ReadOnlySafe:
-			r.readOnly.addRequest(r.raftLog.committed, m)
-			// The local node automatically acks the request.
-			r.readOnly.recvAck(r.id, m.Entries[0].Data)
-			r.bcastHeartbeatWithCtx(m.Entries[0].Data)
-		case ReadOnlyLeaseBased:
-			if resp := r.responseToReadIndexReq(m, r.raftLog.committed); resp.To != None {
-				r.send(resp)
-			}
-		}
+		sendMsgReadIndexResponse(r, m)
+
 		return nil
 	}
 
@@ -1103,6 +1110,9 @@ func stepLeader(r *raft, m pb.Message) error {
 	}
 	switch m.Type {
 	case pb.MsgAppResp:
+		// NB: this code path is also hit from (*raft).advance, where the leader steps
+		// an MsgAppResp to acknowledge the appended entries in the last Ready.
+
 		pr.RecentActive = true
 
 		if m.Reject {
@@ -1153,7 +1163,7 @@ func stepLeader(r *raft, m pb.Message) error {
 				// the rejection's log term. If a probe at one of these indexes
 				// succeeded, its log term at that index would match the leader's,
 				// i.e. 3 or 5 in this example. But the follower already told the
-				// leader that it is still at term 2 at index 9, and since the
+				// leader that it is still at term 2 at index 6, and since the
 				// log term only ever goes up (within a log), this is a contradiction.
 				//
 				// At index 1, however, the leader can draw no such conclusion,
@@ -1256,6 +1266,9 @@ func stepLeader(r *raft, m pb.Message) error {
 				}
 
 				if r.maybeCommit() {
+					// committed index has progressed for the term, so it is safe
+					// to respond to pending read index requests
+					releasePendingReadIndexMessages(r)
 					r.bcastAppend()
 				} else if oldPaused {
 					// If we were paused before, this node may be missing the
@@ -1268,7 +1281,9 @@ func stepLeader(r *raft, m pb.Message) error {
 				// replicate, or when freeTo() covers multiple messages). If
 				// we have more entries to send, send as many messages as we
 				// can (without sending empty messages for the commit index)
-				for r.maybeSendAppend(m.From, false) {
+				if r.id != m.From {
+					for r.maybeSendAppend(m.From, false) {
+					}
 				}
 				// Transfer leadership is in progress.
 				if m.From == r.leadTransferee && pr.Match == r.raftLog.lastIndex() {
@@ -1687,7 +1702,7 @@ func (r *raft) switchToConfig(cfg tracker.Config, prs tracker.ProgressMap) pb.Co
 			r.maybeSendAppend(id, false /* sendIfEmpty */)
 		})
 	}
-	// If the the leadTransferee was removed or demoted, abort the leadership transfer.
+	// If the leadTransferee was removed or demoted, abort the leadership transfer.
 	if _, tOK := r.prs.Config.Voters.IDs()[r.leadTransferee]; !tOK && r.leadTransferee != 0 {
 		r.abortLeaderTransfer()
 	}
@@ -1804,4 +1819,41 @@ func numOfPendingConf(ents []pb.Entry) int {
 		}
 	}
 	return n
+}
+
+func releasePendingReadIndexMessages(r *raft) {
+	if len(r.pendingReadIndexMessages) == 0 {
+		// Fast path for the common case to avoid a call to storage.LastIndex()
+		// via committedEntryInCurrentTerm.
+		return
+	}
+	if !r.committedEntryInCurrentTerm() {
+		r.logger.Error("pending MsgReadIndex should be released only after first commit in current term")
+		return
+	}
+
+	msgs := r.pendingReadIndexMessages
+	r.pendingReadIndexMessages = nil
+
+	for _, m := range msgs {
+		sendMsgReadIndexResponse(r, m)
+	}
+}
+
+func sendMsgReadIndexResponse(r *raft, m pb.Message) {
+	// thinking: use an internally defined context instead of the user given context.
+	// We can express this in terms of the term and index instead of a user-supplied value.
+	// This would allow multiple reads to piggyback on the same message.
+	switch r.readOnly.option {
+	// If more than the local vote is needed, go through a full broadcast.
+	case ReadOnlySafe:
+		r.readOnly.addRequest(r.raftLog.committed, m)
+		// The local node automatically acks the request.
+		r.readOnly.recvAck(r.id, m.Entries[0].Data)
+		r.bcastHeartbeatWithCtx(m.Entries[0].Data)
+	case ReadOnlyLeaseBased:
+		if resp := r.responseToReadIndexReq(m, r.raftLog.committed); resp.To != None {
+			r.send(resp)
+		}
+	}
 }
