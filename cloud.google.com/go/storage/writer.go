@@ -213,6 +213,11 @@ func (w *Writer) open() error {
 		}
 		if err != nil {
 			w.mu.Lock()
+			if w.o.retry != nil {
+				fmt.Println("rh_debug: call.Do(), err:", w.err, "shouldRetry:", w.o.retry.shouldRetry)
+			} else {
+				fmt.Println("rh_debug: call.Do(), err:", w.err, "retry:", w.o.retry)
+			}
 			w.err = err
 			w.mu.Unlock()
 			pr.CloseWithError(err)
