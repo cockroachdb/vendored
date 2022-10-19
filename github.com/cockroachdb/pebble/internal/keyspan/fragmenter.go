@@ -317,6 +317,83 @@ func (f *Fragmenter) TruncateAndFlushTo(key []byte) {
 	f.truncateAndFlush(key)
 }
 
+// DeprecatedFlushTo flushes all of the fragments with a start key <= key,
+// without truncating them to key.
+//
+// Earlier versions of Pebble would use this logic during compaction to emit
+// range deletions which straddle an sstable boundary. This resulted in the
+// emitted spans are not truncated to the specified key. The logic is preserved
+// here for testing read-time behavior of these untruncated 'range tombstones'.
+//
+// Consider the scenario:
+//
+//     a---------k#10
+//          f#8
+//          f#7
+//
+// If the compaction logic splits f#8 and f#7 into different sstables, we can't
+// truncate the span [a,k) at f. Doing so could produce an sstable with the
+// records:
+//
+//     a----f#10
+//          f#8
+//
+// The span [a,f) does not cover the key f.
+func (f *Fragmenter) DeprecatedFlushTo(key []byte) {
+	if f.finished {
+		panic("pebble: span fragmenter already finished")
+	}
+
+	if f.flushedKey != nil {
+		switch c := f.Cmp(key, f.flushedKey); {
+		case c < 0:
+			panic(fmt.Sprintf("pebble: flush-to key (%s) < flushed key (%s)",
+				f.Format(key), f.Format(f.flushedKey)))
+		}
+	}
+	f.flushedKey = append(f.flushedKey[:0], key...)
+
+	if len(f.pending) > 0 {
+		// Since all of the pending spans have the same start key, we only need
+		// to compare against the first one.
+		switch c := f.Cmp(f.pending[0].Start, key); {
+		case c > 0:
+			panic(fmt.Sprintf("pebble: keys must be in order: %s > %s",
+				f.Format(f.pending[0].Start), f.Format(key)))
+		}
+		// Note that we explicitly do not return early here if Start ==
+		// key. Similar to the scenario described above, consider:
+		//
+		//          f----k#10
+		//          f#8
+		//          f#7
+		//
+		// If the compaction logic splits f#8 and f#7 into different sstables,
+		// we have to emit the span [f,k) in both sstables.
+	}
+
+	// At this point we know that the new start key is greater than the pending
+	// spans start keys. We flush all span fragments with a start key
+	// <= key.
+	f.flush(f.pending, key)
+
+	// Truncate the pending spans to start with key, filtering any which
+	// would become empty.
+	pending := f.pending
+	f.pending = f.pending[:0]
+	for _, s := range pending {
+		if f.Cmp(key, s.End) < 0 {
+			//   s: a--+--e
+			// new:    c------
+			f.pending = append(f.pending, Span{
+				Start: s.Start,
+				End:   s.End,
+				Keys:  s.Keys,
+			})
+		}
+	}
+}
+
 // Start returns the start key of the first span in the pending buffer, or nil
 // if there are no pending spans. The start key of all pending spans is the same
 // as that of the first one.

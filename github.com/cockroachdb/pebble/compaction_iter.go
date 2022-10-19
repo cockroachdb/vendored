@@ -800,14 +800,19 @@ func (i *compactionIter) Close() error {
 
 // Tombstones returns a list of pending range tombstones in the fragmenter
 // up to the specified key, or all pending range tombstones if key = nil.
-func (i *compactionIter) Tombstones(key []byte) []keyspan.Span {
-	if key == nil {
+func (i *compactionIter) Tombstones(key []byte, excluded bool) []keyspan.Span {
+	switch {
+	case key == nil:
 		i.rangeDelFrag.Finish()
-	} else {
+	case excluded:
 		// The specified end key is exclusive; no versions of the specified
 		// user key (including range tombstones covering that key) should
 		// be flushed yet.
 		i.rangeDelFrag.TruncateAndFlushTo(key)
+	default:
+		// This case is only exercised in tests, to improve test coverage of
+		// "untruncated" range tombstones. See cockroachdb/cockroach#89777.
+		i.rangeDelFrag.DeprecatedFlushTo(key)
 	}
 	tombstones := i.tombstones
 	i.tombstones = nil
