@@ -506,8 +506,8 @@ github.com/cespare/xxhash/v2
 ## explicit
 github.com/client9/misspell
 github.com/client9/misspell/cmd/misspell
-# github.com/cockroachdb/apd/v3 v3.1.0
-## explicit; go 1.13
+# github.com/cockroachdb/apd/v3 v3.1.2
+## explicit; go 1.17
 github.com/cockroachdb/apd/v3
 # github.com/cockroachdb/circuitbreaker v2.2.2-0.20190114160014-a614b14ccf63+incompatible
 ## explicit
@@ -1248,7 +1248,7 @@ github.com/lestrrat-go/jwx/x25519
 # github.com/lestrrat-go/option v1.0.0
 ## explicit; go 1.16
 github.com/lestrrat-go/option
-# github.com/lib/pq v1.10.6
+# github.com/lib/pq v1.10.7
 ## explicit; go 1.13
 github.com/lib/pq
 github.com/lib/pq/oid
