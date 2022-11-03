@@ -24,7 +24,7 @@ type mergingIterLevel struct {
 	rangeDelIter keyspan.FragmentIterator
 	// iterKey and iterValue cache the current key and value iter are pointed at.
 	iterKey   *InternalKey
-	iterValue []byte
+	iterValue base.LazyValue
 
 	// levelIterBoundaryContext's fields are set when using levelIter, in order
 	// to surface sstable boundary keys and file-level context. See levelIter
@@ -677,29 +677,48 @@ func (m *mergingIter) isNextEntryDeleted(item *mergingIterItem) bool {
 }
 
 // Starting from the current entry, finds the first (next) entry that can be returned.
-func (m *mergingIter) findNextEntry() (*InternalKey, []byte) {
+func (m *mergingIter) findNextEntry() (*InternalKey, base.LazyValue) {
 	var reseeked bool
 	for m.heap.len() > 0 && m.err == nil {
 		item := &m.heap.items[0]
 		if m.levels[item.index].isSyntheticIterBoundsKey {
 			break
 		}
-		// For prefix iteration, stop if we already seeked the iterator due to a
-		// range tombstone and are now past the prefix. We could amortize the
-		// cost of this comparison, by doing it only after we have iterated in
-		// this for loop a few times. But unless we find a performance benefit
-		// to that, we do the simple thing and compare each time. Note that
-		// isNextEntryDeleted already did at least 4 key comparisons in order to
-		// return true, and additionally at least one heap comparison to step to
-		// the next entry.
+		// For prefix iteration, stop if we've already exceeded the iterator's
+		// current prefix. There are two cases where we perform this check.
 		//
-		// Note that we cannot move this comparison into the isNextEntryDeleted
-		// branch. Once isNextEntryDeleted determines a key is deleted and seeks
-		// the level's iterator, item.key's memory is potentially invalid. If
-		// the iterator is now exhausted, item.key may be garbage.
-		if m.prefix != nil && reseeked {
+		// 1. We already re-seeked the iterator due to a range tombstone. We
+		//    could amortize the cost of this comparison, by doing it only after
+		//    we have iterated in this for loop a few times. But unless we find
+		//    a performance benefit to that, we do the simple thing and compare
+		//    each time. Note that isNextEntryDeleted already did at least 4 key
+		//    comparisons in order to return true, and additionally at least one
+		//    heap comparison to step to the next entry.
+		//
+		//    Note that we cannot move this comparison into the
+		//    isNextEntryDeleted branch. Once isNextEntryDeleted determines a
+		//    key is deleted and seeks the level's iterator, item.key's memory
+		//    is potentially invalid. If the iterator is now exhausted, item.key
+		//    may be garbage.
+		//
+		// 2. If the heap root is an ignorable boundary key, Next-ing the
+		//    iterator will close the associated file and open the next file in
+		//    the level. We don't want to do this unnecessarily because the
+		//    'exhausted' file may only appear exhausted because it failed a
+		//    bloom filter check. Avoiding Next-ing the file has a performance
+		//    benefit of unnecessarily advancing to the next file, but it's also
+		//    necessary for correctness of some TrySeekUsingNext optimizations
+		//    deeper in the iterator stack:
+		//
+		//    There may exist valid keys between our current prefix (m.prefix)
+		//    and the ignorable boundary key (item.key) that were not returned
+		//    due to the bloom filter test. A subsequent SeekPrefixGE call with
+		//    a seek key in the range (m.prefix - item.key) will have the
+		//    TrySeekUsingNext flag enabled. The levelIter relies on having not
+		//    skipped these keys in order to avoid more expensive full seeks.
+		if m.prefix != nil && (reseeked || m.levels[item.index].isIgnorableBoundaryKey) {
 			if n := m.split(item.key.UserKey); !bytes.Equal(m.prefix, item.key.UserKey[:n]) {
-				return nil, nil
+				return nil, base.LazyValue{}
 			}
 		}
 
@@ -716,7 +735,7 @@ func (m *mergingIter) findNextEntry() (*InternalKey, []byte) {
 		}
 		m.nextEntry(item)
 	}
-	return nil, nil
+	return nil, base.LazyValue{}
 }
 
 // Steps to the prev entry. item is the current top item in the heap.
@@ -852,7 +871,7 @@ func (m *mergingIter) isPrevEntryDeleted(item *mergingIterItem) bool {
 }
 
 // Starting from the current entry, finds the first (prev) entry that can be returned.
-func (m *mergingIter) findPrevEntry() (*InternalKey, []byte) {
+func (m *mergingIter) findPrevEntry() (*InternalKey, base.LazyValue) {
 	for m.heap.len() > 0 && m.err == nil {
 		item := &m.heap.items[0]
 		if m.levels[item.index].isSyntheticIterBoundsKey {
@@ -870,7 +889,7 @@ func (m *mergingIter) findPrevEntry() (*InternalKey, []byte) {
 		}
 		m.prevEntry(item)
 	}
-	return nil, nil
+	return nil, base.LazyValue{}
 }
 
 // Seeks levels >= level to >= key. Additionally uses range tombstones to extend the seeks.
@@ -964,7 +983,7 @@ func (m *mergingIter) String() string {
 // SeekGE implements base.InternalIterator.SeekGE. Note that SeekGE only checks
 // the upper bound. It is up to the caller to ensure that key is greater than
 // or equal to the lower bound.
-func (m *mergingIter) SeekGE(key []byte, flags base.SeekGEFlags) (*InternalKey, []byte) {
+func (m *mergingIter) SeekGE(key []byte, flags base.SeekGEFlags) (*InternalKey, base.LazyValue) {
 	m.err = nil // clear cached iteration error
 	m.prefix = nil
 	m.seekGE(key, 0 /* start level */, flags)
@@ -976,7 +995,7 @@ func (m *mergingIter) SeekGE(key []byte, flags base.SeekGEFlags) (*InternalKey, 
 // that key is greater than or equal to the lower bound.
 func (m *mergingIter) SeekPrefixGE(
 	prefix, key []byte, flags base.SeekGEFlags,
-) (*base.InternalKey, []byte) {
+) (*base.InternalKey, base.LazyValue) {
 	m.err = nil // clear cached iteration error
 	m.prefix = prefix
 	m.seekGE(key, 0 /* start level */, flags)
@@ -1054,7 +1073,7 @@ func (m *mergingIter) seekLT(key []byte, level int, flags base.SeekLTFlags) {
 // SeekLT implements base.InternalIterator.SeekLT. Note that SeekLT only checks
 // the lower bound. It is up to the caller to ensure that key is less than the
 // upper bound.
-func (m *mergingIter) SeekLT(key []byte, flags base.SeekLTFlags) (*InternalKey, []byte) {
+func (m *mergingIter) SeekLT(key []byte, flags base.SeekLTFlags) (*InternalKey, base.LazyValue) {
 	m.err = nil // clear cached iteration error
 	m.prefix = nil
 	m.seekLT(key, 0 /* start level */, flags)
@@ -1064,7 +1083,7 @@ func (m *mergingIter) SeekLT(key []byte, flags base.SeekLTFlags) (*InternalKey, 
 // First implements base.InternalIterator.First. Note that First only checks
 // the upper bound. It is up to the caller to ensure that key is greater than
 // or equal to the lower bound (e.g. via a call to SeekGE(lower)).
-func (m *mergingIter) First() (*InternalKey, []byte) {
+func (m *mergingIter) First() (*InternalKey, base.LazyValue) {
 	m.err = nil // clear cached iteration error
 	m.prefix = nil
 	m.heap.items = m.heap.items[:0]
@@ -1079,7 +1098,7 @@ func (m *mergingIter) First() (*InternalKey, []byte) {
 // Last implements base.InternalIterator.Last. Note that Last only checks the
 // lower bound. It is up to the caller to ensure that key is less than the
 // upper bound (e.g. via a call to SeekLT(upper))
-func (m *mergingIter) Last() (*InternalKey, []byte) {
+func (m *mergingIter) Last() (*InternalKey, base.LazyValue) {
 	m.err = nil // clear cached iteration error
 	m.prefix = nil
 	for i := range m.levels {
@@ -1090,9 +1109,9 @@ func (m *mergingIter) Last() (*InternalKey, []byte) {
 	return m.findPrevEntry()
 }
 
-func (m *mergingIter) Next() (*InternalKey, []byte) {
+func (m *mergingIter) Next() (*InternalKey, base.LazyValue) {
 	if m.err != nil {
-		return nil, nil
+		return nil, base.LazyValue{}
 	}
 
 	if m.dir != 1 {
@@ -1101,29 +1120,29 @@ func (m *mergingIter) Next() (*InternalKey, []byte) {
 	}
 
 	if m.heap.len() == 0 {
-		return nil, nil
+		return nil, base.LazyValue{}
 	}
 
 	m.nextEntry(&m.heap.items[0])
 	return m.findNextEntry()
 }
 
-func (m *mergingIter) Prev() (*InternalKey, []byte) {
+func (m *mergingIter) Prev() (*InternalKey, base.LazyValue) {
 	if m.err != nil {
-		return nil, nil
+		return nil, base.LazyValue{}
 	}
 
 	if m.dir != -1 {
 		if m.prefix != nil {
 			m.err = errors.New("pebble: unsupported reverse prefix iteration")
-			return nil, nil
+			return nil, base.LazyValue{}
 		}
 		m.switchToMaxHeap()
 		return m.findPrevEntry()
 	}
 
 	if m.heap.len() == 0 {
-		return nil, nil
+		return nil, base.LazyValue{}
 	}
 
 	m.prevEntry(&m.heap.items[0])
@@ -1193,7 +1212,7 @@ func (m *mergingIter) ForEachLevelIter(fn func(li *levelIter) bool) {
 func (m *mergingIter) addItemStats(item *mergingIterItem) {
 	m.stats.PointCount++
 	m.stats.KeyBytes += uint64(len(item.key.UserKey))
-	m.stats.ValueBytes += uint64(len(item.value))
+	m.stats.ValueBytes += uint64(len(item.value.ValueOrHandle))
 }
 
 var _ internalIterator = &mergingIter{}
