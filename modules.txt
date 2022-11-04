@@ -1804,7 +1804,7 @@ golang.org/x/tools/txtar
 ## explicit; go 1.11
 golang.org/x/xerrors
 golang.org/x/xerrors/internal
-# google.golang.org/api v0.69.0
+# google.golang.org/api v0.69.0 => github.com/rhu713/google-api-go-client v0.0.0-20221104181615-509b8f9025b3
 ## explicit; go 1.15
 google.golang.org/api/googleapi
 google.golang.org/api/googleapi/transport
