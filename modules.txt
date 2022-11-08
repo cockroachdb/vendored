@@ -515,10 +515,12 @@ github.com/cockroachdb/circuitbreaker
 # github.com/cockroachdb/cmux v0.0.0-20170110192607-30d10be49292
 ## explicit
 github.com/cockroachdb/cmux
-# github.com/cockroachdb/cockroach-go/v2 v2.2.6
+# github.com/cockroachdb/cockroach-go/v2 v2.2.17
 ## explicit; go 1.13
 github.com/cockroachdb/cockroach-go/v2/crdb
 github.com/cockroachdb/cockroach-go/v2/crdb/crdbpgx
+github.com/cockroachdb/cockroach-go/v2/testserver
+github.com/cockroachdb/cockroach-go/v2/testserver/version
 # github.com/cockroachdb/crlfmt v0.0.0-20210128092314-b3eff0b87c79
 ## explicit; go 1.13
 github.com/cockroachdb/crlfmt
