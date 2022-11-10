@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"fmt"
 	"runtime/debug"
+	"unsafe"
 
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/pebble/internal/base"
@@ -44,11 +45,11 @@ type levelIterBoundaryContext struct {
 	// smallestUserKey and largestUserKey are populated with the smallest and
 	// largest boundaries of the current file.
 	smallestUserKey, largestUserKey []byte
-	// isLargestUserKeyRangeDelSentinel is set to true when a file's largest
-	// boundary is an exclusive range deletion sentinel. If true, the file does
-	// not contain any keys with the provided user key, and the largestUserKey
-	// bound is exclusive.
-	isLargestUserKeyRangeDelSentinel bool
+	// isLargestUserKeyExclusive is set to true when a file's largest boundary
+	// is an exclusive key, (eg, a range deletion sentinel). If true, the file
+	// does not contain any keys with the provided user key, and the
+	// largestUserKey bound is exclusive.
+	isLargestUserKeyExclusive bool
 	// isSyntheticIterBoundsKey is set to true iff the key returned by the level
 	// iterator is a synthetic key derived from the iterator bounds. This is
 	// used to prevent the mergingIter from being stuck at such a synthetic key
@@ -249,6 +250,8 @@ type mergingIter struct {
 	// when mergingIter is a child of Iterator and the mergingIter is processing
 	// range tombstones.
 	elideRangeTombstones bool
+	// Used in some tests to disable the random disabling of seek optimizations.
+	forceEnableSeekOpt bool
 }
 
 // mergingIter implements the base.InternalIterator interface.
@@ -823,7 +826,7 @@ func (m *mergingIter) isPrevEntryDeleted(item *mergingIterItem) bool {
 		// Example 3:
 		// sstable bounds [c#8, g#RangeDelSentinel] containing [b, i)#7 and the key is g#10.
 		// This key is not deleted by this tombstone. We need to look at
-		// isLargestUserKeyRangeDelSentinel.
+		// isLargestUserKeyExclusive.
 		//
 		// For a tombstone at the same level as the key, the file bounds are trivially satisfied.
 
@@ -831,7 +834,7 @@ func (m *mergingIter) isPrevEntryDeleted(item *mergingIterItem) bool {
 		withinLargestSSTableBound := true
 		if l.largestUserKey != nil {
 			cmpResult := m.heap.cmp(l.largestUserKey, item.key.UserKey)
-			withinLargestSSTableBound = cmpResult > 0 || (cmpResult == 0 && !l.isLargestUserKeyRangeDelSentinel)
+			withinLargestSSTableBound = cmpResult > 0 || (cmpResult == 0 && !l.isLargestUserKeyExclusive)
 		}
 		if withinLargestSSTableBound && l.tombstone.Contains(m.heap.cmp, item.key.UserKey) && l.tombstone.VisibleAt(m.snapshot) {
 			if level < item.index {
@@ -914,6 +917,37 @@ func (m *mergingIter) seekGE(key []byte, level int, flags base.SeekGEFlags) {
 	// TODO(peter,rangedel): In addition to the above we can delay seeking a
 	// level (and any lower levels) when the current iterator position is
 	// contained within a range tombstone at a higher level.
+
+	// Deterministically disable the TrySeekUsingNext optimizations sometimes in
+	// invariant builds to encourage the metamorphic tests to surface bugs. Note
+	// that we cannot disable the optimization within individual levels. It must
+	// be disabled for all levels or none. If one lower-level iterator performs
+	// a fresh seek whereas another takes advantage of its current iterator
+	// position, the heap can become inconsistent. Consider the following
+	// example:
+	//
+	//     L5:  [ [b-c) ]  [ d ]*
+	//     L6:  [  b ]           [e]*
+	//
+	// Imagine a SeekGE(a). The [b-c) range tombstone deletes the L6 point key
+	// 'b', resulting in the iterator positioned at d with the heap:
+	//
+	//     {L5: d, L6: e}
+	//
+	// A subsequent SeekGE(b) is seeking to a larger key, so the caller may set
+	// TrySeekUsingNext()=true. If the L5 iterator used the TrySeekUsingNext
+	// optimization but the L6 iterator did not, the iterator would have the
+	// heap:
+	//
+	//     {L6: b, L5: d}
+	//
+	// Because the L5 iterator has already advanced to the next sstable, the
+	// merging iterator cannot observe the [b-c) range tombstone and will
+	// mistakenly return L6's deleted point key 'b'.
+	if invariants.Enabled && flags.TrySeekUsingNext() && !m.forceEnableSeekOpt &&
+		disableSeekOpt(key, uintptr(unsafe.Pointer(m))) {
+		flags = flags.DisableTrySeekUsingNext()
+	}
 
 	for ; level < len(m.levels); level++ {
 		if invariants.Enabled && m.lower != nil && m.heap.cmp(key, m.lower) < 0 {
@@ -1040,7 +1074,7 @@ func (m *mergingIter) seekLT(key []byte, level int, flags base.SeekLTFlags) {
 			withinLargestSSTableBound := true
 			if l.largestUserKey != nil {
 				cmpResult := m.heap.cmp(l.largestUserKey, key)
-				withinLargestSSTableBound = cmpResult > 0 || (cmpResult == 0 && !l.isLargestUserKeyRangeDelSentinel)
+				withinLargestSSTableBound = cmpResult > 0 || (cmpResult == 0 && !l.isLargestUserKeyExclusive)
 			}
 
 			l.tombstone = keyspan.SeekLE(m.heap.cmp, rangeDelIter, key)
