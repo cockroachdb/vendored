@@ -23,7 +23,8 @@ import (
 )
 
 const (
-	cacheDefaultSize = 8 << 20 // 8 MB
+	cacheDefaultSize       = 8 << 20 // 8 MB
+	defaultLevelMultiplier = 10
 )
 
 // Compression exports the base.Compression type.
@@ -549,6 +550,10 @@ type Options struct {
 		// By default, this value is false.
 		ValidateOnIngest bool
 
+		// LevelMultiplier configures the size multiplier used to determine the
+		// desired size of each level of the LSM. Defaults to 10.
+		LevelMultiplier int
+
 		// MultiLevelCompaction allows the compaction of SSTs from more than two
 		// levels iff a conventional two level compaction will quickly trigger a
 		// compaction in the output level.
@@ -571,6 +576,12 @@ type Options struct {
 		// ability to optionally schedule additional CPU. See the documentation
 		// for CPUWorkPermissionGranter for more details.
 		CPUWorkPermissionGranter CPUWorkPermissionGranter
+
+		// PointTombstoneWeight is a float in the range [0, +inf) used to weight the
+		// point tombstone heuristics during compaction picking.
+		//
+		// The default value is 1, which results in no scaling of point tombstones.
+		PointTombstoneWeight float64
 	}
 
 	// Filters is a map from filter policy name to filter policy. It is used for
@@ -772,6 +783,23 @@ type Options struct {
 		// RocksDB 6.2.1.
 		strictWALTail bool
 
+		// disableDeleteOnlyCompactions prevents the scheduling of delete-only
+		// compactions that drop sstables wholy covered by range tombstones or
+		// range key tombstones.
+		disableDeleteOnlyCompactions bool
+
+		// disableElisionOnlyCompactions prevents the scheduling of elision-only
+		// compactions that rewrite sstables in place in order to elide obsolete
+		// keys.
+		disableElisionOnlyCompactions bool
+
+		// disableLazyCombinedIteration is a private option used by the
+		// metamorphic tests to test equivalence between lazy-combined iteration
+		// and constructing the range-key iterator upfront. It's a private
+		// option to avoid littering the public interface with options that we
+		// do not want to allow users to actually configure.
+		disableLazyCombinedIteration bool
+
 		// A private option to disable stats collection.
 		disableTableStats bool
 
@@ -784,13 +812,6 @@ type Options struct {
 		// against the FS are made after the DB is closed, the FS may leak a
 		// goroutine indefinitely.
 		fsCloser io.Closer
-
-		// disableLazyCombinedIteration is a private option used by the
-		// metamorphic tests to test equivalence between lazy-combined iteration
-		// and constructing the range-key iterator upfront. It's a private
-		// option to avoid littering the public interface with options that we
-		// do not want to allow users to actually configure.
-		disableLazyCombinedIteration bool
 	}
 }
 
@@ -919,6 +940,9 @@ func (o *Options) EnsureDefaults() *Options {
 	if o.FlushSplitBytes <= 0 {
 		o.FlushSplitBytes = 2 * o.Levels[0].TargetFileSize
 	}
+	if o.Experimental.LevelMultiplier <= 0 {
+		o.Experimental.LevelMultiplier = defaultLevelMultiplier
+	}
 	if o.Experimental.ReadCompactionRate == 0 {
 		o.Experimental.ReadCompactionRate = 16000
 	}
@@ -927,6 +951,9 @@ func (o *Options) EnsureDefaults() *Options {
 	}
 	if o.Experimental.TableCacheShards <= 0 {
 		o.Experimental.TableCacheShards = runtime.GOMAXPROCS(0)
+	}
+	if o.Experimental.PointTombstoneWeight == 0 {
+		o.Experimental.PointTombstoneWeight = 1
 	}
 
 	o.initMaps()
@@ -1012,6 +1039,9 @@ func (o *Options) String() string {
 	fmt.Fprintf(&buf, "  l0_compaction_threshold=%d\n", o.L0CompactionThreshold)
 	fmt.Fprintf(&buf, "  l0_stop_writes_threshold=%d\n", o.L0StopWritesThreshold)
 	fmt.Fprintf(&buf, "  lbase_max_bytes=%d\n", o.LBaseMaxBytes)
+	if o.Experimental.LevelMultiplier != defaultLevelMultiplier {
+		fmt.Fprintf(&buf, "  level_multiplier=%d\n", o.Experimental.LevelMultiplier)
+	}
 	fmt.Fprintf(&buf, "  max_concurrent_compactions=%d\n", o.MaxConcurrentCompactions())
 	fmt.Fprintf(&buf, "  max_manifest_file_size=%d\n", o.MaxManifestFileSize)
 	fmt.Fprintf(&buf, "  max_open_files=%d\n", o.MaxOpenFiles)
@@ -1019,6 +1049,7 @@ func (o *Options) String() string {
 	fmt.Fprintf(&buf, "  mem_table_stop_writes_threshold=%d\n", o.MemTableStopWritesThreshold)
 	fmt.Fprintf(&buf, "  min_deletion_rate=%d\n", o.Experimental.MinDeletionRate)
 	fmt.Fprintf(&buf, "  merger=%s\n", o.Merger.Name)
+	fmt.Fprintf(&buf, "  point_tombstone_weight=%f\n", o.Experimental.PointTombstoneWeight)
 	fmt.Fprintf(&buf, "  read_compaction_rate=%d\n", o.Experimental.ReadCompactionRate)
 	fmt.Fprintf(&buf, "  read_sampling_multiplier=%d\n", o.Experimental.ReadSamplingMultiplier)
 	fmt.Fprintf(&buf, "  strict_wal_tail=%t\n", o.private.strictWALTail)
@@ -1040,11 +1071,18 @@ func (o *Options) String() string {
 	fmt.Fprintf(&buf, "  force_writer_parallelism=%t\n", o.Experimental.ForceWriterParallelism)
 
 	// Private options.
+	//
+	// These options are only encoded if true, because we do not want them to
+	// appear in production serialized Options files, since they're testing-only
+	// options. They're only serialized when true, which still ensures that the
+	// metamorphic tests may propagate them to subprocesses.
+	if o.private.disableDeleteOnlyCompactions {
+		fmt.Fprintln(&buf, "  disable_delete_only_compactions=true")
+	}
+	if o.private.disableElisionOnlyCompactions {
+		fmt.Fprintln(&buf, "  disable_elision_only_compactions=true")
+	}
 	if o.private.disableLazyCombinedIteration {
-		// This option is only encoded if true, because we do not want it to
-		// appear in production serialized Options files, since it's a
-		// testing-only option. It's only serialized when true, which still
-		// ensures that the metamorphic tests may propagate it to subprocesses.
 		fmt.Fprintln(&buf, "  disable_lazy_combined_iteration=true")
 	}
 
@@ -1188,10 +1226,14 @@ func (o *Options) Parse(s string, hooks *ParseHooks) error {
 				// NB: This is a deprecated serialization of the
 				// `flush_delay_delete_range`.
 				o.FlushDelayDeleteRange, err = time.ParseDuration(value)
-			case "disable_wal":
-				o.DisableWAL, err = strconv.ParseBool(value)
+			case "disable_delete_only_compactions":
+				o.private.disableDeleteOnlyCompactions, err = strconv.ParseBool(value)
+			case "disable_elision_only_compactions":
+				o.private.disableElisionOnlyCompactions, err = strconv.ParseBool(value)
 			case "disable_lazy_combined_iteration":
 				o.private.disableLazyCombinedIteration, err = strconv.ParseBool(value)
+			case "disable_wal":
+				o.DisableWAL, err = strconv.ParseBool(value)
 			case "flush_delay_delete_range":
 				o.FlushDelayDeleteRange, err = time.ParseDuration(value)
 			case "flush_delay_range_key":
@@ -1223,6 +1265,8 @@ func (o *Options) Parse(s string, hooks *ParseHooks) error {
 				// Do nothing; option existed in older versions of pebble.
 			case "lbase_max_bytes":
 				o.LBaseMaxBytes, err = strconv.ParseInt(value, 10, 64)
+			case "level_multiplier":
+				o.Experimental.LevelMultiplier, err = strconv.Atoi(value)
 			case "max_concurrent_compactions":
 				var concurrentCompactions int
 				concurrentCompactions, err = strconv.Atoi(value)
@@ -1247,6 +1291,8 @@ func (o *Options) Parse(s string, hooks *ParseHooks) error {
 			case "min_flush_rate":
 				// Do nothing; option existed in older versions of pebble, and
 				// may be meaningful again eventually.
+			case "point_tombstone_weight":
+				o.Experimental.PointTombstoneWeight, err = strconv.ParseFloat(value, 64)
 			case "strict_wal_tail":
 				o.private.strictWALTail, err = strconv.ParseBool(value)
 			case "merger":
