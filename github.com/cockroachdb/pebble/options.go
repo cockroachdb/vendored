@@ -23,7 +23,8 @@ import (
 )
 
 const (
-	cacheDefaultSize = 8 << 20 // 8 MB
+	cacheDefaultSize       = 8 << 20 // 8 MB
+	defaultLevelMultiplier = 10
 )
 
 // Compression exports the base.Compression type.
@@ -493,6 +494,16 @@ type Options struct {
 		//
 		// By default, this value is false.
 		ValidateOnIngest bool
+
+		// LevelMultiplier configures the size multiplier used to determine the
+		// desired size of each level of the LSM. Defaults to 10.
+		LevelMultiplier int
+
+		// PointTombstoneWeight is a float in the range [0, +inf) used to weight the
+		// point tombstone heuristics during compaction picking.
+		//
+		// The default value is 1, which results in no scaling of point tombstones.
+		PointTombstoneWeight float64
 	}
 
 	// Filters is a map from filter policy name to filter policy. It is used for
@@ -682,6 +693,16 @@ type Options struct {
 		// throughput.
 		enablePacing bool
 
+		// disableDeleteOnlyCompactions prevents the scheduling of delete-only
+		// compactions that drop sstables wholy covered by range tombstones or
+		// range key tombstones.
+		disableDeleteOnlyCompactions bool
+
+		// disableElisionOnlyCompactions prevents the scheduling of elision-only
+		// compactions that rewrite sstables in place in order to elide obsolete
+		// keys.
+		disableElisionOnlyCompactions bool
+
 		// A private option to disable stats collection.
 		disableTableStats bool
 
@@ -838,6 +859,9 @@ func (o *Options) EnsureDefaults() *Options {
 	if o.FlushSplitBytes <= 0 {
 		o.FlushSplitBytes = 2 * o.Levels[0].TargetFileSize
 	}
+	if o.Experimental.LevelMultiplier <= 0 {
+		o.Experimental.LevelMultiplier = defaultLevelMultiplier
+	}
 	if o.Experimental.ReadCompactionRate == 0 {
 		o.Experimental.ReadCompactionRate = 16000
 	}
@@ -846,6 +870,9 @@ func (o *Options) EnsureDefaults() *Options {
 	}
 	if o.Experimental.TableCacheShards <= 0 {
 		o.Experimental.TableCacheShards = runtime.GOMAXPROCS(0)
+	}
+	if o.Experimental.PointTombstoneWeight == 0 {
+		o.Experimental.PointTombstoneWeight = 1
 	}
 
 	o.initMaps()
@@ -931,6 +958,9 @@ func (o *Options) String() string {
 	fmt.Fprintf(&buf, "  l0_stop_writes_threshold=%d\n", o.L0StopWritesThreshold)
 	fmt.Fprintf(&buf, "  lbase_max_bytes=%d\n", o.LBaseMaxBytes)
 	fmt.Fprintf(&buf, "  max_concurrent_compactions=%d\n", o.MaxConcurrentCompactions)
+	if o.Experimental.LevelMultiplier != defaultLevelMultiplier {
+		fmt.Fprintf(&buf, "  level_multiplier=%d\n", o.Experimental.LevelMultiplier)
+	}
 	fmt.Fprintf(&buf, "  max_manifest_file_size=%d\n", o.MaxManifestFileSize)
 	fmt.Fprintf(&buf, "  max_open_files=%d\n", o.MaxOpenFiles)
 	fmt.Fprintf(&buf, "  mem_table_size=%d\n", o.MemTableSize)
@@ -939,6 +969,7 @@ func (o *Options) String() string {
 	fmt.Fprintf(&buf, "  min_deletion_rate=%d\n", o.Experimental.MinDeletionRate)
 	fmt.Fprintf(&buf, "  min_flush_rate=%d\n", o.private.minFlushRate)
 	fmt.Fprintf(&buf, "  merger=%s\n", o.Merger.Name)
+	fmt.Fprintf(&buf, "  point_tombstone_weight=%f\n", o.Experimental.PointTombstoneWeight)
 	fmt.Fprintf(&buf, "  read_compaction_rate=%d\n", o.Experimental.ReadCompactionRate)
 	fmt.Fprintf(&buf, "  read_sampling_multiplier=%d\n", o.Experimental.ReadSamplingMultiplier)
 	fmt.Fprintf(&buf, "  strict_wal_tail=%t\n", o.private.strictWALTail)
@@ -956,6 +987,19 @@ func (o *Options) String() string {
 	fmt.Fprintf(&buf, "  validate_on_ingest=%t\n", o.Experimental.ValidateOnIngest)
 	fmt.Fprintf(&buf, "  wal_dir=%s\n", o.WALDir)
 	fmt.Fprintf(&buf, "  wal_bytes_per_sync=%d\n", o.WALBytesPerSync)
+
+	// Private options.
+	//
+	// These options are only encoded if true, because we do not want them to
+	// appear in production serialized Options files, since they're testing-only
+	// options. They're only serialized when true, which still ensures that the
+	// metamorphic tests may propagate them to subprocesses.
+	if o.private.disableDeleteOnlyCompactions {
+		fmt.Fprintln(&buf, "  disable_delete_only_compactions=true")
+	}
+	if o.private.disableElisionOnlyCompactions {
+		fmt.Fprintln(&buf, "  disable_elision_only_compactions=true")
+	}
 
 	for i := range o.Levels {
 		l := &o.Levels[i]
@@ -1095,6 +1139,10 @@ func (o *Options) Parse(s string, hooks *ParseHooks) error {
 				o.Experimental.CompactionDebtConcurrency, err = strconv.Atoi(value)
 			case "delete_range_flush_delay":
 				o.Experimental.DeleteRangeFlushDelay, err = time.ParseDuration(value)
+			case "disable_delete_only_compactions":
+				o.private.disableDeleteOnlyCompactions, err = strconv.ParseBool(value)
+			case "disable_elision_only_compactions":
+				o.private.disableElisionOnlyCompactions, err = strconv.ParseBool(value)
 			case "disable_wal":
 				o.DisableWAL, err = strconv.ParseBool(value)
 			case "flush_split_bytes":
@@ -1124,6 +1172,8 @@ func (o *Options) Parse(s string, hooks *ParseHooks) error {
 				// Do nothing; option existed in older versions of pebble.
 			case "lbase_max_bytes":
 				o.LBaseMaxBytes, err = strconv.ParseInt(value, 10, 64)
+			case "level_multiplier":
+				o.Experimental.LevelMultiplier, err = strconv.Atoi(value)
 			case "max_concurrent_compactions":
 				o.MaxConcurrentCompactions, err = strconv.Atoi(value)
 			case "max_manifest_file_size":
@@ -1140,6 +1190,8 @@ func (o *Options) Parse(s string, hooks *ParseHooks) error {
 				o.Experimental.MinDeletionRate, err = strconv.Atoi(value)
 			case "min_flush_rate":
 				o.private.minFlushRate, err = strconv.Atoi(value)
+			case "point_tombstone_weight":
+				o.Experimental.PointTombstoneWeight, err = strconv.ParseFloat(value, 64)
 			case "strict_wal_tail":
 				o.private.strictWALTail, err = strconv.ParseBool(value)
 			case "merger":
