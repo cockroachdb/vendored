@@ -554,22 +554,25 @@ github.com/cockroachdb/errors/withstack
 # github.com/cockroachdb/go-test-teamcity v0.0.0-20191211140407-cff980ad0a55
 ## explicit
 github.com/cockroachdb/go-test-teamcity
-# github.com/cockroachdb/gostdlib v1.13.0
-## explicit
+# github.com/cockroachdb/gostdlib v1.19.0
+## explicit; go 1.18
 github.com/cockroachdb/gostdlib/cmd/gofmt
 github.com/cockroachdb/gostdlib/go/format
 github.com/cockroachdb/gostdlib/go/printer
+github.com/cockroachdb/gostdlib/internal/diff
+github.com/cockroachdb/gostdlib/x/sync/semaphore
 github.com/cockroachdb/gostdlib/x/tools/cmd/goimports
 github.com/cockroachdb/gostdlib/x/tools/go/ast/astutil
-github.com/cockroachdb/gostdlib/x/tools/go/internal/packagesdriver
-github.com/cockroachdb/gostdlib/x/tools/go/packages
 github.com/cockroachdb/gostdlib/x/tools/imports
+github.com/cockroachdb/gostdlib/x/tools/internal/event
+github.com/cockroachdb/gostdlib/x/tools/internal/event/core
+github.com/cockroachdb/gostdlib/x/tools/internal/event/keys
+github.com/cockroachdb/gostdlib/x/tools/internal/event/label
 github.com/cockroachdb/gostdlib/x/tools/internal/fastwalk
+github.com/cockroachdb/gostdlib/x/tools/internal/gocommand
 github.com/cockroachdb/gostdlib/x/tools/internal/gopathwalk
 github.com/cockroachdb/gostdlib/x/tools/internal/imports
-github.com/cockroachdb/gostdlib/x/tools/internal/module
-github.com/cockroachdb/gostdlib/x/tools/internal/semver
-github.com/cockroachdb/gostdlib/x/tools/internal/span
+github.com/cockroachdb/gostdlib/x/tools/internal/typeparams
 # github.com/cockroachdb/logtags v0.0.0-20211118104740-dabe8e521a4f
 ## explicit; go 1.16
 github.com/cockroachdb/logtags
