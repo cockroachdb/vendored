@@ -1901,6 +1901,7 @@ golang.org/x/xerrors
 golang.org/x/xerrors/internal
 # google.golang.org/api v0.80.0
 ## explicit; go 1.15
+google.golang.org/api/drive/v3
 google.golang.org/api/googleapi
 google.golang.org/api/googleapi/transport
 google.golang.org/api/iamcredentials/v1
@@ -1912,6 +1913,7 @@ google.golang.org/api/internal/third_party/uritemplates
 google.golang.org/api/iterator
 google.golang.org/api/option
 google.golang.org/api/option/internaloption
+google.golang.org/api/sheets/v4
 google.golang.org/api/storage/v1
 google.golang.org/api/support/bundler
 google.golang.org/api/transport
