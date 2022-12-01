@@ -26,7 +26,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cockroachdb/errors"
 	"github.com/pmezard/go-difflib/difflib"
 )
 
@@ -361,12 +360,12 @@ func runDirective(t *testing.T, r *testDataReader, f func(*testing.T, *TestData)
 				B:       actualLines,
 			})
 			if err == nil {
-				t.Fatalf("\n%s: %s\noutput didn't match expected:\n%s", d.Pos, d.Input, diff)
+				t.Fatalf("\n%s:\n %s\noutput didn't match expected:\n%s", d.Pos, d.Input, diff)
 				return
 			}
 			t.Logf("Failed to produce diff %v", err)
 		}
-		t.Fatalf("\n%s: %s\nexpected:\n%s\nfound:\n%s", d.Pos, d.Input, d.Expected, actual)
+		t.Fatalf("\n%s:\n %s\nexpected:\n%s\nfound:\n%s", d.Pos, d.Input, d.Expected, actual)
 	} else if Verbose() {
 		input := d.Input
 		if input == "" {
@@ -422,10 +421,17 @@ func Walk(t *testing.T, path string, f func(t *testing.T, path string)) {
 			// Temp or hidden file, don't even try processing.
 			continue
 		}
-		t.Run(file.Name(), func(t *testing.T) {
+		t.Run(cutExt(file.Name()), func(t *testing.T) {
 			Walk(t, filepath.Join(path, file.Name()), f)
 		})
 	}
+}
+
+// cutExt returns the given file name with the extension removed, if there is
+// one.
+func cutExt(fileName string) string {
+	extStart := len(fileName) - len(filepath.Ext(fileName))
+	return fileName[:extStart]
 }
 
 func ClearResults(path string) error {
@@ -442,7 +448,7 @@ func ClearResults(path string) error {
 	}
 
 	if finfo.IsDir() {
-		return errors.Newf("%s is a directory, not a file", path)
+		return fmt.Errorf("%s is a directory, not a file", path)
 	}
 
 	runTestInternal(
@@ -567,7 +573,7 @@ func (arg CmdArg) Scan(t *testing.T, i int, dest interface{}) {
 // scanErr is like Scan but returns an error rather than taking a testing.T to fatal.
 func (arg CmdArg) scanErr(i int, dest interface{}) error {
 	if i < 0 || i >= len(arg.Vals) {
-		return errors.Errorf("cannot scan index %d of key %s", i, arg.Key)
+		return fmt.Errorf("cannot scan index %d of key %s", i, arg.Key)
 	}
 	val := arg.Vals[i]
 	switch dest := dest.(type) {
@@ -579,6 +585,12 @@ func (arg CmdArg) scanErr(i int, dest interface{}) error {
 			return err
 		}
 		*dest = int(n) // assume 64bit ints
+	case *int64:
+		n, err := strconv.ParseInt(val, 10, 64)
+		if err != nil {
+			return err
+		}
+		*dest = n
 	case *uint64:
 		n, err := strconv.ParseUint(val, 10, 64)
 		if err != nil {
@@ -592,7 +604,7 @@ func (arg CmdArg) scanErr(i int, dest interface{}) error {
 		}
 		*dest = b
 	default:
-		return errors.Errorf("unsupported type %T for destination #%d (might be easy to add it)", dest, i+1)
+		return fmt.Errorf("unsupported type %T for destination #%d (might be easy to add it)", dest, i+1)
 	}
 	return nil
 }
