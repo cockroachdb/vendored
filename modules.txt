@@ -1218,7 +1218,7 @@ github.com/klauspost/cpuid/v2
 # github.com/klauspost/pgzip v1.2.5
 ## explicit
 github.com/klauspost/pgzip
-# github.com/knz/bubbline v0.0.0-20221124133514-7e375ec1ee20
+# github.com/knz/bubbline v0.0.0-20221202175954-247a3055d876
 ## explicit; go 1.13
 github.com/knz/bubbline
 github.com/knz/bubbline/complete
