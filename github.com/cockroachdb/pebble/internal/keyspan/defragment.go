@@ -8,13 +8,19 @@ import (
 	"bytes"
 
 	"github.com/cockroachdb/pebble/internal/base"
+	"github.com/cockroachdb/pebble/internal/bytealloc"
 	"github.com/cockroachdb/pebble/internal/invariants"
 )
 
 // bufferReuseMaxCapacity is the maximum capacity of a DefragmentingIter buffer
-// that DefragmentingIter will reuse. Buffers greater than this will be
+// that DefragmentingIter will reuse. Buffers larger than this will be
 // discarded and reallocated as necessary.
 const bufferReuseMaxCapacity = 10 << 10 // 10 KB
+
+// keysReuseMaxCapacity is the maximum capacity of a []keyspan.Key buffer that
+// DefragmentingIter will reuse. Buffers larger than this will be discarded and
+// reallocated as necessary.
+const keysReuseMaxCapacity = 100
 
 // DefragmentMethod configures the defragmentation performed by the
 // DefragmentingIter.
@@ -118,25 +124,16 @@ const (
 // defragments in the iteration direction, ensuring it's found a whole
 // defragmented span.
 type DefragmentingIter struct {
+	// DefragmentingBuffers holds buffers used for copying iterator state.
+	*DefragmentingBuffers
 	comparer *base.Comparer
 	equal    base.Equal
 	iter     FragmentIterator
 	iterSpan *Span
 	iterPos  iterPos
 
-	// curr holds the span at the current iterator position. currBuf is a buffer
-	// for use when copying user keys for curr. keysBuf is a buffer for use when
-	// copying Keys for curr. currBuf is cleared between positioning methods.
-	//
-	// keyBuf is a buffer specifically for the defragmented start key when
-	// defragmenting backwards or the defragmented end key when defragmenting
-	// forwards. These bounds are overwritten repeatedly during defragmentation,
-	// and the defragmentation routines overwrite keyBuf repeatedly to store
-	// these extended bounds.
-	curr    Span
-	currBuf []byte
-	keysBuf []Key
-	keyBuf  []byte
+	// curr holds the span at the current iterator position.
+	curr Span
 
 	// method is a comparison function for two spans. method is called when two
 	// spans are abutting to determine whether they may be defragmented.
@@ -148,20 +145,53 @@ type DefragmentingIter struct {
 	reduce DefragmentReducer
 }
 
+// DefragmentingBuffers holds buffers used for copying iterator state.
+type DefragmentingBuffers struct {
+	// currBuf is a buffer for use when copying user keys for curr. currBuf is
+	// cleared between positioning methods.
+	currBuf bytealloc.A
+	// keysBuf is a buffer for use when copying Keys for DefragmentingIter.curr.
+	keysBuf []Key
+	// keyBuf is a buffer specifically for the defragmented start key when
+	// defragmenting backwards or the defragmented end key when defragmenting
+	// forwards. These bounds are overwritten repeatedly during defragmentation,
+	// and the defragmentation routines overwrite keyBuf repeatedly to store
+	// these extended bounds.
+	keyBuf []byte
+}
+
+// PrepareForReuse discards any excessively large buffers.
+func (bufs *DefragmentingBuffers) PrepareForReuse() {
+	if cap(bufs.currBuf) > bufferReuseMaxCapacity {
+		bufs.currBuf = nil
+	}
+	if cap(bufs.keyBuf) > bufferReuseMaxCapacity {
+		bufs.keyBuf = nil
+	}
+	if cap(bufs.keysBuf) > keysReuseMaxCapacity {
+		bufs.keysBuf = nil
+	}
+}
+
 // Assert that *DefragmentingIter implements the FragmentIterator interface.
 var _ FragmentIterator = (*DefragmentingIter)(nil)
 
 // Init initializes the defragmenting iter using the provided defragment
 // method.
 func (i *DefragmentingIter) Init(
-	comparer *base.Comparer, iter FragmentIterator, equal DefragmentMethod, reducer DefragmentReducer,
+	comparer *base.Comparer,
+	iter FragmentIterator,
+	equal DefragmentMethod,
+	reducer DefragmentReducer,
+	bufs *DefragmentingBuffers,
 ) {
 	*i = DefragmentingIter{
-		comparer: comparer,
-		equal:    comparer.Equal,
-		iter:     iter,
-		method:   equal,
-		reduce:   reducer,
+		DefragmentingBuffers: bufs,
+		comparer:             comparer,
+		equal:                comparer.Equal,
+		iter:                 iter,
+		method:               equal,
+		reduce:               reducer,
 	}
 }
 
@@ -437,15 +467,9 @@ func (i *DefragmentingIter) defragmentBackward() *Span {
 }
 
 func (i *DefragmentingIter) saveCurrent() {
-	i.currBuf = i.currBuf[:0]
+	i.currBuf.Reset()
 	i.keysBuf = i.keysBuf[:0]
 	i.keyBuf = i.keyBuf[:0]
-	if cap(i.currBuf) > bufferReuseMaxCapacity {
-		i.currBuf = nil
-	}
-	if cap(i.keyBuf) > bufferReuseMaxCapacity {
-		i.keyBuf = nil
-	}
 	if i.iterSpan == nil {
 		return
 	}
@@ -468,7 +492,6 @@ func (i *DefragmentingIter) saveBytes(b []byte) []byte {
 	if b == nil {
 		return nil
 	}
-	ret := append(i.currBuf, b...)
-	i.currBuf = ret[len(ret):]
-	return ret
+	i.currBuf, b = i.currBuf.Copy(b)
+	return b
 }

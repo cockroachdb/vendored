@@ -13,6 +13,7 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/pebble/internal/base"
+	"github.com/cockroachdb/pebble/internal/bytealloc"
 	"github.com/cockroachdb/pebble/internal/fastrand"
 	"github.com/cockroachdb/pebble/internal/humanize"
 	"github.com/cockroachdb/pebble/internal/invariants"
@@ -172,6 +173,7 @@ type Iterator struct {
 	value  LazyValue
 	// For use in LazyValue.Clone.
 	valueBuf []byte
+	fetcher  base.LazyFetcher
 	// For use in LazyValue.Value.
 	lazyValueBuf []byte
 	valueCloser  io.Closer
@@ -343,17 +345,39 @@ type iteratorRangeKeyState struct {
 	// start and end are the [start, end) boundaries of the current range keys.
 	start []byte
 	end   []byte
-	// keys is sorted by Suffix ascending.
-	keys []RangeKeyData
-	// buf is used to save range-key data before moving the range-key iterator.
-	// Start and end boundaries, suffixes and values are all copied into buf.
-	buf []byte
+
+	rangeKeyBuffers
 
 	// iterConfig holds fields that are used for the construction of the
 	// iterator stack, but do not need to be directly accessed during iteration.
 	// This struct is bundled within the iteratorRangeKeyState struct to reduce
 	// allocations.
 	iterConfig rangekey.UserIteratorConfig
+}
+
+type rangeKeyBuffers struct {
+	// keys is sorted by Suffix ascending.
+	keys []RangeKeyData
+	// buf is used to save range-key data before moving the range-key iterator.
+	// Start and end boundaries, suffixes and values are all copied into buf.
+	buf bytealloc.A
+	// internal holds buffers used by the range key internal iterators.
+	internal rangekey.Buffers
+}
+
+func (b *rangeKeyBuffers) PrepareForReuse() {
+	const maxKeysReuse = 100
+	if len(b.keys) > maxKeysReuse {
+		b.keys = nil
+	}
+	// Avoid caching the key buf if it is overly large. The constant is
+	// fairly arbitrary.
+	if cap(b.buf) >= maxKeyBufCacheSize {
+		b.buf = nil
+	} else {
+		b.buf = b.buf[:0]
+	}
+	b.internal.PrepareForReuse()
 }
 
 func (i *iteratorRangeKeyState) init(cmp base.Compare, split base.Split, opts *IterOptions) {
@@ -899,7 +923,7 @@ func (i *Iterator) findPrevEntry(limit []byte) {
 			// call, so use valueBuf instead. Note that valueBuf is only used
 			// in this one instance; everywhere else (eg. in findNextEntry),
 			// we just point i.value to the unsafe i.iter-owned value buffer.
-			i.value, i.valueBuf = i.iterValue.Clone(i.valueBuf[:0])
+			i.value, i.valueBuf = i.iterValue.Clone(i.valueBuf[:0], &i.fetcher)
 			i.saveRangeKey()
 			i.iterValidityState = IterValid
 			i.iterKey, i.iterValue = i.iter.Prev()
@@ -1827,14 +1851,12 @@ func (i *Iterator) saveRangeKey() {
 		i.rangeKey.hasRangeKey = true
 		return
 	}
-
+	i.rangeKey.buf.Reset()
 	i.rangeKey.hasRangeKey = true
 	i.rangeKey.updated = true
 	i.rangeKey.stale = false
-	i.rangeKey.buf = append(i.rangeKey.buf[:0], s.Start...)
-	i.rangeKey.start = i.rangeKey.buf
-	i.rangeKey.buf = append(i.rangeKey.buf, s.End...)
-	i.rangeKey.end = i.rangeKey.buf[len(i.rangeKey.buf)-len(s.End):]
+	i.rangeKey.buf, i.rangeKey.start = i.rangeKey.buf.Copy(s.Start)
+	i.rangeKey.buf, i.rangeKey.end = i.rangeKey.buf.Copy(s.End)
 	i.rangeKey.keys = i.rangeKey.keys[:0]
 	for j := 0; j < len(s.Keys); j++ {
 		if invariants.Enabled {
@@ -1844,14 +1866,10 @@ func (i *Iterator) saveRangeKey() {
 				panic("pebble: user iteration encountered range keys not in suffix order")
 			}
 		}
-		i.rangeKey.buf = append(i.rangeKey.buf, s.Keys[j].Suffix...)
-		suffix := i.rangeKey.buf[len(i.rangeKey.buf)-len(s.Keys[j].Suffix):]
-		i.rangeKey.buf = append(i.rangeKey.buf, s.Keys[j].Value...)
-		value := i.rangeKey.buf[len(i.rangeKey.buf)-len(s.Keys[j].Value):]
-		i.rangeKey.keys = append(i.rangeKey.keys, RangeKeyData{
-			Suffix: suffix,
-			Value:  value,
-		})
+		var rkd RangeKeyData
+		i.rangeKey.buf, rkd.Suffix = i.rangeKey.buf.Copy(s.Keys[j].Suffix)
+		i.rangeKey.buf, rkd.Value = i.rangeKey.buf.Copy(s.Keys[j].Value)
+		i.rangeKey.keys = append(i.rangeKey.keys, rkd)
 	}
 }
 
@@ -1959,6 +1977,8 @@ func (i *Iterator) Error() error {
 	return i.err
 }
 
+const maxKeyBufCacheSize = 4 << 10 // 4 KB
+
 // Close closes the iterator and returns any accumulated error. Exhausting
 // all the key/value pairs in a table is not considered to be an error.
 // It is not valid to call any method, including Close, after the iterator
@@ -2023,15 +2043,12 @@ func (i *Iterator) Close() error {
 		i.valueCloser = nil
 	}
 
-	const maxKeyBufCacheSize = 4 << 10 // 4 KB
-
 	if i.rangeKey != nil {
-		// Avoid caching the key buf if it is overly large. The constant is
-		// fairly arbitrary.
-		if cap(i.rangeKey.buf) >= maxKeyBufCacheSize {
-			i.rangeKey.buf = nil
+
+		i.rangeKey.rangeKeyBuffers.PrepareForReuse()
+		*i.rangeKey = iteratorRangeKeyState{
+			rangeKeyBuffers: i.rangeKey.rangeKeyBuffers,
 		}
-		*i.rangeKey = iteratorRangeKeyState{buf: i.rangeKey.buf}
 		iterRangeKeyStateAllocPool.Put(i.rangeKey)
 		i.rangeKey = nil
 	}

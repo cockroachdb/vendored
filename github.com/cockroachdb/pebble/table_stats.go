@@ -715,7 +715,7 @@ func newCombinedDeletionKeyspanIter(
 		keyspan.SortKeysByTrailer(&out.Keys)
 		return nil
 	})
-	mIter.Init(comparer.Compare, transform)
+	mIter.Init(comparer.Compare, transform, new(keyspan.MergingBuffers))
 
 	iter, err := r.NewRawRangeDelIter()
 	if err != nil {
@@ -723,7 +723,7 @@ func newCombinedDeletionKeyspanIter(
 	}
 	if iter != nil {
 		dIter := &keyspan.DefragmentingIter{}
-		dIter.Init(comparer, iter, equal, reducer)
+		dIter.Init(comparer, iter, equal, reducer, new(keyspan.DefragmentingBuffers))
 		iter = dIter
 		// Truncate tombstones to the containing file's bounds if necessary.
 		// See docs/range_deletions.md for why this is necessary.
@@ -752,7 +752,7 @@ func newCombinedDeletionKeyspanIter(
 			return len(out.Keys) > 0
 		})
 		dIter := &keyspan.DefragmentingIter{}
-		dIter.Init(comparer, iter, equal, reducer)
+		dIter.Init(comparer, iter, equal, reducer, new(keyspan.DefragmentingBuffers))
 		iter = dIter
 		mIter.AddLevel(iter)
 	}

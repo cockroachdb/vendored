@@ -152,8 +152,20 @@ type LazyValue struct {
 
 // LazyFetcher supports fetching a lazy value.
 type LazyFetcher struct {
-	// ValueFetcher, given a handle, returns the value. It is acceptable to call
-	// the ValueFetcher as long as the DB is open. However, one should assume
+	// Fetcher, given a handle, returns the value.
+	Fetcher ValueFetcher
+	// Attribute includes the short attribute and value length.
+	Attribute   AttributeAndLen
+	fetched     bool
+	value       []byte
+	callerOwned bool
+	err         error
+}
+
+// ValueFetcher is an interface for fetching a value.
+type ValueFetcher interface {
+	// Fetch returns the value, given the handle. It is acceptable to call the
+	// ValueFetcher.Fetch as long as the DB is open. However, one should assume
 	// there is a fast-path when the iterator tree has not moved off the sstable
 	// iterator that initially provided this LazyValue. Hence, to utilize this
 	// fast-path the caller should try to decide whether it needs the value or
@@ -163,13 +175,8 @@ type LazyFetcher struct {
 	// If the fetcher attempted to use buf *and* len(buf) was insufficient, it
 	// will allocate a new slice for the value. In either case it will set
 	// callerOwned to true.
-	ValueFetcher func(handle []byte, buf []byte) (val []byte, callerOwned bool, err error)
-	// Attribute includes the short attribute and value length.
-	Attribute   AttributeAndLen
-	fetched     bool
-	value       []byte
-	callerOwned bool
-	err         error
+	Fetch(
+		handle []byte, valLen int32, buf []byte) (val []byte, callerOwned bool, err error)
 }
 
 // Value returns the underlying value.
@@ -194,7 +201,8 @@ func (lv *LazyValue) fetchValue(buf []byte) (val []byte, callerOwned bool, err e
 	f := lv.Fetcher
 	if !f.fetched {
 		f.fetched = true
-		f.value, f.callerOwned, f.err = lv.Fetcher.ValueFetcher(lv.ValueOrHandle, buf)
+		f.value, f.callerOwned, f.err = f.Fetcher.Fetch(
+			lv.ValueOrHandle, lv.Fetcher.Attribute.ValueLen, buf)
 	}
 	return f.value, f.callerOwned, f.err
 }
@@ -216,18 +224,39 @@ func (lv *LazyValue) Len() int {
 	return int(lv.Fetcher.Attribute.ValueLen)
 }
 
+// TryGetShortAttribute returns the ShortAttribute and a bool indicating
+// whether the ShortAttribute was populated.
+func (lv *LazyValue) TryGetShortAttribute() (ShortAttribute, bool) {
+	if lv.Fetcher == nil {
+		return 0, false
+	}
+	return lv.Fetcher.Attribute.ShortAttribute, true
+}
+
 // Clone creates a stable copy of the LazyValue, by appending bytes to buf.
+// The fetcher parameter must be non-nil and may be over-written and used
+// inside the returned LazyValue -- this is needed to avoid an allocation.
+// Most callers have at most K cloned LazyValues, where K is hard-coded, so
+// they can have a pool of exactly K LazyFetcher structs they can reuse in
+// these calls. The alternative of allocating LazyFetchers from a sync.Pool is
+// not viable since we have no code trigger for returning to the pool
+// (LazyValues are simply GC'd).
+//
 // REQUIRES: LazyValue.Value() has not been called.
 // Ensure that this is only called before LazyValue.Value is called. We don't
-// actually care if it was in-place but we don't want confusing things about whether
-// we need to clone the value inside the fetcher.
-func (lv *LazyValue) Clone(buf []byte) (LazyValue, []byte) {
+// actually care if it was in-place but we don't want to complicate behavior
+// regarding whether we need to clone the value inside the fetcher.
+func (lv *LazyValue) Clone(buf []byte, fetcher *LazyFetcher) (LazyValue, []byte) {
 	if invariants.Enabled && lv.Fetcher != nil && lv.Fetcher.fetched {
 		panic("value has already been fetched")
 	}
 	// INVARIANT: LazyFetcher.value is nil, so there is nothing to copy there.
 	vLen := len(lv.ValueOrHandle)
-	lvCopy := LazyValue{Fetcher: lv.Fetcher}
+	var lvCopy LazyValue
+	if lv.Fetcher != nil {
+		*fetcher = *lv.Fetcher
+		lvCopy.Fetcher = fetcher
+	}
 	if vLen == 0 {
 		return lvCopy, buf
 	}

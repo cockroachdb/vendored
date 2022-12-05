@@ -591,15 +591,12 @@ type Options struct {
 		// The default value is 1, which results in no scaling of point tombstones.
 		PointTombstoneWeight float64
 
-		// EnableValueBlocks enables writing FormatSSTableValueBlocks sstables.
-		// WARNING: do not set this to true yet, since support for
-		// TableFormatPebblev3 is incomplete and not production ready.
-		//
-		// TODO(sumeer): we will need to support changing this in a running Pebble
-		// instance.
-		EnableValueBlocks bool
+		// EnableValueBlocks is used to decide whether to enable writing
+		// TableFormatPebblev3 sstables. WARNING: do not return true yet, since
+		// support for TableFormatPebblev3 is incomplete and not production ready.
+		EnableValueBlocks func() bool
 
-		// ShortAttributeExtractor is used if EnableValueBlocks is set to true
+		// ShortAttributeExtractor is used iff EnableValueBlocks() returns true
 		// (else ignored). If non-nil, a ShortAttribute can be extracted from the
 		// value and stored with the key, when the value is stored elsewhere.
 		ShortAttributeExtractor ShortAttributeExtractor
@@ -1550,7 +1547,6 @@ func (o *Options) MakeWriterOptions(level int, format sstable.TableFormat) sstab
 		writerOpts.BlockPropertyCollectors = o.BlockPropertyCollectors
 	}
 	if format >= sstable.TableFormatPebblev3 {
-		writerOpts.EnableValueBlocks = o.Experimental.EnableValueBlocks
 		writerOpts.ShortAttributeExtractor = o.Experimental.ShortAttributeExtractor
 		writerOpts.RequiredInPlaceValueBound = o.Experimental.RequiredInPlaceValueBound
 	}
