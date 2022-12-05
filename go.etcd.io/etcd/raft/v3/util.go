@@ -40,13 +40,34 @@ func max(a, b uint64) uint64 {
 	return b
 }
 
+var isLocalMsg = [...]bool{
+	pb.MsgHup:         true,
+	pb.MsgBeat:        true,
+	pb.MsgUnreachable: true,
+	pb.MsgSnapStatus:  true,
+	pb.MsgCheckQuorum: true,
+}
+
+var isResponseMsg = [...]bool{
+	pb.MsgAppResp:       true,
+	pb.MsgVoteResp:      true,
+	pb.MsgHeartbeatResp: true,
+	pb.MsgUnreachable:   true,
+	pb.MsgReadIndexResp: true,
+	pb.MsgPreVoteResp:   true,
+}
+
+func isMsgInArray(msgt pb.MessageType, arr []bool) bool {
+	i := int(msgt)
+	return i < len(arr) && arr[i]
+}
+
 func IsLocalMsg(msgt pb.MessageType) bool {
-	return msgt == pb.MsgHup || msgt == pb.MsgBeat || msgt == pb.MsgUnreachable ||
-		msgt == pb.MsgSnapStatus || msgt == pb.MsgCheckQuorum
+	return isMsgInArray(msgt, isLocalMsg[:])
 }
 
 func IsResponseMsg(msgt pb.MessageType) bool {
-	return msgt == pb.MsgAppResp || msgt == pb.MsgVoteResp || msgt == pb.MsgHeartbeatResp || msgt == pb.MsgUnreachable || msgt == pb.MsgPreVoteResp
+	return isMsgInArray(msgt, isResponseMsg[:])
 }
 
 // voteResponseType maps vote and prevote message types to their corresponding responses.
@@ -140,17 +161,17 @@ func DescribeMessage(m pb.Message, f EntryFormatter) string {
 		fmt.Fprintf(&buf, " Commit:%d", m.Commit)
 	}
 	if len(m.Entries) > 0 {
-		fmt.Fprintf(&buf, " Entries:[")
+		fmt.Fprint(&buf, " Entries:[")
 		for i, e := range m.Entries {
 			if i != 0 {
 				buf.WriteString(", ")
 			}
 			buf.WriteString(DescribeEntry(e, f))
 		}
-		fmt.Fprintf(&buf, "]")
+		fmt.Fprint(&buf, "]")
 	}
-	if !IsEmptySnap(m.Snapshot) {
-		fmt.Fprintf(&buf, " Snapshot: %s", DescribeSnapshot(m.Snapshot))
+	if s := m.Snapshot; s != nil && !IsEmptySnap(*s) {
+		fmt.Fprintf(&buf, " Snapshot: %s", DescribeSnapshot(*s))
 	}
 	return buf.String()
 }
