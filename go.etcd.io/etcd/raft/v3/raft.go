@@ -415,6 +415,9 @@ func (r *raft) send(m pb.Message) {
 			m.Term = r.Term
 		}
 	}
+	if m.To == r.id {
+		r.logger.Panicf("message should not be self-addressed when sending %s", m.Type)
+	}
 	r.msgs = append(r.msgs, m)
 }
 
@@ -548,26 +551,29 @@ func (r *raft) advance(rd Ready) {
 	// new Commit index, this does not mean that we're also applying
 	// all of the new entries due to commit pagination by size.
 	if newApplied := rd.appliedCursor(); newApplied > 0 {
-		oldApplied := r.raftLog.applied
 		r.raftLog.appliedTo(newApplied)
 
-		if r.prs.Config.AutoLeave && oldApplied <= r.pendingConfIndex && newApplied >= r.pendingConfIndex && r.state == StateLeader {
+		if r.prs.Config.AutoLeave && newApplied >= r.pendingConfIndex && r.state == StateLeader {
 			// If the current (and most recent, at least for this leader's term)
 			// configuration should be auto-left, initiate that now. We use a
 			// nil Data which unmarshals into an empty ConfChangeV2 and has the
 			// benefit that appendEntry can never refuse it based on its size
 			// (which registers as zero).
-			ent := pb.Entry{
-				Type: pb.EntryConfChangeV2,
-				Data: nil,
+			m, err := confChangeToMsg(nil)
+			if err != nil {
+				panic(err)
 			}
-			// There's no way in which this proposal should be able to be rejected.
-			if !r.appendEntry(ent) {
-				panic("refused un-refusable auto-leaving ConfChangeV2")
+			// NB: this proposal can't be dropped due to size, but can be
+			// dropped if a leadership transfer is in progress. We'll keep
+			// checking this condition on each applied entry, so either the
+			// leadership transfer will succeed and the new leader will leave
+			// the joint configuration, or the leadership transfer will fail,
+			// and we will propose the config change on the next advance.
+			if err := r.Step(m); err != nil {
+				r.logger.Debugf("not initiating automatic transition out of joint configuration %s: %v", r.prs.Config, err)
+			} else {
+				r.logger.Infof("initiating automatic transition out of joint configuration %s", r.prs.Config)
 			}
-			r.bcastAppend()
-			r.pendingConfIndex = r.raftLog.lastIndex()
-			r.logger.Infof("initiating automatic transition out of joint configuration %s", r.prs.Config)
 		}
 	}
 
@@ -640,7 +646,7 @@ func (r *raft) appendEntry(es ...pb.Entry) (accepted bool) {
 	}
 	// Track the size of this uncommitted proposal.
 	if !r.increaseUncommittedSize(es) {
-		r.logger.Debugf(
+		r.logger.Warningf(
 			"%x appending new entries to log would exceed uncommitted entry size limit; dropping proposal",
 			r.id,
 		)
@@ -1282,7 +1288,7 @@ func stepLeader(r *raft, m pb.Message) error {
 				// we have more entries to send, send as many messages as we
 				// can (without sending empty messages for the commit index)
 				if r.id != m.From {
-					for r.maybeSendAppend(m.From, false) {
+					for r.maybeSendAppend(m.From, false /* sendIfEmpty */) {
 					}
 				}
 				// Transfer leadership is in progress.
@@ -1699,6 +1705,9 @@ func (r *raft) switchToConfig(cfg tracker.Config, prs tracker.ProgressMap) pb.Co
 		// let them wait out a heartbeat interval (or the next incoming
 		// proposal).
 		r.prs.Visit(func(id uint64, pr *tracker.Progress) {
+			if id == r.id {
+				return
+			}
 			r.maybeSendAppend(id, false /* sendIfEmpty */)
 		})
 	}
@@ -1719,7 +1728,7 @@ func (r *raft) loadState(state pb.HardState) {
 	r.Vote = state.Vote
 }
 
-// pastElectionTimeout returns true iff r.electionElapsed is greater
+// pastElectionTimeout returns true if r.electionElapsed is greater
 // than or equal to the randomized election timeout in
 // [electiontimeout, 2 * electiontimeout - 1].
 func (r *raft) pastElectionTimeout() bool {
