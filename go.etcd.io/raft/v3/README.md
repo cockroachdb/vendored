@@ -1,4 +1,4 @@
-# Raft library (Deprecated, please use [go.etcd.io/raft/v3](https://github.com/etcd-io/raft) instead.)
+# Raft library
 
 Raft is a protocol with which a cluster of nodes can maintain a replicated state machine.
 The state machine is kept in sync through the use of a replicated log.
@@ -198,4 +198,4 @@ This approach introduces a problem when removing a member from a two-member clus
 
 ## Go docs
 
-More detailed development documentation can be found in go docs: https://pkg.go.dev/go.etcd.io/etcd/raft/v3.
+More detailed development documentation can be found in go docs: https://pkg.go.dev/go.etcd.io/raft/v3.

@@ -1677,13 +1677,13 @@ github.com/yusufpapurcu/wmi
 # github.com/zabawaba99/go-gitignore v0.0.0-20200117185801-39e6bddfb292
 ## explicit
 github.com/zabawaba99/go-gitignore
-# go.etcd.io/etcd/raft/v3 v3.6.0-alpha.0.0.20221202061758-8651478ce2bc
+# go.etcd.io/raft/v3 v3.0.0-20221201111702-eaa6808e1f7a
 ## explicit; go 1.19
-go.etcd.io/etcd/raft/v3
-go.etcd.io/etcd/raft/v3/confchange
-go.etcd.io/etcd/raft/v3/quorum
-go.etcd.io/etcd/raft/v3/raftpb
-go.etcd.io/etcd/raft/v3/tracker
+go.etcd.io/raft/v3
+go.etcd.io/raft/v3/confchange
+go.etcd.io/raft/v3/quorum
+go.etcd.io/raft/v3/raftpb
+go.etcd.io/raft/v3/tracker
 # go.mongodb.org/mongo-driver v1.5.1
 ## explicit; go 1.10
 go.mongodb.org/mongo-driver/bson
