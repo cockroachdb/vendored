@@ -38,6 +38,9 @@ type standardRenderer struct {
 	useANSICompressor  bool
 	once               sync.Once
 
+	// cursor visibility state
+	cursorHidden bool
+
 	// essentially whether or not we're using the full size of the terminal
 	altScreenActive bool
 
@@ -76,7 +79,12 @@ func (r *standardRenderer) start() {
 
 // stop permanently halts the renderer, rendering the final frame.
 func (r *standardRenderer) stop() {
+	// flush locks the mutex
 	r.flush()
+
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
+
 	r.out.ClearLine()
 	r.once.Do(func() {
 		close(r.done)
@@ -91,6 +99,9 @@ func (r *standardRenderer) stop() {
 
 // kill halts the renderer. The final frame will not be rendered.
 func (r *standardRenderer) kill() {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
+
 	r.out.ClearLine()
 	r.once.Do(func() {
 		close(r.done)
@@ -128,6 +139,15 @@ func (r *standardRenderer) flush() {
 	out := termenv.NewOutput(buf)
 
 	newLines := strings.Split(r.buf.String(), "\n")
+
+	// If we know the output's height, we can use it to determine how many
+	// lines we can render. We drop lines from the top of the render buffer if
+	// necessary, as we can't navigate the cursor into the terminal's scrollback
+	// buffer.
+	if r.height > 0 && len(newLines) > r.height {
+		newLines = newLines[len(newLines)-r.height:]
+	}
+
 	numLinesThisFlush := len(newLines)
 	oldLines := strings.Split(r.lastRender, "\n")
 	skipLines := make(map[int]struct{})
@@ -256,16 +276,19 @@ func (r *standardRenderer) clearScreen() {
 }
 
 func (r *standardRenderer) altScreen() bool {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
+
 	return r.altScreenActive
 }
 
 func (r *standardRenderer) enterAltScreen() {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
+
 	if r.altScreenActive {
 		return
 	}
-
-	r.mtx.Lock()
-	defer r.mtx.Unlock()
 
 	r.altScreenActive = true
 	r.out.AltScreen()
@@ -279,19 +302,37 @@ func (r *standardRenderer) enterAltScreen() {
 	r.out.ClearScreen()
 	r.out.MoveCursor(1, 1)
 
+	// cmd.exe and other terminals keep separate cursor states for the AltScreen
+	// and the main buffer. We have to explicitly reset the cursor visibility
+	// whenever we enter AltScreen.
+	if r.cursorHidden {
+		r.out.HideCursor()
+	} else {
+		r.out.ShowCursor()
+	}
+
 	r.repaint()
 }
 
 func (r *standardRenderer) exitAltScreen() {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
+
 	if !r.altScreenActive {
 		return
 	}
 
-	r.mtx.Lock()
-	defer r.mtx.Unlock()
-
 	r.altScreenActive = false
 	r.out.ExitAltScreen()
+
+	// cmd.exe and other terminals keep separate cursor states for the AltScreen
+	// and the main buffer. We have to explicitly reset the cursor visibility
+	// whenever we exit AltScreen.
+	if r.cursorHidden {
+		r.out.HideCursor()
+	} else {
+		r.out.ShowCursor()
+	}
 
 	r.repaint()
 }
@@ -300,6 +341,7 @@ func (r *standardRenderer) showCursor() {
 	r.mtx.Lock()
 	defer r.mtx.Unlock()
 
+	r.cursorHidden = false
 	r.out.ShowCursor()
 }
 
@@ -307,6 +349,7 @@ func (r *standardRenderer) hideCursor() {
 	r.mtx.Lock()
 	defer r.mtx.Unlock()
 
+	r.cursorHidden = true
 	r.out.HideCursor()
 }
 

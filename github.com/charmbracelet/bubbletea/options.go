@@ -1,6 +1,7 @@
 package tea
 
 import (
+	"context"
 	"io"
 
 	"github.com/muesli/termenv"
@@ -13,6 +14,15 @@ import (
 //
 //	p := NewProgram(model, WithInput(someInput), WithOutput(someOutput))
 type ProgramOption func(*Program)
+
+// WithContext lets you specify a context in which to run the Program. This is
+// useful if you want to cancel the execution from outside. When a Program gets
+// cancelled it will exit with an error ErrProgramKilled.
+func WithContext(ctx context.Context) ProgramOption {
+	return func(p *Program) {
+		p.ctx = ctx
+	}
+}
 
 // WithOutput sets the output which, by default, is stdout. In most cases you
 // won't need to use this.
@@ -38,13 +48,21 @@ func WithInputTTY() ProgramOption {
 	}
 }
 
+// WithoutSignalHandler disables the signal handler that Bubble Tea sets up for
+// Programs. This is useful if you want to handle signals yourself.
+func WithoutSignalHandler() ProgramOption {
+	return func(p *Program) {
+		p.startupOptions |= withoutSignalHandler
+	}
+}
+
 // WithoutCatchPanics disables the panic catching that Bubble Tea does by
 // default. If panic catching is disabled the terminal will be in a fairly
 // unusable state after a panic because Bubble Tea will not perform its usual
 // cleanup on exit.
 func WithoutCatchPanics() ProgramOption {
 	return func(p *Program) {
-		p.CatchPanics = false
+		p.startupOptions |= withoutCatchPanics
 	}
 }
 
@@ -55,7 +73,7 @@ func WithoutCatchPanics() ProgramOption {
 // Example:
 //
 //	p := tea.NewProgram(Model{}, tea.WithAltScreen())
-//	if err := p.Start(); err != nil {
+//	if _, err := p.Run(); err != nil {
 //	    fmt.Println("Error running program:", err)
 //	    os.Exit(1)
 //	}
