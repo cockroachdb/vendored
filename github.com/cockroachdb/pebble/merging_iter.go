@@ -249,6 +249,11 @@ type mergingIter struct {
 	upper         []byte
 	stats         *InternalIteratorStats
 
+	// levelsPositioned, if non-nil, is a slice of the same length as levels.
+	// It's used by NextPrefix to record which levels have already been
+	// repositioned. It's created lazily by the first call to NextPrefix.
+	levelsPositioned []bool
+
 	combinedIterState *combinedIterState
 
 	// Used in some tests to disable the random disabling of seek optimizations.
@@ -551,12 +556,70 @@ func (m *mergingIter) switchToMaxHeap() {
 	m.initMaxHeap()
 }
 
-// Steps to the next entry. item is the current top item in the heap.
-func (m *mergingIter) nextEntry(item *mergingIterItem) {
+// maybeNextEntryWithinPrefix steps to the next entry, as long as the iteration
+// prefix has not already been exceeded. If it has, it exhausts the iterator by
+// resetting the heap to empty.
+func (m *mergingIter) maybeNextEntryWithinPrefix(item *mergingIterItem) {
+	if s := m.split(item.key.UserKey); !bytes.Equal(m.prefix, item.key.UserKey[:s]) {
+		// The item at the root of the heap already exceeds the iteration
+		// prefix. We should not advance any more. Clear the heap to reflect
+		// that the iterator is now exhausted (within this prefix, at
+		// least).
+		m.heap.items = m.heap.items[:0]
+		return
+	}
+	m.nextEntry(item, nil /* succKey */)
+}
+
+// nextEntry unconditionally steps to the next entry. item is the current top
+// item in the heap.
+//
+// nextEntry should be called directly when not in prefix-iteration mode, or by
+// Next.  During prefix iteration mode, all other callers should use
+// maybeNextEntryWithinPrefix which will avoid advancing the iterator if the
+// current iteration prefix has been exhausted. See the comment within
+// nextEntry's body for an explanation of why other callers should call
+// maybeNextEntryWithinPrefix, which will ensure the documented invariant is
+// preserved.
+func (m *mergingIter) nextEntry(item *mergingIterItem, succKey []byte) {
+	// INVARIANT: If in prefix iteration mode, item.key must have a prefix equal
+	// to m.prefix. This invariant is important for ensuring TrySeekUsingNext
+	// optimizations behave correctly.
+	//
+	// During prefix iteration, the iterator does not have a full view of the
+	// LSM. Some level iterators may omit keys that are known to fall outside
+	// the seek prefix (eg, due to sstable bloom filter exclusion). It's
+	// important that in such cases we don't position any iterators beyond
+	// m.prefix, because doing so may interfere with future seeks.
+	//
+	// Let prefixes P1 < P2 < P3. Imagine a SeekPrefixGE to prefix P1, followed
+	// by a SeekPrefixGE to prefix P2. Imagine there exist live keys at prefix
+	// P2, but they're not visible to the SeekPrefixGE(P1) (because of
+	// bloom-filter exclusion or a range tombstone that deletes prefix P1 but
+	// not P2). If the SeekPrefixGE(P1) is allowed to move any level iterators
+	// to P3, the SeekPrefixGE(P2, TrySeekUsingNext=true) may mistakenly think
+	// the level contains no point keys or range tombstones within the prefix
+	// P2. Care is taken to avoid ever advancing the iterator beyond the current
+	// prefix. If nextEntry is ever invoked while we're already beyond the
+	// current prefix, we're violating the invariant.
+	if invariants.Enabled && m.prefix != nil {
+		if s := m.split(item.key.UserKey); !bytes.Equal(m.prefix, item.key.UserKey[:s]) {
+			m.logger.Fatalf("mergingIter: prefix violation: nexting beyond prefix %q; existing heap root %q\n%s",
+				m.prefix, item.key, debug.Stack())
+		}
+	}
+
 	l := &m.levels[item.index]
 	oldTopLevel := item.index
 	oldRangeDelIter := l.rangeDelIter
-	if l.iterKey, l.iterValue = l.iter.Next(); l.iterKey != nil {
+
+	if succKey == nil {
+		l.iterKey, l.iterValue = l.iter.Next()
+	} else {
+		l.iterKey, l.iterValue = l.iter.NextPrefix(succKey)
+	}
+
+	if l.iterKey != nil {
 		item.key, item.value = *l.iterKey, l.iterValue
 		if m.heap.len() > 1 {
 			m.heap.fix(0)
@@ -579,9 +642,13 @@ func (m *mergingIter) nextEntry(item *mergingIterItem) {
 	m.initMinRangeDelIters(oldTopLevel)
 }
 
-// isNextEntryDeleted() starts from the current entry (as the next entry) and if it is deleted,
-// moves the iterators forward as needed and returns true, else it returns false. item is the top
-// item in the heap.
+// isNextEntryDeleted starts from the current entry (as the next entry) and if
+// it is deleted, moves the iterators forward as needed and returns true, else
+// it returns false. item is the top item in the heap.
+//
+// During prefix iteration mode, isNextEntryDeleted will exhaust the iterator by
+// clearing the heap if the deleted key(s) extend beyond the iteration prefix
+// during prefix-iteration mode.
 func (m *mergingIter) isNextEntryDeleted(item *mergingIterItem) bool {
 	// Look for a range deletion tombstone containing item.key at higher
 	// levels (level < item.index). If we find such a range tombstone we know
@@ -705,7 +772,11 @@ func (m *mergingIter) isNextEntryDeleted(item *mergingIterItem) bool {
 				return true
 			}
 			if l.tombstone.CoversAt(m.snapshot, item.key.SeqNum()) {
-				m.nextEntry(item)
+				if m.prefix == nil {
+					m.nextEntry(item, nil /* succKey */)
+				} else {
+					m.maybeNextEntryWithinPrefix(item)
+				}
 				return true
 			}
 		}
@@ -720,43 +791,42 @@ func (m *mergingIter) findNextEntry() (*InternalKey, base.LazyValue) {
 		if m.levels[item.index].isSyntheticIterBoundsKey {
 			break
 		}
-		// For prefix iteration, stop if we've already exceeded the iterator's
-		// current prefix. There is one case where we perform this check:
-		//
-		// If the heap root is an ignorable boundary key, Next-ing the iterator will
-		// close the associated file and open the next file in the level. We don't
-		// want to do this unnecessarily because the 'exhausted' file may only appear
-		// exhausted because it failed a bloom filter check. Avoiding Next-ing the
-		// file has a performance benefit of unnecessarily advancing to the next
-		// file, but it's also necessary for correctness of some TrySeekUsingNext
-		// optimizations deeper in the iterator stack:
-		//
-		// There may exist valid keys between our current prefix (m.prefix) and the
-		// ignorable boundary key (item.key) that were not returned due to the bloom
-		// filter test. A subsequent SeekPrefixGE call with a seek key in the range
-		// (m.prefix - item.key) will have the TrySeekUsingNext flag enabled. The
-		// levelIter relies on having not skipped these keys in order to avoid more
-		// expensive full seeks.
-		//
-		// While isNextEntryDeleted could re-seek the iterator, that function is
-		// expected to peek at m.prefix and avoid any seeks past the iterator's
-		// prefix if it is set, avoiding the need to do a check here.
-		if m.prefix != nil && m.levels[item.index].isIgnorableBoundaryKey {
-			if n := m.split(item.key.UserKey); !bytes.Equal(m.prefix, item.key.UserKey[:n]) {
-				return nil, base.LazyValue{}
-			}
-		}
 
 		m.addItemStats(item)
+
+		// Skip ignorable boundary keys. These are not real keys and exist to
+		// keep sstables open until we've surpassed their end boundaries so that
+		// their range deletions are visible.
+		if m.levels[item.index].isIgnorableBoundaryKey {
+			if m.prefix == nil {
+				m.nextEntry(item, nil /* succKey */)
+			} else {
+				m.maybeNextEntryWithinPrefix(item)
+			}
+			continue
+		}
+
+		// Check if the heap root key is deleted by a range tombstone in a
+		// higher level. If it is, isNextEntryDeleted will advance the iterator
+		// to a later key (through seeking or nexting).
 		if m.isNextEntryDeleted(item) {
 			m.stats.PointsCoveredByRangeTombstones++
 			continue
 		}
-		if item.key.Visible(m.snapshot, m.batchSnapshot) &&
-			(!m.levels[item.index].isIgnorableBoundaryKey) {
-			return &item.key, item.value
+
+		// Check if the key is visible at the iterator sequence numbers.
+		if !item.key.Visible(m.snapshot, m.batchSnapshot) {
+			if m.prefix == nil {
+				m.nextEntry(item, nil /* succKey */)
+			} else {
+				m.maybeNextEntryWithinPrefix(item)
+			}
+			continue
 		}
-		m.nextEntry(item)
+
+		// The heap root is visible and not deleted by any range tombstones.
+		// Return it.
+		return &item.key, item.value
 	}
 	return nil, base.LazyValue{}
 }
@@ -1176,7 +1246,59 @@ func (m *mergingIter) Next() (*InternalKey, base.LazyValue) {
 		return nil, base.LazyValue{}
 	}
 
-	m.nextEntry(&m.heap.items[0])
+	// NB: It's okay to call nextEntry directly even during prefix iteration
+	// mode (as opposed to indirectly through maybeNextEntryWithinPrefix).
+	// During prefix iteration mode, we rely on the caller to not call Next if
+	// the iterator has already advanced beyond the iteration prefix. See the
+	// comment above the base.InternalIterator interface.
+	m.nextEntry(&m.heap.items[0], nil /* succKey */)
+	return m.findNextEntry()
+}
+
+func (m *mergingIter) NextPrefix(succKey []byte) (*InternalKey, LazyValue) {
+	if m.dir != 1 {
+		panic("pebble: cannot switch directions with NextPrefix")
+	}
+	if m.err != nil || m.heap.len() == 0 {
+		return nil, LazyValue{}
+	}
+	if m.levelsPositioned == nil {
+		m.levelsPositioned = make([]bool, len(m.levels))
+	} else {
+		for i := range m.levelsPositioned {
+			m.levelsPositioned[i] = false
+		}
+	}
+
+	// The heap root necessarily must be positioned at a key < succKey, because
+	// NextPrefix was invoked.
+	root := &m.heap.items[0]
+	m.levelsPositioned[root.index] = true
+	if invariants.Enabled && m.heap.cmp(root.key.UserKey, succKey) >= 0 {
+		m.logger.Fatalf("pebble: invariant violation: NextPrefix(%q) called on merging iterator already positioned at %q",
+			succKey, root.key)
+	}
+	m.nextEntry(root, succKey)
+	// NB: root is a pointer to the heap root. nextEntry may have changed
+	// the heap root, so we must not expect root to still point to the same
+	// level (or to even be valid, if the heap is now exhaused).
+
+	for m.heap.len() > 0 {
+		if m.levelsPositioned[root.index] {
+			// A level we've previously positioned is at the top of the heap, so
+			// there are no other levels positioned at keys < succKey. We've
+			// advanced as far as we need to.
+			break
+		}
+		// Since this level was not the original heap root when NextPrefix was
+		// called, we don't know whether this level's current key has the
+		// previous prefix or a new one.
+		if m.heap.cmp(root.key.UserKey, succKey) >= 0 {
+			break
+		}
+		m.levelsPositioned[root.index] = true
+		m.nextEntry(root, succKey)
+	}
 	return m.findNextEntry()
 }
 

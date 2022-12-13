@@ -297,6 +297,7 @@ func (m *rangeKeyMasking) SpanChanged(s *keyspan.Span) {
 // Invariant: The userKey is within the user key bounds of the span most
 // recently provided to `SpanChanged`.
 func (m *rangeKeyMasking) SkipPoint(userKey []byte) bool {
+	m.parent.stats.RangeKeyStats.ContainedPoints++
 	if m.maskSpan == nil {
 		// No range key is currently acting as a mask, so don't skip.
 		return false
@@ -309,7 +310,11 @@ func (m *rangeKeyMasking) SkipPoint(userKey []byte) bool {
 	// the InterleavingIter). Skip the point key if the range key's suffix is
 	// greater than the point key's suffix.
 	pointSuffix := userKey[m.split(userKey):]
-	return len(pointSuffix) > 0 && m.cmp(m.maskActiveSuffix, pointSuffix) < 0
+	if len(pointSuffix) > 0 && m.cmp(m.maskActiveSuffix, pointSuffix) < 0 {
+		m.parent.stats.RangeKeyStats.SkippedPoints++
+		return true
+	}
+	return false
 }
 
 // The iteratorRangeKeyState type implements the sstable package's
@@ -622,6 +627,17 @@ func (i *lazyCombinedIter) Next() (*InternalKey, base.LazyValue) {
 		return i.parent.rangeKey.iiter.Next()
 	}
 	k, v := i.pointIter.Next()
+	if i.combinedIterState.triggered {
+		return i.initCombinedIteration(+1, k, v, nil)
+	}
+	return k, v
+}
+
+func (i *lazyCombinedIter) NextPrefix(succKey []byte) (*InternalKey, base.LazyValue) {
+	if i.combinedIterState.initialized {
+		return i.parent.rangeKey.iiter.NextPrefix(succKey)
+	}
+	k, v := i.pointIter.NextPrefix(succKey)
 	if i.combinedIterState.triggered {
 		return i.initCombinedIteration(+1, k, v, nil)
 	}
