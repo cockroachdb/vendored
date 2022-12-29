@@ -1360,6 +1360,13 @@ github.com/morikuni/aec
 ## explicit; go 1.11
 github.com/mostynb/go-grpc-compression/snappy
 github.com/mostynb/go-grpc-compression/zstd
+# github.com/mozillazg/go-slugify v0.2.0
+## explicit
+github.com/mozillazg/go-slugify
+# github.com/mozillazg/go-unidecode v0.2.0
+## explicit; go 1.12
+github.com/mozillazg/go-unidecode
+github.com/mozillazg/go-unidecode/table
 # github.com/mwitkow/go-proto-validators v0.0.0-20180403085117-0950a7990007
 ## explicit
 github.com/mwitkow/go-proto-validators
