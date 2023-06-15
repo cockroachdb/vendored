@@ -209,6 +209,14 @@ func DescribeEntries(ents []pb.Entry, f EntryFormatter) string {
 	return buf.String()
 }
 
+func entsSize(ents []pb.Entry) uint64 {
+	var size uint64
+	for _, ent := range ents {
+		size += uint64(ent.Size())
+	}
+	return size
+}
+
 func limitSize(ents []pb.Entry, maxSize uint64) []pb.Entry {
 	if len(ents) == 0 {
 		return ents

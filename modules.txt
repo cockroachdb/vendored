@@ -1550,8 +1550,8 @@ github.com/spf13/pflag
 # github.com/spf13/viper v1.8.1
 ## explicit; go 1.12
 github.com/spf13/viper
-# github.com/stretchr/testify v1.8.0
-## explicit; go 1.13
+# github.com/stretchr/testify v1.8.4
+## explicit; go 1.20
 github.com/stretchr/testify/assert
 github.com/stretchr/testify/require
 # github.com/subosito/gotenv v1.2.0
@@ -1623,7 +1623,7 @@ github.com/yusufpapurcu/wmi
 # github.com/zabawaba99/go-gitignore v0.0.0-20200117185801-39e6bddfb292
 ## explicit
 github.com/zabawaba99/go-gitignore
-# go.etcd.io/etcd/raft/v3 v3.0.0-20210320072418-e51c697ec6e8 => github.com/cockroachdb/etcd/raft/v3 v3.0.0-20210320072418-e51c697ec6e8
+# go.etcd.io/etcd/raft/v3 v3.0.0-20210320072418-e51c697ec6e8 => github.com/cockroachdb/etcd/raft/v3 v3.0.0-20230615105354-88bbb1d5f3a3
 ## explicit; go 1.15
 go.etcd.io/etcd/raft/v3
 go.etcd.io/etcd/raft/v3/confchange
@@ -2138,5 +2138,5 @@ vitess.io/vitess/go/vt/vtgate/evalengine
 # gopkg.in/yaml.v2 => github.com/cockroachdb/yaml v0.0.0-20210825132133-2d6955c8edbc
 # github.com/knz/go-libedit => github.com/otan-cockroach/go-libedit v1.10.2-0.20201030151939-7cced08450e7
 # go.etcd.io/etcd/pkg/v3 => go.etcd.io/etcd/pkg/v3 v3.0.0-20201109164711-01844fd28560
-# go.etcd.io/etcd/raft/v3 => github.com/cockroachdb/etcd/raft/v3 v3.0.0-20210320072418-e51c697ec6e8
+# go.etcd.io/etcd/raft/v3 => github.com/cockroachdb/etcd/raft/v3 v3.0.0-20230615105354-88bbb1d5f3a3
 # github.com/docker/docker => github.com/moby/moby v20.10.6+incompatible
